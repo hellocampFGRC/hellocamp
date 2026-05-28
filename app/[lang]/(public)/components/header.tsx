@@ -5,7 +5,8 @@ import AuthButton from "./AuthButton";
 export default function Header({ dict, lang }: { dict: any, lang: string }) {
   return (
     <header style={{ 
-      backgroundColor: 'white', 
+      backgroundColor: 'rgba(255, 255, 255, 0.98)', 
+      backdropFilter: 'blur(8px)',
       borderBottom: '1px solid #f1f5f9', 
       position: 'sticky', 
       top: 0, 
@@ -21,7 +22,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'space-between',
-        flexWrap: 'wrap', 
+        flexWrap: 'wrap', /* Permite que o conteúdo vá para a linha de baixo em telemóveis */
         gap: '1rem' 
       }}>
         
@@ -31,18 +32,25 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
           fontWeight: '900', 
           color: '#0f172a', 
           textDecoration: 'none',
-          letterSpacing: '-0.02em'
+          letterSpacing: '-0.02em',
+          flexShrink: 0
         }}>
           HelloCamp
         </Link>
         
         {/* LADO DIREITO: COMPONENTES DE CONTROLO */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '1rem', 
+          justifyContent: 'flex-end',
+          flex: '1 1 auto',
+          overflowX: 'auto', /* Se o ecrã for muito pequeno (iPhone SE), permite deslizar os botões em vez de partir o site */
+          scrollbarWidth: 'none', /* Esconde a barra de scroll */
+          paddingBottom: '2px'
+        }}>
           
           <LanguageSwitcher lang={lang} />
-
-          {/* Linha separadora estrutural */}
-          <div style={{ width: '1px', height: '24px', backgroundColor: '#e2e8f0' }}></div>
 
           <AuthButton lang={lang} dict={dict} />
           
