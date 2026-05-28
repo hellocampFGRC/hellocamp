@@ -141,13 +141,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       
       const idsCriados = reservasData.map(r => r.id);
 
-      // SE O PARCEIRO RECEBER DIRETO, O FLUXO TERMINA AQUI. FICA PENDENTE.
-      if (organizador?.modelo_pagamento === 'parceiro_recebe') {
-        router.push(`/${lang}/sucesso`);
-        return;
-      }
-
-      // 2. CONECTAR À API STRIPE PARA PAGAMENTO DIGITAL (HelloCamp processa)
+      // 2. CONECTAR À API STRIPE PARA PAGAMENTO DIGITAL
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,20 +151,21 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
           userEmail: user.email,
           lang: lang,
           campoNome: campo.nome,
-          stripeAccountId: organizador?.stripe_account_id // Se o parceiro tiver Stripe Connect
+          stripeAccountId: organizador?.stripe_account_id
         })
       });
 
-      const { url } = await res.json();
+      const data = await res.json();
       
-      if (url) {
-        window.location.href = url; // Redireciona o cliente para o ecrã oficial da Stripe
+      if (data.url) {
+        window.location.href = data.url; // Redireciona o cliente para a Stripe
       } else {
-        throw new Error("Falha ao gerar link de pagamento.");
+        alert("Erro na Stripe: " + (data.error || "Verifique as configurações."));
+        setProcessingStripe(false);
       }
 
     } catch (error) { 
-      alert("Erro ao processar reserva. Tente novamente."); 
+      alert("Erro ao processar ligação. Tente novamente."); 
       setProcessingStripe(false); 
     }
   };
@@ -182,6 +177,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <div className="spinner" style={{ width: '50px', height: '50px', border: '5px solid #e2e8f0', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }}></div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0f172a' }}>A redirecionar para pagamento seguro...</h2>
+          <p style={{ color: '#64748b' }}>Por favor, aguarde.</p>
           <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
       )}
@@ -305,28 +301,18 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
             </section>
 
             <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{isEn ? 'Payment Processing' : 'Método de Pagamento'}</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{isEn ? 'Secure Payment' : 'Pagamento Seguro'}</h2>
               
-              {organizador?.modelo_pagamento === 'parceiro_recebe' ? (
-                <div style={{ padding: '1.5rem', backgroundColor: '#f0fdf4', border: '1px solid #059669', borderRadius: '1rem' }}>
-                  <p style={{ fontWeight: 'bold', color: '#064e3b', marginBottom: '0.5rem' }}>Transferência Bancária Direta (Parceiro)</p>
-                  <p style={{ fontSize: '14px', color: '#334155', margin: 0 }}>Entidade: {organizador.empresa_nome}</p>
-                  <p style={{ fontSize: '14px', color: '#334155', margin: 0 }}>IBAN: {organizador.iban}</p>
-                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '1rem' }}>* A sua reserva ficará pendente. O parceiro irá processar este pagamento diretamente e validar a sua inscrição.</p>
+              <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <p style={{ fontWeight: 'bold', color: '#0f172a', margin: '0 0 0.5rem 0' }}>Stripe Checkout</p>
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Pague de forma 100% segura através de MB WAY, Cartão de Crédito ou Débito.</p>
                 </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <p style={{ fontWeight: 'bold', color: '#0f172a', margin: '0 0 0.5rem 0' }}>Pagamento 100% Seguro</p>
-                      <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Ao confirmar, será redirecionado para a plataforma Stripe (suporta Cartão e MB WAY).</p>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/MB_Way.svg/2560px-MB_Way.svg.png" alt="MBWAY" style={{ height: '24px' }} />
-                    </div>
-                  </div>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/MB_Way.svg/2560px-MB_Way.svg.png" alt="MBWAY" style={{ height: '20px' }} />
+                  <span style={{ fontSize: '24px' }}>💳</span>
                 </div>
-              )}
+              </div>
             </section>
 
             <button type="submit" disabled={processingStripe} style={{ width: '100%', padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontSize: '1.125rem', fontWeight: '900', borderRadius: '1rem', border: 'none', cursor: processingStripe ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.3)', transition: 'transform 0.2s' }}>
