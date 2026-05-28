@@ -10,6 +10,16 @@ const PAISES_DESTAQUE = [
   { nome: "França", nome_en: "France", imagem: "https://images.unsplash.com/photo-1502602898657-3e9076006e00?q=80&w=1000&auto=format&fit=crop", desc: "Arte e História", desc_en: "Art and History" }
 ];
 
+// Dicionário de segurança para garantir a tradução no filtro caso falte na BD
+const TRADUCOES_PAISES: Record<string, string> = {
+  "Portugal": "Portugal",
+  "Espanha": "Spain",
+  "França": "France",
+  "Reino Unido": "United Kingdom",
+  "Brasil": "Brazil",
+  "Estados Unidos": "United States"
+};
+
 export default async function Home({
   params,
 }: {
@@ -22,13 +32,12 @@ export default async function Home({
   const { data: camposDeFerias } = await supabase.from('campos').select('*').limit(3).order('created_at', { ascending: false });
   const { data: todosOsDistritos } = await supabase.from('distritos').select('id, nome, nome_en, imagem_capa, descricao_curta, descricao_curta_en');
 
-  // Adicionada a recolha do País
   const { data: camposFiltros } = await supabase.from('campos').select('categoria, categoria_en, idade, idade_en, Distrito, Distrito_en, pais, pais_en');
   
   const categoriasMap = new Map();
   const idadesMap = new Map();
   const distritosMap = new Map();
-  const paisesMap = new Map(); // Novo mapa de países
+  const paisesMap = new Map();
 
   if (camposFiltros) {
     camposFiltros.forEach(c => {
@@ -42,7 +51,12 @@ export default async function Home({
   const categoriasOpcoes = Array.from(categoriasMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const idadesOpcoes = Array.from(idadesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const distritosOpcoes = Array.from(distritosMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
-  const paisesOpcoes = Array.from(paisesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
+  
+  // Opções de países com tradução 100% garantida
+  const paisesOpcoes = Array.from(paisesMap.entries()).map(([pt, en]) => {
+    const labelTraduzida = isEn ? (en || TRADUCOES_PAISES[pt] || pt) : pt;
+    return { valor: pt, label: labelTraduzida };
+  });
 
   return (
     <main className="min-h-screen bg-white font-sans text-gray-900">
@@ -76,7 +90,6 @@ export default async function Home({
             </div>
 
             <form action={`/${lang}/pesquisa`} method="GET" style={{ position: 'static', marginTop: '1rem' }}>
-              {/* Layout em grelha ajustado para 4 colunas em vez de 3 */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', width: '100%' }}>
                 
                 <div>
@@ -90,7 +103,6 @@ export default async function Home({
                   </div>
                 </div>
 
-                {/* NOVO FILTRO: PAÍS */}
                 <div>
                   <label htmlFor="pais" style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#111827', marginBottom: '0.4rem' }}>{isEn ? 'Country' : 'País'}</label>
                   <div style={{ position: 'relative' }}>
@@ -191,7 +203,7 @@ export default async function Home({
         </div>
       </section>
 
-      {/* DESTAQUES GERAIS (COM BOTÃO FAVORITO) */}
+      {/* DESTAQUES GERAIS COM A ESTRUTURA BLINDADA PARA TELEMÓVEIS */}
       <section style={{ backgroundColor: 'white', paddingTop: '5rem', paddingBottom: '5rem', borderTop: '1px solid #f3f4f6' }}>
         <div style={{ margin: '0 auto', maxWidth: '1280px', padding: '0 1.5rem' }}>
           <div style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
@@ -210,28 +222,34 @@ export default async function Home({
               return (
                 <div key={campoId} className="group relative flex flex-col bg-white overflow-hidden border border-gray-100 transition-transform duration-300 hover:-translate-y-1" style={{ borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
                   
-                  {/* BOTÃO FAVORITO */}
+                  {/* LINK INVISÍVEL COBRE O CARTÃO INTEIRO (Resolve o bug nos telemóveis) */}
+                  <Link href={`/${lang}/campo/${campoId}`} className="absolute inset-0 z-10">
+                    <span className="sr-only">{dict.home.explorar} {nomeCampo}</span>
+                  </Link>
+
+                  {/* BOTÃO FAVORITO SOBREPÕE O LINK PARA SER CLICÁVEL */}
                   <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 20 }}>
                     <BotaoFavorito campoId={campoId} />
                   </div>
 
-                  <Link href={`/${lang}/campo/${campoId}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <div style={{ position: 'relative', height: '250px', width: '100%', overflow: 'hidden' }}>
-                      <img src={campo.imagem} alt={nomeCampo} className="transition-transform duration-700 group-hover:scale-105" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      <div style={{ position: 'absolute', top: '1rem', left: '1rem', backgroundColor: '#059669', padding: '0.25rem 0.75rem', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'white', borderRadius: '9999px' }}>{catCampo}</div>
+                  <div style={{ position: 'relative', height: '250px', width: '100%', overflow: 'hidden' }}>
+                    <img src={campo.imagem} alt={nomeCampo} className="transition-transform duration-700 group-hover:scale-105" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <div style={{ position: 'absolute', top: '1rem', left: '1rem', backgroundColor: '#059669', padding: '0.25rem 0.75rem', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'white', borderRadius: '9999px', zIndex: 5 }}>{catCampo}</div>
+                  </div>
+                  
+                  {/* CONTEÚDO DO CARTÃO (pointer-events-none para não empatar o clique no Link no telemóvel) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', padding: '1.5rem', flex: 1, pointerEvents: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">📍 {localCampo}</span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', padding: '1.5rem', flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">📍 {localCampo}</span>
-                      </div>
-                      <h3 className="mt-2 text-xl font-extrabold text-gray-900 leading-snug">{nomeCampo}</h3>
-                      <p className="mt-1 text-sm text-gray-500">{dict.home.faixa_etaria_label} {idadeCampo}</p>
-                      <div style={{ marginTop: 'auto', paddingTop: '1.25rem', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', borderTop: '1px solid #f8fafc' }}>
-                        <p className="text-2xl font-black text-emerald-600 tracking-tight">{precoVisivel}€</p>
-                        <span className="text-xs font-bold uppercase tracking-wider text-amber-500 transition-transform group-hover:translate-x-1 inline-block">{dict.home.explorar} &rarr;</span>
-                      </div>
+                    <h3 className="mt-2 text-xl font-extrabold text-gray-900 leading-snug">{nomeCampo}</h3>
+                    <p className="mt-1 text-sm text-gray-500">{dict.home.faixa_etaria_label} {idadeCampo}</p>
+                    <div style={{ marginTop: 'auto', paddingTop: '1.25rem', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', borderTop: '1px solid #f8fafc' }}>
+                      <p className="text-2xl font-black text-emerald-600 tracking-tight">{precoVisivel}€</p>
+                      <span className="text-xs font-bold uppercase tracking-wider text-amber-500 transition-transform group-hover:translate-x-1 inline-block">{dict.home.explorar} &rarr;</span>
                     </div>
-                  </Link>
+                  </div>
+
                 </div>
               );
             })}
