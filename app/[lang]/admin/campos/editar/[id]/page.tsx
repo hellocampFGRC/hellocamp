@@ -23,7 +23,6 @@ const FOTOS_PADRAO = [
   { url: "https://images.unsplash.com/photo-1606092195730-5d7b9af1efc5?q=80&w=1200&auto=format&fit=crop", nome: "Diversão" }
 ];
 
-// Limpeza de Caracteres Especiais para evitar "Invalid Key" no Supabase
 const sanitizeFileName = (name: string) => {
   return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
 };
@@ -57,7 +56,8 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     nome: "", categoria: "", idade: "", local: "", Distrito: "", racio_monitores: "", duracao_dias: 7,
     alimentacao: "Não tem", alojamento: "Não tem", seguro: "Incluído no Preço", descricao: "", regras_termos: "",
     extra_alimentacao: 0, tipo_cobranca_alimentacao: "Por Turno", extra_alojamento: 0, tipo_cobranca_alojamento: "Por Turno",
-    extra_prolongamento: 0, tipo_cobranca_prolongamento: "Por Turno", extra_transporte: 0, tipo_cobranca_transporte: "Por Turno"
+    extra_prolongamento: 0, tipo_cobranca_prolongamento: "Por Turno", extra_transporte: 0, tipo_cobranca_transporte: "Por Turno",
+    contrato_parceiro_url: ""
   });
 
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
@@ -67,7 +67,10 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     const fetchCampo = async () => {
       const { data, error } = await supabase.from('campos').select('*').eq('id', id).single();
       if (data) {
-        setFormData(data);
+        setFormData({
+          ...data,
+          contrato_parceiro_url: data.contrato_parceiro_url || ""
+        });
         if (data.turnos) {
           const turnosMapeados = data.turnos.map((t: any) => ({ ...t, vagas: t.vagas || data.vagas_totais || 20 }));
           setTurnos(turnosMapeados);
@@ -155,7 +158,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
       const uploadedImages = await Promise.all(images.map(async (img) => {
         if (!img.file) return { url: img.url, isMain: img.isMain };
         const compressedFile = await imageCompression(img.file, { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true });
-        const fileName = `${Date.now()}-${sanitizeFileName(compressedFile.name)}`; // LIMPEZA APLICADA AQUI
+        const fileName = `${Date.now()}-${sanitizeFileName(compressedFile.name)}`;
         const { error } = await supabase.storage.from('campos-imagens').upload(fileName, compressedFile);
         if (error) throw error;
         const { data: publicUrlData } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
@@ -167,7 +170,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
 
       setStatusText(isEn ? "Uploading documents..." : "A processar documentos...");
       const novosDocs = await Promise.all(documentos.map(async (doc) => {
-        const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`; // LIMPEZA APLICADA AQUI
+        const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`;
         const { error } = await supabase.storage.from('campos-documentos').upload(fileName, doc);
         if (error) throw error;
         const { data: publicUrlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
@@ -197,10 +200,14 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
 
       setStatusText(isEn ? "Saving..." : "A guardar alterações...");
       
-      // PARCEIRO NÃO PODE EDITAR COMISSÕES
       const { error } = await supabase.from("campos").update({
-        ...formData, vagas_totais: totalVagasCalculado, preco: precoGlobal,                      
-        datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatasEn, pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
+        nome: formData.nome, categoria: formData.categoria, idade: formData.idade, local: formData.local, Distrito: formData.Distrito,
+        vagas_totais: totalVagasCalculado, racio_monitores: formData.racio_monitores, duracao_dias: formData.duracao_dias,
+        alimentacao: formData.alimentacao, alojamento: formData.alojamento, seguro: formData.seguro,
+        descricao: formData.descricao, regras_termos: formData.regras_termos,
+        extra_alimentacao: formData.extra_alimentacao, extra_alojamento: formData.extra_alojamento,
+        extra_prolongamento: formData.extra_prolongamento, extra_transporte: formData.extra_transporte,
+        preco: precoGlobal, datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatasEn, pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
         linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais, imagem: mainImageUrl, galeria: galeriaUrls,
         programas_pdf: programasDocsFinais, regras_termos_en, latitude: mapPreview.lat, longitude: mapPreview.lon,
         turnos, turnos_en, nome_en, categoria_en, local_en, idade_en, descricao_en, alimentacao_en, alojamento_en, seguro_en, Distrito_en
@@ -222,6 +229,21 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
       </Link>
 
       <h1 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem' }}>{isEn ? 'Edit Camp' : 'Editar Campo'}</h1>
+
+      {/* AVISO DO ESTADO DO CONTRATO */}
+      {!formData.contrato_parceiro_url ? (
+        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', padding: '1.5rem', borderRadius: '1rem', marginBottom: '2rem' }}>
+          <p style={{ margin: 0, fontSize: '14px', color: '#dc2626', fontWeight: 'bold' }}>
+            🔴 {isEn ? 'Hidden from public: Waiting for HelloCamp to validate and attach the contract.' : 'Campo Oculto: A aguardar que a HelloCamp valide e anexe o contrato para o seu programa ficar visível ao público.'}
+          </p>
+        </div>
+      ) : (
+        <div style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', padding: '1.5rem', borderRadius: '1rem', marginBottom: '2rem' }}>
+          <p style={{ margin: 0, fontSize: '14px', color: '#059669', fontWeight: 'bold' }}>
+            🟢 {isEn ? 'Camp Online: Contract validated by HelloCamp.' : 'Campo Online: Contrato validado pela equipa HelloCamp.'}
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         {/* 1. INFO BÁSICA */}
@@ -356,12 +378,12 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
               </select>
             </div>
             <div>
-              <label style={labelStyle}>{isEn ? 'Staff Ratio' : 'Rácio (ex: 1 p/ 5)'}</label>
+              <label style={labelStyle}>{isEn ? 'Staff Ratio' : 'Rácio Monitores'}</label>
               <input type="text" value={formData.racio_monitores || ''} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} style={inputStyle} />
             </div>
             
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>{isEn ? 'Full Description' : 'Descrição'}</label>
+              <label style={labelStyle}>{isEn ? 'Full Description' : 'Descrição Completa'}</label>
               <textarea rows={5} required value={formData.descricao || ''} onChange={e => setFormData({...formData, descricao: e.target.value})} style={{...inputStyle, resize: 'vertical'}} />
             </div>
 
@@ -370,7 +392,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
               <textarea rows={4} value={formData.regras_termos || ''} onChange={e => setFormData({...formData, regras_termos: e.target.value})} style={{...inputStyle, resize: 'vertical'}} />
             </div>
 
-            {/* DOCUMENTOS DO PROGRAMA (PDF) */}
+            {/* DOCUMENTOS */}
             <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
               <label style={labelStyle}>{isEn ? 'Camp Program (PDF)' : 'Programa do Campo (PDF/Word)'}</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'flex-start' }}>
@@ -447,7 +469,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
           </div>
         </div>
 
-        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#059669', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '1.125rem', transition: 'transform 0.1s' }}>
+        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '1.125rem', transition: 'transform 0.1s' }}>
           {saving ? statusText : (isEn ? 'Save Changes' : 'Guardar Alterações')}
         </button>
       </form>
@@ -455,7 +477,6 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
   );
 }
 
-// ESTILOS GERAIS
 const sectionStyle = { backgroundColor: 'white', padding: '2.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' };
 const sectionTitleStyle = { fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '2rem' };
 const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' };

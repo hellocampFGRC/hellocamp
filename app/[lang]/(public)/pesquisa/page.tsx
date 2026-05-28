@@ -19,7 +19,8 @@ export default async function PaginaPesquisa({
   const distrito = typeof sp?.distrito === "string" ? sp.distrito : "";
   const idade = typeof sp?.idade === "string" ? sp.idade : "";
 
-  let query = supabase.from("campos").select("*");
+  // FILTRO APLICADO: Só campos com contrato
+  let query = supabase.from("campos").select("*").not("contrato_parceiro_url", "is", null);
 
   if (categoria) query = query.eq("categoria", categoria);
   if (distrito) query = query.ilike("Distrito", `%${distrito}%`);
@@ -45,7 +46,6 @@ export default async function PaginaPesquisa({
             {filtrosAtivos ? dict.pesquisa.resultados : dict.pesquisa.todos}
           </h1>
           
-          {/* FORMULÁRIO DE FILTROS SEMPRE VISÍVEL */}
           <form method="GET" action={`/${lang}/pesquisa`} style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
             
             <select name="categoria" defaultValue={categoria} style={selectStyle}>
@@ -85,7 +85,7 @@ export default async function PaginaPesquisa({
         </div>
       </section>
 
-      {/* RESULTADOS */}
+      {/* RESULTADOS (CARTÕES COM A ESTRUTURA LINK MOBILE) */}
       <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '3.5rem 1.5rem' }}>
         {!resultados || resultados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '5rem 1.5rem', backgroundColor: 'white', borderRadius: '1.5rem', border: '1px solid #f1f5f9' }}>
@@ -102,34 +102,38 @@ export default async function PaginaPesquisa({
               return (
                 <div key={campo.id} style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'white', overflow: 'hidden', border: '1px solid #e2e8f0', borderRadius: '1.5rem', position: 'relative', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', transition: 'transform 0.2s' }}>
                   
+                  {/* LINK INVISÍVEL COBRE O CARTÃO INTEIRO */}
+                  <Link href={`/${lang}/campo/${campo.id}`} style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+                    <span className="sr-only">Explorar {nomeCampo}</span>
+                  </Link>
+
                   {/* BOTÃO DO CORAÇÃO FLUTUANTE */}
-                  <div style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', zIndex: 10 }}>
+                  <div style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', zIndex: 20 }}>
                     <BotaoFavorito campoId={campo.id} />
                   </div>
 
-                  <Link href={`/${lang}/campo/${campo.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <div style={{ position: 'relative', height: '200px', width: '100%', overflow: 'hidden' }}>
-                      <img src={campo.imagem} alt={nomeCampo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      <div style={{ position: 'absolute', top: '0.75rem', left: '0.75rem', backgroundColor: '#059669', padding: '0.3rem 0.8rem', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'white', borderRadius: '999px' }}>
-                        {catCampo}
-                      </div>
+                  <div style={{ position: 'relative', height: '200px', width: '100%', overflow: 'hidden' }}>
+                    <img src={campo.imagem} alt={nomeCampo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <div style={{ position: 'absolute', top: '0.75rem', left: '0.75rem', backgroundColor: '#059669', padding: '0.3rem 0.8rem', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'white', borderRadius: '999px', zIndex: 5 }}>
+                      {catCampo}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', padding: '1.5rem', flex: 1 }}>
-                      <span style={{ fontSize: '13px', fontWeight: '700', color: '#047857', textTransform: 'uppercase' }}>
-                        📍 {localCampo}
-                      </span>
-                      <h3 style={{ marginTop: '0.5rem', fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.3 }}>{nomeCampo}</h3>
-                      
-                      <p style={{ marginTop: '0.5rem', fontSize: '14px', color: '#64748b', fontWeight: '500' }}>
-                        {dict.pesquisa.idade}: <span style={{ color: '#0f172a' }}>{idadeCampo}</span>
-                      </p>
-                      
-                      <div style={{ marginTop: 'auto', paddingTop: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9' }}>
-                        <p style={{ fontSize: '1.5rem', fontWeight: '900', color: '#059669', margin: 0 }}>{campo.preco}€</p>
-                        <span style={{ fontSize: '14px', fontWeight: '700', color: '#f59e0b' }}>{dict.pesquisa.explorar} &rarr;</span>
-                      </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', padding: '1.5rem', flex: 1, pointerEvents: 'none' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#047857', textTransform: 'uppercase' }}>
+                      📍 {localCampo}
+                    </span>
+                    <h3 style={{ marginTop: '0.5rem', fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.3 }}>{nomeCampo}</h3>
+                    
+                    <p style={{ marginTop: '0.5rem', fontSize: '14px', color: '#64748b', fontWeight: '500' }}>
+                      {dict.pesquisa.idade}: <span style={{ color: '#0f172a' }}>{idadeCampo}</span>
+                    </p>
+                    
+                    <div style={{ marginTop: 'auto', paddingTop: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9' }}>
+                      <p style={{ fontSize: '1.5rem', fontWeight: '900', color: '#059669', margin: 0 }}>{campo.preco}€</p>
+                      <span style={{ fontSize: '14px', fontWeight: '700', color: '#f59e0b' }}>{dict.pesquisa.explorar} &rarr;</span>
                     </div>
-                  </Link>
+                  </div>
                 </div>
               );
             })}

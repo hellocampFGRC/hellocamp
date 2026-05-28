@@ -1,6 +1,7 @@
 import { supabase } from "../../../../../lib/supabase";
 import Link from "next/link";
 import { getDictionary } from "../../../../../lib/getDictionary";
+import BotaoFavorito from "../../components/BotaoFavorito";
 
 export default async function PaginaDoDistrito({ 
   params 
@@ -19,10 +20,11 @@ export default async function PaginaDoDistrito({
     .ilike('nome', nomeLimpo) 
     .single();
 
-  // Agora pesquisa no Distrito OU na Morada (local)
+  // FILTRO APLICADO: Só campos com contrato assinado
   const { data: camposNoDistrito } = await supabase
     .from('campos')
     .select('*')
+    .not('contrato_parceiro_url', 'is', null)
     .or(`Distrito.ilike.%${nomeLimpo}%,local.ilike.%${nomeLimpo}%`); 
 
   if (!distrito) {
@@ -44,6 +46,7 @@ export default async function PaginaDoDistrito({
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', color: '#111827', paddingBottom: '5rem' }}>
       
+      {/* HEADER HERO DO DISTRITO */}
       <div style={{ position: 'relative', width: '100%', height: '350px', backgroundColor: '#111827', overflow: 'hidden' }}>
         <img src={distrito.imagem_capa} alt={nomeDistrito} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.1) 100%)' }}></div>
@@ -60,6 +63,7 @@ export default async function PaginaDoDistrito({
         </div>
       </div>
 
+      {/* LISTAGEM DE CAMPOS NO DISTRITO */}
       <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '4rem 1.5rem' }}>
         <div style={{ marginBottom: '3rem' }}>
           <h2 style={{ fontSize: '1.875rem', fontWeight: '800', color: '#064e3b' }}>
@@ -87,19 +91,26 @@ export default async function PaginaDoDistrito({
               const precoVisivel = campo.preco || (campo.turnos && campo.turnos.length > 0 ? campo.turnos[0].preco : 0);
 
               return (
-                <Link 
-                  href={`/${lang}/campo/${campoId}`} 
-                  key={campoId} 
-                  style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'white', overflow: 'hidden', border: '1px solid #f1f5f9', borderRadius: '1.5rem', textDecoration: 'none', color: 'inherit' }}
-                >
+                <div key={campoId} className="group" style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'white', overflow: 'hidden', border: '1px solid #f1f5f9', borderRadius: '1.5rem', position: 'relative', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', transition: 'transform 0.2s' }}>
+                  
+                  {/* LINK INVISÍVEL COBRE O CARTÃO INTEIRO (Resolve o clique nos telemóveis) */}
+                  <Link href={`/${lang}/campo/${campoId}`} style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+                    <span className="sr-only">Explorar {nomeCampo}</span>
+                  </Link>
+
+                  {/* BOTÃO DO CORAÇÃO FLUTUANTE (Nível acima do link para poder ser clicado) */}
+                  <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 20 }}>
+                    <BotaoFavorito campoId={campoId} />
+                  </div>
+
                   <div style={{ position: 'relative', height: '250px', width: '100%', overflow: 'hidden' }}>
                     <img src={campo.imagem} alt={nomeCampo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <div style={{ position: 'absolute', top: '1rem', left: '1rem', backgroundColor: '#059669', padding: '0.35rem 0.85rem', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', color: 'white', borderRadius: '9999px' }}>
+                    <div style={{ position: 'absolute', top: '1rem', left: '1rem', backgroundColor: '#059669', padding: '0.35rem 0.85rem', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', color: 'white', borderRadius: '9999px', zIndex: 5 }}>
                       {catCampo}
                     </div>
                   </div>
                   
-                  <div style={{ display: 'flex', flexDirection: 'column', padding: '1.5rem', flex: 1 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', padding: '1.5rem', flex: 1, pointerEvents: 'none' }}>
                     <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase' }}>
                       📍 {localCampo}
                     </span>
@@ -115,7 +126,7 @@ export default async function PaginaDoDistrito({
                       </span>
                     </div>
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>

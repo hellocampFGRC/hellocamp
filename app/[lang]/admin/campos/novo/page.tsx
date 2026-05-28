@@ -4,6 +4,7 @@ import { useState, use, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import imageCompression from 'browser-image-compression';
+import React from "react";
 
 type ImagePreview = {
   file?: File;
@@ -42,11 +43,11 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
   const [pais, setPais] = useState("Portugal");
   const [linguas, setLinguas] = useState({ pt: true, en: false, es: false, fr: false, de: false });
 
-  const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0 }]);
+  const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
 
   const [formData, setFormData] = useState({
     nome: "", categoria: "", idade: "", local: "", Distrito: "",
-    vagas_totais: 20, racio_monitores: "", duracao_dias: 7,
+    racio_monitores: "", duracao_dias: 7,
     alimentacao: "Não tem", alojamento: "Não tem", seguro: "Incluído no Preço",
     descricao: "", regras_termos: "",
     extra_alimentacao: 0, tipo_cobranca_alimentacao: "Por Turno",
@@ -107,7 +108,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     return ativas.join(", ");
   };
 
-  const handleAddTurno = () => setTurnos([...turnos, { nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0 }]);
+  const handleAddTurno = () => setTurnos([...turnos, { nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
   const handleRemoveTurno = (index: number) => setTurnos(turnos.filter((_, i) => i !== index));
   const handleTurnoChange = (index: number, field: string, value: string | number | boolean) => {
     const novosTurnos = [...turnos];
@@ -149,6 +150,10 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     } catch (e) { return texto; }
   };
 
+  const sanitizeFileName = (name: string) => {
+    return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -163,7 +168,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
       const uploadedImages = await Promise.all(images.map(async (img) => {
         if (img.url) return { url: img.url, isMain: img.isMain };
         const compressedFile = await imageCompression(img.file!, { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true });
-        const fileName = `${Date.now()}-${compressedFile.name.replace(/\s+/g, '-')}`;
+        const fileName = `${Date.now()}-${sanitizeFileName(compressedFile.name)}`;
         const { error } = await supabase.storage.from('campos-imagens').upload(fileName, compressedFile);
         if (error) throw error;
         const { data: publicUrlData } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
@@ -175,7 +180,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
 
       setStatusText(isEn ? "Uploading documents..." : "A processar documentos...");
       const programasDocs = await Promise.all(documentos.map(async (doc) => {
-        const fileName = `${Date.now()}-${doc.name.replace(/\s+/g, '-')}`;
+        const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`;
         const { error } = await supabase.storage.from('campos-documentos').upload(fileName, doc);
         if (error) throw error;
         const { data: publicUrlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
@@ -202,9 +207,12 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
       const textoDatas = turnos.map(t => `${formatarDataStr(t.data_inicio)} a ${formatarDataStr(t.data_fim)}`).join(", ");
       const textoDatasEn = turnos.map(t => `${formatarDataStr(t.data_inicio)} to ${formatarDataStr(t.data_fim)}`).join(", ");
 
-      setStatusText(isEn ? "Saving..." : "A guardar e publicar...");
+      const totalVagasCalculado = turnos.reduce((acc, curr) => acc + (Number(curr.vagas) || 0), 0);
+
+      setStatusText(isEn ? "Saving..." : "A guardar e submeter para validação...");
       const { error } = await supabase.from("campos").insert([{
         ...formData,
+        vagas_totais: totalVagasCalculado,
         preco: precoGlobal,                      
         datas_disponiveis: textoDatas,           
         datas_disponiveis_en: textoDatasEn,     
@@ -323,10 +331,6 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
           
           <div style={{ marginBottom: '1.5rem', display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
             <div style={{ flex: '1 1 200px' }}>
-              <label style={labelStyle}>{isEn ? 'Total Spots (per Shift)' : 'Vagas Totais (por Turno)'}</label>
-              <input type="number" required value={formData.vagas_totais} onChange={e => setFormData({...formData, vagas_totais: Number(e.target.value)})} style={inputStyle} />
-            </div>
-            <div style={{ flex: '1 1 200px' }}>
               <label style={labelStyle}>{isEn ? 'Base Duration (Days)' : 'Duração Base (em Dias)'}</label>
               <input type="number" required value={formData.duracao_dias} onChange={e => setFormData({...formData, duracao_dias: Number(e.target.value)})} style={inputStyle} />
             </div>
@@ -335,19 +339,23 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
           {turnos.map((turno, index) => (
             <div key={index} style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '0.75rem', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
-                <div style={{ flex: '1 1 200px' }}>
+                <div style={{ flex: '1 1 180px' }}>
                   <label style={labelStyle}>{isEn ? 'Shift Name (e.g., Week 1)' : 'Nome do Turno (ex: Semana 1)'}</label>
                   <input type="text" required value={turno.nome} onChange={e => handleTurnoChange(index, 'nome', e.target.value)} style={inputStyle} />
                 </div>
-                <div style={{ flex: '1 1 120px' }}>
+                <div style={{ flex: '1 1 110px' }}>
                   <label style={labelStyle}>{isEn ? 'Start Date' : 'Data Início'}</label>
                   <input type="date" required value={turno.data_inicio} onChange={e => handleTurnoChange(index, 'data_inicio', e.target.value)} style={inputStyle} />
                 </div>
-                <div style={{ flex: '1 1 120px' }}>
+                <div style={{ flex: '1 1 110px' }}>
                   <label style={labelStyle}>{isEn ? 'End Date' : 'Data Fim'}</label>
                   <input type="date" required value={turno.data_fim} onChange={e => handleTurnoChange(index, 'data_fim', e.target.value)} style={inputStyle} />
                 </div>
-                <div style={{ width: '120px' }}>
+                <div style={{ width: '90px' }}>
+                  <label style={labelStyle}>{isEn ? 'Spots' : 'Vagas'}</label>
+                  <input type="number" required value={turno.vagas} onChange={e => handleTurnoChange(index, 'vagas', Number(e.target.value))} style={inputStyle} />
+                </div>
+                <div style={{ width: '100px' }}>
                   <label style={labelStyle}>{isEn ? 'Price (€)' : 'Preço Turno (€)'}</label>
                   <input type="number" required value={turno.preco} onChange={e => handleTurnoChange(index, 'preco', Number(e.target.value))} style={inputStyle} />
                 </div>
@@ -536,15 +544,21 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
           )}
         </div>
 
+        {/* NOTA DE CONTRATO ADICIONADA */}
+        <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1rem' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: '#b45309', fontWeight: 'bold' }}>
+            ⚠️ {isEn ? 'Important: After saving, your camp will be "Pending". It will only be visible to the public after HelloCamp validates the program and attaches the signed contract.' : 'Importante: Após gravar, o seu campo ficará em análise. Só ficará visível ao público após a validação do programa e a inserção do contrato assinado pela equipa HelloCamp.'}
+          </p>
+        </div>
+
         <button type="submit" disabled={loading} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.125rem', transition: 'transform 0.1s' }}>
-          {loading ? statusText : (isEn ? 'Save & Publish Camp' : 'Gravar e Publicar Campo')}
+          {loading ? statusText : (isEn ? 'Save & Submit for Review' : 'Gravar e Submeter para Validação')}
         </button>
       </form>
     </main>
   );
 }
 
-// Estilos Premium Restaurados!
 const sectionStyle = { backgroundColor: 'white', padding: '2.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' };
 const sectionTitleStyle = { fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '2rem' };
 const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' };

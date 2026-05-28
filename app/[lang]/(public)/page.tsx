@@ -29,10 +29,12 @@ export default async function Home({
   const dict = await getDictionary(lang as "pt" | "en");
   const isEn = lang === 'en';
 
-  const { data: camposDeFerias } = await supabase.from('campos').select('*').limit(3).order('created_at', { ascending: false });
+  // FILTRO APLICADO: Só campos com contrato
+  const { data: camposDeFerias } = await supabase.from('campos').select('*').not('contrato_parceiro_url', 'is', null).limit(3).order('created_at', { ascending: false });
   const { data: todosOsDistritos } = await supabase.from('distritos').select('id, nome, nome_en, imagem_capa, descricao_curta, descricao_curta_en');
 
-  const { data: camposFiltros } = await supabase.from('campos').select('categoria, categoria_en, idade, idade_en, Distrito, Distrito_en, pais, pais_en');
+  // FILTRO APLICADO: Filtros só mostram opções de campos legalmente ativos
+  const { data: camposFiltros } = await supabase.from('campos').select('categoria, categoria_en, idade, idade_en, Distrito, Distrito_en, pais, pais_en').not('contrato_parceiro_url', 'is', null);
   
   const categoriasMap = new Map();
   const idadesMap = new Map();
@@ -52,7 +54,6 @@ export default async function Home({
   const idadesOpcoes = Array.from(idadesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const distritosOpcoes = Array.from(distritosMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   
-  // Opções de países com tradução 100% garantida
   const paisesOpcoes = Array.from(paisesMap.entries()).map(([pt, en]) => {
     const labelTraduzida = isEn ? (en || TRADUCOES_PAISES[pt] || pt) : pt;
     return { valor: pt, label: labelTraduzida };
@@ -237,7 +238,7 @@ export default async function Home({
                     <div style={{ position: 'absolute', top: '1rem', left: '1rem', backgroundColor: '#059669', padding: '0.25rem 0.75rem', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'white', borderRadius: '9999px', zIndex: 5 }}>{catCampo}</div>
                   </div>
                   
-                  {/* CONTEÚDO DO CARTÃO (pointer-events-none para não empatar o clique no Link no telemóvel) */}
+                  {/* CONTEÚDO DO CARTÃO */}
                   <div style={{ display: 'flex', flexDirection: 'column', padding: '1.5rem', flex: 1, pointerEvents: 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">📍 {localCampo}</span>

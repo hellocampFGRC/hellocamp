@@ -11,7 +11,6 @@ export default function PesquisaPorPais({ params }: { params: Promise<{ lang: st
   const { lang, paisNome } = resolvedParams;
   const isEn = lang === 'en';
 
-  // Descodifica o nome do país vindo do URL (ex: "Reino%20Unido" passa a "Reino Unido")
   const nomePaisFormatado = decodeURIComponent(paisNome);
 
   const [campos, setCampos] = useState<any[]>([]);
@@ -19,10 +18,11 @@ export default function PesquisaPorPais({ params }: { params: Promise<{ lang: st
 
   useEffect(() => {
     const fetchCamposPorPais = async () => {
-      // Procura correspondência na coluna pais ou pais_en
+      // FILTRO APLICADO: Só campos com contrato
       const { data, error } = await supabase
         .from("campos")
         .select("*")
+        .not('contrato_parceiro_url', 'is', null)
         .or(`pais.ilike.${nomePaisFormatado},pais_en.ilike.${nomePaisFormatado}`)
         .order('id', { ascending: false });
 
@@ -72,27 +72,30 @@ export default function PesquisaPorPais({ params }: { params: Promise<{ lang: st
                 key={campo.id} 
                 style={{ backgroundColor: 'white', borderRadius: '1.25rem', border: '1px solid #e2e8f0', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}
               >
+                {/* LINK INVISÍVEL COBRE O CARTÃO INTEIRO */}
+                <Link href={`/${lang}/campo/${campo.id}`} style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+                  <span className="sr-only">Explorar {nomeVisivel}</span>
+                </Link>
+
                 {/* BOTÃO DO CORAÇÃO FLUTUANTE */}
-                <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 10 }}>
+                <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 20 }}>
                   <BotaoFavorito campoId={campo.id} />
                 </div>
 
-                <Link href={`/${lang}/campo/${campo.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                  <div style={{ height: '180px', width: '100%', overflow: 'hidden' }}>
-                    <img src={campo.imagem} alt={nomeVisivel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
+                <div style={{ height: '180px', width: '100%', overflow: 'hidden', position: 'relative' }}>
+                  <img src={campo.imagem} alt={nomeVisivel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
 
-                  <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase' }}>{campo.categoria}</span>
-                    <h3 style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '1.25rem', fontWeight: '800', color: '#0f172a' }}>{nomeVisivel}</h3>
-                    <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>📍 {localVisivel}</p>
-                    
-                    <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 'bold' }}>{campo.idade}</span>
-                      <span style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0f172a' }}>{campo.preco}€</span>
-                    </div>
+                <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', flex: 1, pointerEvents: 'none' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase' }}>{campo.categoria}</span>
+                  <h3 style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '1.25rem', fontWeight: '800', color: '#0f172a' }}>{nomeVisivel}</h3>
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>📍 {localVisivel}</p>
+                  
+                  <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 'bold' }}>{campo.idade}</span>
+                    <span style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0f172a' }}>{campo.preco}€</span>
                   </div>
-                </Link>
+                </div>
               </div>
             );
           })}
@@ -101,6 +104,3 @@ export default function PesquisaPorPais({ params }: { params: Promise<{ lang: st
     </div>
   );
 }
-
-const thStyle = {}; // Não aplicável nesta estrutura de grid
-const tdStyle = {};

@@ -17,7 +17,7 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const { data: camposData } = await supabase
+      const { data: camposData, error } = await supabase
         .from('campos')
         .select(`
           id,
@@ -25,6 +25,7 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
           nome_en,
           vagas_totais,
           turnos,
+          contrato_parceiro_url,
           reservas (
             id,
             turno_nome,
@@ -53,7 +54,6 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
             crianca: reserva.criancas
           }));
 
-          // Se existirem turnos definidos, calculamos a capacidade real somando as vagas de cada turno
           const realVagasTotais = c.turnos && c.turnos.length > 0
             ? c.turnos.reduce((acc: number, curr: any) => acc + (Number(curr.vagas) || 0), 0)
             : (Number(c.vagas_totais) || 0);
@@ -63,7 +63,8 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
             nome: isEn && c.nome_en ? c.nome_en : c.nome,
             vagas_totais: realVagasTotais,
             dataInicioCronologica: dataOrdenacao,
-            inscritos: inscritos
+            inscritos: inscritos,
+            contratoUrl: c.contrato_parceiro_url
           };
         });
 
@@ -105,10 +106,10 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
     await supabase.from('reservas').update({ status_pagamento: novoStatus }).eq('id', reservaId);
   };
 
-  // COMPILAÇÃO DA REALIDADE SELECIONADA (VISÃO GLOBAL OU FILTRADA)
   let campoNomeFicheiro = "geral";
   let vagasTotaisExibidas = 0;
   let inscritosRows: any[] = [];
+  let contextoContratoOculto = false;
 
   if (filtroCampoId === 'todos') {
     campoGrupos.forEach(g => {
@@ -121,13 +122,16 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
       vagasTotaisExibidas = grupoSelecao.vagas_totais;
       campoNomeFicheiro = grupoSelecao.nome.toLowerCase().replace(/\s+/g, '_');
       inscritosRows = grupoSelecao.inscritos.map((i: any) => ({ ...i, campNome: grupoSelecao.nome }));
+      
+      if (!grupoSelecao.contratoUrl) {
+        contextoContratoOculto = true;
+      }
     }
   }
 
   const inscritosCount = inscritosRows.length;
   const disponiveisCount = Math.max(0, vagasTotaisExibidas - inscritosCount);
 
-  // INDICADORES DEMOGRÁFICOS DO CONTEXTO ATIVO
   let masc = 0, fem = 0, comAlergia = 0, somaIdades = 0;
   inscritosRows.forEach((item: any) => {
     if (item.crianca?.sexo === 'Masculino') masc++;
@@ -168,7 +172,6 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
   return (
     <div style={{ fontFamily: 'sans-serif', paddingBottom: '3rem' }}>
       
-      {/* SEÇÃO SUPERIOR FILTRADA COM DESIGN COERENTE */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '2.25rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>
@@ -179,7 +182,6 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
           </p>
         </div>
 
-        {/* REPLICA DO FILTRO PREMIUM DA FATURAÇÃO */}
         <div style={{ minWidth: '300px' }}>
           <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#334155', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>
             {isEn ? 'Select Program Context' : 'Selecionar Campo de Férias'}
@@ -191,7 +193,9 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
           >
             <option value="todos">{isEn ? 'All Active Camps (Global)' : 'Visão Global (Todos os Campos)'}</option>
             {campoGrupos.map(c => (
-              <option key={c.id} value={c.id}>{c.nome}</option>
+              <option key={c.id} value={c.id}>
+                {c.nome} {!c.contratoUrl && '(Oculto)'}
+              </option>
             ))}
           </select>
         </div>
@@ -203,8 +207,16 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+
+          {/* AVISO DO ESTADO DO CONTRATO NA VISTA DO CAMPO */}
+          {contextoContratoOculto && (
+            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', padding: '1rem', borderRadius: '0.75rem' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: '#dc2626', fontWeight: 'bold' }}>
+                🔴 {isEn ? 'This camp is hidden from the public. Waiting for HelloCamp contract.' : 'Atenção: Este campo está invisível para o público pois aguarda a validação e o contrato da HelloCamp.'}
+              </p>
+            </div>
+          )}
           
-          {/* INDICADORES FINACEIROS E LOGÍSTICOS ADAPTIVOS */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
             <div style={statCardStyle}>
               <span style={statLabelStyle}>{isEn ? 'TOTAL CAPACITY' : 'VAGAS TOTAIS CONTEXTO'}</span>
@@ -229,7 +241,6 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
             </div>
           </div>
 
-          {/* DEMOGRAFIA DE AUDITORIA INTERNA */}
           <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '1.25rem', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '2rem' }}>
             <div>
               <span style={analyticsLabelStyle}>{isEn ? 'GENDER RATIO' : 'DISTRIBUIÇÃO POR SEXO'}</span>
@@ -251,7 +262,6 @@ export default function ReservasParceiroAdvanced({ params }: { params: Promise<{
             </div>
           </div>
 
-          {/* LISTA NOMINAL CENTRALIZADA */}
           <div style={{ backgroundColor: 'white', borderRadius: '1.25rem', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
             <div style={{ padding: '1.25rem 1.5rem', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#334155', textTransform: 'uppercase' }}>{isEn ? 'NOMINAL ROSTER' : 'LISTA NOMINAL DE PARTICIPANTES FILTRADA'}</h3>
