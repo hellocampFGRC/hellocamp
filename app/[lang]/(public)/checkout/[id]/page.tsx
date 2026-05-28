@@ -16,6 +16,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const [criancas, setCriancas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [processingStripe, setProcessingStripe] = useState(false);
 
   const quantidade = parseInt(searchParams.get("quantidade_criancas") || "1");
   const diasInscritosParam = searchParams.get("dias_inscritos");
@@ -36,7 +37,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   
   const [selecoesCriancas, setSelecoesCriancas] = useState<string[]>(Array(quantidade).fill(""));
 
-  // ESTADOS DO POP-UP (MODAL)
   const [showModal, setShowModal] = useState(false);
   const [indexToAssign, setIndexToAssign] = useState<number | null>(null);
   const [savingChild, setSavingChild] = useState(false);
@@ -67,9 +67,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     fetchDados();
   }, [id, lang, router]);
 
-  if (loading || !campo) return <div style={{ padding: '4rem', textAlign: 'center' }}>{isEn ? 'Preparing checkout...' : 'A preparar a sua reserva...'}</div>;
+  if (loading || !campo) return <div style={{ padding: '4rem', textAlign: 'center', fontWeight: 'bold', color: '#64748b' }}>{isEn ? 'Preparing secure checkout...' : 'A preparar a sua reserva de forma segura...'}</div>;
 
-  // CÁLCULOS
   const noites = Math.max(1, diasEfetivos - 1);
   const valAlimentacao = extAlimentacao ? (Number(campo.extra_alimentacao) || 0) * diasEfetivos : 0;
   const valAlojamento = extAlojamento ? (Number(campo.extra_alojamento) || 0) * noites : 0;
@@ -85,7 +84,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
   const precoFinalTotal = (precoBaseUnitario + totalExtrasPorCrianca) * quantidade;
 
-  // LÓGICA DO POP-UP
   const openNewChildModal = (index: number) => {
     setNewChild({ nome: '', nif: '', data_nascimento: '', sexo: '', restricoes_alimentares: '' });
     setIndexToAssign(index);
@@ -112,7 +110,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     setSavingChild(false);
   };
 
-  // ATUALIZAÇÃO AUTOMÁTICA DA CRIANÇA EXISTENTE (ONBLUR)
   const handleUpdateLocalCrianca = (idDaCrianca: string, campoTabela: string, valor: string) => {
     setCriancas(prev => prev.map(c => c.id === idDaCrianca ? { ...c, [campoTabela]: valor } : c));
   };
@@ -120,45 +117,75 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     await supabase.from('criancas').update({ [campoTabela]: valor }).eq('id', idDaCrianca);
   };
 
-  // SUBMETER RESERVA
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selecoesCriancas.some(c => c === "")) {
       alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione uma criança para todas as vagas."); return;
     }
 
-    setLoading(true);
-    try {
-      const promessasReservas = selecoesCriancas.map(crianca_id => {
-        return supabase.from('reservas').insert([{
-          cliente_id: user.id, crianca_id: crianca_id, campo_id: campo.id,
-          organizador_id: campo.organizador_id, quantidade_criancas: 1,
-          valor_total: precoBaseUnitario + totalExtrasPorCrianca,
-          turno_nome: turnoSelecionado?.nome || 'Programa Base',
-          extras_escolhidos: { extAlimentacao, extAlojamento, extProlongamento, extTransporte, dias_inscritos: diasEfetivos }
-        }]);
-      });
+    setProcessingStripe(true);
 
-      await Promise.all(promessasReservas);
-      const nomesCriancasEscolhidas = criancas.filter(c => selecoesCriancas.includes(c.id)).map(c => c.nome).join(", ");
+    try {
+      // 1. Criar Reservas como Pendentes
+      const insercoes = selecoesCriancas.map(crianca_id => ({
+        cliente_id: user.id, crianca_id: crianca_id, campo_id: campo.id,
+        organizador_id: campo.organizador_id, quantidade_criancas: 1,
+        valor_total: precoBaseUnitario + totalExtrasPorCrianca,
+        turno_nome: turnoSelecionado?.nome || 'Programa Base',
+        status_pagamento: 'Pendente',
+        extras_escolhidos: { extAlimentacao, extAlojamento, extProlongamento, extTransporte, dias_inscritos: diasEfetivos }
+      }));
+
+      const { data: reservasData, error } = await supabase.from('reservas').insert(insercoes).select('id');
+      if (error) throw error;
       
-      await fetch('/api/notificar-reserva', {
+      const idsCriados = reservasData.map(r => r.id);
+
+      // SE O PARCEIRO RECEBER DIRETO, O FLUXO TERMINA AQUI. FICA PENDENTE.
+      if (organizador?.modelo_pagamento === 'parceiro_recebe') {
+        router.push(`/${lang}/sucesso`);
+        return;
+      }
+
+      // 2. CONECTAR À API STRIPE PARA PAGAMENTO DIGITAL (HelloCamp processa)
+      const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          emailPai: user.email, organizadorId: organizador.id, campoNome: campo.nome,
-          criancas: nomesCriancasEscolhidas, turno: turnoSelecionado?.nome || 'Programa Base',
-          total: precoFinalTotal, dias: diasEfetivos
+          reservasIds: idsCriados,
+          totalAmount: precoFinalTotal,
+          userEmail: user.email,
+          lang: lang,
+          campoNome: campo.nome,
+          stripeAccountId: organizador?.stripe_account_id // Se o parceiro tiver Stripe Connect
         })
       });
 
-      router.push(`/${lang}/sucesso`);
-    } catch (error) { alert("Erro ao processar reserva."); } finally { setLoading(false); }
+      const { url } = await res.json();
+      
+      if (url) {
+        window.location.href = url; // Redireciona o cliente para o ecrã oficial da Stripe
+      } else {
+        throw new Error("Falha ao gerar link de pagamento.");
+      }
+
+    } catch (error) { 
+      alert("Erro ao processar reserva. Tente novamente."); 
+      setProcessingStripe(false); 
+    }
   };
 
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#f3f4f6', fontFamily: 'sans-serif', paddingBottom: '5rem', paddingTop: '3rem', position: 'relative' }}>
       
+      {processingStripe && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="spinner" style={{ width: '50px', height: '50px', border: '5px solid #e2e8f0', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }}></div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0f172a' }}>A redirecionar para pagamento seguro...</h2>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
       {/* POP-UP MODAL NOVA CRIANÇA */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.7)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
@@ -237,7 +264,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                       </button>
                     </div>
 
-                    {/* CARTÃO DE EDIÇÃO INLINE DA CRIANÇA */}
                     {childInfo && (
                       <div style={{ marginTop: '1.5rem', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
@@ -279,27 +305,32 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
             </section>
 
             <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{isEn ? 'Payment Method' : 'Método de Pagamento'}</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{isEn ? 'Payment Processing' : 'Método de Pagamento'}</h2>
               
               {organizador?.modelo_pagamento === 'parceiro_recebe' ? (
                 <div style={{ padding: '1.5rem', backgroundColor: '#f0fdf4', border: '1px solid #059669', borderRadius: '1rem' }}>
                   <p style={{ fontWeight: 'bold', color: '#064e3b', marginBottom: '0.5rem' }}>Transferência Bancária Direta (Parceiro)</p>
                   <p style={{ fontSize: '14px', color: '#334155', margin: 0 }}>Entidade: {organizador.empresa_nome}</p>
                   <p style={{ fontSize: '14px', color: '#334155', margin: 0 }}>IBAN: {organizador.iban}</p>
-                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '1rem' }}>* O pagamento será processado diretamente pelo parceiro organizador do campo.</p>
+                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '1rem' }}>* A sua reserva ficará pendente. O parceiro irá processar este pagamento diretamente e validar a sua inscrição.</p>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.25rem', border: '2px solid #059669', borderRadius: '1rem', backgroundColor: '#f0fdf4', cursor: 'pointer' }}>
-                      <input type="radio" name="Metodo_Pagamento" value="MB WAY" defaultChecked style={{ width: '20px', height: '20px', accentColor: '#059669' }} />
-                      <span style={{ fontWeight: 'bold', color: '#064e3b' }}>MB WAY (Processado pela HelloCamp)</span>
-                  </label>
+                  <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <p style={{ fontWeight: 'bold', color: '#0f172a', margin: '0 0 0.5rem 0' }}>Pagamento 100% Seguro</p>
+                      <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Ao confirmar, será redirecionado para a plataforma Stripe (suporta Cartão e MB WAY).</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/MB_Way.svg/2560px-MB_Way.svg.png" alt="MBWAY" style={{ height: '24px' }} />
+                    </div>
+                  </div>
                 </div>
               )}
             </section>
 
-            <button type="submit" disabled={loading} style={{ width: '100%', padding: '1.25rem', backgroundColor: '#de5d25', color: 'white', fontSize: '1.125rem', fontWeight: '900', borderRadius: '1rem', border: 'none', cursor: 'pointer' }}>
-              {loading ? 'A processar...' : `Confirmar e Pagar ${precoFinalTotal}€`}
+            <button type="submit" disabled={processingStripe} style={{ width: '100%', padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontSize: '1.125rem', fontWeight: '900', borderRadius: '1rem', border: 'none', cursor: processingStripe ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.3)', transition: 'transform 0.2s' }}>
+              Confirmar e Pagar {precoFinalTotal}€
             </button>
           </form>
         </div>
