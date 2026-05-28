@@ -1,0 +1,169 @@
+import { supabase } from "@/lib/supabase";
+import Link from "next/link";
+import { getDictionary } from "@/lib/getDictionary";
+import BotaoFavorito from "../components/BotaoFavorito";
+
+export default async function PaginaPesquisa({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ lang: string }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const { lang } = await params;
+  const dict = await getDictionary(lang as "pt" | "en");
+  const sp = await searchParams;
+  const isEn = lang === 'en';
+  
+  const categoria = typeof sp?.categoria === "string" ? sp.categoria : "";
+  const distrito = typeof sp?.distrito === "string" ? sp.distrito : "";
+  const idade = typeof sp?.idade === "string" ? sp.idade : "";
+
+  let query = supabase.from("campos").select("*");
+
+  if (categoria) query = query.eq("categoria", categoria);
+  if (distrito) query = query.ilike("Distrito", `%${distrito}%`);
+  if (idade) query = query.eq("idade", idade);
+
+  const { data: resultados } = await query.order("nome");
+  const filtrosAtivos = categoria || distrito || idade;
+
+  const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
+
+  return (
+    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', color: '#111827', paddingBottom: '5rem' }}>
+      
+      {/* FILTROS HEADER INTERATIVO */}
+      <section style={{ backgroundColor: 'white', borderBottom: '1px solid #f1f5f9', padding: '2.5rem 1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+          
+          <Link href={`/${lang}`} style={{ display: 'inline-block', marginBottom: '1.5rem', fontSize: '13px', fontWeight: 'bold', color: '#64748b', textDecoration: 'none' }}>
+            &larr; {dict.pesquisa.voltar}
+          </Link>
+
+          <h1 style={{ fontSize: '1.875rem', fontWeight: '900', color: '#0f172a', marginBottom: '1.5rem' }}>
+            {filtrosAtivos ? dict.pesquisa.resultados : dict.pesquisa.todos}
+          </h1>
+          
+          {/* FORMULÁRIO DE FILTROS SEMPRE VISÍVEL */}
+          <form method="GET" action={`/${lang}/pesquisa`} style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+            
+            <select name="categoria" defaultValue={categoria} style={selectStyle}>
+              <option value="">{isEn ? 'All Categories' : 'Todas as Categorias'}</option>
+              <option value="Desporto">{isEn ? 'Sports' : 'Desporto'}</option>
+              <option value="Aventura & Natureza">{isEn ? 'Adventure & Nature' : 'Aventura & Natureza'}</option>
+              <option value="Tecnologia & Ciência">{isEn ? 'Tech & Science' : 'Tecnologia & Ciência'}</option>
+              <option value="Artes & Criatividade">{isEn ? 'Arts & Creativity' : 'Artes & Criatividade'}</option>
+              <option value="Línguas">{isEn ? 'Languages' : 'Línguas'}</option>
+            </select>
+
+            <select name="distrito" defaultValue={distrito} style={selectStyle}>
+              <option value="">{isEn ? 'All Districts' : 'Todos os Distritos'}</option>
+              {distritosPT.map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+
+            <select name="idade" defaultValue={idade} style={selectStyle}>
+              <option value="">{isEn ? 'All Ages' : 'Todas as Idades'}</option>
+              <option value="6-9 anos">{isEn ? '6-9 years' : '6-9 anos'}</option>
+              <option value="10-13 anos">{isEn ? '10-13 years' : '10-13 anos'}</option>
+              <option value="14-17 anos">{isEn ? '14-17 years' : '14-17 anos'}</option>
+            </select>
+
+            <button type="submit" style={btnFiltroStyle}>
+              {isEn ? 'Update Results' : 'Atualizar Resultados'}
+            </button>
+            
+            {filtrosAtivos && (
+              <Link href={`/${lang}/pesquisa`} style={{ fontSize: '13px', fontWeight: 'bold', color: '#dc2626', textDecoration: 'none', marginLeft: '0.5rem' }}>
+                {isEn ? 'Clear filters' : 'Limpar filtros'}
+              </Link>
+            )}
+          </form>
+
+        </div>
+      </section>
+
+      {/* RESULTADOS */}
+      <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '3.5rem 1.5rem' }}>
+        {!resultados || resultados.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '5rem 1.5rem', backgroundColor: 'white', borderRadius: '1.5rem', border: '1px solid #f1f5f9' }}>
+            <p style={{ fontSize: '1.25rem', color: '#64748b' }}>{dict.pesquisa.sem_resultados}</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '2rem' }}>
+            {resultados.map((campo: any) => {
+              const nomeCampo = lang === 'en' && campo.nome_en ? campo.nome_en : campo.nome;
+              const catCampo = lang === 'en' && campo.categoria_en ? campo.categoria_en : campo.categoria;
+              const localCampo = lang === 'en' && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
+              const idadeCampo = lang === 'en' && campo.idade_en ? campo.idade_en : campo.idade;
+
+              return (
+                <div key={campo.id} style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'white', overflow: 'hidden', border: '1px solid #e2e8f0', borderRadius: '1.5rem', position: 'relative', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', transition: 'transform 0.2s' }}>
+                  
+                  {/* BOTÃO DO CORAÇÃO FLUTUANTE */}
+                  <div style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', zIndex: 10 }}>
+                    <BotaoFavorito campoId={campo.id} />
+                  </div>
+
+                  <Link href={`/${lang}/campo/${campo.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <div style={{ position: 'relative', height: '200px', width: '100%', overflow: 'hidden' }}>
+                      <img src={campo.imagem} alt={nomeCampo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div style={{ position: 'absolute', top: '0.75rem', left: '0.75rem', backgroundColor: '#059669', padding: '0.3rem 0.8rem', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'white', borderRadius: '999px' }}>
+                        {catCampo}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', padding: '1.5rem', flex: 1 }}>
+                      <span style={{ fontSize: '13px', fontWeight: '700', color: '#047857', textTransform: 'uppercase' }}>
+                        📍 {localCampo}
+                      </span>
+                      <h3 style={{ marginTop: '0.5rem', fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.3 }}>{nomeCampo}</h3>
+                      
+                      <p style={{ marginTop: '0.5rem', fontSize: '14px', color: '#64748b', fontWeight: '500' }}>
+                        {dict.pesquisa.idade}: <span style={{ color: '#0f172a' }}>{idadeCampo}</span>
+                      </p>
+                      
+                      <div style={{ marginTop: 'auto', paddingTop: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9' }}>
+                        <p style={{ fontSize: '1.5rem', fontWeight: '900', color: '#059669', margin: 0 }}>{campo.preco}€</p>
+                        <span style={{ fontSize: '14px', fontWeight: '700', color: '#f59e0b' }}>{dict.pesquisa.explorar} &rarr;</span>
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+const selectStyle: React.CSSProperties = {
+  padding: '0.875rem 2.5rem 0.875rem 1rem',
+  borderRadius: '0.75rem',
+  border: '1px solid #cbd5e1',
+  backgroundColor: '#f8fafc',
+  fontSize: '14px',
+  fontWeight: '600',
+  color: '#0f172a',
+  outline: 'none',
+  cursor: 'pointer',
+  appearance: 'none',
+  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 1rem center',
+  backgroundSize: '1em'
+};
+
+const btnFiltroStyle: React.CSSProperties = {
+  padding: '0.875rem 1.5rem',
+  backgroundColor: '#0f172a',
+  color: 'white',
+  fontWeight: 'bold',
+  fontSize: '14px',
+  borderRadius: '0.75rem',
+  border: 'none',
+  cursor: 'pointer'
+};
