@@ -10,13 +10,11 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [connectLoading, setConnectLoading] = useState(false);
   const [perfil, setPerfil] = useState<any>(null);
   
-  // Dados integrais carregados da base de dados
   const [camposParceiro, setCamposParceiro] = useState<any[]>([]);
   const [reservasFull, setReservasFull] = useState<any[]>([]);
-  
-  // Estado do Filtro Superior
   const [filtroCampoId, setFiltroCampoId] = useState<string>('todos');
 
   useEffect(() => {
@@ -27,14 +25,12 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
       const { data: perfilData } = await supabase.from('perfis').select('*').eq('id', session.user.id).single();
       setPerfil(perfilData || {});
 
-      // Buscar a lista de campos que pertencem a este organizador para preencher o Dropdown
       const { data: camposData } = await supabase
         .from('campos')
         .select('id, nome, preco, taxa_comissao, base_comissao, contrato_parceiro_url')
         .eq('organizador_id', session.user.id);
       setCamposParceiro(camposData || []);
 
-      // Buscar TODAS as reservas e cruzar os dados do campo (para as regras de comissão)
       const { data: reservasData } = await supabase
         .from('reservas')
         .select(`
@@ -51,7 +47,36 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
     carregarDados();
   }, []);
 
-  const handleSave = async (e: React.FormEvent) => {
+  // Lógica para ligar ou gerir a conta automática na Stripe
+  const handleStripeConnect = async () => {
+    setConnectLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch('/api/stripe-connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: session.user.id,
+          email: session.user.email,
+          lang: lang
+        })
+      });
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url; // Redireciona para o formulário seguro da Stripe
+      } else {
+        alert("Erro ao conectar com a Stripe: " + data.error);
+      }
+    } catch (err: any) {
+      alert("Erro técnico: " + err.message);
+    }
+    setConnectLoading(false);
+  };
+
+  const handleSaveDetails = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -59,46 +84,33 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
     if (session && perfil) {
       const { error } = await supabase.from('perfis').update({
         empresa_nome: perfil.empresa_nome,
-        nif_empresa: perfil.nif_empresa,
-        iban: perfil.iban,
-        modelo_pagamento: perfil.modelo_pagamento
+        nif_empresa: perfil.nif_empresa
       }).eq('id', session.user.id);
       
       if (error) alert("Erro ao guardar: " + error.message);
-      else alert(isEn ? "Billing details saved." : "Dados de faturação guardados com sucesso.");
+      else alert(isEn ? "Company details saved." : "Dados da empresa guardados com sucesso.");
     }
     setSaving(false);
   };
 
   if (loading) return <div style={{ padding: '4rem', textAlign: 'center', fontWeight: 'bold', color: '#64748b' }}>{isEn ? 'Loading financial data...' : 'A carregar dados financeiros e comissões...'}</div>;
 
-  // --- FILTRAGEM DE RESERVAS PELO DROPDOWN ---
-  const reservasAtivas = filtroCampoId === 'todos' 
-    ? reservasFull 
-    : reservasFull.filter(r => r.campo_id === filtroCampoId);
+  const reservasAtivas = filtroCampoId === 'todos' ? reservasFull : reservasFull.filter(r => r.campo_id === filtroCampoId);
 
-  // --- MATEMÁTICA FINANCEIRA EM TEMPO REAL ---
   const taxaComissaoGeral = perfil?.taxa_comissao || 12;
   const baseIncidenciaGeral = perfil?.base_comissao || 'total'; 
-  const modeloPagamento = perfil?.modelo_pagamento || 'plataforma_recebe';
 
   let totalVolume = 0;
   let totalComissoesGeradas = 0;
-  let saldoHelloCampDeveParceiro = 0;
-  let saldoParceiroDeveHelloCamp = 0;
+  let saldoParceiroSeraTransferido = 0;
 
   const historicoCalculado = reservasAtivas.map(res => {
     const valorReserva = Number(res.valor_total) || 0;
-    
     if (res.status_pagamento !== 'Reembolsado') {
       totalVolume += valorReserva;
     }
 
-    // Regras Específicas do Campo (se existirem) vs. Regras do Contrato Geral
-    const taxaLinha = (res.campos?.taxa_comissao !== null && res.campos?.taxa_comissao !== undefined)
-      ? Number(res.campos.taxa_comissao)
-      : Number(taxaComissaoGeral);
-
+    const taxaLinha = (res.campos?.taxa_comissao !== null && res.campos?.taxa_comissao !== undefined) ? Number(res.campos.taxa_comissao) : Number(taxaComissaoGeral);
     const baseLinha = res.campos?.base_comissao || baseIncidenciaGeral;
 
     let valorIncidencia = valorReserva;
@@ -113,37 +125,30 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
     
     if (res.status_pagamento !== 'Reembolsado') {
       totalComissoesGeradas += valorComissao;
-
-      if (modeloPagamento === 'plataforma_recebe') {
-        saldoHelloCampDeveParceiro += (valorReserva - valorComissao);
-      } else {
-        saldoParceiroDeveHelloCamp += valorComissao;
-      }
+      saldoParceiroSeraTransferido += (valorReserva - valorComissao);
     }
 
     return { ...res, valorIncidencia, valorComissao, taxaAplicada: taxaLinha, baseAplicada: baseLinha };
   });
 
-  // --- DADOS PARA O CARTÃO DE COMISSÃO DE ACORDO COM O FILTRO ---
   const campoFiltradoData = filtroCampoId !== 'todos' ? camposParceiro.find(c => c.id === filtroCampoId) : null;
   const taxaExibida = campoFiltradoData && campoFiltradoData.taxa_comissao !== null ? campoFiltradoData.taxa_comissao : taxaComissaoGeral;
   const baseExibida = campoFiltradoData && campoFiltradoData.base_comissao ? campoFiltradoData.base_comissao : baseIncidenciaGeral;
   const contratoExibido = campoFiltradoData?.contrato_parceiro_url || null;
 
   return (
-    <main style={{ maxWidth: '1000px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+    <main style={{ maxWidth: '1000px', margin: '0 auto', fontFamily: 'sans-serif', padding: '1rem' }}>
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>
-            {isEn ? 'Billing & Payments' : 'Faturação e Pagamentos'}
+            {isEn ? 'Billing & Automated Payouts' : 'Faturação e Recebimentos Automáticos'}
           </h1>
           <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: '15px' }}>
-            {isEn ? 'Manage financial details and track commissions.' : 'Gira as transações, comissões e saldos em tempo real.'}
+            {isEn ? 'Track splits, manage company info and connect your bank account via Stripe.' : 'Controle a divisão de valores, faturas e sincronize o seu banco de forma automatizada.'}
           </p>
         </div>
 
-        {/* FILTRO GLOBAL DE CAMPOS */}
         <div style={{ minWidth: '280px' }}>
           <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#334155', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
             {isEn ? 'Filter by Camp' : 'Filtrar Finanças por Campo'}
@@ -161,105 +166,107 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
         </div>
       </div>
 
-      {/* 1. DASHBOARD DE RESUMO FINANCEIRO DINÂMICO */}
+      {/* PAINEL DE CONFIGURAÇÃO DE CONFIGURAÇÃO STRIPE CONNECT */}
+      <div style={{ marginBottom: '2.5rem', padding: '2rem', borderRadius: '1rem', backgroundColor: perfil?.stripe_account_id ? '#f0fdf4' : '#f8fafc', border: `1px solid ${perfil?.stripe_account_id ? '#bbf7d0' : '#e2e8f0'}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>
+              {perfil?.stripe_account_id ? '✓ Configuração Bancária Concluída' : '⚠️ Ative os Recebimentos Automáticos'}
+            </h3>
+            <p style={{ margin: '0.5rem 0 0 0', fontSize: '14px', color: '#475569', lineHeight: 1.4 }}>
+              {perfil?.stripe_account_id 
+                ? 'A sua conta bancária está vinculada de forma segura através da Stripe. O valor das inscrições (deduzido da comissão) será transferido diretamente para a sua conta.' 
+                : 'Para poder receber os pagamentos das inscrições feitas pelos pais, necessita de associar os seus dados de pagamento à nossa plataforma parceira Stripe.'}
+            </p>
+          </div>
+          <button 
+            onClick={handleStripeConnect} 
+            disabled={connectLoading}
+            style={{
+              padding: '1rem 1.5rem',
+              backgroundColor: perfil?.stripe_account_id ? '#059669' : '#0f172a',
+              color: 'white',
+              fontWeight: 'bold',
+              borderRadius: '0.5rem',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            {connectLoading ? 'A processar...' : (perfil?.stripe_account_id ? 'Gerir Conta Stripe' : 'Ligar à Stripe')}
+          </button>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
-        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
           <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{isEn ? 'Net Volume' : 'Volume Total Transacionado'}</p>
           <p style={{ fontSize: '2rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>{totalVolume.toFixed(2)}€</p>
         </div>
 
-        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{isEn ? 'Commissions' : 'Comissões HelloCamp'}</p>
+        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+          <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{isEn ? 'Retained Commission' : 'Comissão HelloCamp'}</p>
           <p style={{ fontSize: '2rem', fontWeight: '900', color: '#ef4444', margin: 0 }}>{totalComissoesGeradas.toFixed(2)}€</p>
         </div>
 
-        <div style={{ backgroundColor: modeloPagamento === 'plataforma_recebe' ? '#ecfdf5' : '#fef2f2', padding: '1.5rem', borderRadius: '1rem', border: `1px solid ${modeloPagamento === 'plataforma_recebe' ? '#10b981' : '#ef4444'}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <p style={{ fontSize: '12px', fontWeight: 'bold', color: modeloPagamento === 'plataforma_recebe' ? '#065f46' : '#991b1b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-            {modeloPagamento === 'plataforma_recebe' ? (isEn ? 'Balance to Receive (from HelloCamp)' : 'Saldo a Receber (da HelloCamp)') : (isEn ? 'Balance to Pay (to HelloCamp)' : 'Saldo a Pagar (à HelloCamp)')}
+        <div style={{ backgroundColor: '#ecfdf5', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #10b981' }}>
+          <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#065f46', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+            {isEn ? 'Your Net Balance' : 'O Seu Ganho Líquido Transferido'}
           </p>
-          <p style={{ fontSize: '2rem', fontWeight: '900', color: modeloPagamento === 'plataforma_recebe' ? '#059669' : '#dc2626', margin: 0 }}>
-            {modeloPagamento === 'plataforma_recebe' ? saldoHelloCampDeveParceiro.toFixed(2) : saldoParceiroDeveHelloCamp.toFixed(2)}€
-          </p>
-          <p style={{ fontSize: '11px', color: modeloPagamento === 'plataforma_recebe' ? '#047857' : '#b91c1c', marginTop: '0.5rem', fontWeight: 'bold' }}>
-            * Referente ao filtro acima selecionado
+          <p style={{ fontSize: '2rem', fontWeight: '900', color: '#059669', margin: 0 }}>
+            {saldoParceiroSeraTransferido.toFixed(2)}€
           </p>
         </div>
       </div>
 
       <div style={{ display: 'grid', gap: '2rem', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', marginBottom: '2.5rem', alignItems: 'start' }}>
         
-        {/* 2. DADOS BANCÁRIOS E FISCAIS */}
+        {/* DADOS FISCAIS DA EMPRESA */}
         <div style={cardStyle}>
-          <h2 style={cardTitleStyle}>{isEn ? 'Company Details' : 'Dados da Empresa / Pagamento'}</h2>
-          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <h2 style={cardTitleStyle}>{isEn ? 'Company Details' : 'Dados Fiscais da Empresa'}</h2>
+          <form onSubmit={handleSaveDetails} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
               <label style={labelStyle}>{isEn ? 'Company Name' : 'Nome da Empresa / Entidade'}</label>
               <input type="text" value={perfil.empresa_nome || ''} onChange={e => setPerfil({...perfil, empresa_nome: e.target.value})} style={inputStyle} required />
             </div>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>NIF</label>
-                <input type="text" value={perfil.nif_empresa || ''} onChange={e => setPerfil({...perfil, nif_empresa: e.target.value})} style={inputStyle} required />
-              </div>
-              <div style={{ flex: 2 }}>
-                <label style={labelStyle}>IBAN (Transferências)</label>
-                <input type="text" value={perfil.iban || ''} onChange={e => setPerfil({...perfil, iban: e.target.value})} style={inputStyle} required />
-              </div>
+            <div>
+              <label style={labelStyle}>NIF</label>
+              <input type="text" value={perfil.nif_empresa || ''} onChange={e => setPerfil({...perfil, nif_empresa: e.target.value})} style={inputStyle} required />
             </div>
-            <div style={{ marginTop: '0.5rem' }}>
-              <label style={labelStyle}>{isEn ? 'Payment Flow' : 'Modelo de Pagamento Preferencial'}</label>
-              <select value={perfil.modelo_pagamento || 'plataforma_recebe'} onChange={e => setPerfil({...perfil, modelo_pagamento: e.target.value})} style={selectStyle}>
-                <option value="plataforma_recebe">{isEn ? 'HelloCamp receives from client and transfers to me' : 'HelloCamp recebe do cliente e transfere-me'}</option>
-                <option value="parceiro_recebe">{isEn ? 'I receive directly and pay commission to HelloCamp' : 'Recebo diretamente do cliente e pago comissão à HelloCamp'}</option>
-              </select>
-            </div>
-            <button type="submit" disabled={saving} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', transition: 'transform 0.1s' }} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}>
-              {saving ? 'A guardar...' : (isEn ? 'Save Details' : 'Gravar Dados')}
+            <button type="submit" disabled={saving} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}>
+              {saving ? 'A guardar...' : (isEn ? 'Save Details' : 'Gravar Dados Fiscais')}
             </button>
           </form>
         </div>
 
-        {/* 3. ACORDO BASE DE COMISSÕES (DINÂMICO) */}
+        {/* ACORDO DE COMISSÕES */}
         <div style={cardStyle}>
           <h2 style={cardTitleStyle}>
             {filtroCampoId === 'todos' ? (isEn ? 'Your Global Agreement' : 'Acordo de Comissionamento Geral') : (isEn ? 'Camp Agreement' : 'Contrato Deste Campo')}
           </h2>
-          
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1 }}>
-            
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
               <div style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', textAlign: 'center', minWidth: '120px' }}>
-                <p style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                  {filtroCampoId === 'todos' ? 'Taxa Base' : 'Taxa do Campo'}
-                </p>
+                <p style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{filtroCampoId === 'todos' ? 'Taxa Base' : 'Taxa do Campo'}</p>
                 <span style={{ fontSize: '2rem', fontWeight: '900', color: '#059669' }}>{taxaExibida}%</span>
               </div>
               <div>
                 <p style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Base de Incidência</p>
                 <p style={{ fontSize: '14px', color: '#0f172a', fontWeight: 'bold', margin: '0 0 0.5rem 0' }}>
-                  {baseExibida === 'apenas_programa' 
-                    ? (isEn ? 'Base program only (Extras excluded)' : 'Apenas sobre o Programa Base')
-                    : (isEn ? 'Total value (Program + Extras)' : 'Sobre Valor Total da Reserva')}
+                  {baseExibida === 'apenas_programa' ? (isEn ? 'Base program only (Extras excluded)' : 'Apenas sobre o Programa Base') : (isEn ? 'Total value (Program + Extras)' : 'Sobre Valor Total da Reserva')}
                 </p>
               </div>
             </div>
 
-            {/* DOWNLOAD DO CONTRATO (SÓ APARECE SE HOUVER UM CAMPO ESPECÍFICO COM CONTRATO) */}
             {filtroCampoId !== 'todos' && contratoExibido && (
-              <a 
-                href={contratoExibido} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                style={{ padding: '1rem', backgroundColor: '#fffbeb', color: '#b45309', borderRadius: '0.5rem', textDecoration: 'none', fontWeight: 'bold', fontSize: '13px', border: '1px solid #fde68a', textAlign: 'center', display: 'block' }}
-              >
+              <a href={contratoExibido} target="_blank" rel="noopener noreferrer" style={{ padding: '1rem', backgroundColor: '#fffbeb', color: '#b45309', borderRadius: '0.5rem', textDecoration: 'none', fontWeight: 'bold', fontSize: '13px', border: '1px solid #fde68a', textAlign: 'center', display: 'block' }}>
                 📥 Descarregar Contrato Validado Pela HelloCamp
               </a>
             )}
             
-            {/* CORREÇÃO DO ERRO VISUAL: Caixa amarela agora fica perfeitamente contida */}
             <div style={{ backgroundColor: '#fefce8', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #fef08a', marginTop: 'auto' }}>
               <p style={{ fontSize: '12px', color: '#854d0e', margin: 0, fontWeight: 'bold', lineHeight: 1.4 }}>
-                💡 {isEn ? 'To change your commission rate or base, please contact your account manager.' : 'Para renegociar a sua taxa base ou alterar os termos do seu contrato, por favor contacte a Direção da HelloCamp.'}
+                💡 {isEn ? 'Commission fees are auto-deducted directly at checkout transaction.' : 'As comissões da plataforma são deduzidas e divididas automaticamente no ato do pagamento.'}
               </p>
             </div>
           </div>
@@ -267,7 +274,7 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
 
       </div>
 
-      {/* 4. TABELA DE HISTÓRICO DE TRANSAÇÕES */}
+      {/* TABELA DE HISTÓRICO */}
       <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
         <h2 style={cardTitleStyle}>{isEn ? 'Transaction History' : 'Histórico de Transações e Comissões'}</h2>
         
@@ -321,10 +328,9 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
   );
 }
 
-// Estilos Reutilizáveis
 const cardStyle = { display: 'flex', flexDirection: 'column' as const, backgroundColor: 'white', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' };
 const cardTitleStyle = { fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' };
 const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '0.5rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
-const inputBase = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const, transition: 'border-color 0.2s' };
+const inputBase = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };
 const inputStyle = { ...inputBase };
 const selectStyle = { ...inputBase, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2em' };
