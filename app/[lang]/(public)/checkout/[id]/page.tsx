@@ -136,8 +136,11 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         extras_escolhidos: { extAlimentacao, extAlojamento, extProlongamento, extTransporte, dias_inscritos: diasEfetivos }
       }));
 
-      const { data: reservasData, error } = await supabase.from('reservas').insert(insercoes).select('id');
-      if (error) throw error;
+      const { data: reservasData, error: supabaseError } = await supabase.from('reservas').insert(insercoes).select('id');
+      
+      if (supabaseError) {
+        throw new Error("Erro Base de Dados: " + supabaseError.message);
+      }
       
       const idsCriados = reservasData.map(r => r.id);
 
@@ -161,17 +164,22 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         })
       });
 
+      // Se a resposta HTTP for um erro (ex: 500)
+      if (!res.ok) {
+        const textError = await res.text();
+        throw new Error("Erro Servidor (HTTP " + res.status + "): " + textError);
+      }
+
       const data = await res.json();
       
       if (data.url) {
         window.location.href = data.url; // Redireciona o cliente para a Stripe
       } else {
-        alert("Erro na Stripe: " + (data.error || "Verifique as configurações."));
-        setProcessingStripe(false);
+        throw new Error("Erro na Stripe: A resposta não continha um link de pagamento válido.");
       }
 
-    } catch (error) { 
-      alert("Erro ao processar ligação. Tente novamente."); 
+    } catch (error: any) { 
+      alert("ATENÇÃO - Erro Técnico:\n" + error.message); 
       setProcessingStripe(false); 
     }
   };
@@ -321,8 +329,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                     <p style={{ fontWeight: 'bold', color: '#0f172a', margin: '0 0 0.5rem 0' }}>Stripe Checkout</p>
                     <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Pague de forma 100% segura através de MB WAY, Cartão de Crédito ou Débito.</p>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/MB_Way.svg/2560px-MB_Way.svg.png" alt="MBWAY" style={{ height: '20px' }} />
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontWeight: 'bold', color: '#0f172a' }}>
+                    <span style={{ fontStyle: 'italic', color: '#005f8f' }}>MB WAY</span>
                     <span style={{ fontSize: '24px' }}>💳</span>
                   </div>
                 </div>
