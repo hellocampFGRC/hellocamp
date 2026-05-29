@@ -148,7 +148,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       }
 
       // 2. CONECTAR À API STRIPE PARA PAGAMENTO DIGITAL (HelloCamp processa)
-      const res = await fetch('/api/stripe/checkout', {
+      const res = await fetch('/api/stripe-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
