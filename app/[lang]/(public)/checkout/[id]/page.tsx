@@ -5,6 +5,18 @@ import { supabase } from "@/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import React from "react";
 
+const calcularIdade = (dataNasc: string) => {
+  if (!dataNasc) return 0;
+  const hoje = new Date();
+  const nasc = new Date(dataNasc);
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) {
+    idade--;
+  }
+  return idade;
+};
+
 export default function CheckoutPage({ params }: { params: Promise<{ lang: string; id: string }> }) {
   const { lang, id } = use(params);
   const router = useRouter();
@@ -14,6 +26,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const [campo, setCampo] = useState<any>(null);
   const [organizador, setOrganizador] = useState<any>(null);
   const [criancas, setCriancas] = useState<any[]>([]);
+  const [reservasExistentes, setReservasExistentes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [processingStripe, setProcessingStripe] = useState(false);
@@ -62,22 +75,23 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       const { data: criancasData } = await supabase.from("criancas").select("*").eq("cliente_id", session.user.id).order('created_at', { ascending: false });
       setCriancas(criancasData || []);
       
+      const { data: reservasData } = await supabase.from("reservas").select("crianca_id, turno_nome").eq("cliente_id", session.user.id).eq("campo_id", id);
+      setReservasExistentes(reservasData || []);
+
       setLoading(false);
     };
     fetchDados();
   }, [id, lang, router]);
 
-  if (loading || !campo) return <div style={{ padding: '4rem', textAlign: 'center', fontWeight: 'bold', color: '#64748b' }}>{isEn ? 'Preparing secure checkout...' : 'A preparar a sua reserva de forma segura...'}</div>;
-
   const noites = Math.max(1, diasEfetivos - 1);
-  const valAlimentacao = extAlimentacao ? (Number(campo.extra_alimentacao) || 0) * diasEfetivos : 0;
-  const valAlojamento = extAlojamento ? (Number(campo.extra_alojamento) || 0) * noites : 0;
-  const valProlongamento = extProlongamento ? (Number(campo.extra_prolongamento) || 0) * diasEfetivos : 0;
-  const valTransporte = extTransporte ? (Number(campo.extra_transporte) || 0) * diasEfetivos : 0;
+  const valAlimentacao = extAlimentacao ? (Number(campo?.extra_alimentacao) || 0) * diasEfetivos : 0;
+  const valAlojamento = extAlojamento ? (Number(campo?.extra_alojamento) || 0) * noites : 0;
+  const valProlongamento = extProlongamento ? (Number(campo?.extra_prolongamento) || 0) * diasEfetivos : 0;
+  const valTransporte = extTransporte ? (Number(campo?.extra_transporte) || 0) * diasEfetivos : 0;
 
   const totalExtrasPorCrianca = valAlimentacao + valAlojamento + valProlongamento + valTransporte;
   
-  let precoBaseUnitario = Number(turnoSelecionado?.preco || campo.preco || 0);
+  let precoBaseUnitario = Number(turnoSelecionado?.preco || campo?.preco || 0);
   if (turnoSelecionado?.permite_dias && diasInscritosParam && diasInscritosParam !== 'full') {
     precoBaseUnitario = Number(turnoSelecionado.preco_dia) * diasEfetivos;
   }
@@ -120,17 +134,16 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selecoesCriancas.some(c => c === "")) {
-      alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione uma criança para todas as vagas."); return;
+      alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione um participante válido para todas as vagas."); return;
     }
 
     setProcessingStripe(true);
 
     try {
-      // 1. Criar Reservas como Pendentes
       const insercoes = selecoesCriancas.map(crianca_id => ({
         cliente_id: user.id, crianca_id: crianca_id, campo_id: campo.id,
         organizador_id: campo.organizador_id, quantidade_criancas: 1,
-        valor_total: precoBaseUnitario + totalExtrasPorCrianca,
+        valor_total: precoFinalTotal / quantidade,
         turno_nome: turnoSelecionado?.nome || 'Programa Base',
         status_pagamento: 'Pendente',
         extras_escolhidos: { extAlimentacao, extAlojamento, extProlongamento, extTransporte, dias_inscritos: diasEfetivos }
@@ -144,13 +157,11 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       
       const idsCriados = reservasData.map(r => r.id);
 
-      // SE O PARCEIRO RECEBER DIRETO, O FLUXO TERMINA AQUI.
       if (organizador?.modelo_pagamento === 'parceiro_recebe') {
         router.push(`/${lang}/sucesso`);
         return;
       }
 
-      // 2. CONECTAR À API STRIPE PARA PAGAMENTO DIGITAL (HelloCamp processa)
       const res = await fetch('/api/stripe-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -164,7 +175,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         })
       });
 
-      // Se a resposta HTTP for um erro (ex: 500)
       if (!res.ok) {
         const textError = await res.text();
         throw new Error("Erro Servidor (HTTP " + res.status + "): " + textError);
@@ -173,7 +183,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       const data = await res.json();
       
       if (data.url) {
-        window.location.href = data.url; // Redireciona o cliente para a Stripe
+        window.location.href = data.url; 
       } else {
         throw new Error("Erro na Stripe: A resposta não continha um link de pagamento válido.");
       }
@@ -183,6 +193,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       setProcessingStripe(false); 
     }
   };
+
+  if (loading || !campo) return <div style={{ padding: '4rem', textAlign: 'center', fontWeight: 'bold', color: '#64748b' }}>{isEn ? 'Preparing secure checkout...' : 'A preparar a sua reserva de forma segura...'}</div>;
 
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#f3f4f6', fontFamily: 'sans-serif', paddingBottom: '5rem', paddingTop: '3rem', position: 'relative' }}>
@@ -261,11 +273,25 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                         setSelecoesCriancas(novas);
                       }} style={{ ...selectStyle, flex: 1 }}>
                         <option value="">{isEn ? 'Choose a child...' : 'Escolha um participante...'}</option>
-                        {criancas.map(c => (
-                          <option key={c.id} value={c.id} disabled={selecoesCriancas.includes(c.id) && selecoesCriancas[i] !== c.id}>
-                            {c.nome}
-                          </option>
-                        ))}
+                        {criancas.map(c => {
+                          const idade = calcularIdade(c.data_nascimento);
+                          const idadeForaLimite = (campo.idade_min && idade < campo.idade_min) || (campo.idade_max && idade > campo.idade_max);
+                          const jaInscritoNesteTurno = reservasExistentes.some(r => r.crianca_id === c.id && r.turno_nome === (turnoSelecionado?.nome || 'Programa Base'));
+                          const jaSelecionadoNesteForm = selecoesCriancas.includes(c.id) && selecoesCriancas[i] !== c.id;
+                          
+                          const isDisabled = idadeForaLimite || jaInscritoNesteTurno || jaSelecionadoNesteForm;
+                          
+                          let aviso = "";
+                          if (idadeForaLimite) aviso = isEn ? `(Age not allowed: ${idade} yrs)` : `(Idade não permitida: ${idade} anos)`;
+                          else if (jaInscritoNesteTurno) aviso = isEn ? "(Already registered)" : "(Já inscrito neste turno)";
+                          else if (jaSelecionadoNesteForm) aviso = "(Selecionado nesta compra)";
+
+                          return (
+                            <option key={c.id} value={c.id} disabled={isDisabled}>
+                              {c.nome} {aviso}
+                            </option>
+                          );
+                        })}
                       </select>
                       
                       <button type="button" onClick={() => openNewChildModal(i)} style={{ padding: '0.875rem 1.25rem', backgroundColor: '#f0fdf4', color: '#059669', fontWeight: 'bold', borderRadius: '0.75rem', border: '1px solid #a7f3d0', cursor: 'pointer', whiteSpace: 'nowrap' }}>
