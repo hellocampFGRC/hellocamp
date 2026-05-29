@@ -1,14 +1,23 @@
-export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-// Omitimos a apiVersion para o sistema usar automaticamente a mais recente sem dar erro de TypeScript
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_sua_chave_aqui');
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  // A instância da Stripe só acontece quando o pedido for feito
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  
+  if (!stripeSecretKey) {
+    return NextResponse.json({ error: "Servidor mal configurado." }, { status: 500 });
+  }
+
+  const stripe = new Stripe(stripeSecretKey);
+
   try {
     const body = await req.json();
     const { reservasIds, totalAmount, userEmail, lang, campoNome, stripeAccountId } = body;
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.hellocamp.pt';
 
     const sessionData: any = {
       payment_method_types: ['card', 'mbway'],
@@ -27,16 +36,16 @@ export async function POST(req: Request) {
         },
       ],
       mode: 'payment',
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/${lang}/sucesso?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/${lang}`,
+      success_url: `${siteUrl}/${lang}/sucesso?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/${lang}`,
       metadata: {
-        reservasIds: JSON.stringify(reservasIds), // Guardamos aqui para o Webhook usar a seguir!
+        reservasIds: JSON.stringify(reservasIds), 
       },
     };
 
     if (stripeAccountId) {
       sessionData.payment_intent_data = {
-        application_fee_amount: Math.round((totalAmount * 0.15) * 100), // Ex: HelloCamp retém 15%
+        application_fee_amount: Math.round((totalAmount * 0.15) * 100),
         transfer_data: {
           destination: stripeAccountId,
         },
