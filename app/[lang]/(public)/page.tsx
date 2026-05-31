@@ -208,7 +208,7 @@ export default async function Home({
                 const descPais = isEn ? pais.desc_en : pais.desc;
                 
                 return (
-                  <Link href={`/${lang}/pesquisa/${encodeURIComponent(pais.nome)}`} key={pais.nome} className="group relative block h-[280px] w-full overflow-hidden rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-slate-900">
+                  <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(pais.nome)}`} key={pais.nome} className="group relative block h-[280px] w-full overflow-hidden rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-slate-900">
                     <img src={pais.imagem} alt={nomePais} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                     <div className="absolute bottom-0 left-0 p-6">
