@@ -3,21 +3,42 @@ import Link from "next/link";
 import { getDictionary } from "../../../lib/getDictionary";
 import BotaoFavorito from "./components/BotaoFavorito";
 
+// ARRAY DE PAÍSES (Com imagens novas de alta qualidade)
 const PAISES_DESTAQUE = [
-  { nome: "Portugal", nome_en: "Portugal", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?q=80&w=1000&auto=format&fit=crop", desc: "Aventura e Sol", desc_en: "Adventure and Sun" },
-  { nome: "Espanha", nome_en: "Spain", imagem: "https://images.unsplash.com/photo-1543783207-ec64e4d95325?q=80&w=1000&auto=format&fit=crop", desc: "Cultura e Diversão", desc_en: "Culture and Fun" },
-  { nome: "Reino Unido", nome_en: "United Kingdom", imagem: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?q=80&w=1000&auto=format&fit=crop", desc: "Inglês Nativo", desc_en: "Native English" },
-  { nome: "França", nome_en: "France", imagem: "https://images.unsplash.com/photo-1502602898657-3e9076006e00?q=80&w=1000&auto=format&fit=crop", desc: "Arte e História", desc_en: "Art and History" }
+  { nome: "Portugal", nome_en: "Portugal", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=1000", desc: "Aventura e Sol", desc_en: "Adventure and Sun" },
+  { nome: "Espanha", nome_en: "Spain", imagem: "https://images.unsplash.com/photo-1543783207-ec64e4d95325?auto=format&fit=crop&q=80&w=1000", desc: "Cultura e Diversão", desc_en: "Culture and Fun" },
+  { nome: "Reino Unido", nome_en: "United Kingdom", imagem: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&q=80&w=1000", desc: "Inglês Nativo", desc_en: "Native English" },
+  { nome: "França", nome_en: "France", imagem: "https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&q=80&w=1000", desc: "Arte e História", desc_en: "Art and History" },
+  { nome: "Alemanha", nome_en: "Germany", imagem: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&q=80&w=1000", desc: "Inovação e Natureza", desc_en: "Innovation & Nature" },
+  { nome: "Itália", nome_en: "Italy", imagem: "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&q=80&w=1000", desc: "Gastronomia e Cultura", desc_en: "Food and Culture" },
+  { nome: "Estados Unidos", nome_en: "United States", imagem: "https://images.unsplash.com/photo-1485738422979-f5c462d49f74?auto=format&fit=crop&q=80&w=1000", desc: "A Grande Aventura", desc_en: "The Great Adventure" },
+  { nome: "Irlanda", nome_en: "Ireland", imagem: "https://images.unsplash.com/photo-1590089415225-401ed6f9db8e?auto=format&fit=crop&q=80&w=1000", desc: "Verdes e Lendas", desc_en: "Greens and Legends" },
+  { nome: "Suíça", nome_en: "Switzerland", imagem: "https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&q=80&w=1000", desc: "Montanhas e Lagos", desc_en: "Mountains and Lakes" }
 ];
 
-// Dicionário de segurança para garantir a tradução no filtro caso falte na BD
+// ARRAY DE DISTRITOS (Agora blindados no código em vez da BD para garantir qualidade premium e sem erros)
+const DISTRITOS_DESTAQUE = [
+  { nome: "Lisboa", nome_en: "Lisbon", imagem: "https://images.unsplash.com/photo-1585208798174-6cedd86e019a?auto=format&fit=crop&q=80&w=1000", desc: "Capital Vibrante", desc_en: "Vibrant Capital" },
+  { nome: "Porto", nome_en: "Porto", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=1000", desc: "A Magia do Norte", desc_en: "Northern Magic" },
+  { nome: "Faro", nome_en: "Faro", imagem: "https://images.unsplash.com/photo-1533556019545-21d7b322a46c?auto=format&fit=crop&q=80&w=1000", desc: "Praias do Algarve", desc_en: "Algarve Beaches" },
+  { nome: "Braga", nome_en: "Braga", imagem: "https://images.unsplash.com/photo-1563806229-37330eb02d33?auto=format&fit=crop&q=80&w=1000", desc: "Cidade Jovem", desc_en: "Youth City" },
+  { nome: "Setúbal", nome_en: "Setúbal", imagem: "https://images.unsplash.com/photo-1590500139707-1b0dff17be6c?auto=format&fit=crop&q=80&w=1000", desc: "Serra e Mar", desc_en: "Mountains & Sea" },
+  { nome: "Aveiro", nome_en: "Aveiro", imagem: "https://images.unsplash.com/photo-1627392683050-8b63e9f4eb8d?auto=format&fit=crop&q=80&w=1000", desc: "A Veneza de Portugal", desc_en: "The Venice of Portugal" },
+  { nome: "Coimbra", nome_en: "Coimbra", imagem: "https://images.unsplash.com/photo-1562947230-0eb5343d9229?auto=format&fit=crop&q=80&w=1000", desc: "História e Saber", desc_en: "History and Knowledge" },
+  { nome: "Leiria", nome_en: "Leiria", imagem: "https://images.unsplash.com/photo-1551221156-f56f2f9c572a?auto=format&fit=crop&q=80&w=1000", desc: "Ondas e Litoral", desc_en: "Waves and Coastline" }
+];
+
 const TRADUCOES_PAISES: Record<string, string> = {
   "Portugal": "Portugal",
   "Espanha": "Spain",
   "França": "France",
   "Reino Unido": "United Kingdom",
-  "Brasil": "Brazil",
-  "Estados Unidos": "United States"
+  "Alemanha": "Germany",
+  "Itália": "Italy",
+  "Estados Unidos": "United States",
+  "Irlanda": "Ireland",
+  "Suíça": "Switzerland",
+  "Brasil": "Brazil"
 };
 
 export default async function Home({
@@ -29,11 +50,10 @@ export default async function Home({
   const dict = await getDictionary(lang as "pt" | "en");
   const isEn = lang === 'en';
 
-  // FILTRO APLICADO: Só campos com contrato
+  // 1. Busca os últimos 3 campos registados (Destaques)
   const { data: camposDeFerias } = await supabase.from('campos').select('*').not('contrato_parceiro_url', 'is', null).limit(3).order('created_at', { ascending: false });
-  const { data: todosOsDistritos } = await supabase.from('distritos').select('id, nome, nome_en, imagem_capa, descricao_curta, descricao_curta_en');
-
-  // FILTRO APLICADO: Filtros só mostram opções de campos legalmente ativos
+  
+  // 2. Busca TODA a listagem de campos ativos para extrair os locais exatos onde EXISTEM campos
   const { data: camposFiltros } = await supabase.from('campos').select('categoria, categoria_en, idade, idade_en, Distrito, Distrito_en, pais, pais_en').not('contrato_parceiro_url', 'is', null);
   
   const categoriasMap = new Map();
@@ -50,213 +70,215 @@ export default async function Home({
     });
   }
 
+  // Prepara Dropdowns
   const categoriasOpcoes = Array.from(categoriasMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const idadesOpcoes = Array.from(idadesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const distritosOpcoes = Array.from(distritosMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
-  
-  const paisesOpcoes = Array.from(paisesMap.entries()).map(([pt, en]) => {
-    const labelTraduzida = isEn ? (en || TRADUCOES_PAISES[pt] || pt) : pt;
-    return { valor: pt, label: labelTraduzida };
-  });
+  const paisesOpcoes = Array.from(paisesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? (en || TRADUCOES_PAISES[pt] || pt) : pt }));
+
+  // LÓGICA DE FILTRAGEM DE CARTÕES (Apenas mostra se houverem campos na BD!)
+  const distritosAtivosCards = DISTRITOS_DESTAQUE.filter(distrito => distritosMap.has(distrito.nome));
+  const paisesAtivosCards = PAISES_DESTAQUE.filter(pais => paisesMap.has(pais.nome));
 
   return (
-    <main className="min-h-screen bg-white font-sans text-gray-900">
+    <main className="min-h-screen bg-white font-sans text-slate-900">
       
-      <section style={{ position: 'relative', height: '75vh', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-          <img src="https://images.unsplash.com/photo-1596464716127-f2a82984de30?q=80&w=2000&auto=format&fit=crop" alt="Crianças felizes num campo de férias" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)' }}></div>
+      {/* HERO SECTION */}
+      <section className="relative h-[75vh] w-full flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <img src="https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&q=80&w=2000" alt="Crianças no campo" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/40"></div>
         </div>
-        <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 1.5rem', textAlign: 'center', margin: '0 auto' }}>
-          <h1 className="text-5xl font-extrabold tracking-tight text-white md:text-7xl">{dict.home.titulo}</h1>
-          <p className="mt-8 max-w-2xl text-xl font-medium text-gray-100 md:text-2xl tracking-wide leading-relaxed">
+        <div className="relative z-10 flex flex-col items-center px-6 text-center max-w-4xl mx-auto">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight">{dict.home.titulo}</h1>
+          <p className="mt-6 text-lg md:text-2xl font-medium text-white/90 tracking-wide leading-relaxed max-w-3xl">
             {dict.home.subtitulo}
           </p>
         </div>
       </section>
 
-      <section id="pesquisa" style={{ position: 'relative', paddingTop: '5rem', paddingBottom: '5rem', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', scrollMarginTop: '80px' }}>
-        <div style={{ margin: '0 auto', maxWidth: '1000px', padding: '0 1.5rem' }}>
-          <div className="text-center mb-8">
-            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-2">{dict.home.filtros_inteligentes}</p>
-            <h2 className="text-3xl font-extrabold text-gray-900 md:text-4xl tracking-tight">{dict.home.encontre_campo}</h2>
-            <p className="mt-3 text-[14px] text-gray-500 max-w-xl mx-auto leading-relaxed">{dict.home.descricao_filtros}</p>
+      {/* SEARCH FILTERS BOX */}
+      <section id="pesquisa" className="relative py-20 bg-slate-50 border-b border-slate-200 scroll-mt-20">
+        <div className="max-w-5xl mx-auto px-4 md:px-6">
+          
+          <div className="text-center mb-10">
+            <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-3">{dict.home.filtros_inteligentes}</p>
+            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">{dict.home.encontre_campo}</h2>
+            <p className="mt-4 text-base text-slate-500 max-w-2xl mx-auto leading-relaxed">{dict.home.descricao_filtros}</p>
           </div>
 
-          <div style={{ position: 'relative', backgroundColor: 'white', borderRadius: '20px', boxShadow: '0 8px 30px rgba(0,0,0,0.03)', padding: '2.5rem 2rem 3.5rem 2rem', maxWidth: '950px', margin: '0 auto', marginBottom: '2rem' }}>
-            <div style={{ position: 'absolute', top: '1.25rem', right: '1.5rem', zIndex: 20 }}>
-              <Link href={`/${lang}/mapa`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f0fdf4', color: '#047857', padding: '0.5rem 1rem', borderRadius: '999px', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none', border: '1px solid #d1fae5', transition: 'all 0.3s' }}>
+          <div className="relative bg-white rounded-3xl shadow-xl shadow-slate-200/50 p-6 md:p-10 border border-slate-100 max-w-4xl mx-auto mb-8">
+            
+            <div className="absolute top-5 right-5 z-20 hidden md:block">
+              <Link href={`/${lang}/mapa`} className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-full text-xs font-bold no-underline border border-emerald-100 hover:bg-emerald-100 transition-colors">
                 <span>📍</span> {dict.home.ver_mapa}
               </Link>
             </div>
 
-            <form action={`/${lang}/pesquisa`} method="GET" style={{ position: 'static', marginTop: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', width: '100%' }}>
+            <form action={`/${lang}/pesquisa`} method="GET" className="mt-8 md:mt-4 relative">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
                 
                 <div>
-                  <label htmlFor="categoria" style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#111827', marginBottom: '0.4rem' }}>{dict.home.categoria}</label>
-                  <div style={{ position: 'relative' }}>
-                    <select id="categoria" name="categoria" style={{ width: '100%', appearance: 'none', borderRadius: '10px', backgroundColor: '#f4f5f8', padding: '0.875rem 1rem', color: '#374151', fontSize: '13px', fontWeight: '500', border: 'none', outline: 'none', cursor: 'pointer' }}>
-                      <option value="">{dict.home.todas_categorias}</option>
-                      {categoriasOpcoes.map((cat: any) => <option key={cat.valor} value={cat.valor}>{cat.label}</option>)}
-                    </select>
-                    <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
-                  </div>
+                  <label className="block text-xs font-bold text-slate-900 mb-2">{isEn ? 'Country' : 'País'}</label>
+                  <select name="pais" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500">
+                    <option value="">{isEn ? 'All Countries' : 'Todos os Países'}</option>
+                    {paisesOpcoes.map((p: any) => <option key={p.valor} value={p.valor}>{p.label}</option>)}
+                  </select>
                 </div>
 
                 <div>
-                  <label htmlFor="pais" style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#111827', marginBottom: '0.4rem' }}>{isEn ? 'Country' : 'País'}</label>
-                  <div style={{ position: 'relative' }}>
-                    <select id="pais" name="pais" style={{ width: '100%', appearance: 'none', borderRadius: '10px', backgroundColor: '#f4f5f8', padding: '0.875rem 1rem', color: '#374151', fontSize: '13px', fontWeight: '500', border: 'none', outline: 'none', cursor: 'pointer' }}>
-                      <option value="">{isEn ? 'All Countries' : 'Todos os Países'}</option>
-                      {paisesOpcoes.map((p: any) => <option key={p.valor} value={p.valor}>{p.label}</option>)}
-                    </select>
-                    <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
-                  </div>
+                  <label className="block text-xs font-bold text-slate-900 mb-2">{dict.home.distrito}</label>
+                  <select name="distrito" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500">
+                    <option value="">{dict.home.todos_distritos}</option>
+                    {distritosOpcoes.map((d: any) => <option key={d.valor} value={d.valor}>{d.label}</option>)}
+                  </select>
                 </div>
 
                 <div>
-                  <label htmlFor="distrito" style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#111827', marginBottom: '0.4rem' }}>{dict.home.distrito}</label>
-                  <div style={{ position: 'relative' }}>
-                    <select id="distrito" name="distrito" style={{ width: '100%', appearance: 'none', borderRadius: '10px', backgroundColor: '#f4f5f8', padding: '0.875rem 1rem', color: '#374151', fontSize: '13px', fontWeight: '500', border: 'none', outline: 'none', cursor: 'pointer' }}>
-                      <option value="">{dict.home.todos_distritos}</option>
-                      {distritosOpcoes.map((d: any) => <option key={d.valor} value={d.valor}>{d.label}</option>)}
-                    </select>
-                    <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
-                  </div>
+                  <label className="block text-xs font-bold text-slate-900 mb-2">{dict.home.categoria}</label>
+                  <select name="categoria" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500">
+                    <option value="">{dict.home.todas_categorias}</option>
+                    {categoriasOpcoes.map((cat: any) => <option key={cat.valor} value={cat.valor}>{cat.label}</option>)}
+                  </select>
                 </div>
 
                 <div>
-                  <label htmlFor="idade" style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#111827', marginBottom: '0.4rem' }}>{dict.home.faixa_etaria}</label>
-                  <div style={{ position: 'relative' }}>
-                    <select id="idade" name="idade" style={{ width: '100%', appearance: 'none', borderRadius: '10px', backgroundColor: '#f4f5f8', padding: '0.875rem 1rem', color: '#374151', fontSize: '13px', fontWeight: '500', border: 'none', outline: 'none', cursor: 'pointer' }}>
-                      <option value="">{dict.home.todas_idades}</option>
-                      {idadesOpcoes.map((faixa: any) => <option key={faixa.valor} value={faixa.valor}>{faixa.label}</option>)}
-                    </select>
-                    <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
-                  </div>
+                  <label className="block text-xs font-bold text-slate-900 mb-2">{dict.home.faixa_etaria}</label>
+                  <select name="idade" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500">
+                    <option value="">{dict.home.todas_idades}</option>
+                    {idadesOpcoes.map((faixa: any) => <option key={faixa.valor} value={faixa.valor}>{faixa.label}</option>)}
+                  </select>
                 </div>
 
               </div>
 
-              <button type="submit" className="group hover:scale-105 transition-transform duration-300" style={{ position: 'absolute', bottom: '-45px', left: '50%', transform: 'translateX(-50%)', width: '90px', height: '90px', backgroundColor: '#de5d25', borderRadius: '50%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 20px -5px rgba(222, 93, 37, 0.4)', border: '5px solid #f8fafc', cursor: 'pointer', zIndex: 20 }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <span style={{ color: 'white', fontSize: '8px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' }}>{dict.home.pesquisar}</span>
-              </button>
+              {/* ACTION BUTTON */}
+              <div className="flex justify-center mt-8 md:absolute md:-bottom-[4.5rem] md:left-1/2 md:-translate-x-1/2">
+                <button type="submit" className="group w-full md:w-24 md:h-24 bg-[#EBA914] hover:bg-amber-500 rounded-xl md:rounded-full flex flex-row md:flex-col items-center justify-center gap-2 py-4 shadow-lg shadow-amber-500/30 md:border-[6px] md:border-slate-50 transition-transform hover:scale-105 z-20">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <span className="text-white text-sm md:text-[10px] font-black uppercase tracking-wider">{dict.home.pesquisar}</span>
+                </button>
+              </div>
 
             </form>
           </div>
         </div>
       </section>
 
-      <section style={{ margin: '0 auto', maxWidth: '1280px', padding: '5rem 1.5rem' }}>
-        <div style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <h2 className="text-3xl font-extrabold text-emerald-900 md:text-4xl tracking-tight">{dict.home.descubra_regiao_titulo}</h2>
-          <p className="mt-3 text-base text-emerald-700 max-w-2xl mx-auto">{dict.home.descubra_regiao_sub}</p>
-        </div>
-        {!todosOsDistritos || todosOsDistritos.length === 0 ? (
-          <div className="mt-8 text-center bg-gray-50 py-12 px-6 rounded-2xl border border-gray-100 text-sm text-gray-500">{dict.home.nenhum_distrito}</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-            {todosOsDistritos.map((distrito) => {
-              const nomeDistrito = isEn && distrito.nome_en ? distrito.nome_en : distrito.nome;
-              const descDistrito = isEn && distrito.descricao_curta_en ? distrito.descricao_curta_en : distrito.descricao_curta;
-
-              return (
-                <Link href={`/${lang}/pesquisa?distrito=${distrito.nome}`} key={distrito.id} className="group transition-transform duration-300 hover:-translate-y-1" style={{ position: 'relative', display: 'block', height: '320px', width: '100%', overflow: 'hidden', backgroundColor: 'white', borderRadius: '1.5rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
-                  <img src={distrito.imagem_capa} alt={nomeDistrito} className="transition-transform duration-1000 group-hover:scale-110" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 70%)' }}></div>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, padding: '1.5rem' }}>
-                    <h3 className="text-2xl font-extrabold text-white tracking-tight">{nomeDistrito}</h3>
-                    <p className="mt-1 text-sm font-medium tracking-wider text-amber-300">{descDistrito}</p>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section style={{ backgroundColor: '#f8fafc', paddingTop: '5rem', paddingBottom: '5rem' }}>
-        <div style={{ margin: '0 auto', maxWidth: '1280px', padding: '0 1.5rem' }}>
-          <div style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <h2 className="text-3xl font-extrabold text-emerald-900 md:text-4xl tracking-tight">{isEn ? 'Discover by Country' : 'Descubra por País'}</h2>
-            <p className="mt-3 text-base text-emerald-700 max-w-2xl mx-auto">{isEn ? 'International camps and global experiences' : 'Campos internacionais e experiências globais'}</p>
+      {/* SECÇÃO DISTRITOS (Visível apenas se houver campos em Portugal) */}
+      {distritosAtivosCards.length > 0 && (
+        <section className="max-w-7xl mx-auto py-20 px-4 md:px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">{dict.home.descubra_regiao_titulo}</h2>
+            <p className="mt-4 text-base text-slate-500">{dict.home.descubra_regiao_sub}</p>
           </div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
-            {PAISES_DESTAQUE.map((pais) => {
-              const nomePais = isEn ? pais.nome_en : pais.nome;
-              const descPais = isEn ? pais.desc_en : pais.desc;
-              
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {distritosAtivosCards.map((distrito) => {
+              const nomeDistrito = isEn ? distrito.nome_en : distrito.nome;
+              const descDistrito = isEn ? distrito.desc_en : distrito.desc;
+
               return (
-                <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(pais.nome)}`} key={pais.nome} className="group transition-transform duration-300 hover:-translate-y-1" style={{ position: 'relative', display: 'block', height: '280px', width: '100%', overflow: 'hidden', backgroundColor: 'white', borderRadius: '1.5rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
-                  <img src={pais.imagem} alt={nomePais} className="transition-transform duration-1000 group-hover:scale-110" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 70%)' }}></div>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, padding: '1.5rem' }}>
-                    <h3 className="text-2xl font-extrabold text-white tracking-tight">{nomePais}</h3>
-                    <p className="mt-1 text-sm font-medium tracking-wider text-amber-300">{descPais}</p>
+                <Link href={`/${lang}/pesquisa?distrito=${distrito.nome}`} key={distrito.nome} className="group relative block h-[280px] w-full overflow-hidden rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-slate-900">
+                  <img src={distrito.imagem} alt={nomeDistrito} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                  <div className="absolute bottom-0 left-0 p-6">
+                    <h3 className="text-2xl font-black text-white tracking-tight">{nomeDistrito}</h3>
+                    <p className="mt-1 text-sm font-bold text-[#EBA914]">{descDistrito}</p>
                   </div>
                 </Link>
               );
             })}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      {/* DESTAQUES GERAIS COM A ESTRUTURA BLINDADA PARA TELEMÓVEIS */}
-      <section style={{ backgroundColor: 'white', paddingTop: '5rem', paddingBottom: '5rem', borderTop: '1px solid #f3f4f6' }}>
-        <div style={{ margin: '0 auto', maxWidth: '1280px', padding: '0 1.5rem' }}>
-          <div style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <h2 className="text-3xl font-extrabold text-emerald-900 md:text-4xl tracking-tight">{dict.home.destaques_titulo}</h2>
-            <p className="mt-3 text-base text-emerald-700 max-w-2xl mx-auto">{dict.home.destaques_subtitulo}</p>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-            {camposDeFerias?.map((campo: any, index: number) => {
-              const campoId = campo.id !== undefined && campo.id !== null ? campo.id : index + 1;
-              const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
-              const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
-              const localCampo = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.distrito || campo.local);
-              const idadeCampo = isEn && campo.idade_en ? campo.idade_en : campo.idade;
-              const precoVisivel = campo.preco || (campo.turnos && campo.turnos.length > 0 ? campo.turnos[0].preco : 0);
-
-              return (
-                <div key={campoId} className="group relative flex flex-col bg-white overflow-hidden border border-gray-100 transition-transform duration-300 hover:-translate-y-1" style={{ borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
-                  
-                  {/* LINK INVISÍVEL COBRE O CARTÃO INTEIRO (Resolve o bug nos telemóveis) */}
-                  <Link href={`/${lang}/campo/${campoId}`} className="absolute inset-0 z-10">
-                    <span className="sr-only">{dict.home.explorar} {nomeCampo}</span>
+      {/* SECÇÃO PAÍSES (Visível apenas se houver campos internacionais) */}
+      {paisesAtivosCards.length > 0 && (
+        <section className="bg-slate-50 py-20 border-t border-slate-100">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">{isEn ? 'Discover by Country' : 'Descubra por País'}</h2>
+              <p className="mt-4 text-base text-slate-500">{isEn ? 'International camps and global experiences' : 'Campos internacionais e experiências globais'}</p>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {paisesAtivosCards.map((pais) => {
+                const nomePais = isEn ? pais.nome_en : pais.nome;
+                const descPais = isEn ? pais.desc_en : pais.desc;
+                
+                return (
+                  <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(pais.nome)}`} key={pais.nome} className="group relative block h-[280px] w-full overflow-hidden rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-slate-900">
+                    <img src={pais.imagem} alt={nomePais} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                    <div className="absolute bottom-0 left-0 p-6">
+                      <h3 className="text-2xl font-black text-white tracking-tight">{nomePais}</h3>
+                      <p className="mt-1 text-sm font-bold text-[#EBA914]">{descPais}</p>
+                    </div>
                   </Link>
-
-                  {/* BOTÃO FAVORITO SOBREPÕE O LINK PARA SER CLICÁVEL */}
-                  <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 20 }}>
-                    <BotaoFavorito campoId={campoId} />
-                  </div>
-
-                  <div style={{ position: 'relative', height: '250px', width: '100%', overflow: 'hidden' }}>
-                    <img src={campo.imagem} alt={nomeCampo} className="transition-transform duration-700 group-hover:scale-105" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <div style={{ position: 'absolute', top: '1rem', left: '1rem', backgroundColor: '#059669', padding: '0.25rem 0.75rem', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'white', borderRadius: '9999px', zIndex: 5 }}>{catCampo}</div>
-                  </div>
-                  
-                  {/* CONTEÚDO DO CARTÃO */}
-                  <div style={{ display: 'flex', flexDirection: 'column', padding: '1.5rem', flex: 1, pointerEvents: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">📍 {localCampo}</span>
-                    </div>
-                    <h3 className="mt-2 text-xl font-extrabold text-gray-900 leading-snug">{nomeCampo}</h3>
-                    <p className="mt-1 text-sm text-gray-500">{dict.home.faixa_etaria_label} {idadeCampo}</p>
-                    <div style={{ marginTop: 'auto', paddingTop: '1.25rem', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', borderTop: '1px solid #f8fafc' }}>
-                      <p className="text-2xl font-black text-emerald-600 tracking-tight">{precoVisivel}€</p>
-                      <span className="text-xs font-bold uppercase tracking-wider text-amber-500 transition-transform group-hover:translate-x-1 inline-block">{dict.home.explorar} &rarr;</span>
-                    </div>
-                  </div>
-
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
+
+      {/* DESTAQUES GERAIS */}
+      {camposDeFerias && camposDeFerias.length > 0 && (
+        <section className="bg-white py-20 border-t border-slate-100">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">{dict.home.destaques_titulo}</h2>
+              <p className="mt-4 text-base text-slate-500">{dict.home.destaques_subtitulo}</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {camposDeFerias.map((campo: any, index: number) => {
+                const campoId = campo.id !== undefined && campo.id !== null ? campo.id : index + 1;
+                const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
+                const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
+                const localCampo = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
+                const idadeCampo = isEn && campo.idade_en ? campo.idade_en : campo.idade;
+                const precoVisivel = campo.preco || (campo.turnos && campo.turnos.length > 0 ? campo.turnos[0].preco : 0);
+
+                return (
+                  <div key={campoId} className="group relative flex flex-col bg-white overflow-hidden border border-slate-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                    
+                    <Link href={`/${lang}/campo/${campoId}`} className="absolute inset-0 z-10">
+                      <span className="sr-only">{dict.home.explorar} {nomeCampo}</span>
+                    </Link>
+
+                    <div className="absolute top-4 right-4 z-20">
+                      <BotaoFavorito campoId={campoId} />
+                    </div>
+
+                    <div className="relative h-56 w-full overflow-hidden bg-slate-100">
+                      <img src={campo.imagem} alt={nomeCampo} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                      <div className="absolute top-4 left-4 bg-emerald-600 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white rounded-full z-0">
+                        {catCampo}
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col p-6 flex-1 pointer-events-none">
+                      <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-2">📍 {localCampo}</span>
+                      <h3 className="text-xl font-black text-slate-900 leading-tight mb-2">{nomeCampo}</h3>
+                      <p className="text-sm text-slate-500 font-medium mb-6">{dict.home.faixa_etaria_label} {idadeCampo}</p>
+                      
+                      <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
+                        <p className="text-2xl font-black text-emerald-600 m-0">{precoVisivel}€</p>
+                        <span className="text-sm font-black uppercase tracking-wider text-[#EBA914] transition-transform group-hover:translate-x-1">
+                          {dict.home.explorar} &rarr;
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
     </main>
   );
 }
