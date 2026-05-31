@@ -42,7 +42,7 @@ export default async function DetalhesDoCampo({
   const dict = await getDictionary(lang as "pt" | "en");
   const isEn = lang === 'en';
 
-  // 2. Busca do Campo e das Reviews
+  // 2. Busca do Campo, das Reviews e do Organizador
   const { data: campo } = await supabase.from("campos").select("*").eq("id", id).single();
   const { data: reviews } = await supabase.from("reviews").select("*").eq("campo_id", id).order('created_at', { ascending: false });
 
@@ -57,6 +57,13 @@ export default async function DetalhesDoCampo({
         </Link>
       </div>
     );
+  }
+
+  // Se o campo tiver organizador_id, vamos buscar o nome (e logotipo se quiser) à tabela perfis
+  let parceiroInfo = null;
+  if (campo.organizador_id) {
+    const { data: organizador } = await supabase.from("perfis").select("nome_empresa, logotipo_url, parceiro_verificado").eq("id", campo.organizador_id).single();
+    parceiroInfo = organizador;
   }
 
   const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
@@ -120,10 +127,37 @@ export default async function DetalhesDoCampo({
               </div>
             </div>
 
-            {/* DESCRIÇÃO */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100">
+            {/* DESCRIÇÃO E PERFIL DO ORGANIZADOR */}
+            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-20">
               <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{dict.detalhe.sobre_programa}</h2>
               <p className="leading-relaxed text-slate-600 text-base whitespace-pre-wrap font-medium">{descCampo}</p>
+              
+              {/* BLOCO DO PARCEIRO ("Host") */}
+              {campo.organizador_id && parceiroInfo && (
+                <Link href={`/${lang}/admin/${campo.organizador_id}`} className="mt-8 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors no-underline group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm flex-shrink-0">
+                      {parceiroInfo.logotipo_url ? (
+                         <img src={parceiroInfo.logotipo_url} alt="Logo" className="w-full h-full object-cover" />
+                      ) : (
+                         <span className="text-slate-400 text-lg">🏢</span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">{isEn ? 'Organized by' : 'Organizado por'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-black text-slate-900 m-0 group-hover:text-emerald-600 transition-colors">
+                          {parceiroInfo.nome_empresa || 'Parceiro HelloCamp'}
+                        </p>
+                        {parceiroInfo.parceiro_verificado && (
+                          <span className="text-emerald-500 text-xs" title="Parceiro Verificado">✓</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-slate-400 font-bold">&rarr;</span>
+                </Link>
+              )}
             </div>
 
             {/* REGRAS */}
@@ -188,7 +222,7 @@ export default async function DetalhesDoCampo({
               </div>
             </div>
 
-            {/* ZONA DE AVALIAÇÕES (MÓDULO NOVO) */}
+            {/* ZONA DE AVALIAÇÕES */}
             <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-8 border-b border-slate-50 pb-4">
                 <h2 className="text-xl font-bold text-slate-900 m-0">{isEn ? 'Reviews' : 'Avaliações'}</h2>
