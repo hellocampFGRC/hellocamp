@@ -82,8 +82,8 @@ export default async function PesquisaPorPais({
   const nomePaisApresentar = isEn && dadosPais?.nome_en ? dadosPais.nome_en : nomePaisInicial;
   
   const descricaoPadrao = isEn 
-    ? `Explore premium holiday camps in ${nomePaisApresentar}. From thrilling outdoor adventures and intensive sports clinics to creative arts and language immersion, discover handpicked programs.` 
-    : `Explore os melhores campos de férias em ${nomePaisApresentar}. Desde aventuras ao ar livre e clínicas desportivas até programas de artes e imersão linguística, descubra opções premium desenhadas para experiências inesquecíveis.`;
+    ? `Explore premium holiday camps in ${nomePaisApresentar}. From thrilling outdoor adventures and intensive sports clubs to creative arts and language classes, discover handpicked programs.` 
+    : `Explore os melhores campos de férias em ${nomePaisApresentar}. Desde aventuras ao ar livre e atividades desportivas até programas de artes e línguas, descubra opções premium desenhadas para experiências inesquecíveis.`;
     
   const descPaisFinal = isEn 
     ? (dadosPais?.seo_descricao_en || descricaoPadrao) 
