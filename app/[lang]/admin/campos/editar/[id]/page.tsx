@@ -50,10 +50,19 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
   const [pais, setPais] = useState("Portugal");
   const [linguas, setLinguas] = useState({ pt: false, en: false, es: false, fr: false, de: false });
 
+  // Estados novos para gestão flexível das faixas etárias
+  const [faixasSelecionadas, setFaixasSelecionadas] = useState({
+    ca6_9: false,
+    ca10_13: false,
+    ca14_17: false,
+    outra: false
+  });
+  const [idadeManual, setIdadeManual] = useState("");
+
   const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
 
   const [formData, setFormData] = useState({
-    nome: "", categoria: "", idade: "", local: "", Distrito: "", racio_monitores: "", duracao_dias: 7,
+    nome: "", categoria: "", local: "", Distrito: "", racio_monitores: "", duracao_dias: 7,
     alimentacao: "Não tem", alojamento: "Não tem", seguro: "Incluído no Preço", descricao: "", regras_termos: "",
     extra_alimentacao: 0, tipo_cobranca_alimentacao: "Por Turno", extra_alojamento: 0, tipo_cobranca_alojamento: "Por Turno",
     extra_prolongamento: 0, tipo_cobranca_prolongamento: "Por Turno", extra_transporte: 0, tipo_cobranca_transporte: "Por Turno",
@@ -71,6 +80,30 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
           ...data,
           contrato_parceiro_url: data.contrato_parceiro_url || ""
         });
+        
+        // Desestruturação inteligente da string de idades guardada no banco
+        if (data.idade) {
+          const idadesGuardadas = data.idade.split(",").map((s: string) => s.trim());
+          const c6_9 = idadesGuardadas.includes("6-9 anos");
+          const c10_13 = idadesGuardadas.includes("10-13 anos");
+          const c14_17 = idadesGuardadas.includes("14-17 anos");
+          
+          // Se houver algum valor diferente das opções padrão, mapeia para o campo manual
+          const padroes = ["6-9 anos", "10-13 anos", "14-17 anos"];
+          const customizadas = idadesGuardadas.filter((s: string) => !padroes.includes(s));
+          
+          setFaixasSelecionadas({
+            ca6_9: c6_9,
+            ca10_13: c10_13,
+            ca14_17: c14_17,
+            outra: customizadas.length > 0
+          });
+          
+          if (customizadas.length > 0) {
+            setIdadeManual(customizadas.join(", "));
+          }
+        }
+
         if (data.turnos) {
           const turnosMapeados = data.turnos.map((t: any) => ({ ...t, vagas: t.vagas || data.vagas_totais || 20 }));
           setTurnos(turnosMapeados);
@@ -121,6 +154,19 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     return ativas.join(", ");
   };
 
+  const handleFaixasChange = (key: keyof typeof faixasSelecionadas) => {
+    setFaixasSelecionadas(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const construirStringIdades = () => {
+    const lista = [];
+    if (faixasSelecionadas.ca6_9) lista.push("6-9 anos");
+    if (faixasSelecionadas.ca10_13) lista.push("10-13 anos");
+    if (faixasSelecionadas.ca14_17) lista.push("14-17 anos");
+    if (faixasSelecionadas.outra && idadeManual.trim()) lista.push(idadeManual.trim());
+    return lista.join(", ");
+  };
+
   const handleAddTurno = () => setTurnos([...turnos, { nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
   const handleRemoveTurno = (index: number) => setTurnos(turnos.filter((_, i) => i !== index));
   const handleTurnoChange = (index: number, field: string, value: string | number | boolean) => {
@@ -150,8 +196,12 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+
+    const stringIdadesCompleta = construirStringIdades();
+
     if (!mapPreview) { alert(isEn ? "Ensure the map is loaded." : "Garanta que o mapa carregou."); setSaving(false); return; }
     if (images.length === 0) { alert(isEn ? "Select a photo." : "Adicione uma fotografia."); setSaving(false); return; }
+    if (!stringIdadesCompleta) { alert(isEn ? "Select or enter at least one age bracket." : "Selecione ou digite pelo menos uma faixa etária."); setSaving(false); return; }
 
     try {
       setStatusText(isEn ? "Processing images..." : "A processar fotografias...");
@@ -186,7 +236,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         alimentacao_en, alojamento_en, seguro_en, Distrito_en, regras_termos_en
       ] = await Promise.all([
         traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
-        traduzirParaIngles(formData.idade), traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
+        traduzirParaIngles(stringIdadesCompleta), traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
         traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.Distrito),
         traduzirParaIngles(formData.regras_termos)
       ]);
@@ -201,7 +251,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
       setStatusText(isEn ? "Saving..." : "A guardar alterações...");
       
       const { error } = await supabase.from("campos").update({
-        nome: formData.nome, categoria: formData.categoria, idade: formData.idade, local: formData.local, Distrito: formData.Distrito,
+        nome: formData.nome, categoria: formData.categoria, idade: stringIdadesCompleta, local: formData.local, Distrito: formData.Distrito,
         vagas_totais: totalVagasCalculado, racio_monitores: formData.racio_monitores, duracao_dias: formData.duracao_dias,
         alimentacao: formData.alimentacao, alojamento: formData.alojamento, seguro: formData.seguro,
         descricao: formData.descricao, regras_termos: formData.regras_termos,
@@ -257,12 +307,40 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
                 <option value="">{isEn ? 'Select...' : 'Selecione...'}</option><option value="Desporto">Desporto</option><option value="Aventura & Natureza">Aventura & Natureza</option><option value="Tecnologia & Ciência">Tecnologia & Ciência</option><option value="Artes & Criatividade">Artes & Criatividade</option><option value="Línguas">Línguas</option>
               </select>
             </div>
-            <div>
-              <label style={labelStyle}>{isEn ? 'Age Group' : 'Faixa Etária'}</label>
-              <select required value={formData.idade || ''} onChange={e => setFormData({...formData, idade: e.target.value})} style={selectStyle}>
-                <option value="">{isEn ? 'Select...' : 'Selecione...'}</option><option value="6-9 anos">6-9 anos</option><option value="10-13 anos">10-13 anos</option><option value="14-17 anos">14-17 anos</option><option value="Todas as idades">Todas as idades</option>
-              </select>
+            
+            {/* GESTÃO DE IDADES FLEXÍVEL NA EDIÇÃO */}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>{isEn ? 'Age Groups (Select multiple or add manually)' : 'Faixas Etárias (Selecione múltiplas ou adicione manualmente)'}</label>
+              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', marginTop: '0.5rem', marginBottom: '1rem' }}>
+                <label style={checkboxLabelStyle}>
+                  <input type="checkbox" checked={faixasSelecionadas.ca6_9} onChange={() => handleFaixasChange('ca6_9')} /> 6-9 {isEn ? 'years' : 'anos'}
+                </label>
+                <label style={checkboxLabelStyle}>
+                  <input type="checkbox" checked={faixasSelecionadas.ca10_13} onChange={() => handleFaixasChange('ca10_13')} /> 10-13 {isEn ? 'years' : 'anos'}
+                </label>
+                <label style={checkboxLabelStyle}>
+                  <input type="checkbox" checked={faixasSelecionadas.ca14_17} onChange={() => handleFaixasChange('ca14_17')} /> 14-17 {isEn ? 'years' : 'anos'}
+                </label>
+                <label style={checkboxLabelStyle}>
+                  <input type="checkbox" checked={faixasSelecionadas.outra} onChange={() => handleFaixasChange('outra')} /> {isEn ? 'Custom range' : 'Outro intervalo'}
+                </label>
+              </div>
+              
+              {faixasSelecionadas.outra && (
+                <div style={{ maxWidth: '300px', animation: 'fadeIn 0.2s' }}>
+                  <label style={{ ...labelStyle, fontSize: '11px', color: '#64748b' }}>{isEn ? 'Custom Age Group (e.g.: 8-15 years)' : 'Faixa Etária Customizada (ex: 8-15 anos)'}</label>
+                  <input 
+                    type="text" 
+                    required={faixasSelecionadas.outra} 
+                    value={idadeManual} 
+                    onChange={e => setIdadeManual(e.target.value)} 
+                    placeholder="Ex: 8-15 anos"
+                    style={inputStyle} 
+                  />
+                </div>
+              )}
             </div>
+
             <div>
               <label style={labelStyle}>{isEn ? 'Spoken Languages' : 'Línguas Faladas'}</label>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>

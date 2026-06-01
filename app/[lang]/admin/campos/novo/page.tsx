@@ -43,10 +43,19 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
   const [pais, setPais] = useState("Portugal");
   const [linguas, setLinguas] = useState({ pt: true, en: false, es: false, fr: false, de: false });
 
+  // Estados novos para gestão flexível das faixas etárias
+  const [faixasSelecionadas, setFaixasSelecionadas] = useState({
+    ca6_9: false,
+    ca10_13: false,
+    ca14_17: false,
+    outra: false
+  });
+  const [idadeManual, setIdadeManual] = useState("");
+
   const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
 
   const [formData, setFormData] = useState({
-    nome: "", categoria: "", idade: "", local: "", Distrito: "",
+    nome: "", categoria: "", local: "", Distrito: "",
     racio_monitores: "", duracao_dias: 7,
     alimentacao: "Não tem", alojamento: "Não tem", seguro: "Incluído no Preço",
     descricao: "", regras_termos: "",
@@ -108,6 +117,19 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     return ativas.join(", ");
   };
 
+  const handleFaixasChange = (key: keyof typeof faixasSelecionadas) => {
+    setFaixasSelecionadas(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const construirStringIdades = () => {
+    const lista = [];
+    if (faixasSelecionadas.ca6_9) lista.push("6-9 anos");
+    if (faixasSelecionadas.ca10_13) lista.push("10-13 anos");
+    if (faixasSelecionadas.ca14_17) lista.push("14-17 anos");
+    if (faixasSelecionadas.outra && idadeManual.trim()) lista.push(idadeManual.trim());
+    return lista.join(", ");
+  };
+
   const handleAddTurno = () => setTurnos([...turnos, { nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
   const handleRemoveTurno = (index: number) => setTurnos(turnos.filter((_, i) => i !== index));
   const handleTurnoChange = (index: number, field: string, value: string | number | boolean) => {
@@ -158,10 +180,13 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     e.preventDefault();
     setLoading(true);
 
+    const stringIdadesCompleta = construirStringIdades();
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     if (!mapPreview) { alert(isEn ? "Please ensure the map is loaded." : "Por favor, garanta que o mapa carregou."); setLoading(false); return; }
     if (images.length === 0) { alert(isEn ? "Please select a photo." : "Por favor, adicione uma fotografia."); setLoading(false); return; }
+    if (!stringIdadesCompleta) { alert(isEn ? "Please select or type at least one age range." : "Por favor, selecione ou digite pelo menos uma faixa etária."); setLoading(false); return; }
 
     try {
       setStatusText(isEn ? "Processing images..." : "A processar fotografias...");
@@ -195,7 +220,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
         alimentacao_en, alojamento_en, seguro_en, Distrito_en, regras_termos_en
       ] = await Promise.all([
         traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
-        traduzirParaIngles(formData.idade), traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
+        traduzirParaIngles(stringIdadesCompleta), traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
         traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.Distrito),
         traduzirParaIngles(formData.regras_termos)
       ]);
@@ -212,6 +237,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
       setStatusText(isEn ? "Saving..." : "A guardar e submeter para validação...");
       const { error } = await supabase.from("campos").insert([{
         ...formData,
+        idade: stringIdadesCompleta,
         vagas_totais: totalVagasCalculado,
         preco: precoGlobal,                      
         datas_disponiveis: textoDatas,           
@@ -258,16 +284,40 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
                 <option value="Línguas">{isEn ? 'Languages' : 'Línguas'}</option>
               </select>
             </div>
-            <div>
-              <label style={labelStyle}>{isEn ? 'Age Group' : 'Faixa Etária'}</label>
-              <select required onChange={e => setFormData({...formData, idade: e.target.value})} style={selectStyle}>
-                <option value="">{isEn ? 'Select...' : 'Selecione...'}</option>
-                <option value="6-9 anos">{isEn ? '6-9 years' : '6-9 anos'}</option>
-                <option value="10-13 anos">{isEn ? '10-13 years' : '10-13 anos'}</option>
-                <option value="14-17 anos">{isEn ? '14-17 years' : '14-17 anos'}</option>
-                <option value="Todas as idades">{isEn ? 'All ages' : 'Todas as idades'}</option>
-              </select>
+            
+            {/* GESTÃO DE IDADES FLEXÍVEL */}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>{isEn ? 'Age Groups (Select multiple or add manually)' : 'Faixas Etárias (Selecione múltiplas ou adicione manualmente)'}</label>
+              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', marginTop: '0.5rem', marginBottom: '1rem' }}>
+                <label style={checkboxLabelStyle}>
+                  <input type="checkbox" checked={faixasSelecionadas.ca6_9} onChange={() => handleFaixasChange('ca6_9')} /> 6-9 {isEn ? 'years' : 'anos'}
+                </label>
+                <label style={checkboxLabelStyle}>
+                  <input type="checkbox" checked={faixasSelecionadas.ca10_13} onChange={() => handleFaixasChange('ca10_13')} /> 10-13 {isEn ? 'years' : 'anos'}
+                </label>
+                <label style={checkboxLabelStyle}>
+                  <input type="checkbox" checked={faixasSelecionadas.ca14_17} onChange={() => handleFaixasChange('ca14_17')} /> 14-17 {isEn ? 'years' : 'anos'}
+                </label>
+                <label style={checkboxLabelStyle}>
+                  <input type="checkbox" checked={faixasSelecionadas.outra} onChange={() => handleFaixasChange('outra')} /> {isEn ? 'Custom range' : 'Outro intervalo'}
+                </label>
+              </div>
+              
+              {faixasSelecionadas.outra && (
+                <div style={{ maxWidth: '300px', animation: 'fadeIn 0.2s' }}>
+                  <label style={{ ...labelStyle, fontSize: '11px', color: '#64748b' }}>{isEn ? 'Custom Age Group (e.g.: 8-15 years)' : 'Faixa Etária Customizada (ex: 8-15 anos)'}</label>
+                  <input 
+                    type="text" 
+                    required={faixasSelecionadas.outra} 
+                    value={idadeManual} 
+                    onChange={e => setIdadeManual(e.target.value)} 
+                    placeholder="Ex: 8-15 anos"
+                    style={inputStyle} 
+                  />
+                </div>
+              )}
             </div>
+
             <div>
               <label style={labelStyle}>{isEn ? 'Spoken Languages' : 'Línguas Faladas'}</label>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
@@ -426,7 +476,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
               <label style={labelStyle}>{isEn ? 'Camp Program (PDF/Word)' : 'Programa do Campo (PDF/Word)'}</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'flex-start' }}>
                 {documentos.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                     {documentos.map((doc, idx) => (
                       <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', fontSize: '13px' }}>
                         <span style={{ fontWeight: 'bold', color: '#0f172a' }}>📄 {doc.name}</span>
