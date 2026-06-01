@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import imageCompression from 'browser-image-compression';
@@ -38,6 +38,10 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
   const [saving, setSaving] = useState(false);
   const [statusText, setStatusText] = useState("");
   
+  // ESTADOS DO AUTO-SAVE
+  const isFirstRender = useRef(true);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
+  
   const [images, setImages] = useState<ImagePreview[]>([]);
   const [usarFotoPadrao, setUsarFotoPadrao] = useState(false);
   
@@ -50,7 +54,6 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
   const [pais, setPais] = useState("Portugal");
   const [linguas, setLinguas] = useState({ pt: false, en: false, es: false, fr: false, de: false });
 
-  // Estados novos para gestão flexível das faixas etárias
   const [faixasSelecionadas, setFaixasSelecionadas] = useState({
     ca6_9: false,
     ca10_13: false,
@@ -81,27 +84,17 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
           contrato_parceiro_url: data.contrato_parceiro_url || ""
         });
         
-        // Desestruturação inteligente da string de idades guardada no banco
         if (data.idade) {
           const idadesGuardadas = data.idade.split(",").map((s: string) => s.trim());
           const c6_9 = idadesGuardadas.includes("6-9 anos");
           const c10_13 = idadesGuardadas.includes("10-13 anos");
           const c14_17 = idadesGuardadas.includes("14-17 anos");
           
-          // Se houver algum valor diferente das opções padrão, mapeia para o campo manual
           const padroes = ["6-9 anos", "10-13 anos", "14-17 anos"];
           const customizadas = idadesGuardadas.filter((s: string) => !padroes.includes(s));
           
-          setFaixasSelecionadas({
-            ca6_9: c6_9,
-            ca10_13: c10_13,
-            ca14_17: c14_17,
-            outra: customizadas.length > 0
-          });
-          
-          if (customizadas.length > 0) {
-            setIdadeManual(customizadas.join(", "));
-          }
+          setFaixasSelecionadas({ ca6_9: c6_9, ca10_13: c10_13, ca14_17: c14_17, outra: customizadas.length > 0 });
+          if (customizadas.length > 0) setIdadeManual(customizadas.join(", "));
         }
 
         if (data.turnos) {
@@ -193,18 +186,29 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     } catch (e) { return texto; }
   };
 
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-
+  // LÓGICA CENTRAL DE GRAVAÇÃO (Suporta Clique Manual e Auto-Save)
+  const handleUpdate = async (e?: React.FormEvent, isAutoSave = false) => {
+    if (e) e.preventDefault();
+    
     const stringIdadesCompleta = construirStringIdades();
 
-    if (!mapPreview) { alert(isEn ? "Ensure the map is loaded." : "Garanta que o mapa carregou."); setSaving(false); return; }
-    if (images.length === 0) { alert(isEn ? "Select a photo." : "Adicione uma fotografia."); setSaving(false); return; }
-    if (!stringIdadesCompleta) { alert(isEn ? "Select or enter at least one age bracket." : "Selecione ou digite pelo menos uma faixa etária."); setSaving(false); return; }
+    if (!mapPreview || images.length === 0 || !stringIdadesCompleta) {
+      if (!isAutoSave) {
+        if (!mapPreview) alert(isEn ? "Ensure the map is loaded." : "Garanta que o mapa carregou.");
+        else if (images.length === 0) alert(isEn ? "Select a photo." : "Adicione uma fotografia.");
+        else alert(isEn ? "Select or enter at least one age bracket." : "Selecione ou digite pelo menos uma faixa etária.");
+      } else {
+        setAutoSaveStatus('error');
+      }
+      return;
+    }
+
+    if (!isAutoSave) setSaving(true);
+    else setAutoSaveStatus('saving');
 
     try {
-      setStatusText(isEn ? "Processing images..." : "A processar fotografias...");
+      if (!isAutoSave) setStatusText(isEn ? "Processing images..." : "A processar fotografias...");
+      
       const uploadedImages = await Promise.all(images.map(async (img) => {
         if (!img.file) return { url: img.url, isMain: img.isMain };
         const compressedFile = await imageCompression(img.file, { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true });
@@ -215,10 +219,19 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         return { url: publicUrlData.publicUrl, isMain: img.isMain };
       }));
 
+      // Atualiza o estado das imagens para que no próximo auto-save não voltem a ser carregadas
+      if (images.some(img => img.file)) {
+      setImages(uploadedImages.map(img => ({ 
+       url: img.url, 
+       preview: img.url || '', // Resolve o erro do TypeScript
+       isMain: img.isMain 
+       })));
+      }
+
       const mainImageUrl = uploadedImages.find(i => i.isMain)?.url || uploadedImages[0]?.url;
       const galeriaUrls = uploadedImages.filter(i => !i.isMain).map(i => i.url);
 
-      setStatusText(isEn ? "Uploading documents..." : "A processar documentos...");
+      if (!isAutoSave) setStatusText(isEn ? "Uploading documents..." : "A processar documentos...");
       const novosDocs = await Promise.all(documentos.map(async (doc) => {
         const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`;
         const { error } = await supabase.storage.from('campos-documentos').upload(fileName, doc);
@@ -227,8 +240,14 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         return { nome: doc.name, url: publicUrlData.publicUrl };
       }));
 
+      // Atualiza documentos para não reenviar
+      if (novosDocs.length > 0) {
+        setDocumentosExistentes(prev => [...prev, ...novosDocs]);
+        setDocumentos([]);
+      }
       const programasDocsFinais = [...documentosExistentes, ...novosDocs];
-      setStatusText(isEn ? "Translating data..." : "A traduzir dados...");
+
+      if (!isAutoSave) setStatusText(isEn ? "Translating data..." : "A traduzir dados...");
       const linguasFinais = getLinguasString();
 
       const [
@@ -248,7 +267,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
       const textoDatasEn = turnos.map(t => `${formatarDataStr(t.data_inicio)} to ${formatarDataStr(t.data_fim)}`).join(", ");
       const totalVagasCalculado = turnos.reduce((acc, curr) => acc + (Number(curr.vagas) || 0), 0);
 
-      setStatusText(isEn ? "Saving..." : "A guardar alterações...");
+      if (!isAutoSave) setStatusText(isEn ? "Saving..." : "A guardar alterações...");
       
       const { error } = await supabase.from("campos").update({
         nome: formData.nome, categoria: formData.categoria, idade: stringIdadesCompleta, local: formData.local, Distrito: formData.Distrito,
@@ -264,19 +283,60 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
       }).eq('id', id);
 
       if (error) throw error;
-      alert(isEn ? "Camp updated successfully!" : "Campo atualizado com sucesso!");
-      router.push(`/${lang}/admin/campos`);
-    } catch (error: any) { alert("Erro: " + error.message); } finally { setSaving(false); setStatusText(""); }
+      
+      if (!isAutoSave) {
+        alert(isEn ? "Camp updated successfully!" : "Campo atualizado com sucesso!");
+        router.push(`/${lang}/admin/campos`);
+      } else {
+        setAutoSaveStatus('saved');
+      }
+    } catch (error: any) { 
+      if (!isAutoSave) alert("Erro: " + error.message); 
+      else setAutoSaveStatus('error');
+    } finally { 
+      if (!isAutoSave) { setSaving(false); setStatusText(""); }
+    }
   };
+
+  // O MOTOR DO AUTO-SAVE (Delay de 3 segundos de inatividade)
+  useEffect(() => {
+    if (loading) return; 
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    
+    setAutoSaveStatus('pending');
+    
+    const timer = setTimeout(() => {
+      handleUpdate(undefined, true);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [formData, turnos, linguas, faixasSelecionadas, mapPreview, pais, idadeManual, images, documentos, documentosExistentes]);
 
   if (loading) return <div style={{ padding: '4rem', textAlign: 'center' }}>{isEn ? 'Loading...' : 'A carregar dados do campo...'}</div>;
 
   return (
     <main style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
       
-      <Link href={`/${lang}/admin/campos`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem', color: '#64748b', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', backgroundColor: 'white', padding: '0.5rem 1rem', borderRadius: '999px', border: '1px solid #e2e8f0' }}>
-        &larr; {isEn ? 'Back to My Camps' : 'Voltar aos Meus Campos'}
-      </Link>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <Link href={`/${lang}/admin/campos`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: '#64748b', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', backgroundColor: 'white', padding: '0.5rem 1rem', borderRadius: '999px', border: '1px solid #e2e8f0' }}>
+          &larr; {isEn ? 'Back to My Camps' : 'Voltar aos Meus Campos'}
+        </Link>
+
+        {/* INDICADOR DE AUTO-SAVE E BOTÃO DE PREVIEW */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {autoSaveStatus === 'pending' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#f59e0b' }}>✎ {isEn ? 'Unsaved changes...' : 'Alogumas alterações não guardadas...'}</span>}
+          {autoSaveStatus === 'saving' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#3b82f6' }}>⏳ {isEn ? 'Saving...' : 'A gravar automaticamente...'}</span>}
+          {autoSaveStatus === 'saved' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>✓ {isEn ? 'Saved' : 'Guardado'}</span>}
+          {autoSaveStatus === 'error' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ef4444' }}>⚠ {isEn ? 'Save error' : 'Erro ao gravar'}</span>}
+          
+          <a href={`/${lang}/campo/${id}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#0f172a', color: 'white', padding: '0.5rem 1.25rem', borderRadius: '999px', fontWeight: 'bold', textDecoration: 'none', fontSize: '13px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+            👁️ {isEn ? 'Preview Camp' : 'Ver Campo Online'}
+          </a>
+        </div>
+      </div>
 
       <h1 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem' }}>{isEn ? 'Edit Camp' : 'Editar Campo'}</h1>
 
@@ -295,7 +355,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         </div>
       )}
 
-      <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <form onSubmit={(e) => handleUpdate(e, false)} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         {/* 1. INFO BÁSICA */}
         <div style={sectionStyle}>
           <h2 style={sectionTitleStyle}>{isEn ? '1. Basic Information' : '1. Informações Básicas'}</h2>
