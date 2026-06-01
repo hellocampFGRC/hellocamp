@@ -75,6 +75,10 @@ export default async function DetalhesDoCampo({
   const alojamentoCampo = isEn && campo.alojamento_en ? campo.alojamento_en : campo.alojamento;
   const seguroCampo = isEn && campo.seguro_en ? campo.seguro_en : campo.seguro;
   const regrasCampo = isEn && campo.regras_termos_en ? campo.regras_termos_en : campo.regras_termos;
+  
+  // Tratamento do País para os Breadcrumbs
+  const paisReal = campo.pais || "Portugal"; // Fallback caso campos muito antigos não tenham país
+  const paisVisivel = isEn && campo.pais_en ? campo.pais_en : paisReal;
 
   const scoreAvaliacoes = campo.rating_score || 0;
   const totalAvaliacoes = campo.total_reviews || 0;
@@ -85,17 +89,47 @@ export default async function DetalhesDoCampo({
     return d.toLocaleDateString(isEn ? 'en-US' : 'pt-PT', { day: 'numeric', month: 'long' });
   };
 
+  // SCHEMA MARKUP PARA BREADCRUMBS (O Segredo do SEO Estruturado)
+  const baseUrl = "https://www.hellocamp.pt";
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": isEn ? "Home" : "Início", "item": `${baseUrl}/${lang}` },
+      { "@type": "ListItem", "position": 2, "name": paisVisivel, "item": `${baseUrl}/${lang}/pesquisa/pais/${encodeURIComponent(paisReal)}` },
+      { "@type": "ListItem", "position": 3, "name": localCampo, "item": `${baseUrl}/${lang}/distrito/${encodeURIComponent(campo.Distrito || localCampo)}` },
+      { "@type": "ListItem", "position": 4, "name": nomeCampo, "item": `${baseUrl}/${lang}/campo/${campo.id}` }
+    ]
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24">
+
+      {/* SCRIPT SEO INVISÍVEL */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
 
       {/* HERO SECTION DA PÁGINA */}
       <div className="relative w-full h-[580px] bg-slate-900 overflow-hidden">
         <img src={campo.imagem} alt={nomeCampo} className="w-full h-full object-cover opacity-90" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent"></div>
 
-        <div className="absolute top-6 left-6 z-30">
-          <Link href={`/${lang}`} className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 shadow-md border border-slate-100 hover:bg-slate-50 transition-colors">
-            &larr; {dict.detalhe.voltar_pesquisa}
+        {/* BREADCRUMBS VISUAIS (Substitui o botão de voltar genérico) */}
+        <div className="absolute top-6 left-6 z-30 hidden sm:block">
+          <nav className="flex items-center gap-2 text-[10px] sm:text-xs font-bold text-slate-700 bg-white/95 backdrop-blur-sm px-5 py-2.5 rounded-full shadow-md border border-white/20 tracking-wider uppercase">
+            <Link href={`/${lang}`} className="hover:text-emerald-600 transition-colors">{isEn ? 'Home' : 'Início'}</Link>
+            <span className="text-slate-400">/</span>
+            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(paisReal)}`} className="hover:text-emerald-600 transition-colors">{paisVisivel}</Link>
+            <span className="text-slate-400">/</span>
+            <Link href={`/${lang}/distrito/${encodeURIComponent(campo.Distrito || localCampo)}`} className="hover:text-emerald-600 transition-colors">{localCampo}</Link>
+            <span className="text-slate-400">/</span>
+            <span className="text-slate-400 max-w-[120px] sm:max-w-[200px] truncate" title={nomeCampo}>{nomeCampo}</span>
+          </nav>
+        </div>
+
+        {/* BREADCRUMBS VERSÃO MOBILE (Mais curto) */}
+        <div className="absolute top-6 left-4 z-30 sm:hidden">
+           <Link href={`/${lang}/distrito/${encodeURIComponent(campo.Distrito || localCampo)}`} className="inline-flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-sm px-4 py-2.5 text-xs font-bold text-slate-700 shadow-md border border-white/20 uppercase tracking-wider">
+            &larr; {localCampo}
           </Link>
         </div>
       </div>
