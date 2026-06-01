@@ -2,197 +2,284 @@
 
 import { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 import React from "react";
 
-export default function GestaoReservasParceiro({ params }: { params: Promise<{ lang: string }> }) {
+export default function DashboardMarketing({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const isEn = lang === 'en';
 
   const [loading, setLoading] = useState(true);
-  const [reservas, setReservas] = useState<any[]>([]);
-  const [reservaSelecionada, setReservaSelecionada] = useState<any>(null);
+  const [nomeEmpresa, setNomeEmpresa] = useState("");
+  
+  // Métricas de Marketing
+  const [metricas, setMetricas] = useState({
+    totalReservas: 0,
+    vezesGuardado: 0, 
+    camposAtivos: 0,
+    camposPendentes: 0,
+    mediaEstrelas: 0,
+  });
+
+  // Motor de Sugestões e Alertas
+  const [sugestoes, setSugestoes] = useState<any[]>([]);
 
   useEffect(() => {
-    const carregarReservas = async () => {
+    const fetchMarketingData = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const { data } = await supabase
-        .from('reservas')
-        .select(`
-          id, created_at, valor_total, status_pagamento, turno_nome, extras_escolhidos,
-          criancas ( nome, data_nascimento, sexo, restricoes_alimentares ),
-          perfis ( nome_completo, email, telefone, nif, contacto_emergencia, pessoas_autorizadas_recolha ),
-          campos ( nome )
-        `)
-        .eq('organizador_id', session.user.id)
-        .order('created_at', { ascending: false });
+      const userId = session.user.id;
 
-      setReservas(data || []);
+      // 1. Busca Perfil
+      const { data: perfil } = await supabase.from('perfis').select('nome_empresa').eq('id', userId).single();
+      if (perfil) setNomeEmpresa(perfil.nome_empresa || (isEn ? "Partner" : "Parceiro"));
+
+      // 2. Busca Campos do Parceiro para Análise de Conversão
+      const { data: campos } = await supabase.from('campos').select('id, nome, contrato_parceiro_url, rating_score, total_reviews, galeria, programas_pdf, imagem').eq('organizador_id', userId);
+      const camposIds = campos?.map(c => c.id) || [];
+      
+      let ativos = 0;
+      let pendentes = 0;
+      let somaEstrelas = 0;
+      let totalComReviews = 0;
+      const novasSugestoes: any[] = [];
+
+      campos?.forEach(c => {
+        // Contagem de Estado
+        if (c.contrato_parceiro_url) ativos++;
+        else pendentes++;
+
+        // Contagem de Reviews
+        if (c.rating_score > 0) {
+          somaEstrelas += c.rating_score;
+          totalComReviews++;
+        }
+
+        // MOTOR DE OTIMIZAÇÃO (O que falta para vender mais?)
+        if (!c.contrato_parceiro_url) {
+          novasSugestoes.push({ 
+            tipo: 'critical', 
+            icon: '🔴', 
+            titulo: isEn ? 'Contract Pending' : 'Contrato Pendente',
+            texto: isEn ? `The camp "${c.nome}" is hidden. Waiting for HelloCamp validation.` : `O campo "${c.nome}" está invisível. Aguarda validação da HelloCamp.`, 
+            link: `/${lang}/admin/campos/editar/${c.id}`,
+            actionText: isEn ? 'Check Status' : 'Ver Estado'
+          });
+        }
+        
+        if (!c.galeria || c.galeria.length === 0) {
+          novasSugestoes.push({ 
+            tipo: 'warning', 
+            icon: '📸', 
+            titulo: isEn ? 'Missing Gallery' : 'Galeria de Fotos Vazia',
+            texto: isEn ? `Parents decide based on photos! Add a gallery to "${c.nome}".` : `Os pais compram com os olhos! Adicione fotografias à galeria do campo "${c.nome}".`, 
+            link: `/${lang}/admin/campos/editar/${c.id}`,
+            actionText: isEn ? 'Add Photos' : 'Adicionar Fotos'
+          });
+        }
+
+        if (!c.programas_pdf || c.programas_pdf.length === 0) {
+          novasSugestoes.push({ 
+            tipo: 'info', 
+            icon: '📄', 
+            titulo: isEn ? 'No Itinerary PDF' : 'Falta o Programa Detalhado (PDF)',
+            texto: isEn ? `Attach a PDF schedule to "${c.nome}" to increase trust.` : `Anexe um PDF com o itinerário no campo "${c.nome}" para aumentar a confiança dos pais.`, 
+            link: `/${lang}/admin/campos/editar/${c.id}`,
+            actionText: isEn ? 'Attach PDF' : 'Anexar PDF'
+          });
+        }
+
+        if (c.total_reviews === 0 && c.contrato_parceiro_url) {
+          novasSugestoes.push({ 
+            tipo: 'idea', 
+            icon: '⭐', 
+            titulo: isEn ? 'Zero Reviews' : 'Nenhuma Avaliação',
+            texto: isEn ? `"${c.nome}" has no reviews. Share the link with past clients!` : `O campo "${c.nome}" não tem avaliações. Partilhe o link com clientes antigos para ganhar tração!`, 
+            link: `/${lang}/campo/${c.id}`,
+            actionText: isEn ? 'Get Link' : 'Obter Link'
+          });
+        }
+      });
+
+      // 3. Busca Total de Reservas (Métrica de Sucesso)
+      const { count: countReservas } = await supabase.from('reservas').select('*', { count: 'exact', head: true }).eq('organizador_id', userId);
+
+      // 4. Busca Wishlists (Funil de Desejo)
+      let vezesGuardadoTotal = 0;
+      if (camposIds.length > 0) {
+        const { count } = await supabase.from('wishlist_campos').select('*', { count: 'exact', head: true }).in('campo_id', camposIds);
+        vezesGuardadoTotal = count || 0;
+      }
+
+      setMetricas({
+        totalReservas: countReservas || 0,
+        vezesGuardado: vezesGuardadoTotal,
+        camposAtivos: ativos,
+        camposPendentes: pendentes,
+        mediaEstrelas: totalComReviews > 0 ? (somaEstrelas / totalComReviews) : 0,
+      });
+
+      // Ordenar sugestões (Críticos primeiro)
+      const prioridade: Record<string, number> = { 'critical': 1, 'warning': 2, 'info': 3, 'idea': 4 };
+      novasSugestoes.sort((a, b) => prioridade[a.tipo] - prioridade[b.tipo]);
+
+      setSugestoes(novasSugestoes);
       setLoading(false);
     };
-    carregarReservas();
-  }, []);
 
-  const safeExtract = (obj: any) => Array.isArray(obj) ? obj[0] : obj;
+    fetchMarketingData();
+  }, [isEn, lang]);
 
-  if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>{isEn ? 'Loading bookings...' : 'A carregar as suas reservas...'}</div>;
+  if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>{isEn ? 'Loading marketing data...' : 'A carregar motor de otimização...'}</div>;
 
   return (
-    <main style={{ maxWidth: '1200px', margin: '0 auto', fontFamily: 'sans-serif', padding: '2rem 1.5rem' }}>
+    <main style={{ maxWidth: '1200px', margin: '0 auto', fontFamily: 'sans-serif', padding: '2rem 1.5rem', paddingBottom: '4rem' }}>
       
-      <div style={{ marginBottom: '2.5rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>
-          {isEn ? 'Bookings Management' : 'Gestão de Inscrições'}
-        </h1>
-        <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: '15px' }}>
-          {isEn ? 'Click on any participant to view full emergency and booking details.' : 'Clique no nome de qualquer participante para aceder à Ficha Completa (Segurança, Alergias, Pagamentos).'}
-        </p>
-      </div>
-
-      <div style={{ backgroundColor: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-        {reservas.length === 0 ? (
-          <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
-            {isEn ? 'You have no bookings yet.' : 'Ainda não tem reservas efetuadas.'}
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-              <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                <tr>
-                  <th style={thStyle}>{isEn ? 'Date' : 'Data'}</th>
-                  <th style={thStyle}>{isEn ? 'Camp / Shift' : 'Campo / Turno'}</th>
-                  <th style={thStyle}>{isEn ? 'Participant' : 'Participante'}</th>
-                  <th style={thStyle}>{isEn ? 'Guardian' : 'Encarregado'}</th>
-                  <th style={thStyle}>{isEn ? 'Status' : 'Estado'}</th>
-                  <th style={thStyle}>{isEn ? 'Actions' : 'Ações'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reservas.map((reserva) => {
-                  const crianca = safeExtract(reserva.criancas) || {};
-                  const pai = safeExtract(reserva.perfis) || {};
-                  const campo = safeExtract(reserva.campos) || {};
-
-                  return (
-                    <tr key={reserva.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.2s' }}>
-                      <td style={tdStyle}>{new Date(reserva.created_at).toLocaleDateString()}</td>
-                      <td style={tdStyle}>
-                        <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{campo.nome}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>{reserva.turno_nome}</div>
-                      </td>
-                      <td style={tdStyle}>
-                        <span style={{ fontWeight: 'bold', color: '#059669', cursor: 'pointer' }} onClick={() => setReservaSelecionada(reserva)}>
-                          👦 {crianca.nome || 'N/A'}
-                        </span>
-                        {crianca.restricoes_alimentares && <span style={{ marginLeft: '8px', fontSize: '12px' }} title={isEn ? "Allergies" : "Alergias"}>⚠️</span>}
-                      </td>
-                      <td style={tdStyle}>
-                        <div style={{ color: '#334155', fontWeight: '600' }}>{pai.nome_completo || (isEn ? 'No Name' : 'Sem Nome')}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>{pai.telefone}</div>
-                      </td>
-                      <td style={tdStyle}>
-                        <span style={{ padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '11px', fontWeight: 'bold', backgroundColor: reserva.status_pagamento === 'Pago' ? '#ecfdf5' : '#fef3c7', color: reserva.status_pagamento === 'Pago' ? '#059669' : '#b45309' }}>
-                          {reserva.status_pagamento === 'Pago' ? (isEn ? 'Paid' : 'Pago') : (isEn ? 'Pending' : 'Pendente')}
-                        </span>
-                      </td>
-                      <td style={tdStyle}>
-                        <button onClick={() => setReservaSelecionada(reserva)} style={{ padding: '0.5rem 1rem', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-                          {isEn ? 'View Details' : 'Ver Ficha'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {reservaSelecionada && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '800px', borderRadius: '1.5rem', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
-            
-            <div style={{ padding: '1.5rem 2rem', backgroundColor: '#0f172a', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900' }}>{isEn ? 'Booking Details' : 'Ficha de Inscrição'}</h2>
-                <p style={{ margin: '0.25rem 0 0 0', color: '#94a3b8', fontSize: '14px' }}>Ref: {reservaSelecionada.id}</p>
-              </div>
-              <button onClick={() => setReservaSelecionada(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '2rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
-            </div>
-
-            <div style={{ padding: '2rem', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-                
-                <div style={modalCardStyle}>
-                  <h3 style={modalTitleStyle}>👦 {isEn ? 'Participant Data' : 'Dados do Participante'}</h3>
-                  <DetailRow label={isEn ? "Name" : "Nome"} value={safeExtract(reservaSelecionada.criancas)?.nome} />
-                  <DetailRow label={isEn ? "Birth Date" : "Data Nasc."} value={safeExtract(reservaSelecionada.criancas)?.data_nascimento} />
-                  <DetailRow label={isEn ? "Gender" : "Género"} value={safeExtract(reservaSelecionada.criancas)?.sexo} />
-                  <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fff7ed', borderRadius: '0.5rem', border: '1px solid #fed7aa' }}>
-                    <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#c2410c', textTransform: 'uppercase', marginBottom: '0.25rem' }}>{isEn ? 'Allergies / Restrictions' : 'Alergias / Restrições'}</span>
-                    <span style={{ fontSize: '14px', color: '#9a3412', fontWeight: 'bold' }}>{safeExtract(reservaSelecionada.criancas)?.restricoes_alimentares || (isEn ? 'None declared' : 'Nenhuma declarada')}</span>
-                  </div>
-                </div>
-
-                <div style={modalCardStyle}>
-                  <h3 style={modalTitleStyle}>🛡️ {isEn ? 'Security & Contacts (Guardian)' : 'Segurança e Contactos (Pai/Mãe)'}</h3>
-                  <DetailRow label={isEn ? "Guardian" : "Encarregado"} value={safeExtract(reservaSelecionada.perfis)?.nome_completo} />
-                  <DetailRow label={isEn ? "Phone" : "Telemóvel"} value={safeExtract(reservaSelecionada.perfis)?.telefone} />
-                  <DetailRow label="Email" value={safeExtract(reservaSelecionada.perfis)?.email} />
-                  <DetailRow label="NIF" value={safeExtract(reservaSelecionada.perfis)?.nif || (isEn ? 'Not provided' : 'Não fornecido')} />
-                  
-                  <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fef2f2', borderRadius: '0.5rem', border: '1px solid #fecaca' }}>
-                    <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#e11d48', textTransform: 'uppercase', marginBottom: '0.25rem' }}>{isEn ? 'Emergency Contact (Alt.)' : 'Contacto de Emergência (Alt.)'}</span>
-                    <span style={{ fontSize: '14px', color: '#9f1239', fontWeight: 'bold' }}>{safeExtract(reservaSelecionada.perfis)?.contacto_emergencia || (isEn ? '⚠️ Missing Data' : '⚠️ Faltam Dados')}</span>
-                  </div>
-
-                  <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#f0fdf4', borderRadius: '0.5rem', border: '1px solid #bbf7d0' }}>
-                    <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', marginBottom: '0.25rem' }}>{isEn ? 'Authorized Pickup Persons' : 'Autorizados a Levantar'}</span>
-                    <span style={{ fontSize: '14px', color: '#064e3b', fontWeight: '600', whiteSpace: 'pre-wrap' }}>{safeExtract(reservaSelecionada.perfis)?.pessoas_autorizadas_recolha || (isEn ? '⚠️ Missing Data' : '⚠️ Faltam Dados')}</span>
-                  </div>
-                </div>
-
-                <div style={{ ...modalCardStyle, gridColumn: '1 / -1' }}>
-                  <h3 style={modalTitleStyle}>📅 {isEn ? 'Program Details' : 'Detalhes do Programa'}</h3>
-                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1 }}>
-                      <DetailRow label={isEn ? "Program / Shift" : "Programa/Turno"} value={reservaSelecionada.turno_nome} />
-                      <DetailRow label={isEn ? "Effective Days" : "Dias Efetivos"} value={reservaSelecionada.extras_escolhidos?.dias_inscritos || (isEn ? 'Full Week' : 'Semana Completa')} />
-                      <DetailRow label={isEn ? "Financial Status" : "Estado Financeiro"} value={reservaSelecionada.status_pagamento === 'Pago' ? (isEn ? 'Paid' : 'Pago') : (isEn ? 'Pending' : 'Pendente')} />
-                    </div>
-                    <div style={{ flex: 1, backgroundColor: '#f1f5f9', padding: '1rem', borderRadius: '0.5rem' }}>
-                      <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{isEn ? 'Extras Contracted:' : 'Extras Contratados:'}</span>
-                      <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '14px', color: '#334155', fontWeight: '600' }}>
-                        {reservaSelecionada.extras_escolhidos?.extAlimentacao ? <li>{isEn ? 'Meals Included' : 'Refeições Incluídas'}</li> : null}
-                        {reservaSelecionada.extras_escolhidos?.extAlojamento ? <li>{isEn ? 'Accommodation' : 'Alojamento/Dormida'}</li> : null}
-                        {reservaSelecionada.extras_escolhidos?.extTransporte ? <li>{isEn ? 'Transport' : 'Transporte'}</li> : null}
-                        {reservaSelecionada.extras_escolhidos?.extProlongamento ? <li>{isEn ? 'Extended Hours' : 'Prolongamento de Horário'}</li> : null}
-                        {!reservaSelecionada.extras_escolhidos?.extAlimentacao && !reservaSelecionada.extras_escolhidos?.extAlojamento && !reservaSelecionada.extras_escolhidos?.extTransporte && !reservaSelecionada.extras_escolhidos?.extProlongamento && <li>{isEn ? 'No extras selected' : 'Nenhum extra selecionado'}</li>}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-          </div>
+      <div style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '2.25rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
+            {isEn ? `Welcome, ${nomeEmpresa}` : `Olá, ${nomeEmpresa} 👋`}
+          </h1>
+          <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: '15px', fontWeight: '500' }}>
+            {isEn ? 'Monitor your marketing traction and optimize your camps to sell more.' : 'Acompanhe a sua tração e descubra como otimizar os seus campos para vender mais.'}
+          </p>
         </div>
-      )}
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <Link href={`/${lang}/admin/campos/novo`} style={{ display: 'inline-block', backgroundColor: '#0f172a', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+            + {isEn ? 'Create Camp' : 'Novo Campo'}
+          </Link>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2.5rem', alignItems: 'start' }}>
+        
+        {/* COLUNA ESQUERDA: FUNIL E MÉTRICAS */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {isEn ? 'Traction & Marketing' : 'Tração & Marketing'}
+          </h2>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1.5rem' }}>
+            {/* Wishlists (O Funil de Desejo) */}
+            <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ width: '3rem', height: '3rem', backgroundColor: '#fef2f2', color: '#ef4444', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>
+                  ❤️
+                </div>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {isEn ? 'Wishlists' : 'Favoritos'}
+                </span>
+              </div>
+              <span style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0f172a', display: 'block', lineHeight: 1 }}>
+                {metricas.vezesGuardado}
+              </span>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
+                {isEn ? 'Times your camps were saved by parents.' : 'Vezes que os pais guardaram os seus campos.'}
+              </p>
+            </div>
+
+            {/* Avaliações Globais */}
+            <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ width: '3rem', height: '3rem', backgroundColor: '#fefce8', color: '#eab308', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>
+                  ⭐
+                </div>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {isEn ? 'Global Rating' : 'Avaliação'}
+                </span>
+              </div>
+              <span style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0f172a', display: 'block', lineHeight: 1 }}>
+                {metricas.mediaEstrelas > 0 ? metricas.mediaEstrelas.toFixed(1) : '-'}
+              </span>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
+                {isEn ? 'Average score across all your camps.' : 'Média de todas as reviews publicadas.'}
+              </p>
+            </div>
+
+            {/* Total Inscritos */}
+            <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ width: '3rem', height: '3rem', backgroundColor: '#f0fdf4', color: '#10b981', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>
+                  🎫
+                </div>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {isEn ? 'Total Bookings' : 'Total de Inscrições'}
+                </span>
+              </div>
+              <span style={{ fontSize: '2.5rem', fontWeight: '900', color: '#10b981', display: 'block', lineHeight: 1 }}>
+                {metricas.totalReservas}
+              </span>
+            </div>
+          </div>
+
+          {/* ATALHOS RÁPIDOS */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <Link href={`/${lang}/admin/reservas`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', textDecoration: 'none', transition: 'border-color 0.2s' }}>
+              <span style={{ fontSize: '1.5rem' }}>📋</span>
+              <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>{isEn ? 'Manage Logistics' : 'Gestão de Logística'} &rarr;</span>
+            </Link>
+            <Link href={`/${lang}/admin/faturacao`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', textDecoration: 'none', transition: 'border-color 0.2s' }}>
+              <span style={{ fontSize: '1.5rem' }}>💰</span>
+              <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>{isEn ? 'Finance & Billing' : 'Finanças e Faturação'} &rarr;</span>
+            </Link>
+          </div>
+
+        </div>
+
+        {/* COLUNA DIREITA: MOTOR DE OTIMIZAÇÃO (Avisos e Sugestões) */}
+        <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(15,23,42,0.05)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {isEn ? 'Optimization Engine' : 'Motor de Conversão'}
+            </h2>
+            <span style={{ backgroundColor: sugestoes.length > 0 ? '#fef2f2' : '#f0fdf4', color: sugestoes.length > 0 ? '#ef4444' : '#10b981', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '12px', fontWeight: '900' }}>
+              {sugestoes.length} {isEn ? 'Tasks' : 'Avisos'}
+            </span>
+          </div>
+
+          {sugestoes.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', backgroundColor: '#f8fafc', borderRadius: '1rem', border: '1px dashed #cbd5e1' }}>
+              <span style={{ fontSize: '3rem', display: 'block', marginBottom: '1rem' }}>🏆</span>
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>
+                {isEn ? 'All set!' : 'Tudo perfeito!'}
+              </h3>
+              <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+                {isEn ? 'Your camps are fully optimized.' : 'Os seus campos estão otimizados ao máximo para converter reservas.'}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {sugestoes.map((sug, idx) => {
+                // Cores dinâmicas com base no nível de alerta
+                let bgColor = '#f8fafc', borderColor = '#e2e8f0', titleColor = '#0f172a';
+                if (sug.tipo === 'critical') { bgColor = '#fef2f2'; borderColor = '#fecaca'; titleColor = '#991b1b'; }
+                if (sug.tipo === 'warning') { bgColor = '#fffbeb'; borderColor = '#fde68a'; titleColor = '#92400e'; }
+                if (sug.tipo === 'info') { bgColor = '#eff6ff'; borderColor = '#bfdbfe'; titleColor = '#1e40af'; }
+
+                return (
+                  <div key={idx} style={{ padding: '1.25rem', borderRadius: '1rem', backgroundColor: bgColor, border: `1px solid ${borderColor}`, display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '1.5rem', lineHeight: 1 }}>{sug.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '14px', fontWeight: '800', color: titleColor }}>
+                        {sug.titulo}
+                      </h4>
+                      <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#475569', lineHeight: 1.4 }}>
+                        {sug.texto}
+                      </p>
+                      <Link href={sug.link} style={{ display: 'inline-block', fontSize: '12px', fontWeight: '800', color: titleColor, textDecoration: 'underline', textUnderlineOffset: '4px' }}>
+                        {sug.actionText} &rarr;
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+      </div>
     </main>
   );
 }
-
-const thStyle = { padding: '1rem', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' as const, fontSize: '12px' };
-const tdStyle = { padding: '1rem 1rem', verticalAlign: 'middle' as const };
-const modalCardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' };
-const modalTitleStyle = { margin: '0 0 1.5rem 0', fontSize: '1.125rem', fontWeight: '900', color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' };
-
-const DetailRow = ({ label, value }: { label: string, value: string }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', borderBottom: '1px dashed #f1f5f9', paddingBottom: '0.25rem' }}>
-    <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>{label}:</span>
-    <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '700', textAlign: 'right' }}>{value || 'N/A'}</span>
-  </div>
-);
