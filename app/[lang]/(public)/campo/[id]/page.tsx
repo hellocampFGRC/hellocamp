@@ -59,7 +59,6 @@ export default async function DetalhesDoCampo({
     );
   }
 
-  // Se o campo tiver organizador_id, vamos buscar o nome (e logotipo se quiser) à tabela perfis
   let parceiroInfo = null;
   if (campo.organizador_id) {
     const { data: organizador } = await supabase.from("perfis").select("nome_empresa, logotipo_url, parceiro_verificado").eq("id", campo.organizador_id).single();
@@ -76,8 +75,7 @@ export default async function DetalhesDoCampo({
   const seguroCampo = isEn && campo.seguro_en ? campo.seguro_en : campo.seguro;
   const regrasCampo = isEn && campo.regras_termos_en ? campo.regras_termos_en : campo.regras_termos;
   
-  // Tratamento do País para os Breadcrumbs
-  const paisReal = campo.pais || "Portugal"; // Fallback caso campos muito antigos não tenham país
+  const paisReal = campo.pais || "Portugal"; 
   const paisVisivel = isEn && campo.pais_en ? campo.pais_en : paisReal;
 
   const scoreAvaliacoes = campo.rating_score || 0;
@@ -89,7 +87,6 @@ export default async function DetalhesDoCampo({
     return d.toLocaleDateString(isEn ? 'en-US' : 'pt-PT', { day: 'numeric', month: 'long' });
   };
 
-  // SCHEMA MARKUP PARA BREADCRUMBS (O Segredo do SEO Estruturado)
   const baseUrl = "https://www.hellocamp.pt";
   const breadcrumbSchema = {
     "@context": "https://schema.org",
@@ -105,7 +102,6 @@ export default async function DetalhesDoCampo({
   return (
     <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24">
 
-      {/* SCRIPT SEO INVISÍVEL */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
 
       {/* HERO SECTION DA PÁGINA */}
@@ -113,7 +109,6 @@ export default async function DetalhesDoCampo({
         <img src={campo.imagem} alt={nomeCampo} className="w-full h-full object-cover opacity-90" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent"></div>
 
-        {/* BREADCRUMBS VISUAIS (Substitui o botão de voltar genérico) */}
         <div className="absolute top-6 left-6 z-30 hidden sm:block">
           <nav className="flex items-center gap-2 text-[10px] sm:text-xs font-bold text-slate-700 bg-white/95 backdrop-blur-sm px-5 py-2.5 rounded-full shadow-md border border-white/20 tracking-wider uppercase">
             <Link href={`/${lang}`} className="hover:text-emerald-600 transition-colors">{isEn ? 'Home' : 'Início'}</Link>
@@ -126,7 +121,6 @@ export default async function DetalhesDoCampo({
           </nav>
         </div>
 
-        {/* BREADCRUMBS VERSÃO MOBILE (Mais curto) */}
         <div className="absolute top-6 left-4 z-30 sm:hidden">
            <Link href={`/${lang}/distrito/${encodeURIComponent(campo.Distrito || localCampo)}`} className="inline-flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-sm px-4 py-2.5 text-xs font-bold text-slate-700 shadow-md border border-white/20 uppercase tracking-wider">
             &larr; {localCampo}
@@ -139,9 +133,9 @@ export default async function DetalhesDoCampo({
           
           <div className="flex-1 w-full flex flex-col gap-6">
             
-            {/* CABEÇALHO DO CAMPO E REVIEWS */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative">
-              <div className="absolute top-8 right-8 z-20">
+            {/* CABEÇALHO DO CAMPO E REVIEWS (z-40 para a Lightbox não ser bloqueada) */}
+            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-40">
+              <div className="absolute top-8 right-8 z-50">
                 <BotaoFavorito campoId={campo.id} />
               </div>
               
@@ -152,7 +146,6 @@ export default async function DetalhesDoCampo({
               
               <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight mb-4">{nomeCampo}</h1>
               
-              {/* ESTRELAS E SCORE */}
               <div className="flex items-center gap-2">
                 <span className="text-[#EBA914] text-lg font-black">★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : 'Novo'}</span>
                 <span className="text-slate-400 text-sm font-bold underline decoration-slate-300 underline-offset-4">
@@ -161,12 +154,11 @@ export default async function DetalhesDoCampo({
               </div>
             </div>
 
-            {/* DESCRIÇÃO E PERFIL DO ORGANIZADOR */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-20">
+            {/* DESCRIÇÃO E PERFIL DO ORGANIZADOR (z-10 para ficar debaixo da Lightbox) */}
+            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{dict.detalhe.sobre_programa}</h2>
               <p className="leading-relaxed text-slate-600 text-base whitespace-pre-wrap font-medium">{descCampo}</p>
               
-              {/* BLOCO DO PARCEIRO ("Host") */}
               {campo.organizador_id && parceiroInfo && (
                 <Link href={`/${lang}/admin/${campo.organizador_id}`} className="mt-8 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors no-underline group">
                   <div className="flex items-center gap-4">
@@ -196,14 +188,14 @@ export default async function DetalhesDoCampo({
 
             {/* REGRAS */}
             {regrasCampo && (
-              <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100">
+              <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
                 <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{isEn ? 'Specific Rules & Terms' : 'Regras e Termos'}</h2>
                 <p className="leading-relaxed text-slate-500 text-sm whitespace-pre-wrap font-medium">{regrasCampo}</p>
               </div>
             )}
 
             {/* DATAS */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100">
+            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-5">{dict.detalhe.datas_disponibilidade}</h2>
               <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100">
                 {campo.turnos && campo.turnos.length > 0 ? (
@@ -234,7 +226,7 @@ export default async function DetalhesDoCampo({
             </div>
 
             {/* INFORMAÇÕES IMPORTANTES */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100">
+            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-6">{dict.detalhe.informacoes_importantes}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
@@ -257,7 +249,7 @@ export default async function DetalhesDoCampo({
             </div>
 
             {/* ZONA DE AVALIAÇÕES */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100">
+            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <div className="flex items-center justify-between mb-8 border-b border-slate-50 pb-4">
                 <h2 className="text-xl font-bold text-slate-900 m-0">{isEn ? 'Reviews' : 'Avaliações'}</h2>
                 <div className="flex items-center gap-2">
@@ -291,7 +283,7 @@ export default async function DetalhesDoCampo({
             </div>
 
             {/* FORMULÁRIO DE CONTACTO */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100">
+            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h3 className="text-xl font-bold text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
               <p className="text-sm text-slate-500 font-medium mb-8">{dict.detalhe.duvidas_sub}</p>
               
@@ -338,7 +330,7 @@ export default async function DetalhesDoCampo({
             </div>
           </div>
 
-          <div className="w-full lg:w-[400px] flex-shrink-0 lg:sticky lg:top-8">
+          <div className="w-full lg:w-[400px] flex-shrink-0 lg:sticky lg:top-8 relative z-30">
             <CaixaReserva campo={campo} lang={lang} dict={dict} />
           </div>
         </div>

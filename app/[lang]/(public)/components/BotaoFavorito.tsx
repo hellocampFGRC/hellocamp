@@ -5,16 +5,17 @@ import { supabase } from "@/lib/supabase";
 import React from "react";
 
 interface BotaoFavoritoProps {
-  campoId: string | number; // Suporta tanto IDs antigos (Integer) como os novos de segurança (UUID)
+  campoId: string | number;
 }
 
 export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
   const [isFavorited, setIsFavorited] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   
-  // Estados do Modal de Wishlists
+  // Estados do Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [wishlists, setWishlists] = useState<any[]>([]);
+  const [listasAtivas, setListasAtivas] = useState<string[]>([]); // Guarda os IDs das listas onde este campo já está
   const [novaListaNome, setNovaListaNome] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -24,19 +25,19 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
       if (!session) return;
       setUserId(session.user.id);
 
-      // Verifica se este campo está em ALGUMA das wishlists deste utilizador
+      // Verifica em que listas este campo se encontra
       const { data, error } = await supabase
         .from("wishlist_campos")
         .select("wishlist_id, wishlists!inner(user_id)")
         .eq("campo_id", campoId)
         .eq("wishlists.user_id", session.user.id);
 
-      if (error) {
-        console.error("Erro ao verificar favorito na base de dados:", error);
-      }
-
-      if (data && data.length > 0) {
+      if (!error && data && data.length > 0) {
         setIsFavorited(true);
+        setListasAtivas(data.map(d => d.wishlist_id));
+      } else {
+        setIsFavorited(false);
+        setListasAtivas([]);
       }
     };
     
@@ -64,27 +65,32 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
       
     if (error) {
       console.error("Erro ao buscar listas:", error);
-      alert("Erro ao carregar as suas listas: " + error.message);
     }
       
     setWishlists(data || []);
     setLoading(false);
   };
 
-  const guardarNaLista = async (wishlistId: string) => {
+  const toggleLista = async (wishlistId: string) => {
     setLoading(true);
-    
-    // Tenta inserir na tabela de ligação
-    const { error } = await supabase
-      .from("wishlist_campos")
-      .insert({ wishlist_id: wishlistId, campo_id: campoId });
-    
-    if (error) {
-      console.error("Erro ao guardar na lista existente:", error);
-      alert("Erro ao adicionar à lista: " + error.message);
+    const isAlreadyInList = listasAtivas.includes(wishlistId);
+
+    if (isAlreadyInList) {
+      // REMOVER da lista
+      const { error } = await supabase.from("wishlist_campos").delete().eq("wishlist_id", wishlistId).eq("campo_id", campoId);
+      if (!error) {
+        const novasListas = listasAtivas.filter(id => id !== wishlistId);
+        setListasAtivas(novasListas);
+        setIsFavorited(novasListas.length > 0);
+      }
     } else {
-      setIsFavorited(true);
-      setIsModalOpen(false); // Só fecha a janela se houver sucesso
+      // ADICIONAR à lista
+      const { error } = await supabase.from("wishlist_campos").insert({ wishlist_id: wishlistId, campo_id: campoId });
+      if (!error) {
+        const novasListas = [...listasAtivas, wishlistId];
+        setListasAtivas(novasListas);
+        setIsFavorited(true);
+      }
     }
     
     setLoading(false);
@@ -96,7 +102,6 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
     
     setLoading(true);
 
-    // 1. Cria a wishlist na base de dados
     const { data: novaWishlist, error: errorWishlist } = await supabase
       .from("wishlists")
       .insert({ user_id: userId, nome: novaListaNome, is_publica: true })
@@ -104,24 +109,18 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
       .single();
 
     if (errorWishlist) {
-      console.error("Falha ao criar lista nova:", errorWishlist);
       alert("Erro ao criar a lista: " + errorWishlist.message);
       setLoading(false);
-      return; // Para a execução aqui para não fechar a janela
+      return;
     }
 
-    // 2. Guarda o campo na nova wishlist que acabou de ser criada
     if (novaWishlist) {
-      const { error: errorCampo } = await supabase
-        .from("wishlist_campos")
-        .insert({ wishlist_id: novaWishlist.id, campo_id: campoId });
+      const { error: errorCampo } = await supabase.from("wishlist_campos").insert({ wishlist_id: novaWishlist.id, campo_id: campoId });
         
-      if (errorCampo) {
-        console.error("Falha ao ligar campo à nova lista:", errorCampo);
-        alert("A lista foi criada, mas não foi possível adicionar o campo: " + errorCampo.message);
-      } else {
+      if (!errorCampo) {
+        setWishlists([novaWishlist, ...wishlists]); // Atualiza as opções visuais
+        setListasAtivas([...listasAtivas, novaWishlist.id]);
         setIsFavorited(true);
-        setIsModalOpen(false); // Sucesso total: pode fechar
         setNovaListaNome("");
       }
     }
@@ -140,9 +139,9 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
         </svg>
       </button>
 
-      {/* MODAL DE WISHLISTS (Fixo no ecrã inteiro) */}
+      {/* MODAL DE WISHLISTS */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsModalOpen(false); }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsModalOpen(false); }}>
           <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-black text-slate-900 text-lg">Guardar na lista</h3>
@@ -150,17 +149,29 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
             </div>
             
             <div className="p-6 max-h-60 overflow-y-auto flex flex-col gap-2">
-              {loading ? (
+              {loading && wishlists.length === 0 ? (
                 <div className="text-center text-sm font-bold text-slate-400 py-4">A processar...</div>
               ) : wishlists.length === 0 ? (
                 <p className="text-sm text-slate-500 font-medium py-2">Ainda não tem listas criadas.</p>
               ) : (
-                wishlists.map(w => (
-                  <button key={w.id} onClick={() => guardarNaLista(w.id)} disabled={loading} className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition-colors font-bold text-slate-700 text-sm flex justify-between items-center group disabled:opacity-50">
-                    {w.nome}
-                    <span className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity">+</span>
-                  </button>
-                ))
+                wishlists.map(w => {
+                  const isInList = listasAtivas.includes(w.id);
+                  return (
+                    <button 
+                      key={w.id} 
+                      onClick={() => toggleLista(w.id)} 
+                      disabled={loading} 
+                      className={`w-full text-left p-4 rounded-xl border transition-colors font-bold text-sm flex justify-between items-center group disabled:opacity-50 ${isInList ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 text-slate-700'}`}
+                    >
+                      {w.nome}
+                      {isInList ? (
+                        <span className="text-emerald-500 font-black">✓</span>
+                      ) : (
+                        <span className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity">+</span>
+                      )}
+                    </button>
+                  );
+                })
               )}
             </div>
 
