@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import React from "react";
 
 interface BotaoFavoritoProps {
-  campoId: string | number; // Atualizado para suportar UUID
+  campoId: string | number; // Suporta tanto IDs antigos (Integer) como os novos de segurança (UUID)
 }
 
 export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
@@ -25,14 +25,21 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
       setUserId(session.user.id);
 
       // Verifica se este campo está em ALGUMA das wishlists deste utilizador
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("wishlist_campos")
         .select("wishlist_id, wishlists!inner(user_id)")
         .eq("campo_id", campoId)
         .eq("wishlists.user_id", session.user.id);
 
-      if (data && data.length > 0) setIsFavorited(true);
+      if (error) {
+        console.error("Erro ao verificar favorito na base de dados:", error);
+      }
+
+      if (data && data.length > 0) {
+        setIsFavorited(true);
+      }
     };
+    
     verificarFavorito();
   }, [campoId]);
 
@@ -49,11 +56,16 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
     setIsModalOpen(true);
     
     // Buscar as listas existentes do utilizador
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("wishlists")
       .select("id, nome")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
+      
+    if (error) {
+      console.error("Erro ao buscar listas:", error);
+      alert("Erro ao carregar as suas listas: " + error.message);
+    }
       
     setWishlists(data || []);
     setLoading(false);
@@ -61,33 +73,59 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
 
   const guardarNaLista = async (wishlistId: string) => {
     setLoading(true);
-    // Tenta inserir (se já lá estiver, a chave primária bloqueia sem erro grave)
-    await supabase.from("wishlist_campos").insert({ wishlist_id: wishlistId, campo_id: campoId });
-    setIsFavorited(true);
-    setIsModalOpen(false);
+    
+    // Tenta inserir na tabela de ligação
+    const { error } = await supabase
+      .from("wishlist_campos")
+      .insert({ wishlist_id: wishlistId, campo_id: campoId });
+    
+    if (error) {
+      console.error("Erro ao guardar na lista existente:", error);
+      alert("Erro ao adicionar à lista: " + error.message);
+    } else {
+      setIsFavorited(true);
+      setIsModalOpen(false); // Só fecha a janela se houver sucesso
+    }
+    
     setLoading(false);
   };
 
   const criarEGuardar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!novaListaNome.trim() || !userId) return;
+    
     setLoading(true);
 
-    // 1. Cria a wishlist
-    const { data: novaWishlist } = await supabase
+    // 1. Cria a wishlist na base de dados
+    const { data: novaWishlist, error: errorWishlist } = await supabase
       .from("wishlists")
       .insert({ user_id: userId, nome: novaListaNome, is_publica: true })
       .select()
       .single();
 
-    // 2. Guarda o campo na nova wishlist
+    if (errorWishlist) {
+      console.error("Falha ao criar lista nova:", errorWishlist);
+      alert("Erro ao criar a lista: " + errorWishlist.message);
+      setLoading(false);
+      return; // Para a execução aqui para não fechar a janela
+    }
+
+    // 2. Guarda o campo na nova wishlist que acabou de ser criada
     if (novaWishlist) {
-      await supabase.from("wishlist_campos").insert({ wishlist_id: novaWishlist.id, campo_id: campoId });
-      setIsFavorited(true);
+      const { error: errorCampo } = await supabase
+        .from("wishlist_campos")
+        .insert({ wishlist_id: novaWishlist.id, campo_id: campoId });
+        
+      if (errorCampo) {
+        console.error("Falha ao ligar campo à nova lista:", errorCampo);
+        alert("A lista foi criada, mas não foi possível adicionar o campo: " + errorCampo.message);
+      } else {
+        setIsFavorited(true);
+        setIsModalOpen(false); // Sucesso total: pode fechar
+        setNovaListaNome("");
+      }
     }
     
-    setIsModalOpen(false);
-    setNovaListaNome("");
     setLoading(false);
   };
 
@@ -113,12 +151,12 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
             
             <div className="p-6 max-h-60 overflow-y-auto flex flex-col gap-2">
               {loading ? (
-                <div className="text-center text-sm font-bold text-slate-400">A carregar...</div>
+                <div className="text-center text-sm font-bold text-slate-400 py-4">A processar...</div>
               ) : wishlists.length === 0 ? (
-                <p className="text-sm text-slate-500 font-medium">Ainda não tem listas criadas.</p>
+                <p className="text-sm text-slate-500 font-medium py-2">Ainda não tem listas criadas.</p>
               ) : (
                 wishlists.map(w => (
-                  <button key={w.id} onClick={() => guardarNaLista(w.id)} className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition-colors font-bold text-slate-700 text-sm flex justify-between items-center group">
+                  <button key={w.id} onClick={() => guardarNaLista(w.id)} disabled={loading} className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition-colors font-bold text-slate-700 text-sm flex justify-between items-center group disabled:opacity-50">
                     {w.nome}
                     <span className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity">+</span>
                   </button>
@@ -133,10 +171,10 @@ export default function BotaoFavorito({ campoId }: BotaoFavoritoProps) {
                   placeholder="Nome da nova lista..." 
                   value={novaListaNome} 
                   onChange={e => setNovaListaNome(e.target.value)}
-                  className="flex-1 p-3 rounded-xl border border-slate-200 text-sm outline-none focus:border-emerald-500" 
+                  className="flex-1 p-3 rounded-xl border border-slate-200 text-sm outline-none focus:border-emerald-500 bg-white" 
                   required
                 />
-                <button type="submit" disabled={loading} className="bg-slate-900 text-white px-4 py-3 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-800 disabled:opacity-50">
+                <button type="submit" disabled={loading} className="bg-slate-900 text-white px-4 py-3 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-800 disabled:opacity-50 transition-opacity">
                   Criar
                 </button>
               </form>
