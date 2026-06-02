@@ -168,7 +168,8 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
           </div>
           
           <div style={gridStyle}>
-            <div>
+            {/* CORREÇÃO: Tipo Sanguíneo a ocupar a largura total (1 / -1) para não cortar o texto */}
+            <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>{isEn ? 'Blood Type' : 'Tipo Sanguíneo'}</label>
               <select value={formData.tipo_sanguineo} onChange={e => setFormData({...formData, tipo_sanguineo: e.target.value})} style={selectStyle}>
                 <option value="">{isEn ? 'Unknown / Not declared' : 'Desconhecido / Não declarado'}</option>
@@ -254,12 +255,17 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
   );
 }
 
-// ESTILOS LIMPOS (MANTENDO A ESTÉTICA SILENT LUXURY)
+// ESTILOS LIMPOS
 const sectionStyle = { backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' };
 const sectionTitleStyle = { fontSize: '1.25rem', fontWeight: '900', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '2rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
-const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' };
+
+// CORREÇÃO: minmax de 220px aumentado para 250px para maior consistência dos campos
+const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' };
+
 const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', textTransform: 'uppercase' as const, marginBottom: '0.5rem', letterSpacing: '0.02em' };
 const asteriskStyle = { color: '#ef4444' };
 const inputBase = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '15px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const, transition: 'border-color 0.2s, box-shadow 0.2s' };
 const inputStyle = { ...inputBase };
-const selectStyle = { ...inputBase, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
+
+// CORREÇÃO: paddingRight aumentado para 2.5rem (para a seta do dropdown não sobrepor o texto longo)
+const selectStyle = { ...inputBase, paddingRight: '2.5rem', cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
