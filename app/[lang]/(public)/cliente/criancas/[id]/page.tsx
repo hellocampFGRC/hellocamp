@@ -11,22 +11,22 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
   const isEn = lang === 'en';
   const router = useRouter();
 
+  // Se o ID no URL for a palavra 'novo', sabemos que estamos no modo de criação
+  const isModoCriacao = id === 'novo';
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // Estado expandido para o perfil clínico e logístico completo
   const [formData, setFormData] = useState({ 
     nome: '', 
     nif: '', 
     data_nascimento: '', 
     sexo: '',
-    // Perfil Clínico
     tipo_sanguineo: '',
     restricoes_alimentares: '',
     doencas_cronicas: '',
     medicacao_regular: '',
     limitacoes_fisicas: '',
-    // Perfil Logístico
     sabe_nadar: '',
     sabe_andar_bicicleta: '',
     tamanho_tshirt: ''
@@ -34,6 +34,13 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
 
   useEffect(() => {
     const fetchCrianca = async () => {
+      // Se for modo criação, paramos o loading imediatamente (não há dados a buscar)
+      if (isModoCriacao) {
+        setLoading(false);
+        return;
+      }
+
+      // Se for modo edição, vamos à base de dados buscar o perfil
       const { data } = await supabase.from('criancas').select('*').eq('id', id).single();
       if (data) {
         setFormData({ 
@@ -54,17 +61,34 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
       setLoading(false);
     };
     fetchCrianca();
-  }, [id]);
+  }, [id, isModoCriacao]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const { error } = await supabase.from('criancas').update(formData).eq('id', id);
-    if (!error) {
-      alert(isEn ? 'Profile saved successfully!' : 'Perfil de segurança guardado com sucesso!');
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada.");
+
+      if (isModoCriacao) {
+        // MODO CRIAÇÃO: Faz um INSERT com o ID do pai
+        const { error } = await supabase.from('criancas').insert({
+          cliente_id: session.user.id,
+          ...formData
+        });
+        if (error) throw error;
+      } else {
+        // MODO EDIÇÃO: Faz um UPDATE filtrando pelo ID da criança
+        const { error } = await supabase.from('criancas').update(formData).eq('id', id);
+        if (error) throw error;
+      }
+
+      alert(isEn ? 'Profile saved successfully!' : 'Perfil guardado com sucesso!');
       router.push(`/${lang}/cliente/criancas`);
-    } else {
-      alert('Erro: ' + error.message);
+    } catch (err: any) {
+      alert('Erro ao guardar: ' + err.message);
+    } finally {
       setSaving(false);
     }
   };
@@ -75,7 +99,7 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
     router.push(`/${lang}/cliente/criancas`);
   };
 
-  if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>{isEn ? 'Loading profile...' : 'A carregar perfil...'}</div>;
+  if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>{isEn ? 'Loading profile...' : 'A preparar o formulário...'}</div>;
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '4rem' }}>
@@ -84,14 +108,18 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
         <Link href={`/${lang}/cliente/criancas`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: '#64748b', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', backgroundColor: 'white', padding: '0.6rem 1.2rem', borderRadius: '999px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
           &larr; {isEn ? 'Back to list' : 'Voltar à lista'}
         </Link>
-        <button type="button" onClick={handleApagar} style={{ color: '#ef4444', backgroundColor: 'transparent', padding: '0.6rem 1.2rem', borderRadius: '999px', border: '1px solid #fecaca', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-          {isEn ? 'Delete Profile' : 'Apagar Perfil'}
-        </button>
+        
+        {/* O botão apagar só faz sentido se a criança já existir (Modo Edição) */}
+        {!isModoCriacao && (
+          <button type="button" onClick={handleApagar} style={{ color: '#ef4444', backgroundColor: 'transparent', padding: '0.6rem 1.2rem', borderRadius: '999px', border: '1px solid #fecaca', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+            {isEn ? 'Delete Profile' : 'Apagar Perfil'}
+          </button>
+        )}
       </div>
 
       <div style={{ marginBottom: '2.5rem' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0f172a', margin: '0 0 0.5rem 0', letterSpacing: '-0.02em' }}>
-          {isEn ? 'Participant Profile' : 'Perfil do Participante'}
+          {isModoCriacao ? (isEn ? 'New Participant' : 'Novo Participante') : (isEn ? 'Edit Profile' : 'Editar Perfil')}
         </h1>
         <p style={{ margin: 0, color: '#64748b', fontSize: '15px' }}>
           {isEn ? 'Keep this data updated to ensure maximum safety during the camps.' : 'Mantenha estes dados atualizados para garantir a máxima segurança durante os campos de férias.'}
@@ -100,7 +128,6 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         
-        {/* BLOCO 1: IDENTIFICAÇÃO BÁSICA */}
         <div style={sectionStyle}>
           <h2 style={sectionTitleStyle}>1. {isEn ? 'Basic Identification' : 'Identificação Básica'}</h2>
           
@@ -132,7 +159,6 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
           </div>
         </div>
 
-        {/* BLOCO 2: PERFIL CLÍNICO E DE SEGURANÇA */}
         <div style={{...sectionStyle, borderColor: '#fecaca'}}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '2px solid #fef2f2', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
             <span style={{ fontSize: '1.5rem' }}>🏥</span>
@@ -175,7 +201,6 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
           </div>
         </div>
 
-        {/* BLOCO 3: COMPETÊNCIAS E LOGÍSTICA */}
         <div style={{...sectionStyle, borderColor: '#bfdbfe'}}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '2px solid #eff6ff', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
             <span style={{ fontSize: '1.5rem' }}>🎒</span>

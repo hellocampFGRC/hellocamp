@@ -30,30 +30,9 @@ export default function ListaCriancas({ params }: { params: Promise<{ lang: stri
     fetchCriancas();
   }, []);
 
-  const handleCriarNovaCrianca = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      
-      const { data, error } = await supabase
-        .from('criancas')
-        .insert({ cliente_id: session.user.id, nome: 'Novo Participante' })
-        .select()
-        .single();
-      
-      if (error) {
-        alert("Erro ao criar perfil: " + error.message);
-        console.error(error);
-        return;
-      }
-
-      if (data) {
-        // Redireciona para o URL correto consoante a sua estrutura de pastas
-        router.push(`/${lang}/cliente/criancas/${data.id}`);
-      }
-    } catch (err: any) {
-      alert("Ocorreu um erro inesperado: " + err.message);
-    }
+  // AGORA SIM! Apenas navega para a página de criar (URL com a palavra "novo")
+  const handleCriarNovaCrianca = () => {
+    router.push(`/${lang}/cliente/criancas/novo`);
   };
 
   const calcularIdade = (dataNasc: string) => {
@@ -85,7 +64,7 @@ export default function ListaCriancas({ params }: { params: Promise<{ lang: stri
       ) : criancas.length === 0 ? (
         <div className="text-center py-16 px-4 bg-white border-2 border-dashed border-slate-300 rounded-2xl">
           <p className="text-slate-500 mb-4 text-base md:text-lg">{isEn ? 'No children profiles found.' : 'Ainda não adicionou nenhum filho(a).'}</p>
-          <button onClick={handleCriarNovaCrianca} className="text-emerald-600 font-bold bg-transparent text-base hover:text-emerald-700">
+          <button onClick={handleCriarNovaCrianca} className="text-emerald-600 font-bold bg-transparent text-base hover:text-emerald-700 border-none cursor-pointer">
             {isEn ? 'Create profile now →' : 'Criar perfil agora →'}
           </button>
         </div>
@@ -93,6 +72,7 @@ export default function ListaCriancas({ params }: { params: Promise<{ lang: stri
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {criancas.map(c => {
             const idade = calcularIdade(c.data_nascimento);
+            
             return (
               <Link key={c.id} href={`/${lang}/cliente/criancas/${c.id}`} className="bg-white p-6 rounded-2xl border border-slate-200 no-underline text-inherit flex flex-col shadow-sm hover:shadow-md hover:border-emerald-500 transition-all group">
                 <div className="flex justify-between items-start mb-4">
@@ -104,9 +84,9 @@ export default function ListaCriancas({ params }: { params: Promise<{ lang: stri
                   {idade !== null ? (
                     <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">🎂 {idade} {isEn ? 'years' : 'anos'}</span>
                   ) : (
-                    <span className="bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1 rounded-full text-xs font-bold">⚠️ Idade em falta</span>
+                    <span className="bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1 rounded-full text-xs font-bold">⚠️ Dados incompletos</span>
                   )}
-                  {c.sexo && (
+                  {c.sexo && c.sexo !== 'Prefiro não dizer' && (
                     <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">👤 {c.sexo}</span>
                   )}
                 </div>
