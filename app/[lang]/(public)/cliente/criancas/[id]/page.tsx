@@ -11,7 +11,6 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
   const isEn = lang === 'en';
   const router = useRouter();
 
-  // Se o ID no URL for a palavra 'novo', sabemos que estamos no modo de criação
   const isModoCriacao = id === 'novo';
 
   const [loading, setLoading] = useState(true);
@@ -29,18 +28,21 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
     limitacoes_fisicas: '',
     sabe_nadar: '',
     sabe_andar_bicicleta: '',
-    tamanho_tshirt: ''
+    tamanho_tshirt: '',
+    // NOVOS CAMPOS UNIVERSAIS
+    autorizacao_fotografia: '',
+    nivel_ingles: '',
+    fobias_medos: '',
+    perfil_comportamental: ''
   });
 
   useEffect(() => {
     const fetchCrianca = async () => {
-      // Se for modo criação, paramos o loading imediatamente (não há dados a buscar)
       if (isModoCriacao) {
         setLoading(false);
         return;
       }
 
-      // Se for modo edição, vamos à base de dados buscar o perfil
       const { data } = await supabase.from('criancas').select('*').eq('id', id).single();
       if (data) {
         setFormData({ 
@@ -55,7 +57,11 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
           limitacoes_fisicas: data.limitacoes_fisicas || '',
           sabe_nadar: data.sabe_nadar || '',
           sabe_andar_bicicleta: data.sabe_andar_bicicleta || '',
-          tamanho_tshirt: data.tamanho_tshirt || ''
+          tamanho_tshirt: data.tamanho_tshirt || '',
+          autorizacao_fotografia: data.autorizacao_fotografia || '',
+          nivel_ingles: data.nivel_ingles || '',
+          fobias_medos: data.fobias_medos || '',
+          perfil_comportamental: data.perfil_comportamental || ''
         });
       }
       setLoading(false);
@@ -72,14 +78,12 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
       if (!session) throw new Error("Sessão expirada.");
 
       if (isModoCriacao) {
-        // MODO CRIAÇÃO: Faz um INSERT com o ID do pai
         const { error } = await supabase.from('criancas').insert({
           cliente_id: session.user.id,
           ...formData
         });
         if (error) throw error;
       } else {
-        // MODO EDIÇÃO: Faz um UPDATE filtrando pelo ID da criança
         const { error } = await supabase.from('criancas').update(formData).eq('id', id);
         if (error) throw error;
       }
@@ -109,7 +113,6 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
           &larr; {isEn ? 'Back to list' : 'Voltar à lista'}
         </Link>
         
-        {/* O botão apagar só faz sentido se a criança já existir (Modo Edição) */}
         {!isModoCriacao && (
           <button type="button" onClick={handleApagar} style={{ color: '#ef4444', backgroundColor: 'transparent', padding: '0.6rem 1.2rem', borderRadius: '999px', border: '1px solid #fecaca', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
             {isEn ? 'Delete Profile' : 'Apagar Perfil'}
@@ -130,18 +133,15 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
         
         <div style={sectionStyle}>
           <h2 style={sectionTitleStyle}>1. {isEn ? 'Basic Identification' : 'Identificação Básica'}</h2>
-          
           <div style={gridStyle}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>{isEn ? 'Full Name' : 'Nome Completo'} <span style={asteriskStyle}>*</span></label>
               <input type="text" required value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} style={inputStyle} />
             </div>
-
             <div>
               <label style={labelStyle}>{isEn ? 'Date of Birth' : 'Data de Nascimento'} <span style={asteriskStyle}>*</span></label>
               <input type="date" required value={formData.data_nascimento} onChange={e => setFormData({...formData, data_nascimento: e.target.value})} style={inputStyle} />
             </div>
-
             <div>
               <label style={labelStyle}>{isEn ? 'Gender' : 'Sexo'} <span style={asteriskStyle}>*</span></label>
               <select required value={formData.sexo} onChange={e => setFormData({...formData, sexo: e.target.value})} style={selectStyle}>
@@ -151,7 +151,6 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
                 <option value="Prefiro não dizer">{isEn ? 'Prefer not to say' : 'Prefiro não dizer'}</option>
               </select>
             </div>
-
             <div>
               <label style={labelStyle}>{isEn ? 'Tax ID (NIF)' : 'NIF da Criança'}</label>
               <input type="text" value={formData.nif} onChange={e => setFormData({...formData, nif: e.target.value})} style={inputStyle} placeholder={isEn ? "Optional (For invoices)" : "Opcional (Para faturas)"} />
@@ -166,9 +165,7 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
               2. {isEn ? 'Medical & Safety Profile' : 'Perfil Clínico e Segurança'}
             </h2>
           </div>
-          
           <div style={gridStyle}>
-            {/* CORREÇÃO: Tipo Sanguíneo a ocupar a largura total (1 / -1) para não cortar o texto */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>{isEn ? 'Blood Type' : 'Tipo Sanguíneo'}</label>
               <select value={formData.tipo_sanguineo} onChange={e => setFormData({...formData, tipo_sanguineo: e.target.value})} style={selectStyle}>
@@ -179,22 +176,18 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
                 <option value="O+">O+</option><option value="O-">O-</option>
               </select>
             </div>
-
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>{isEn ? 'Food Allergies or Dietary Restrictions' : 'Alergias ou Restrições Alimentares'}</label>
               <input type="text" value={formData.restricoes_alimentares} onChange={e => setFormData({...formData, restricoes_alimentares: e.target.value})} placeholder={isEn ? 'E.g.: Peanuts, Lactose intolerant, Vegan...' : 'Ex: Amendoins, Intolerante à lactose, Celíaco...'} style={inputStyle} />
             </div>
-
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>{isEn ? 'Chronic Diseases or Conditions' : 'Doenças Crónicas ou Condições Médicas'}</label>
               <input type="text" value={formData.doencas_cronicas} onChange={e => setFormData({...formData, doencas_cronicas: e.target.value})} placeholder={isEn ? 'E.g.: Asthma, Diabetes, Heart condition...' : 'Ex: Asma, Diabetes, Problema cardíaco...'} style={inputStyle} />
             </div>
-
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>{isEn ? 'Regular Medication' : 'Medicação Regular'}</label>
               <input type="text" value={formData.medicacao_regular} onChange={e => setFormData({...formData, medicacao_regular: e.target.value})} placeholder={isEn ? 'E.g.: Needs inhaler during sports...' : 'Ex: Toma anti-histamínico de manhã, precisa de inalador...'} style={inputStyle} />
             </div>
-            
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>{isEn ? 'Physical Limitations' : 'Limitações Físicas'}</label>
               <input type="text" value={formData.limitacoes_fisicas} onChange={e => setFormData({...formData, limitacoes_fisicas: e.target.value})} placeholder={isEn ? 'E.g.: Cannot do high-impact sports...' : 'Ex: Não pode fazer desportos de alto impacto, recente lesão no joelho...'} style={inputStyle} />
@@ -244,6 +237,34 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
                 <option value="L Adulto">L (Adulto)</option>
               </select>
             </div>
+
+            <div>
+              <label style={labelStyle}>{isEn ? 'English Level' : 'Nível de Inglês'}</label>
+              <select value={formData.nivel_ingles} onChange={e => setFormData({...formData, nivel_ingles: e.target.value})} style={selectStyle}>
+                <option value="">{isEn ? 'Not answered' : 'Não respondido'}</option>
+                <option value="Nenhum">Nenhum</option>
+                <option value="Básico">Básico</option>
+                <option value="Intermédio">Intermédio</option>
+                <option value="Avançado / Fluente">Avançado / Fluente</option>
+              </select>
+            </div>
+
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>{isEn ? 'Fears or Phobias' : 'Fobias ou Medos Conhecidos'}</label>
+              <input type="text" value={formData.fobias_medos} onChange={e => setFormData({...formData, fobias_medos: e.target.value})} placeholder={isEn ? 'E.g.: Fear of dogs, heights, darkness...' : 'Ex: Medo de alturas, água funda, cães, escuro...'} style={inputStyle} />
+            </div>
+
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>{isEn ? 'Personality Traits' : 'Perfil Comportamental / Personalidade'}</label>
+              <input type="text" value={formData.perfil_comportamental} onChange={e => setFormData({...formData, perfil_comportamental: e.target.value})} placeholder={isEn ? 'E.g.: Very shy, energetic, natural leader...' : 'Ex: Criança tímida nos primeiros dias, muito ativa, necessita de rotinas...'} style={inputStyle} />
+            </div>
+
+            <div style={{ gridColumn: '1 / -1', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #cbd5e1', marginTop: '0.5rem' }}>
+              <label style={{...checkboxLabelStyle, margin: 0}}>
+                <input type="checkbox" checked={formData.autorizacao_fotografia === 'Sim'} onChange={e => setFormData({...formData, autorizacao_fotografia: e.target.checked ? 'Sim' : 'Não'})} style={{ width: '1.25rem', height: '1.25rem', accentColor: '#0f172a' }} />
+                {isEn ? 'I authorize the capture of images/video for the camp’s internal updates and marketing.' : 'Autorizo a captação de imagem/vídeo para atualizações aos pais e marketing do campo.'}
+              </label>
+            </div>
           </div>
         </div>
 
@@ -258,14 +279,10 @@ export default function EditarCrianca({ params }: { params: Promise<{ lang: stri
 // ESTILOS LIMPOS
 const sectionStyle = { backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' };
 const sectionTitleStyle = { fontSize: '1.25rem', fontWeight: '900', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '2rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
-
-// CORREÇÃO: minmax de 220px aumentado para 250px para maior consistência dos campos
 const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' };
-
 const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', textTransform: 'uppercase' as const, marginBottom: '0.5rem', letterSpacing: '0.02em' };
+const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '14px', color: '#334155', cursor: 'pointer', fontWeight: '600' };
 const asteriskStyle = { color: '#ef4444' };
 const inputBase = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '15px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const, transition: 'border-color 0.2s, box-shadow 0.2s' };
 const inputStyle = { ...inputBase };
-
-// CORREÇÃO: paddingRight aumentado para 2.5rem (para a seta do dropdown não sobrepor o texto longo)
 const selectStyle = { ...inputBase, paddingRight: '2.5rem', cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };

@@ -25,6 +25,10 @@ const FOTOS_PADRAO = [
   { url: "https://images.unsplash.com/photo-1503917988258-f87a78e3c995?q=80&w=1200&auto=format&fit=crop", nome: "Francês / Paris" }
 ];
 
+const sanitizeFileName = (name: string) => {
+  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
+};
+
 export default function NovoCampo({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const router = useRouter();
@@ -170,10 +174,6 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
       const data = await res.json();
       return data.responseData.translatedText;
     } catch (e) { return texto; }
-  };
-
-  const sanitizeFileName = (name: string) => {
-    return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
