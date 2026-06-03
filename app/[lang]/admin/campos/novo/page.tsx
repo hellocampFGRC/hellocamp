@@ -25,10 +25,6 @@ const FOTOS_PADRAO = [
   { url: "https://images.unsplash.com/photo-1503917988258-f87a78e3c995?q=80&w=1200&auto=format&fit=crop", nome: "Francês / Paris" }
 ];
 
-const sanitizeFileName = (name: string) => {
-  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
-};
-
 export default function NovoCampo({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const router = useRouter();
@@ -56,6 +52,9 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
   const [idadeManual, setIdadeManual] = useState("");
 
   const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
+  
+  // Estado para armazenar as perguntas dinâmicas do Checkout
+  const [perguntasCustomizadas, setPerguntasCustomizadas] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     nome: "", categoria: "", local: "", Distrito: "",
@@ -142,6 +141,15 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     setTurnos(novosTurnos);
   };
 
+  // Funções de controlo das perguntas customizadas
+  const handleAddPergunta = () => setPerguntasCustomizadas([...perguntasCustomizadas, ""]);
+  const handleRemovePergunta = (index: number) => setPerguntasCustomizadas(perguntasCustomizadas.filter((_, i) => i !== index));
+  const handlePerguntaChange = (index: number, val: string) => {
+    const novas = [...perguntasCustomizadas];
+    novas[index] = val;
+    setPerguntasCustomizadas(novas);
+  };
+
   const buscarNoMapaManual = async () => {
     if (formData.local.length < 3) return;
     try {
@@ -174,6 +182,10 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
       const data = await res.json();
       return data.responseData.translatedText;
     } catch (e) { return texto; }
+  };
+
+  const sanitizeFileName = (name: string) => {
+    return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -215,6 +227,10 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
       setStatusText(isEn ? "Translating data..." : "A traduzir dados...");
       const linguasFinais = getLinguasString();
 
+      // Processar e traduzir perguntas válidas
+      const perguntasValidas = perguntasCustomizadas.filter(p => p.trim() !== "");
+      const perguntasEn = await Promise.all(perguntasValidas.map(p => traduzirParaIngles(p)));
+
       const [
         nome_en, categoria_en, local_en, idade_en, descricao_en,
         alimentacao_en, alojamento_en, seguro_en, Distrito_en, regras_termos_en, politica_cancelamento_en
@@ -249,7 +265,9 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
         latitude: mapPreview.lat, longitude: mapPreview.lon,
         turnos, turnos_en, organizador_id: session.user.id,
         nome_en, categoria_en, local_en, idade_en, descricao_en,
-        alimentacao_en, alojamento_en, seguro_en, Distrito_en
+        alimentacao_en, alojamento_en, seguro_en, Distrito_en,
+        perguntas_customizadas: perguntasValidas,
+        perguntas_customizadas_en: perguntasEn
       }]);
 
       if (error) throw error;
@@ -277,11 +295,11 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
               <label style={labelStyle}>{isEn ? 'Category' : 'Categoria'}</label>
               <select required onChange={e => setFormData({...formData, categoria: e.target.value})} style={selectStyle}>
                 <option value="">{isEn ? 'Select...' : 'Selecione...'}</option>
-                <option value="Desporto">{isEn ? 'Sports' : 'Desporto'}</option>
-                <option value="Aventura & Natureza">{isEn ? 'Adventure & Nature' : 'Aventura & Natureza'}</option>
-                <option value="Tecnologia & Ciência">{isEn ? 'Tech & Science' : 'Tecnologia & Ciência'}</option>
-                <option value="Artes & Criatividade">{isEn ? 'Arts & Creativity' : 'Artes & Criatividade'}</option>
-                <option value="Línguas">{isEn ? 'Languages' : 'Línguas'}</option>
+                <option value="Desporto">Desporto</option>
+                <option value="Aventura & Natureza">Aventura & Natureza</option>
+                <option value="Tecnologia & Ciência">Tecnologia & Ciência</option>
+                <option value="Artes & Criatividade">Artes & Criatividade</option>
+                <option value="Línguas">Línguas</option>
               </select>
             </div>
             
@@ -306,19 +324,12 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
               {faixasSelecionadas.outra && (
                 <div style={{ maxWidth: '300px', animation: 'fadeIn 0.2s' }}>
                   <label style={{ ...labelStyle, fontSize: '11px', color: '#64748b' }}>{isEn ? 'Custom Age Group (e.g.: 8-15 years)' : 'Faixa Etária Customizada (ex: 8-15 anos)'}</label>
-                  <input 
-                    type="text" 
-                    required={faixasSelecionadas.outra} 
-                    value={idadeManual} 
-                    onChange={e => setIdadeManual(e.target.value)} 
-                    placeholder="Ex: 8-15 anos"
-                    style={inputStyle} 
-                  />
+                  <input type="text" required={faixasSelecionadas.outra} value={idadeManual} onChange={e => setIdadeManual(e.target.value)} placeholder="Ex: 8-15 anos" style={inputStyle} />
                 </div>
               )}
             </div>
 
-            {/* NOVA ADIÇÃO: POLÍTICA DE CANCELAMENTO */}
+            {/* POLÍTICA DE CANCELAMENTO */}
             <div style={{ gridColumn: '1 / -1', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
               <label style={{...labelStyle, color: '#0f172a'}}>{isEn ? 'Cancellation Policy' : 'Política de Cancelamento'}</label>
               <select required value={formData.politica_cancelamento} onChange={e => setFormData({...formData, politica_cancelamento: e.target.value})} style={{...selectStyle, width: '100%'}}>
@@ -348,7 +359,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
             <div>
               <label style={labelStyle}>{isEn ? 'Country' : 'País'}</label>
               <select required value={pais} onChange={e => { setPais(e.target.value); setMapPreview(null); if (e.target.value !== "Portugal") setFormData({...formData, Distrito: ""}); }} style={selectStyle}>
-                {paises.map(p => <option key={p.pt} value={p.pt}>{isEn ? p.en : p.pt}</option>)}
+                {paises.map((p) => <option key={p.pt} value={p.pt}>{isEn ? p.en : p.pt}</option>)}
               </select>
             </div>
             {pais === "Portugal" && (
@@ -367,7 +378,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
               {addressSuggestions.length > 0 && !mapPreview && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '0.25rem', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxHeight: '200px', overflowY: 'auto' }}>
                   {addressSuggestions.map((sugestao, index) => (
-                    <div key={index} onClick={() => { setFormData({ ...formData, local: sugestao.display_name }); setMapPreview({ lat: parseFloat(sugestao.lat), lon: parseFloat(sugestao.lon) }); setAddressSuggestions([]); }} style={{ padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: index !== addressSuggestions.length -1 ? '1px solid #f1f5f9' : 'none', fontSize: '13px', color: '#334155' }} onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')} onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}>
+                    <div key={index} onClick={() => { setFormData({ ...formData, local: sugestao.display_name }); setMapPreview({ lat: parseFloat(sugestao.lat), lon: parseFloat(sugestao.lon) }); setAddressSuggestions([]); }} style={{ padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: index !== addressSuggestions.length -1 ? '1px solid #f1f5f9' : 'none', fontSize: '13px', color: '#334155' }}>
                       {sugestao.display_name}
                     </div>
                   ))}
@@ -400,7 +411,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
             <div key={index} style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '0.75rem', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
                 <div style={{ flex: '1 1 180px' }}>
-                  <label style={labelStyle}>{isEn ? 'Shift Name (e.g., Week 1)' : 'Nome do Turno (ex: Semana 1)'}</label>
+                  <label style={labelStyle}>{isEn ? 'Shift Name' : 'Nome do Turno'}</label>
                   <input type="text" required value={turno.nome} onChange={e => handleTurnoChange(index, 'nome', e.target.value)} style={inputStyle} />
                 </div>
                 <div style={{ flex: '1 1 110px' }}>
@@ -416,7 +427,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
                   <input type="number" required value={turno.vagas} onChange={e => handleTurnoChange(index, 'vagas', Number(e.target.value))} style={inputStyle} />
                 </div>
                 <div style={{ width: '100px' }}>
-                  <label style={labelStyle}>{isEn ? 'Price (€)' : 'Preço Turno (€)'}</label>
+                  <label style={labelStyle}>{isEn ? 'Price (€)' : 'Preço (€)'}</label>
                   <input type="number" required value={turno.preco} onChange={e => handleTurnoChange(index, 'preco', Number(e.target.value))} style={inputStyle} />
                 </div>
                 {turnos.length > 1 && (
@@ -424,7 +435,6 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
                 )}
               </div>
 
-              {/* GESTÃO DE DIAS ISOLADOS */}
               <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '1rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
                 <label style={checkboxLabelStyle}>
                   <input type="checkbox" checked={turno.permite_dias} onChange={e => handleTurnoChange(index, 'permite_dias', e.target.checked)} />
@@ -448,28 +458,28 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
             <div>
               <label style={labelStyle}>{isEn ? 'Food' : 'Alimentação'}</label>
               <select value={formData.alimentacao} onChange={e => setFormData({...formData, alimentacao: e.target.value})} style={selectStyle}>
-                <option value="Incluído no Preço">{isEn ? 'Included' : 'Incluído no Preço'}</option>
-                <option value="Opcional (Pago à parte)">{isEn ? 'Optional (Paid extra)' : 'Opcional (Pago à parte)'}</option>
-                <option value="Não tem">{isEn ? 'Not included' : 'Não tem'}</option>
+                <option value="Incluído no Preço">Incluído no Preço</option>
+                <option value="Opcional (Pago à parte)">Opcional (Pago à parte)</option>
+                <option value="Não tem">Não tem</option>
               </select>
             </div>
             <div>
               <label style={labelStyle}>{isEn ? 'Accommodation' : 'Alojamento'}</label>
               <select value={formData.alojamento} onChange={e => setFormData({...formData, alojamento: e.target.value})} style={selectStyle}>
-                <option value="Incluído no Preço">{isEn ? 'Included' : 'Incluído no Preço'}</option>
-                <option value="Opcional (Pago à parte)">{isEn ? 'Optional (Paid extra)' : 'Opcional (Pago à parte)'}</option>
-                <option value="Não tem">{isEn ? 'Not included' : 'Não tem'}</option>
+                <option value="Incluído no Preço">Incluído no Preço</option>
+                <option value="Opcional (Pago à parte)">Opcional (Pago à parte)</option>
+                <option value="Não tem">Não tem</option>
               </select>
             </div>
             <div>
               <label style={labelStyle}>{isEn ? 'Insurance' : 'Seguro Obrigatório'}</label>
               <select value={formData.seguro} onChange={e => setFormData({...formData, seguro: e.target.value})} style={selectStyle}>
-                <option value="Incluído no Preço">{isEn ? 'Included' : 'Incluído no Preço'}</option>
-                <option value="Pago à parte no local">{isEn ? 'Paid locally' : 'Pago à parte no local'}</option>
+                <option value="Incluído no Preço">Incluído no Preço</option>
+                <option value="Pago à parte no local">Pago à parte no local</option>
               </select>
             </div>
             <div>
-              <label style={labelStyle}>{isEn ? 'Staff Ratio' : 'Rácio Monitores (ex: 1 p/ 5)'}</label>
+              <label style={labelStyle}>{isEn ? 'Staff Ratio' : 'Rácio Monitores'}</label>
               <input type="text" value={formData.racio_monitores} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} style={inputStyle} />
             </div>
             
@@ -480,7 +490,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
 
             <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem' }}>
               <label style={labelStyle}>{isEn ? 'Specific Rules & Terms' : 'Regras e Termos Específicos'}</label>
-              <textarea rows={4} onChange={e => setFormData({...formData, regras_termos: e.target.value})} placeholder={isEn ? "E.g.: Cancellation policies, what to bring..." : "Ex: Regras da casa, objetos proibidos, vestuário recomendado..."} style={{...inputStyle, resize: 'vertical'}} />
+              <textarea rows={4} onChange={e => setFormData({...formData, regras_termos: e.target.value})} style={{...inputStyle, resize: 'vertical'}} />
             </div>
 
             <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
@@ -505,86 +515,69 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
           </div>
         </div>
 
-        {/* 5. CUSTOS EXTRA OPCIONAIS */}
+        {/* 5. CUSTOS DE SERVIÇOS OPCIONAIS */}
         <div style={sectionStyle}>
           <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '5. Optional Services (€)' : '5. Custos de Serviços Opcionais (€)'}</h2>
-            <p style={{ fontSize: '13px', color: '#64748b', marginTop: '0.5rem' }}>{isEn ? 'Fill in only if marked as "Optional" above.' : 'Preencha apenas se escolheu como "Opcional" acima.'}</p>
           </div>
           
           <div style={gridStyle}>
-            <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-              <label style={labelStyle}>{isEn ? 'Extra Food' : 'Alimentação Extra'}</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input type="number" onChange={e => setFormData({...formData, extra_alimentacao: Number(e.target.value)})} style={{...inputStyle, flex: 1}} />
-                <select value={formData.tipo_cobranca_alimentacao} onChange={e => setFormData({...formData, tipo_cobranca_alimentacao: e.target.value})} style={{...selectStyle, flex: 1}}>
-                  <option value="Por Turno">{isEn ? 'Per Shift' : 'Por Turno'}</option>
-                  <option value="Por Dia">{isEn ? 'Per Day' : 'Por Dia'}</option>
-                </select>
+            {['alimentacao', 'alojamento', 'prolongamento', 'transporte'].map(extra => (
+              <div key={extra} style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                <label style={labelStyle}>{extra.charAt(0).toUpperCase() + extra.slice(1)} Extra</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input type="number" onChange={e => setFormData({...formData, [`extra_${extra}`]: Number(e.target.value)})} style={{...inputStyle, flex: 1}} />
+                  <select value={(formData as any)[`tipo_cobranca_${extra}`]} onChange={e => setFormData({...formData, [`tipo_cobranca_${extra}`]: e.target.value})} style={{...selectStyle, flex: 1}}>
+                    <option value="Por Turno">Por Turno</option><option value="Por Dia">Por Dia</option>
+                  </select>
+                </div>
               </div>
-            </div>
-
-            <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-              <label style={labelStyle}>{isEn ? 'Extra Accom.' : 'Alojamento Extra'}</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input type="number" onChange={e => setFormData({...formData, extra_alojamento: Number(e.target.value)})} style={{...inputStyle, flex: 1}} />
-                <select value={formData.tipo_cobranca_alojamento} onChange={e => setFormData({...formData, tipo_cobranca_alojamento: e.target.value})} style={{...selectStyle, flex: 1}}>
-                  <option value="Por Turno">{isEn ? 'Per Shift' : 'Por Turno'}</option>
-                  <option value="Por Dia">{isEn ? 'Per Day' : 'Por Dia'}</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-              <label style={labelStyle}>{isEn ? 'Extended Hours' : 'Prolongamento'}</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input type="number" onChange={e => setFormData({...formData, extra_prolongamento: Number(e.target.value)})} style={{...inputStyle, flex: 1}} />
-                <select value={formData.tipo_cobranca_prolongamento} onChange={e => setFormData({...formData, tipo_cobranca_prolongamento: e.target.value})} style={{...selectStyle, flex: 1}}>
-                  <option value="Por Turno">{isEn ? 'Per Shift' : 'Por Turno'}</option>
-                  <option value="Por Dia">{isEn ? 'Per Day' : 'Por Dia'}</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-              <label style={labelStyle}>{isEn ? 'Transport' : 'Transporte Opcional'}</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input type="number" onChange={e => setFormData({...formData, extra_transporte: Number(e.target.value)})} style={{...inputStyle, flex: 1}} />
-                <select value={formData.tipo_cobranca_transporte} onChange={e => setFormData({...formData, tipo_cobranca_transporte: e.target.value})} style={{...selectStyle, flex: 1}}>
-                  <option value="Por Turno">{isEn ? 'Per Shift' : 'Por Turno'}</option>
-                  <option value="Por Dia">{isEn ? 'Per Day' : 'Por Dia'}</option>
-                </select>
-              </div>
-            </div>
+            ))}
           </div>
+        </div>
+
+        {/* 5.1. PERGUNTAS CUSTOMIZADAS PARA O CHECKOUT */}
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+              {isEn ? '5.1. Custom Checkout Questions' : '5.1. Perguntas Customizadas para o Checkout'}
+            </h2>
+            <button type="button" onClick={handleAddPergunta} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>
+              + {isEn ? 'Add Question' : 'Adicionar Pergunta'}
+            </button>
+          </div>
+          
+          {perguntasCustomizadas.length === 0 ? (
+            <p style={{ fontSize: '14px', color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>{isEn ? 'No custom questions added yet.' : 'Nenhuma pergunta customizada adicionada ainda.'}</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {perguntasCustomizadas.map((pergunta, index) => (
+                <div key={index} style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <input type="text" value={pergunta} onChange={e => handlePerguntaChange(index, e.target.value)} placeholder={isEn ? `Question #${index + 1}` : `Pergunta nº ${index + 1}`} style={inputStyle} required />
+                  <button type="button" onClick={() => handleRemovePergunta(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 6. GALERIA */}
         <div style={sectionStyle}>
           <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '6. Main Photo & Gallery' : '6. Fotografia Principal e Galeria'}</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '6. Photo Gallery' : '6. Fotografia Principal e Galeria'}</h2>
           </div>
-          
           <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '0.75rem', textTransform: 'uppercase' }}>
-              {isEn ? 'Option A: Choose a Platform Template' : 'Opção A: Escolher Fotografia Padrão da Plataforma'}
-            </p>
             <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
               {FOTOS_PADRAO.map((foto, idx) => (
                 <div key={idx} onClick={() => selecionarFotoPadrao(foto.url)} style={{ minWidth: '120px', height: '80px', borderRadius: '0.5rem', overflow: 'hidden', border: images[0]?.url === foto.url ? '3px solid #059669' : '1px solid #cbd5e1', cursor: 'pointer', position: 'relative' }}>
                   <img src={foto.url} alt={foto.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  {images[0]?.url === foto.url && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5, 150, 105, 0.2)' }} />}
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', margin: '1.5rem 0', fontSize: '12px' }}>{isEn ? 'OR' : 'OU'}</div>
-
-          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', cursor: 'pointer', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.75rem', transition: 'background-color 0.2s' }}>
-            <span style={{ fontWeight: 'bold', color: '#64748b', fontSize: '15px' }}>
-              {isEn ? '📸 Click here to upload your own photos...' : '📸 Clique aqui para enviar as suas próprias fotografias...'}
-            </span>
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', cursor: 'pointer', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.75rem' }}>
+            <span style={{ fontWeight: 'bold', color: '#64748b', fontSize: '15px' }}>📸 Enviar as suas próprias fotografias...</span>
             <input type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
           </label>
 
@@ -592,40 +585,28 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
               {images.map((img, idx) => (
                 <div key={idx} style={{ position: 'relative', borderRadius: '0.75rem', overflow: 'hidden', border: img.isMain ? '3px solid #059669' : '1px solid #e2e8f0', height: '120px' }}>
-                  <img src={img.preview} alt={`Preview ${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <button type="button" onClick={() => removeImage(idx)} style={{ position: 'absolute', top: '5px', right: '5px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
-                  {!img.isMain && (
-                    <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
-                      {isEn ? 'Set as Main' : 'Tornar Principal'}
-                    </button>
-                  )}
+                  <img src={img.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <button type="button" onClick={() => removeImage(idx)} style={{ position: 'absolute', top: '5px', right: '5px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>X</button>
+                  {!img.isMain && <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', border: 'none', cursor: 'pointer' }}>Tornar Principal</button>}
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* AVISO DE CONTRATO / REVISÃO */}
-        <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1rem' }}>
-          <p style={{ margin: 0, fontSize: '13px', color: '#b45309', fontWeight: 'bold' }}>
-            ⚠️ {isEn ? 'Important: After saving, your camp will be "Pending". It will only be visible to the public after HelloCamp validates the program and attaches the signed contract.' : 'Importante: Após gravar, o seu campo ficará em análise. Só ficará visível ao público após a validação do programa e a inserção do contrato assinado pela equipa HelloCamp.'}
-          </p>
-        </div>
-
-        {/* SUBMIT */}
-        <button type="submit" disabled={loading} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.125rem', transition: 'transform 0.1s' }}>
-          {loading ? statusText : (isEn ? 'Save & Submit for Review' : 'Gravar e Submeter para Validação')}
+        <button type="submit" disabled={loading} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.125rem' }}>
+          {loading ? statusText : 'Gravar e Submeter para Validação'}
         </button>
       </form>
     </main>
   );
 }
 
-// ESTILOS EM LINHA MANUTENÇÃO ORIGINAL
 const sectionStyle = { backgroundColor: 'white', padding: '2.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' };
 const sectionTitleStyle = { fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '2rem' };
 const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' };
 const labelStyle = { display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '0.5rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
 const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '15px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };
-const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
+const selectStyle = { ...inputStyle, paddingRight: '2.5rem', cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
 const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '14px', color: '#334155', cursor: 'pointer', fontWeight: '600' };
+const asteriskStyle = { color: '#ef4444' };

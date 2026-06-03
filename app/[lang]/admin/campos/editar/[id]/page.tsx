@@ -57,6 +57,9 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
   const [idadeManual, setIdadeManual] = useState("");
 
   const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
+  
+  // Estado para armazenar as perguntas customizadas dinâmicas na Edição
+  const [perguntasCustomizadas, setPerguntasCustomizadas] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     nome: "", categoria: "", local: "", Distrito: "", racio_monitores: "", duracao_dias: 7,
@@ -96,6 +99,9 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         if (data.turnos) {
           const turnosMapeados = data.turnos.map((t: any) => ({ ...t, vagas: t.vagas || data.vagas_totais || 20 }));
           setTurnos(turnosMapeados);
+        }
+        if (data.perguntas_customizadas) {
+          setPerguntasCustomizadas(data.perguntas_customizadas);
         }
         if (data.pais) setPais(data.pais);
         if (data.latitude && data.longitude) setMapPreview({ lat: data.latitude, lon: data.longitude });
@@ -158,6 +164,14 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
   const handleRemoveTurno = (index: number) => setTurnos(turnos.filter((_, i) => i !== index));
   const handleTurnoChange = (index: number, field: string, value: string | number | boolean) => {
     const novosTurnos = [...turnos]; novosTurnos[index] = { ...novosTurnos[index], [field]: value }; setTurnos(novosTurnos);
+  };
+
+  const handleAddPergunta = () => setPerguntasCustomizadas([...perguntasCustomizadas, ""]);
+  const handleRemovePergunta = (index: number) => setPerguntasCustomizadas(perguntasCustomizadas.filter((_, i) => i !== index));
+  const handlePerguntaChange = (index: number, val: string) => {
+    const novas = [...perguntasCustomizadas];
+    novas[index] = val;
+    setPerguntasCustomizadas(novas);
   };
 
   const buscarNoMapaManual = async () => {
@@ -235,6 +249,10 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
       if (!isAutoSave) setStatusText(isEn ? "Translating data..." : "A traduzir dados...");
       const linguasFinais = getLinguasString();
 
+      // Processamento e tradução das perguntas dinâmicas
+      const perguntasValidas = perguntasCustomizadas.filter(p => p.trim() !== "");
+      const perguntasEn = await Promise.all(perguntasValidas.map(p => traduzirParaIngles(p)));
+
       const [
         nome_en, categoria_en, local_en, idade_en, descricao_en,
         alimentacao_en, alojamento_en, seguro_en, Distrito_en, regras_termos_en, politica_cancelamento_en
@@ -264,7 +282,8 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         preco: precoGlobal, datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatasEn, pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
         linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais, imagem: mainImageUrl, galeria: galeriaUrls,
         programas_pdf: programasDocsFinais, regras_termos_en, latitude: mapPreview.lat, longitude: mapPreview.lon,
-        turnos, turnos_en, nome_en, categoria_en, local_en, idade_en, descricao_en, alimentacao_en, alojamento_en, seguro_en, Distrito_en
+        turnos, turnos_en, nome_en, categoria_en, local_en, idade_en, descricao_en, alimentacao_en, alojamento_en, seguro_en, Distrito_en,
+        perguntas_customizadas: perguntasValidas, perguntas_customizadas_en: perguntasEn
       }).eq('id', id);
 
       if (error) throw error;
@@ -287,7 +306,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     setAutoSaveStatus('pending');
     const timer = setTimeout(() => { handleUpdate(undefined, true); }, 3000);
     return () => clearTimeout(timer);
-  }, [formData, turnos, linguas, faixasSelecionadas, mapPreview, pais, idadeManual, images, documentos, documentosExistentes]);
+  }, [formData, turnos, linguas, faixasSelecionadas, mapPreview, pais, idadeManual, images, documentos, documentosExistentes, perguntasCustomizadas]);
 
   if (loading) return <div style={{ padding: '4rem', textAlign: 'center' }}>{isEn ? 'Loading...' : 'A carregar dados do campo...'}</div>;
 
@@ -299,38 +318,39 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
           &larr; {isEn ? 'Back to My Camps' : 'Voltar aos Meus Campos'}
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {autoSaveStatus === 'pending' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#f59e0b' }}>✎ {isEn ? 'Unsaved changes...' : 'Alogumas alterações não guardadas...'}</span>}
-          {autoSaveStatus === 'saving' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#3b82f6' }}>⏳ {isEn ? 'Saving...' : 'A gravar automaticamente...'}</span>}
-          {autoSaveStatus === 'saved' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>✓ {isEn ? 'Saved' : 'Guardado'}</span>}
-          {autoSaveStatus === 'error' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ef4444' }}>⚠ {isEn ? 'Save error' : 'Erro ao gravar'}</span>}
+          {autoSaveStatus === 'pending' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#f59e0b' }}>✎ Alterações por guardar...</span>}
+          {autoSaveStatus === 'saving' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#3b82f6' }}>⏳ A gravar automaticamente...</span>}
+          {autoSaveStatus === 'saved' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>✓ Guardado</span>}
+          {autoSaveStatus === 'error' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ef4444' }}>⚠ Erro ao gravar</span>}
           <a href={`/${lang}/campo/${id}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#0f172a', color: 'white', padding: '0.5rem 1.25rem', borderRadius: '999px', fontWeight: 'bold', textDecoration: 'none', fontSize: '13px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-            👁️ {isEn ? 'Preview Camp' : 'Ver Campo Online'}
+            👁️ Ver Campo Online
           </a>
         </div>
       </div>
 
-      <h1 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem' }}>{isEn ? 'Edit Camp' : 'Editar Campo'}</h1>
+      <h1 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem' }}>Editar Campo</h1>
 
       <form onSubmit={(e) => handleUpdate(e, false)} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         
+        {/* 1. INFO BÁSICA */}
         <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>{isEn ? '1. Basic Information' : '1. Informações Básicas'}</h2>
+          <h2 style={sectionTitleStyle}>1. Informações Básicas</h2>
           <div style={gridStyle}>
-            <div><label style={labelStyle}>{isEn ? 'Camp Name' : 'Nome do Campo'}</label><input type="text" required value={formData.nome || ''} onChange={e => setFormData({...formData, nome: e.target.value})} style={inputStyle} /></div>
+            <div><label style={labelStyle}>Nome do Campo</label><input type="text" required value={formData.nome || ''} onChange={e => setFormData({...formData, nome: e.target.value})} style={inputStyle} /></div>
             <div>
-              <label style={labelStyle}>{isEn ? 'Category' : 'Categoria'}</label>
+              <label style={labelStyle}>Categoria</label>
               <select required value={formData.categoria || ''} onChange={e => setFormData({...formData, categoria: e.target.value})} style={selectStyle}>
                 <option value="Desporto">Desporto</option><option value="Aventura & Natureza">Aventura & Natureza</option><option value="Tecnologia & Ciência">Tecnologia & Ciência</option><option value="Artes & Criatividade">Artes & Criatividade</option><option value="Línguas">Línguas</option>
               </select>
             </div>
             
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>{isEn ? 'Age Groups' : 'Faixas Etárias'}</label>
+              <label style={labelStyle}>Faixas Etárias</label>
               <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', marginTop: '0.5rem', marginBottom: '1rem' }}>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca6_9} onChange={() => handleFaixasChange('ca6_9')} /> 6-9 {isEn ? 'years' : 'anos'}</label>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca10_13} onChange={() => handleFaixasChange('ca10_13')} /> 10-13 {isEn ? 'years' : 'anos'}</label>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca14_17} onChange={() => handleFaixasChange('ca14_17')} /> 14-17 {isEn ? 'years' : 'anos'}</label>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.outra} onChange={() => handleFaixasChange('outra')} /> {isEn ? 'Custom range' : 'Outro intervalo'}</label>
+                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca6_9} onChange={() => handleFaixasChange('ca6_9')} /> 6-9 anos</label>
+                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca10_13} onChange={() => handleFaixasChange('ca10_13')} /> 10-13 anos</label>
+                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca14_17} onChange={() => handleFaixasChange('ca14_17')} /> 14-17 anos</label>
+                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.outra} onChange={() => handleFaixasChange('outra')} /> Outro intervalo</label>
               </div>
               {faixasSelecionadas.outra && (
                 <div style={{ maxWidth: '300px' }}>
@@ -340,12 +360,11 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
             </div>
             
             <div style={{ gridColumn: '1 / -1', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
-              <label style={{...labelStyle, color: '#0f172a'}}>{isEn ? 'Cancellation Policy' : 'Política de Cancelamento'}</label>
-              <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '1rem' }}>{isEn ? 'Choose standard rules for refunds to protect your business.' : 'Escolha a política de reembolso para proteger o seu negócio e informar os pais.'}</p>
+              <label style={{...labelStyle, color: '#0f172a'}}>Política de Cancelamento</label>
               <select required value={formData.politica_cancelamento || ''} onChange={e => setFormData({...formData, politica_cancelamento: e.target.value})} style={{...selectStyle, width: '100%', borderColor: '#cbd5e1'}}>
-                <option value="Flexível (Reembolso a 100% até 7 dias antes)">{isEn ? 'Flexible (100% refund up to 7 days before)' : 'Flexível (Reembolso a 100% até 7 dias antes)'}</option>
-                <option value="Moderada (Reembolso a 50% até 15 dias antes)">{isEn ? 'Moderate (50% refund up to 15 days before)' : 'Moderada (Reembolso a 50% até 15 dias antes)'}</option>
-                <option value="Estrita (Sem reembolso após reserva)">{isEn ? 'Strict (No refund after booking)' : 'Estrita (Sem reembolso após reserva)'}</option>
+                <option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (Reembolso a 100% até 7 dias antes)</option>
+                <option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (Reembolso a 50% até 15 dias antes)</option>
+                <option value="Estrita (Sem reembolso após reserva)">Estrita (Sem reembolso após reserva)</option>
               </select>
             </div>
           </div>
@@ -353,30 +372,30 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
 
         {/* 2. LOCALIZAÇÃO E MAPA */}
         <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>{isEn ? '2. Location' : '2. Localização'}</h2>
+          <h2 style={sectionTitleStyle}>2. Localização</h2>
           <div style={gridStyle}>
             <div>
-              <label style={labelStyle}>{isEn ? 'Country' : 'País'}</label>
+              <label style={labelStyle}>País</label>
               <select required value={pais} onChange={e => { setPais(e.target.value); setMapPreview(null); if (e.target.value !== "Portugal") setFormData({...formData, Distrito: ""}); }} style={selectStyle}>
-                {paises.map(p => <option key={p.pt} value={p.pt}>{isEn ? p.en : p.pt}</option>)}
+                {paises.map((p) => <option key={p.pt} value={p.pt}>{isEn ? p.en : p.pt}</option>)}
               </select>
             </div>
             {pais === "Portugal" && (
               <div>
-                <label style={labelStyle}>{isEn ? 'District' : 'Distrito'}</label>
+                <label style={labelStyle}>Distrito</label>
                 <select required value={formData.Distrito || ''} onChange={e => { setFormData({...formData, Distrito: e.target.value}); setMapPreview(null); }} style={selectStyle}>
-                  <option value="">{isEn ? 'Select District...' : 'Selecione...'}</option>{distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
+                  <option value="">Selecione...</option>{distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
             )}
             <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
-              <label style={labelStyle}>{isEn ? 'Specific Address' : 'Morada Específica (Pressione Enter para pesquisar)'}</label>
+              <label style={labelStyle}>Morada Específica</label>
               <input type="text" required value={formData.local || ''} onChange={e => { setFormData({...formData, local: e.target.value}); setMapPreview(null); }} onBlur={buscarNoMapaManual} onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); buscarNoMapaManual(); } }} style={inputStyle} />
               
               {addressSuggestions.length > 0 && !mapPreview && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '0.25rem', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxHeight: '200px', overflowY: 'auto' }}>
                   {addressSuggestions.map((sugestao, index) => (
-                    <div key={index} onClick={() => { setFormData({ ...formData, local: sugestao.display_name }); setMapPreview({ lat: parseFloat(sugestao.lat), lon: parseFloat(sugestao.lon) }); setAddressSuggestions([]); }} style={{ padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: index !== addressSuggestions.length -1 ? '1px solid #f1f5f9' : 'none', fontSize: '13px', color: '#334155' }} onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')} onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}>
+                    <div key={index} onClick={() => { setFormData({ ...formData, local: sugestao.display_name }); setMapPreview({ lat: parseFloat(sugestao.lat), lon: parseFloat(sugestao.lon) }); setAddressSuggestions([]); }} style={{ padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: index !== addressSuggestions.length -1 ? '1px solid #f1f5f9' : 'none', fontSize: '13px', color: '#334155' }}>
                       {sugestao.display_name}
                     </div>
                   ))}
@@ -394,34 +413,34 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         {/* 3. TURNOS E VAGAS */}
         <div style={sectionStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '3. Shifts & Spots' : '3. Turnos e Vagas'}</h2>
-            <button type="button" onClick={handleAddTurno} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>+ {isEn ? 'Add Shift' : 'Adicionar Turno'}</button>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>3. Turnos e Vagas</h2>
+            <button type="button" onClick={handleAddTurno} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>+ Adicionar Turno</button>
           </div>
           
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={labelStyle}>{isEn ? 'Base Duration (Days)' : 'Duração Base Global (em Dias)'}</label>
+            <label style={labelStyle}>Duração Base Global (em Dias)</label>
             <input type="number" required value={formData.duracao_dias || 0} onChange={e => setFormData({...formData, duracao_dias: Number(e.target.value)})} style={{...inputStyle, maxWidth: '200px'}} />
           </div>
 
           {turnos.map((turno, index) => (
             <div key={index} style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '0.75rem', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
-                <div style={{ flex: '1 1 180px' }}><label style={labelStyle}>{isEn ? 'Shift Name' : 'Nome do Turno'}</label><input type="text" required value={turno.nome || ''} onChange={e => handleTurnoChange(index, 'nome', e.target.value)} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>{isEn ? 'Start Date' : 'Início'}</label><input type="date" required value={turno.data_inicio || ''} onChange={e => handleTurnoChange(index, 'data_inicio', e.target.value)} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>{isEn ? 'End Date' : 'Fim'}</label><input type="date" required value={turno.data_fim || ''} onChange={e => handleTurnoChange(index, 'data_fim', e.target.value)} style={inputStyle} /></div>
-                <div style={{ width: '90px' }}><label style={labelStyle}>{isEn ? 'Spots' : 'Vagas'}</label><input type="number" required value={turno.vagas || 0} onChange={e => handleTurnoChange(index, 'vagas', Number(e.target.value))} style={inputStyle} /></div>
-                <div style={{ width: '100px' }}><label style={labelStyle}>{isEn ? 'Price (€)' : 'Preço (€)'}</label><input type="number" required value={turno.preco || 0} onChange={e => handleTurnoChange(index, 'preco', Number(e.target.value))} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 180px' }}><label style={labelStyle}>Nome do Turno</label><input type="text" required value={turno.nome || ''} onChange={e => handleTurnoChange(index, 'nome', e.target.value)} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>Início</label><input type="date" required value={turno.data_inicio || ''} onChange={e => handleTurnoChange(index, 'data_inicio', e.target.value)} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>Fim</label><input type="date" required value={turno.data_fim || ''} onChange={e => handleTurnoChange(index, 'data_fim', e.target.value)} style={inputStyle} /></div>
+                <div style={{ width: '90px' }}><label style={labelStyle}>Vagas</label><input type="number" required value={turno.vagas || 0} onChange={e => handleTurnoChange(index, 'vagas', Number(e.target.value))} style={inputStyle} /></div>
+                <div style={{ width: '100px' }}><label style={labelStyle}>Preço (€)</label><input type="number" required value={turno.preco || 0} onChange={e => handleTurnoChange(index, 'preco', Number(e.target.value))} style={inputStyle} /></div>
                 {turnos.length > 1 && <button type="button" onClick={() => handleRemoveTurno(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>}
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '1rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
                 <label style={checkboxLabelStyle}>
                   <input type="checkbox" checked={turno.permite_dias || false} onChange={e => handleTurnoChange(index, 'permite_dias', e.target.checked)} />
-                  {isEn ? 'Allow booking specific days?' : 'Permitir inscrição em dias isolados?'}
+                  Permitir inscrição em dias isolados?
                 </label>
                 {turno.permite_dias && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>{isEn ? 'Price/Day (€):' : 'Preço/Dia (€):'}</label>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Preço/Dia (€):</label>
                     <input type="number" required={turno.permite_dias} value={turno.preco_dia || 0} onChange={e => handleTurnoChange(index, 'preco_dia', Number(e.target.value))} style={{ ...inputStyle, width: '100px', padding: '0.5rem' }} />
                   </div>
                 )}
@@ -432,44 +451,43 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
 
         {/* 4. CONDIÇÕES E DOCUMENTOS */}
         <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>{isEn ? '4. Program & Conditions' : '4. Programa e Condições'}</h2>
+          <h2 style={sectionTitleStyle}>4. Programa e Condições</h2>
           <div style={gridStyle}>
             <div>
-              <label style={labelStyle}>{isEn ? 'Food' : 'Alimentação'}</label>
+              <label style={labelStyle}>Alimentação</label>
               <select value={formData.alimentacao || ''} onChange={e => setFormData({...formData, alimentacao: e.target.value})} style={selectStyle}>
-                <option value="Incluído no Preço">{isEn ? 'Included' : 'Incluído no Preço'}</option><option value="Opcional (Pago à parte)">{isEn ? 'Optional' : 'Opcional'}</option><option value="Não tem">{isEn ? 'None' : 'Não tem'}</option>
+                <option value="Incluído no Preço">Incluído no Preço</option><option value="Opcional (Pago à parte)">Opcional</option><option value="Não tem">Não tem</option>
               </select>
             </div>
             <div>
-              <label style={labelStyle}>{isEn ? 'Accommodation' : 'Alojamento'}</label>
+              <label style={labelStyle}>Alojamento</label>
               <select value={formData.alojamento || ''} onChange={e => setFormData({...formData, alojamento: e.target.value})} style={selectStyle}>
-                <option value="Incluído no Preço">{isEn ? 'Included' : 'Incluído no Preço'}</option><option value="Opcional (Pago à parte)">{isEn ? 'Optional' : 'Opcional'}</option><option value="Não tem">{isEn ? 'None' : 'Não tem'}</option>
+                <option value="Incluído no Preço">Incluído no Preço</option><option value="Opcional (Pago à parte)">Opcional</option><option value="Não tem">Não tem</option>
               </select>
             </div>
             <div>
-              <label style={labelStyle}>{isEn ? 'Insurance' : 'Seguro'}</label>
+              <label style={labelStyle}>Seguro</label>
               <select value={formData.seguro || ''} onChange={e => setFormData({...formData, seguro: e.target.value})} style={selectStyle}>
-                <option value="Incluído no Preço">{isEn ? 'Included' : 'Incluído'}</option><option value="Pago à parte no local">{isEn ? 'Paid locally' : 'Pago no local'}</option>
+                <option value="Incluído no Preço">Incluído</option><option value="Pago à parte no local">Pago no local</option>
               </select>
             </div>
             <div>
-              <label style={labelStyle}>{isEn ? 'Staff Ratio' : 'Rácio Monitores'}</label>
+              <label style={labelStyle}>Rácio Monitores</label>
               <input type="text" value={formData.racio_monitores || ''} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} style={inputStyle} />
             </div>
             
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>{isEn ? 'Full Description' : 'Descrição Completa'}</label>
+              <label style={labelStyle}>Descrição Completa</label>
               <textarea rows={5} required value={formData.descricao || ''} onChange={e => setFormData({...formData, descricao: e.target.value})} style={{...inputStyle, resize: 'vertical'}} />
             </div>
 
             <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem' }}>
-              <label style={labelStyle}>{isEn ? 'Rules & Terms' : 'Regras e Termos'}</label>
+              <label style={labelStyle}>Regras e Termos</label>
               <textarea rows={4} value={formData.regras_termos || ''} onChange={e => setFormData({...formData, regras_termos: e.target.value})} style={{...inputStyle, resize: 'vertical'}} />
             </div>
 
-            {/* DOCUMENTOS */}
             <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
-              <label style={labelStyle}>{isEn ? 'Camp Program (PDF)' : 'Programa do Campo (PDF/Word)'}</label>
+              <label style={labelStyle}>Programa do Campo (PDF/Word)</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'flex-start' }}>
                 {documentosExistentes.map((doc, idx) => (
                   <div key={`exist-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', fontSize: '13px' }}>
@@ -484,7 +502,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
                   </div>
                 ))}
                 <label style={{ padding: '0.75rem 1.5rem', backgroundColor: '#e2e8f0', color: '#334155', fontWeight: 'bold', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '14px' }}>
-                  + {isEn ? 'Attach Document' : 'Anexar Documento'}
+                  + Anexar Documento
                   <input type="file" accept=".pdf,.doc,.docx" multiple onChange={handleDocSelect} style={{ display: 'none' }} />
                 </label>
               </div>
@@ -495,7 +513,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         {/* 5. EXTRAS COM COBRANÇA */}
         <div style={sectionStyle}>
           <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '5. Extras (€)' : '5. Custos Opcionais (€)'}</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>5. Custos Opcionais (€)</h2>
           </div>
           <div style={gridStyle}>
             {['alimentacao', 'alojamento', 'prolongamento', 'transporte'].map(extra => (
@@ -512,23 +530,32 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
           </div>
         </div>
 
+        {/* 5.1. PERGUNTAS CUSTOMIZADAS PARA O CHECKOUT */}
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>5.1. Perguntas Customizadas para o Checkout</h2>
+            <button type="button" onClick={handleAddPergunta} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>+ Adicionar Pergunta</button>
+          </div>
+          
+          {perguntasCustomizadas.length === 0 ? (
+            <p style={{ fontSize: '14px', color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>Nenhuma pergunta customizada adicionada ainda.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {perguntasCustomizadas.map((pergunta, index) => (
+                <div key={index} style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <input type="text" value={pergunta} onChange={e => handlePerguntaChange(index, e.target.value)} placeholder={`Pergunta nº ${index + 1}`} style={inputStyle} required />
+                  <button type="button" onClick={() => handleRemovePergunta(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* 6. GALERIA */}
         <div style={sectionStyle}>
           <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>6. Galeria</h2>
           </div>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '0.75rem', textTransform: 'uppercase' }}>Opção A: Escolher Padrão</p>
-            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-              {FOTOS_PADRAO.map((foto, idx) => (
-                <div key={idx} onClick={() => selecionarFotoPadrao(foto.url)} style={{ minWidth: '120px', height: '80px', borderRadius: '0.5rem', overflow: 'hidden', border: images[0]?.url === foto.url ? '3px solid #059669' : '1px solid #cbd5e1', cursor: 'pointer', position: 'relative' }}>
-                  <img src={foto.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  {images[0]?.url === foto.url && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5, 150, 105, 0.2)' }} />}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', margin: '1.5rem 0', fontSize: '12px' }}>OU</div>
           <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', cursor: 'pointer', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.75rem' }}>
             <span style={{ fontWeight: 'bold', color: '#64748b' }}>📸 Clique para enviar fotos...</span>
             <input type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
@@ -538,14 +565,14 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
               <div key={idx} style={{ position: 'relative', borderRadius: '0.75rem', overflow: 'hidden', border: img.isMain ? '3px solid #059669' : '1px solid #e2e8f0', height: '120px' }}>
                 <img src={img.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 <button type="button" onClick={() => removeImage(idx)} style={{ position: 'absolute', top: '5px', right: '5px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '24px', height: '24px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
-                {!img.isMain && <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}>Principal</button>}
+                {!img.isMain && <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', border: 'none', cursor: 'pointer' }}>Principal</button>}
               </div>
             ))}
           </div>
         </div>
 
-        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '1.125rem', transition: 'transform 0.1s' }}>
-          {saving ? statusText : (isEn ? 'Save Changes' : 'Guardar Alterações')}
+        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '1.125rem' }}>
+          Guardar Alterações
         </button>
       </form>
     </main>
@@ -557,5 +584,5 @@ const sectionTitleStyle = { fontSize: '1.25rem', fontWeight: '800', color: '#0f1
 const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' };
 const labelStyle = { display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '0.5rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
 const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '15px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };
-const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
+const selectStyle = { ...inputStyle, paddingRight: '2.5rem', cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
 const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '14px', color: '#334155', cursor: 'pointer', fontWeight: '600' };
