@@ -25,6 +25,40 @@ const FOTOS_PADRAO = [
   { url: "https://images.unsplash.com/photo-1503917988258-f87a78e3c995?q=80&w=1200&auto=format&fit=crop", nome: "Francês / Paris" }
 ];
 
+const PERGUNTAS_SUGERIDAS = {
+  "Desporto": [
+    "Qual o nível de experiência na modalidade?",
+    "A criança é federada nalgum clube?",
+    "Qual o peso e altura? (Para equipamentos)",
+    "Traz equipamento próprio ou precisa de alugar?"
+  ],
+  "Aventura & Natureza": [
+    "Já tem experiência a dormir em tendas?",
+    "Traz saco de cama e esteira próprios?",
+    "A criança tem medo de alturas ou do escuro?"
+  ],
+  "Tecnologia & Ciência": [
+    "Qual o nível de conhecimentos de informática?",
+    "Vai trazer computador próprio (Portátil)?",
+    "Qual o sistema operativo que utiliza (Mac/Windows)?"
+  ],
+  "Artes & Criatividade": [
+    "Toca algum instrumento musical? Qual?",
+    "Tem experiência prévia com teatro/dança?",
+    "Traz os seus próprios materiais de pintura?"
+  ],
+  "Línguas": [
+    "Já estudou este idioma antes?",
+    "Qual o nível de proficiência atual (A1, A2, B1...)?",
+    "Fez algum exame oficial recentemente?"
+  ]
+};
+
+const PERGUNTAS_GERAIS = [
+  "Autoriza que a criança saia sozinha no final do dia?",
+  "Alguém diferente do encarregado vai recolher a criança?"
+];
+
 export default function NovoCampo({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const router = useRouter();
@@ -44,16 +78,12 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
   const [linguas, setLinguas] = useState({ pt: true, en: false, es: false, fr: false, de: false });
 
   const [faixasSelecionadas, setFaixasSelecionadas] = useState({
-    ca6_9: false,
-    ca10_13: false,
-    ca14_17: false,
-    outra: false
+    ca6_9: false, ca10_13: false, ca14_17: false, outra: false
   });
   const [idadeManual, setIdadeManual] = useState("");
 
   const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
-  
-  // Estado para armazenar as perguntas dinâmicas do Checkout
+
   const [perguntasCustomizadas, setPerguntasCustomizadas] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
@@ -141,7 +171,6 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     setTurnos(novosTurnos);
   };
 
-  // Funções de controlo das perguntas customizadas
   const handleAddPergunta = () => setPerguntasCustomizadas([...perguntasCustomizadas, ""]);
   const handleRemovePergunta = (index: number) => setPerguntasCustomizadas(perguntasCustomizadas.filter((_, i) => i !== index));
   const handlePerguntaChange = (index: number, val: string) => {
@@ -149,6 +178,16 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     novas[index] = val;
     setPerguntasCustomizadas(novas);
   };
+
+  const adicionarPerguntaSugerida = (pergunta: string) => {
+    if (!perguntasCustomizadas.includes(pergunta)) {
+      setPerguntasCustomizadas([...perguntasCustomizadas, pergunta]);
+    }
+  };
+
+  const sugestoesAtuais = formData.categoria 
+    ? PERGUNTAS_SUGERIDAS[formData.categoria as keyof typeof PERGUNTAS_SUGERIDAS] || [] 
+    : [];
 
   const buscarNoMapaManual = async () => {
     if (formData.local.length < 3) return;
@@ -227,7 +266,6 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
       setStatusText(isEn ? "Translating data..." : "A traduzir dados...");
       const linguasFinais = getLinguasString();
 
-      // Processar e traduzir perguntas válidas
       const perguntasValidas = perguntasCustomizadas.filter(p => p.trim() !== "");
       const perguntasEn = await Promise.all(perguntasValidas.map(p => traduzirParaIngles(p)));
 
@@ -295,41 +333,30 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
               <label style={labelStyle}>{isEn ? 'Category' : 'Categoria'}</label>
               <select required onChange={e => setFormData({...formData, categoria: e.target.value})} style={selectStyle}>
                 <option value="">{isEn ? 'Select...' : 'Selecione...'}</option>
-                <option value="Desporto">Desporto</option>
-                <option value="Aventura & Natureza">Aventura & Natureza</option>
-                <option value="Tecnologia & Ciência">Tecnologia & Ciência</option>
-                <option value="Artes & Criatividade">Artes & Criatividade</option>
-                <option value="Línguas">Línguas</option>
+                <option value="Desporto">{isEn ? 'Sports' : 'Desporto'}</option>
+                <option value="Aventura & Natureza">{isEn ? 'Adventure & Nature' : 'Aventura & Natureza'}</option>
+                <option value="Tecnologia & Ciência">{isEn ? 'Tech & Science' : 'Tecnologia & Ciência'}</option>
+                <option value="Artes & Criatividade">{isEn ? 'Arts & Creativity' : 'Artes & Criatividade'}</option>
+                <option value="Línguas">{isEn ? 'Languages' : 'Línguas'}</option>
               </select>
             </div>
             
-            {/* GESTÃO DE IDADES FLEXÍVEL */}
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>{isEn ? 'Age Groups (Select multiple or add manually)' : 'Faixas Etárias (Selecione múltiplas ou adicione manualmente)'}</label>
+              <label style={labelStyle}>{isEn ? 'Age Groups (Select multiple or add manually)' : 'Faixas Etárias'}</label>
               <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', marginTop: '0.5rem', marginBottom: '1rem' }}>
-                <label style={checkboxLabelStyle}>
-                  <input type="checkbox" checked={faixasSelecionadas.ca6_9} onChange={() => handleFaixasChange('ca6_9')} /> 6-9 {isEn ? 'years' : 'anos'}
-                </label>
-                <label style={checkboxLabelStyle}>
-                  <input type="checkbox" checked={faixasSelecionadas.ca10_13} onChange={() => handleFaixasChange('ca10_13')} /> 10-13 {isEn ? 'years' : 'anos'}
-                </label>
-                <label style={checkboxLabelStyle}>
-                  <input type="checkbox" checked={faixasSelecionadas.ca14_17} onChange={() => handleFaixasChange('ca14_17')} /> 14-17 {isEn ? 'years' : 'anos'}
-                </label>
-                <label style={checkboxLabelStyle}>
-                  <input type="checkbox" checked={faixasSelecionadas.outra} onChange={() => handleFaixasChange('outra')} /> {isEn ? 'Custom range' : 'Outro intervalo'}
-                </label>
+                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca6_9} onChange={() => handleFaixasChange('ca6_9')} /> 6-9 {isEn ? 'years' : 'anos'}</label>
+                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca10_13} onChange={() => handleFaixasChange('ca10_13')} /> 10-13 {isEn ? 'years' : 'anos'}</label>
+                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca14_17} onChange={() => handleFaixasChange('ca14_17')} /> 14-17 {isEn ? 'years' : 'anos'}</label>
+                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.outra} onChange={() => handleFaixasChange('outra')} /> {isEn ? 'Custom range' : 'Outro intervalo'}</label>
               </div>
-              
               {faixasSelecionadas.outra && (
                 <div style={{ maxWidth: '300px', animation: 'fadeIn 0.2s' }}>
-                  <label style={{ ...labelStyle, fontSize: '11px', color: '#64748b' }}>{isEn ? 'Custom Age Group (e.g.: 8-15 years)' : 'Faixa Etária Customizada (ex: 8-15 anos)'}</label>
+                  <label style={{ ...labelStyle, fontSize: '11px', color: '#64748b' }}>{isEn ? 'Custom Age Group' : 'Faixa Etária Customizada (ex: 8-15 anos)'}</label>
                   <input type="text" required={faixasSelecionadas.outra} value={idadeManual} onChange={e => setIdadeManual(e.target.value)} placeholder="Ex: 8-15 anos" style={inputStyle} />
                 </div>
               )}
             </div>
 
-            {/* POLÍTICA DE CANCELAMENTO */}
             <div style={{ gridColumn: '1 / -1', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
               <label style={{...labelStyle, color: '#0f172a'}}>{isEn ? 'Cancellation Policy' : 'Política de Cancelamento'}</label>
               <select required value={formData.politica_cancelamento} onChange={e => setFormData({...formData, politica_cancelamento: e.target.value})} style={{...selectStyle, width: '100%'}}>
@@ -359,7 +386,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
             <div>
               <label style={labelStyle}>{isEn ? 'Country' : 'País'}</label>
               <select required value={pais} onChange={e => { setPais(e.target.value); setMapPreview(null); if (e.target.value !== "Portugal") setFormData({...formData, Distrito: ""}); }} style={selectStyle}>
-                {paises.map((p) => <option key={p.pt} value={p.pt}>{isEn ? p.en : p.pt}</option>)}
+                {paises.map(p => <option key={p.pt} value={p.pt}>{isEn ? p.en : p.pt}</option>)}
               </select>
             </div>
             {pais === "Portugal" && (
@@ -372,7 +399,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
               </div>
             )}
             <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
-              <label style={labelStyle}>{isEn ? 'Specific Address (Press Enter or click outside to search)' : 'Morada Específica (Pressione Enter ou clique fora para pesquisar)'}</label>
+              <label style={labelStyle}>{isEn ? 'Specific Address' : 'Morada Específica (Pressione Enter para pesquisar)'}</label>
               <input type="text" required value={formData.local} onChange={e => { setFormData({...formData, local: e.target.value}); setMapPreview(null); }} onBlur={buscarNoMapaManual} onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); buscarNoMapaManual(); } }} style={inputStyle} />
               
               {addressSuggestions.length > 0 && !mapPreview && (
@@ -410,29 +437,12 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
           {turnos.map((turno, index) => (
             <div key={index} style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '0.75rem', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
-                <div style={{ flex: '1 1 180px' }}>
-                  <label style={labelStyle}>{isEn ? 'Shift Name' : 'Nome do Turno'}</label>
-                  <input type="text" required value={turno.nome} onChange={e => handleTurnoChange(index, 'nome', e.target.value)} style={inputStyle} />
-                </div>
-                <div style={{ flex: '1 1 110px' }}>
-                  <label style={labelStyle}>{isEn ? 'Start Date' : 'Data Início'}</label>
-                  <input type="date" required value={turno.data_inicio} onChange={e => handleTurnoChange(index, 'data_inicio', e.target.value)} style={inputStyle} />
-                </div>
-                <div style={{ flex: '1 1 110px' }}>
-                  <label style={labelStyle}>{isEn ? 'End Date' : 'Data Fim'}</label>
-                  <input type="date" required value={turno.data_fim} onChange={e => handleTurnoChange(index, 'data_fim', e.target.value)} style={inputStyle} />
-                </div>
-                <div style={{ width: '90px' }}>
-                  <label style={labelStyle}>{isEn ? 'Spots' : 'Vagas'}</label>
-                  <input type="number" required value={turno.vagas} onChange={e => handleTurnoChange(index, 'vagas', Number(e.target.value))} style={inputStyle} />
-                </div>
-                <div style={{ width: '100px' }}>
-                  <label style={labelStyle}>{isEn ? 'Price (€)' : 'Preço (€)'}</label>
-                  <input type="number" required value={turno.preco} onChange={e => handleTurnoChange(index, 'preco', Number(e.target.value))} style={inputStyle} />
-                </div>
-                {turnos.length > 1 && (
-                  <button type="button" onClick={() => handleRemoveTurno(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
-                )}
+                <div style={{ flex: '1 1 180px' }}><label style={labelStyle}>{isEn ? 'Shift Name' : 'Nome do Turno'}</label><input type="text" required value={turno.nome} onChange={e => handleTurnoChange(index, 'nome', e.target.value)} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>{isEn ? 'Start Date' : 'Data Início'}</label><input type="date" required value={turno.data_inicio} onChange={e => handleTurnoChange(index, 'data_inicio', e.target.value)} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>{isEn ? 'End Date' : 'Data Fim'}</label><input type="date" required value={turno.data_fim} onChange={e => handleTurnoChange(index, 'data_fim', e.target.value)} style={inputStyle} /></div>
+                <div style={{ width: '90px' }}><label style={labelStyle}>{isEn ? 'Spots' : 'Vagas'}</label><input type="number" required value={turno.vagas} onChange={e => handleTurnoChange(index, 'vagas', Number(e.target.value))} style={inputStyle} /></div>
+                <div style={{ width: '100px' }}><label style={labelStyle}>{isEn ? 'Price (€)' : 'Preço (€)'}</label><input type="number" required value={turno.preco} onChange={e => handleTurnoChange(index, 'preco', Number(e.target.value))} style={inputStyle} /></div>
+                {turnos.length > 1 && <button type="button" onClick={() => handleRemoveTurno(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>}
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '1rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
@@ -442,7 +452,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
                 </label>
                 {turno.permite_dias && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>{isEn ? 'Price per Day (€):' : 'Preço por Dia (€):'}</label>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>{isEn ? 'Price/Day (€):' : 'Preço/Dia (€):'}</label>
                     <input type="number" required={turno.permite_dias} value={turno.preco_dia} onChange={e => handleTurnoChange(index, 'preco_dia', Number(e.target.value))} style={{ ...inputStyle, width: '100px', padding: '0.5rem' }} />
                   </div>
                 )}
@@ -458,24 +468,19 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
             <div>
               <label style={labelStyle}>{isEn ? 'Food' : 'Alimentação'}</label>
               <select value={formData.alimentacao} onChange={e => setFormData({...formData, alimentacao: e.target.value})} style={selectStyle}>
-                <option value="Incluído no Preço">Incluído no Preço</option>
-                <option value="Opcional (Pago à parte)">Opcional (Pago à parte)</option>
-                <option value="Não tem">Não tem</option>
+                <option value="Incluído no Preço">Incluído no Preço</option><option value="Opcional (Pago à parte)">Opcional</option><option value="Não tem">Não tem</option>
               </select>
             </div>
             <div>
               <label style={labelStyle}>{isEn ? 'Accommodation' : 'Alojamento'}</label>
               <select value={formData.alojamento} onChange={e => setFormData({...formData, alojamento: e.target.value})} style={selectStyle}>
-                <option value="Incluído no Preço">Incluído no Preço</option>
-                <option value="Opcional (Pago à parte)">Opcional (Pago à parte)</option>
-                <option value="Não tem">Não tem</option>
+                <option value="Incluído no Preço">Incluído no Preço</option><option value="Opcional (Pago à parte)">Opcional</option><option value="Não tem">Não tem</option>
               </select>
             </div>
             <div>
               <label style={labelStyle}>{isEn ? 'Insurance' : 'Seguro Obrigatório'}</label>
               <select value={formData.seguro} onChange={e => setFormData({...formData, seguro: e.target.value})} style={selectStyle}>
-                <option value="Incluído no Preço">Incluído no Preço</option>
-                <option value="Pago à parte no local">Pago à parte no local</option>
+                <option value="Incluído no Preço">Incluído</option><option value="Pago à parte no local">Pago no local</option>
               </select>
             </div>
             <div>
@@ -494,7 +499,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
             </div>
 
             <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
-              <label style={labelStyle}>{isEn ? 'Camp Program (PDF/Word)' : 'Programa do Campo (PDF/Word)'}</label>
+              <label style={labelStyle}>{isEn ? 'Camp Program (PDF)' : 'Programa do Campo (PDF/Word)'}</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'flex-start' }}>
                 {documentos.length > 0 && (
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', width: '100%' }}>
@@ -515,12 +520,11 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
           </div>
         </div>
 
-        {/* 5. CUSTOS DE SERVIÇOS OPCIONAIS */}
+        {/* 5. CUSTOS EXTRA OPCIONAIS */}
         <div style={sectionStyle}>
           <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '5. Optional Services (€)' : '5. Custos de Serviços Opcionais (€)'}</h2>
           </div>
-          
           <div style={gridStyle}>
             {['alimentacao', 'alojamento', 'prolongamento', 'transporte'].map(extra => (
               <div key={extra} style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
@@ -540,21 +544,49 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
         <div style={sectionStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-              {isEn ? '5.1. Custom Checkout Questions' : '5.1. Perguntas Customizadas para o Checkout'}
+              {isEn ? '5.1. Checkout Questions' : '5.1. Perguntas para o Checkout'}
             </h2>
             <button type="button" onClick={handleAddPergunta} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>
-              + {isEn ? 'Add Question' : 'Adicionar Pergunta'}
+              + {isEn ? 'Custom Question' : 'Pergunta Livre'}
             </button>
           </div>
           
+          <p style={{ fontSize: '13px', color: '#64748b', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+            {isEn ? 'Select suggested questions or create your own to ask parents during booking.' : 'Selecione as perguntas sugeridas para a sua categoria ou crie perguntas livres.'}
+          </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '2rem' }}>
+            {sugestoesAtuais.map((pergunta, idx) => (
+              <button 
+                key={`cat-${idx}`} type="button" onClick={() => adicionarPerguntaSugerida(pergunta)} disabled={perguntasCustomizadas.includes(pergunta)}
+                style={{ padding: '0.5rem 0.875rem', backgroundColor: perguntasCustomizadas.includes(pergunta) ? '#f1f5f9' : '#f0fdf4', color: perguntasCustomizadas.includes(pergunta) ? '#94a3b8' : '#059669', border: `1px solid ${perguntasCustomizadas.includes(pergunta) ? '#e2e8f0' : '#a7f3d0'}`, borderRadius: '999px', fontSize: '12px', fontWeight: 'bold', cursor: perguntasCustomizadas.includes(pergunta) ? 'default' : 'pointer', transition: 'all 0.2s' }}
+              >
+                + {pergunta}
+              </button>
+            ))}
+            {PERGUNTAS_GERAIS.map((pergunta, idx) => (
+              <button 
+                key={`geral-${idx}`} type="button" onClick={() => adicionarPerguntaSugerida(pergunta)} disabled={perguntasCustomizadas.includes(pergunta)}
+                style={{ padding: '0.5rem 0.875rem', backgroundColor: perguntasCustomizadas.includes(pergunta) ? '#f1f5f9' : '#f8fafc', color: perguntasCustomizadas.includes(pergunta) ? '#94a3b8' : '#475569', border: `1px solid ${perguntasCustomizadas.includes(pergunta) ? '#e2e8f0' : '#cbd5e1'}`, borderRadius: '999px', fontSize: '12px', fontWeight: 'bold', cursor: perguntasCustomizadas.includes(pergunta) ? 'default' : 'pointer' }}
+              >
+                + {pergunta}
+              </button>
+            ))}
+          </div>
+          
           {perguntasCustomizadas.length === 0 ? (
-            <p style={{ fontSize: '14px', color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>{isEn ? 'No custom questions added yet.' : 'Nenhuma pergunta customizada adicionada ainda.'}</p>
+            <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '0.75rem' }}>
+              <p style={{ fontSize: '14px', color: '#64748b', fontWeight: 'bold', margin: 0 }}>
+                {isEn ? 'No questions added yet.' : 'Nenhuma pergunta adicionada ao checkout.'}
+              </p>
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {perguntasCustomizadas.map((pergunta, index) => (
                 <div key={index} style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                  <input type="text" value={pergunta} onChange={e => handlePerguntaChange(index, e.target.value)} placeholder={isEn ? `Question #${index + 1}` : `Pergunta nº ${index + 1}`} style={inputStyle} required />
-                  <button type="button" onClick={() => handleRemovePergunta(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+                  <div style={{ width: '30px', height: '30px', backgroundColor: '#0f172a', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '12px', flexShrink: 0 }}>{index + 1}</div>
+                  <input type="text" value={pergunta} onChange={e => handlePerguntaChange(index, e.target.value)} placeholder={isEn ? `Type your question here...` : `Escreva a sua pergunta livre...`} style={inputStyle} required />
+                  <button type="button" onClick={() => handleRemovePergunta(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', flexShrink: 0 }}>Remover</button>
                 </div>
               ))}
             </div>
@@ -564,20 +596,25 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
         {/* 6. GALERIA */}
         <div style={sectionStyle}>
           <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '6. Photo Gallery' : '6. Fotografia Principal e Galeria'}</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '6. Main Photo & Gallery' : '6. Fotografia Principal e Galeria'}</h2>
           </div>
+          
           <div style={{ marginBottom: '1.5rem' }}>
+            <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '0.75rem', textTransform: 'uppercase' }}>Opção A: Escolher Padrão</p>
             <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
               {FOTOS_PADRAO.map((foto, idx) => (
                 <div key={idx} onClick={() => selecionarFotoPadrao(foto.url)} style={{ minWidth: '120px', height: '80px', borderRadius: '0.5rem', overflow: 'hidden', border: images[0]?.url === foto.url ? '3px solid #059669' : '1px solid #cbd5e1', cursor: 'pointer', position: 'relative' }}>
                   <img src={foto.url} alt={foto.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  {images[0]?.url === foto.url && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5, 150, 105, 0.2)' }} />}
                 </div>
               ))}
             </div>
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', cursor: 'pointer', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.75rem' }}>
-            <span style={{ fontWeight: 'bold', color: '#64748b', fontSize: '15px' }}>📸 Enviar as suas próprias fotografias...</span>
+          <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', margin: '1.5rem 0', fontSize: '12px' }}>OU</div>
+
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', cursor: 'pointer', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.75rem', transition: 'background-color 0.2s' }}>
+            <span style={{ fontWeight: 'bold', color: '#64748b', fontSize: '15px' }}>📸 Clique aqui para enviar fotografias...</span>
             <input type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
           </label>
 
@@ -585,16 +622,26 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
               {images.map((img, idx) => (
                 <div key={idx} style={{ position: 'relative', borderRadius: '0.75rem', overflow: 'hidden', border: img.isMain ? '3px solid #059669' : '1px solid #e2e8f0', height: '120px' }}>
-                  <img src={img.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <button type="button" onClick={() => removeImage(idx)} style={{ position: 'absolute', top: '5px', right: '5px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>X</button>
-                  {!img.isMain && <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', border: 'none', cursor: 'pointer' }}>Tornar Principal</button>}
+                  <img src={img.preview} alt={`Preview ${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <button type="button" onClick={() => removeImage(idx)} style={{ position: 'absolute', top: '5px', right: '5px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+                  {!img.isMain && (
+                    <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+                      Tornar Principal
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <button type="submit" disabled={loading} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.125rem' }}>
+        <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1rem' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: '#b45309', fontWeight: 'bold' }}>
+            ⚠️ Importante: Após gravar, o seu campo ficará em análise pela equipa HelloCamp para validação e contrato.
+          </p>
+        </div>
+
+        <button type="submit" disabled={loading} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.125rem', transition: 'transform 0.1s' }}>
           {loading ? statusText : 'Gravar e Submeter para Validação'}
         </button>
       </form>
@@ -607,6 +654,5 @@ const sectionTitleStyle = { fontSize: '1.25rem', fontWeight: '800', color: '#0f1
 const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' };
 const labelStyle = { display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '0.5rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
 const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '15px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };
-const selectStyle = { ...inputStyle, paddingRight: '2.5rem', cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
+const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
 const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '14px', color: '#334155', cursor: 'pointer', fontWeight: '600' };
-const asteriskStyle = { color: '#ef4444' };

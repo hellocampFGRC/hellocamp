@@ -23,6 +23,40 @@ const FOTOS_PADRAO = [
   { url: "https://images.unsplash.com/photo-1606092195730-5d7b9af1efc5?q=80&w=1200&auto=format&fit=crop", nome: "Diversão" }
 ];
 
+const PERGUNTAS_SUGERIDAS = {
+  "Desporto": [
+    "Qual o nível de experiência na modalidade?",
+    "A criança é federada nalgum clube?",
+    "Qual o peso e altura? (Para equipamentos)",
+    "Traz equipamento próprio ou precisa de alugar?"
+  ],
+  "Aventura & Natureza": [
+    "Já tem experiência a dormir em tendas?",
+    "Traz saco de cama e esteira próprios?",
+    "A criança tem medo de alturas ou do escuro?"
+  ],
+  "Tecnologia & Ciência": [
+    "Qual o nível de conhecimentos de informática?",
+    "Vai trazer computador próprio (Portátil)?",
+    "Qual o sistema operativo que utiliza (Mac/Windows)?"
+  ],
+  "Artes & Criatividade": [
+    "Toca algum instrumento musical? Qual?",
+    "Tem experiência prévia com teatro/dança?",
+    "Traz os seus próprios materiais de pintura?"
+  ],
+  "Línguas": [
+    "Já estudou este idioma antes?",
+    "Qual o nível de proficiência atual (A1, A2, B1...)?",
+    "Fez algum exame oficial recentemente?"
+  ]
+};
+
+const PERGUNTAS_GERAIS = [
+  "Autoriza que a criança saia sozinha no final do dia?",
+  "Alguém diferente do encarregado vai recolher a criança?"
+];
+
 const sanitizeFileName = (name: string) => {
   return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
 };
@@ -58,7 +92,6 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
 
   const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
   
-  // Estado para armazenar as perguntas customizadas dinâmicas na Edição
   const [perguntasCustomizadas, setPerguntasCustomizadas] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
@@ -174,6 +207,16 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     setPerguntasCustomizadas(novas);
   };
 
+  const adicionarPerguntaSugerida = (pergunta: string) => {
+    if (!perguntasCustomizadas.includes(pergunta)) {
+      setPerguntasCustomizadas([...perguntasCustomizadas, pergunta]);
+    }
+  };
+
+  const sugestoesAtuais = formData.categoria 
+    ? PERGUNTAS_SUGERIDAS[formData.categoria as keyof typeof PERGUNTAS_SUGERIDAS] || [] 
+    : [];
+
   const buscarNoMapaManual = async () => {
     if (formData.local.length < 3) return;
     try {
@@ -249,7 +292,6 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
       if (!isAutoSave) setStatusText(isEn ? "Translating data..." : "A traduzir dados...");
       const linguasFinais = getLinguasString();
 
-      // Processamento e tradução das perguntas dinâmicas
       const perguntasValidas = perguntasCustomizadas.filter(p => p.trim() !== "");
       const perguntasEn = await Promise.all(perguntasValidas.map(p => traduzirParaIngles(p)));
 
@@ -389,7 +431,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
               </div>
             )}
             <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
-              <label style={labelStyle}>Morada Específica</label>
+              <label style={labelStyle}>Morada Específica (Pressione Enter para pesquisar)</label>
               <input type="text" required value={formData.local || ''} onChange={e => { setFormData({...formData, local: e.target.value}); setMapPreview(null); }} onBlur={buscarNoMapaManual} onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); buscarNoMapaManual(); } }} style={inputStyle} />
               
               {addressSuggestions.length > 0 && !mapPreview && (
@@ -486,6 +528,7 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
               <textarea rows={4} value={formData.regras_termos || ''} onChange={e => setFormData({...formData, regras_termos: e.target.value})} style={{...inputStyle, resize: 'vertical'}} />
             </div>
 
+            {/* DOCUMENTOS */}
             <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
               <label style={labelStyle}>Programa do Campo (PDF/Word)</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'flex-start' }}>
@@ -533,18 +576,46 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         {/* 5.1. PERGUNTAS CUSTOMIZADAS PARA O CHECKOUT */}
         <div style={sectionStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>5.1. Perguntas Customizadas para o Checkout</h2>
-            <button type="button" onClick={handleAddPergunta} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>+ Adicionar Pergunta</button>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>5.1. Perguntas para o Checkout</h2>
+            <button type="button" onClick={handleAddPergunta} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>
+              + Pergunta Livre
+            </button>
+          </div>
+          
+          <p style={{ fontSize: '13px', color: '#64748b', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+            Selecione as perguntas sugeridas para a sua categoria ou crie perguntas livres para os pais responderem no momento da reserva.
+          </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '2rem' }}>
+            {sugestoesAtuais.map((pergunta, idx) => (
+              <button 
+                key={`cat-${idx}`} type="button" onClick={() => adicionarPerguntaSugerida(pergunta)} disabled={perguntasCustomizadas.includes(pergunta)}
+                style={{ padding: '0.5rem 0.875rem', backgroundColor: perguntasCustomizadas.includes(pergunta) ? '#f1f5f9' : '#f0fdf4', color: perguntasCustomizadas.includes(pergunta) ? '#94a3b8' : '#059669', border: `1px solid ${perguntasCustomizadas.includes(pergunta) ? '#e2e8f0' : '#a7f3d0'}`, borderRadius: '999px', fontSize: '12px', fontWeight: 'bold', cursor: perguntasCustomizadas.includes(pergunta) ? 'default' : 'pointer', transition: 'all 0.2s' }}
+              >
+                + {pergunta}
+              </button>
+            ))}
+            {PERGUNTAS_GERAIS.map((pergunta, idx) => (
+              <button 
+                key={`geral-${idx}`} type="button" onClick={() => adicionarPerguntaSugerida(pergunta)} disabled={perguntasCustomizadas.includes(pergunta)}
+                style={{ padding: '0.5rem 0.875rem', backgroundColor: perguntasCustomizadas.includes(pergunta) ? '#f1f5f9' : '#f8fafc', color: perguntasCustomizadas.includes(pergunta) ? '#94a3b8' : '#475569', border: `1px solid ${perguntasCustomizadas.includes(pergunta) ? '#e2e8f0' : '#cbd5e1'}`, borderRadius: '999px', fontSize: '12px', fontWeight: 'bold', cursor: perguntasCustomizadas.includes(pergunta) ? 'default' : 'pointer' }}
+              >
+                + {pergunta}
+              </button>
+            ))}
           </div>
           
           {perguntasCustomizadas.length === 0 ? (
-            <p style={{ fontSize: '14px', color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>Nenhuma pergunta customizada adicionada ainda.</p>
+            <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '0.75rem' }}>
+              <p style={{ fontSize: '14px', color: '#64748b', fontWeight: 'bold', margin: 0 }}>Nenhuma pergunta adicionada ao checkout.</p>
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {perguntasCustomizadas.map((pergunta, index) => (
                 <div key={index} style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                  <input type="text" value={pergunta} onChange={e => handlePerguntaChange(index, e.target.value)} placeholder={`Pergunta nº ${index + 1}`} style={inputStyle} required />
-                  <button type="button" onClick={() => handleRemovePergunta(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+                  <div style={{ width: '30px', height: '30px', backgroundColor: '#0f172a', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '12px', flexShrink: 0 }}>{index + 1}</div>
+                  <input type="text" value={pergunta} onChange={e => handlePerguntaChange(index, e.target.value)} placeholder="Escreva a sua pergunta livre..." style={inputStyle} required />
+                  <button type="button" onClick={() => handleRemovePergunta(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', flexShrink: 0 }}>Remover</button>
                 </div>
               ))}
             </div>
@@ -556,6 +627,18 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
           <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>6. Galeria</h2>
           </div>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '0.75rem', textTransform: 'uppercase' }}>Opção A: Escolher Padrão</p>
+            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+              {FOTOS_PADRAO.map((foto, idx) => (
+                <div key={idx} onClick={() => selecionarFotoPadrao(foto.url)} style={{ minWidth: '120px', height: '80px', borderRadius: '0.5rem', overflow: 'hidden', border: images[0]?.url === foto.url ? '3px solid #059669' : '1px solid #cbd5e1', cursor: 'pointer', position: 'relative' }}>
+                  <img src={foto.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  {images[0]?.url === foto.url && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5, 150, 105, 0.2)' }} />}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', margin: '1.5rem 0', fontSize: '12px' }}>OU</div>
           <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', cursor: 'pointer', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.75rem' }}>
             <span style={{ fontWeight: 'bold', color: '#64748b' }}>📸 Clique para enviar fotos...</span>
             <input type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
@@ -565,14 +648,14 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
               <div key={idx} style={{ position: 'relative', borderRadius: '0.75rem', overflow: 'hidden', border: img.isMain ? '3px solid #059669' : '1px solid #e2e8f0', height: '120px' }}>
                 <img src={img.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 <button type="button" onClick={() => removeImage(idx)} style={{ position: 'absolute', top: '5px', right: '5px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '24px', height: '24px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
-                {!img.isMain && <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', border: 'none', cursor: 'pointer' }}>Principal</button>}
+                {!img.isMain && <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}>Principal</button>}
               </div>
             ))}
           </div>
         </div>
 
-        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '1.125rem' }}>
-          Guardar Alterações
+        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '1.125rem', transition: 'transform 0.1s' }}>
+          {saving ? statusText : 'Guardar Alterações'}
         </button>
       </form>
     </main>
