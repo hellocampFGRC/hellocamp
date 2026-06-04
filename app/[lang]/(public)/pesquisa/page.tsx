@@ -16,23 +16,34 @@ export default function PaginaPesquisa({
   const isEn = lang === 'en';
   const searchParams = useSearchParams();
 
+  // CAPTURAR O NOVO PARÂMETRO TEXTO LIVRE ("q")
+  const qParam = searchParams.get("q") || "";
   const catParam = searchParams.get("categoria") || "";
   const distParam = searchParams.get("distrito") || "";
   const idadeParam = searchParams.get("idade") || "";
   const paisParam = searchParams.get("pais") || "";
 
+  const [qUI, setQUI] = useState(qParam);
   const [paisUI, setPaisUI] = useState(paisParam);
   const mostrarDistritos = paisUI === "" || paisUI === "Portugal";
 
   const [resultados, setResultados] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const filtrosAtivos = catParam || distParam || idadeParam || paisParam;
+  const filtrosAtivos = qParam || catParam || distParam || idadeParam || paisParam;
 
   useEffect(() => {
     const fetchResultados = async () => {
       setLoading(true);
       let query = supabase.from("campos").select("*").not("contrato_parceiro_url", "is", null);
+
+      // FILTRAGEM INTELIGENTE DE TEXTO LIVRE
+      if (qParam) {
+        // Remove espaços extra para evitar erros na BD
+        const termo = qParam.trim();
+        // Procura a palavra no Nome, Descrição, Categoria, Distrito e Local Específico (tanto em PT como EN)
+        query = query.or(`nome.ilike.%${termo}%,descricao.ilike.%${termo}%,categoria.ilike.%${termo}%,local.ilike.%${termo}%,Distrito.ilike.%${termo}%,nome_en.ilike.%${termo}%,descricao_en.ilike.%${termo}%`);
+      }
 
       if (catParam) query = query.eq("categoria", catParam);
       if (distParam && mostrarDistritos) query = query.ilike("Distrito", `%${distParam}%`);
@@ -44,7 +55,7 @@ export default function PaginaPesquisa({
       setLoading(false);
     };
     fetchResultados();
-  }, [catParam, distParam, idadeParam, paisParam, mostrarDistritos]);
+  }, [qParam, catParam, distParam, idadeParam, paisParam, mostrarDistritos]);
 
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
 
@@ -79,50 +90,68 @@ export default function PaginaPesquisa({
             {filtrosAtivos ? (isEn ? 'Search Results' : 'Resultados da Pesquisa') : (isEn ? 'All Camps' : 'Todos os Campos')}
           </h1>
           
-          <form method="GET" action={`/${lang}/pesquisa`} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-center">
+          <form method="GET" action={`/${lang}/pesquisa`} className="flex flex-col gap-4">
             
-            <select name="pais" value={paisUI} onChange={(e) => setPaisUI(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500">
-              <option value="">{isEn ? 'All Countries' : 'Todos os Países'}</option>
-              <option value="Portugal">Portugal</option>
-              <option value="Espanha">{isEn ? 'Spain' : 'Espanha'}</option>
-              <option value="Reino Unido">{isEn ? 'UK' : 'Reino Unido'}</option>
-              <option value="França">{isEn ? 'France' : 'França'}</option>
-              <option value="Suíça">{isEn ? 'Switzerland' : 'Suíça'}</option>
-              <option value="Itália">{isEn ? 'Italy' : 'Itália'}</option>
-            </select>
+            {/* NOVA BARRA DE TEXTO LIVRE NA PESQUISA */}
+            <div className="relative w-full">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <span className="text-slate-400">🔍</span>
+              </div>
+              <input 
+                type="text" 
+                name="q" 
+                value={qUI}
+                onChange={(e) => setQUI(e.target.value)}
+                placeholder={isEn ? "Search by name, sport, or location (e.g., Surf in Porto)..." : "Pesquise por nome, desporto ou local (ex: Surf no Porto)..."} 
+                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm md:text-base font-medium text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-sm"
+              />
+            </div>
 
-            <select name="categoria" defaultValue={catParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500">
-              <option value="">{isEn ? 'All Categories' : 'Todas as Categorias'}</option>
-              <option value="Desporto">{isEn ? 'Sports' : 'Desporto'}</option>
-              <option value="Aventura & Natureza">{isEn ? 'Adventure' : 'Aventura & Natureza'}</option>
-              <option value="Tecnologia & Ciência">{isEn ? 'Tech' : 'Tecnologia & Ciência'}</option>
-              <option value="Artes & Criatividade">{isEn ? 'Arts' : 'Artes & Criatividade'}</option>
-              <option value="Línguas">{isEn ? 'Languages' : 'Línguas'}</option>
-            </select>
-
-            {mostrarDistritos && (
-              <select name="distrito" defaultValue={distParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500">
-                <option value="">{isEn ? 'All Districts' : 'Todos os Distritos'}</option>
-                {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
+            {/* FILTROS TRADICIONAIS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-center">
+              <select name="pais" value={paisUI} onChange={(e) => setPaisUI(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 cursor-pointer">
+                <option value="">{isEn ? 'All Countries' : 'Todos os Países'}</option>
+                <option value="Portugal">Portugal</option>
+                <option value="Espanha">{isEn ? 'Spain' : 'Espanha'}</option>
+                <option value="Reino Unido">{isEn ? 'UK' : 'Reino Unido'}</option>
+                <option value="França">{isEn ? 'France' : 'França'}</option>
+                <option value="Suíça">{isEn ? 'Switzerland' : 'Suíça'}</option>
+                <option value="Itália">{isEn ? 'Italy' : 'Itália'}</option>
               </select>
-            )}
 
-            <select name="idade" defaultValue={idadeParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500">
-              <option value="">{isEn ? 'All Ages' : 'Todas as Idades'}</option>
-              <option value="6-9 anos">6-9 {isEn ? 'years' : 'anos'}</option>
-              <option value="10-13 anos">10-13 {isEn ? 'years' : 'anos'}</option>
-              <option value="14-17 anos">14-17 {isEn ? 'years' : 'anos'}</option>
-            </select>
+              <select name="categoria" defaultValue={catParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 cursor-pointer">
+                <option value="">{isEn ? 'All Categories' : 'Todas as Categorias'}</option>
+                <option value="Desporto">{isEn ? 'Sports' : 'Desporto'}</option>
+                <option value="Aventura & Natureza">{isEn ? 'Adventure' : 'Aventura & Natureza'}</option>
+                <option value="Tecnologia & Ciência">{isEn ? 'Tech' : 'Tecnologia & Ciência'}</option>
+                <option value="Artes & Criatividade">{isEn ? 'Arts' : 'Artes & Criatividade'}</option>
+                <option value="Línguas">{isEn ? 'Languages' : 'Línguas'}</option>
+              </select>
 
-            <button type="submit" className="w-full py-2.5 bg-slate-900 text-white font-bold text-sm rounded-lg hover:bg-slate-800 transition-colors shadow-sm">
-              {isEn ? 'Update' : 'Atualizar'}
-            </button>
-            
-            {filtrosAtivos && (
-              <Link href={`/${lang}/pesquisa`} className="text-sm font-bold text-red-600 hover:text-red-700 text-center sm:text-left transition-colors">
-                {isEn ? 'Clear filters' : 'Limpar filtros'}
-              </Link>
-            )}
+              {mostrarDistritos && (
+                <select name="distrito" defaultValue={distParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 cursor-pointer">
+                  <option value="">{isEn ? 'All Districts' : 'Todos os Distritos'}</option>
+                  {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              )}
+
+              <select name="idade" defaultValue={idadeParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 cursor-pointer">
+                <option value="">{isEn ? 'All Ages' : 'Todas as Idades'}</option>
+                <option value="6-9 anos">6-9 {isEn ? 'years' : 'anos'}</option>
+                <option value="10-13 anos">10-13 {isEn ? 'years' : 'anos'}</option>
+                <option value="14-17 anos">14-17 {isEn ? 'years' : 'anos'}</option>
+              </select>
+
+              <button type="submit" className="w-full py-2.5 bg-slate-900 text-white font-bold text-sm rounded-lg hover:bg-slate-800 transition-colors shadow-sm cursor-pointer">
+                {isEn ? 'Update Search' : 'Atualizar Pesquisa'}
+              </button>
+              
+              {filtrosAtivos && (
+                <Link href={`/${lang}/pesquisa`} className="text-sm font-bold text-red-600 hover:text-red-700 text-center sm:text-left transition-colors">
+                  {isEn ? 'Clear filters' : 'Limpar filtros'}
+                </Link>
+              )}
+            </div>
           </form>
 
         </div>
@@ -132,8 +161,15 @@ export default function PaginaPesquisa({
         {loading ? (
            <div className="text-center py-20 text-slate-500 font-bold text-lg">{isEn ? 'Loading...' : 'A carregar...'}</div>
         ) : (!resultados || resultados.length === 0) ? (
-          <div className="text-center p-12 bg-white rounded-2xl border border-slate-100 shadow-sm">
-            <p className="text-lg text-slate-500 font-bold">{isEn ? 'No results found.' : 'Sem resultados.'}</p>
+          <div className="text-center p-12 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center gap-4">
+            <span className="text-4xl">🏕️</span>
+            <h3 className="text-xl font-black text-slate-900">{isEn ? 'No camps found' : 'Nenhum campo encontrado'}</h3>
+            <p className="text-base text-slate-500 font-medium max-w-md mx-auto">
+              {isEn ? 'Try adjusting your filters or searching for something else.' : 'Tente pesquisar por uma palavra mais genérica ou limpar alguns filtros.'}
+            </p>
+            <Link href={`/${lang}/pesquisa`} className="mt-2 text-emerald-600 font-bold hover:text-emerald-700 transition-colors">
+              {isEn ? 'Clear all filters &rarr;' : 'Ver todos os campos &rarr;'}
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">

@@ -1,3 +1,5 @@
+"use client";
+
 import { supabase } from "../../../lib/supabase";
 import Link from "next/link";
 import { getDictionary } from "../../../lib/getDictionary";
@@ -16,7 +18,7 @@ const PAISES_DESTAQUE = [
   { nome: "Suíça", nome_en: "Switzerland", imagem: "https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&q=80&w=1000", desc: "Montanhas e Lagos", desc_en: "Mountains and Lakes" }
 ];
 
-// ARRAY DE DISTRITOS (Agora blindados no código em vez da BD para garantir qualidade premium e sem erros)
+// ARRAY DE DISTRITOS
 const DISTRITOS_DESTAQUE = [
   { nome: "Lisboa", nome_en: "Lisbon", imagem: "https://images.unsplash.com/photo-1585208798174-6cedd86e019a?auto=format&fit=crop&q=80&w=1000", desc: "Capital Vibrante", desc_en: "Vibrant Capital" },
   { nome: "Porto", nome_en: "Porto", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=1000", desc: "A Magia do Norte", desc_en: "Northern Magic" },
@@ -29,16 +31,9 @@ const DISTRITOS_DESTAQUE = [
 ];
 
 const TRADUCOES_PAISES: Record<string, string> = {
-  "Portugal": "Portugal",
-  "Espanha": "Spain",
-  "França": "France",
-  "Reino Unido": "United Kingdom",
-  "Alemanha": "Germany",
-  "Itália": "Italy",
-  "Estados Unidos": "United States",
-  "Irlanda": "Ireland",
-  "Suíça": "Switzerland",
-  "Brasil": "Brazil"
+  "Portugal": "Portugal", "Espanha": "Spain", "França": "France", "Reino Unido": "United Kingdom",
+  "Alemanha": "Germany", "Itália": "Italy", "Estados Unidos": "United States", "Irlanda": "Ireland",
+  "Suíça": "Switzerland", "Brasil": "Brazil"
 };
 
 export default async function Home({
@@ -50,10 +45,8 @@ export default async function Home({
   const dict = await getDictionary(lang as "pt" | "en");
   const isEn = lang === 'en';
 
-  // 1. Busca os últimos 3 campos registados (Destaques)
   const { data: camposDeFerias } = await supabase.from('campos').select('*').not('contrato_parceiro_url', 'is', null).limit(3).order('created_at', { ascending: false });
   
-  // 2. Busca TODA a listagem de campos ativos para extrair os locais exatos onde EXISTEM campos
   const { data: camposFiltros } = await supabase.from('campos').select('categoria, categoria_en, idade, idade_en, Distrito, Distrito_en, pais, pais_en').not('contrato_parceiro_url', 'is', null);
   
   const categoriasMap = new Map();
@@ -70,13 +63,11 @@ export default async function Home({
     });
   }
 
-  // Prepara Dropdowns
   const categoriasOpcoes = Array.from(categoriasMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const idadesOpcoes = Array.from(idadesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const distritosOpcoes = Array.from(distritosMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const paisesOpcoes = Array.from(paisesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? (en || TRADUCOES_PAISES[pt] || pt) : pt }));
 
-  // LÓGICA DE FILTRAGEM DE CARTÕES (Apenas mostra se houverem campos na BD!)
   const distritosAtivosCards = DISTRITOS_DESTAQUE.filter(distrito => distritosMap.has(distrito.nome));
   const paisesAtivosCards = PAISES_DESTAQUE.filter(pais => paisesMap.has(pais.nome));
 
@@ -115,9 +106,30 @@ export default async function Home({
               </Link>
             </div>
 
-            <form action={`/${lang}/pesquisa`} method="GET" className="mt-8 md:mt-4 relative">
+            <form action={`/${lang}/pesquisa`} method="GET" className="mt-8 md:mt-2 relative flex flex-col gap-6">
+              
+              {/* NOVA BARRA DE PESQUISA TEXTO LIVRE */}
+              <div className="w-full relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <span className="text-slate-400 text-lg">🔍</span>
+                </div>
+                <input 
+                  type="text" 
+                  name="q" 
+                  placeholder={isEn ? "What are you looking for? (e.g. Tennis in Porto, Surf...)" : "O que procura? (ex: Ténis no Porto, Surf na Caparica...)"} 
+                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-base md:text-lg font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* LINHA DE DIVISÃO OPCIONAL */}
+              <div className="flex items-center gap-4 w-full">
+                <div className="h-px bg-slate-100 flex-1"></div>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{isEn ? 'Or filter by' : 'Ou filtre por'}</span>
+                <div className="h-px bg-slate-100 flex-1"></div>
+              </div>
+
+              {/* FILTROS TRADICIONAIS */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                
                 <div>
                   <label className="block text-xs font-bold text-slate-900 mb-2">{isEn ? 'Country' : 'País'}</label>
                   <select name="pais" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500">
@@ -149,12 +161,11 @@ export default async function Home({
                     {idadesOpcoes.map((faixa: any) => <option key={faixa.valor} value={faixa.valor}>{faixa.label}</option>)}
                   </select>
                 </div>
-
               </div>
 
               {/* ACTION BUTTON */}
-              <div className="flex justify-center mt-8 md:absolute md:-bottom-[4.5rem] md:left-1/2 md:-translate-x-1/2">
-                <button type="submit" className="group w-full md:w-24 md:h-24 bg-[#EBA914] hover:bg-amber-500 rounded-xl md:rounded-full flex flex-row md:flex-col items-center justify-center gap-2 py-4 shadow-lg shadow-amber-500/30 md:border-[6px] md:border-slate-50 transition-transform hover:scale-105 z-20">
+              <div className="flex justify-center mt-6 md:absolute md:-bottom-[4.5rem] md:left-1/2 md:-translate-x-1/2">
+                <button type="submit" className="group w-full md:w-24 md:h-24 bg-[#EBA914] hover:bg-amber-500 rounded-xl md:rounded-full flex flex-row md:flex-col items-center justify-center gap-2 py-4 shadow-lg shadow-amber-500/30 md:border-[6px] md:border-slate-50 transition-transform hover:scale-105 z-20 cursor-pointer">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                   <span className="text-white text-sm md:text-[10px] font-black uppercase tracking-wider">{dict.home.pesquisar}</span>
                 </button>
@@ -165,7 +176,7 @@ export default async function Home({
         </div>
       </section>
 
-      {/* SECÇÃO DISTRITOS (Visível apenas se houver campos em Portugal) */}
+      {/* SECÇÃO DISTRITOS */}
       {distritosAtivosCards.length > 0 && (
         <section className="max-w-7xl mx-auto py-20 px-4 md:px-6">
           <div className="text-center mb-12">
@@ -193,7 +204,7 @@ export default async function Home({
         </section>
       )}
 
-      {/* SECÇÃO PAÍSES (Visível apenas se houver campos internacionais) */}
+      {/* SECÇÃO PAÍSES */}
       {paisesAtivosCards.length > 0 && (
         <section className="bg-slate-50 py-20 border-t border-slate-100">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
