@@ -1,11 +1,9 @@
-"use client";
-
 import { supabase } from "../../../lib/supabase";
 import Link from "next/link";
 import { getDictionary } from "../../../lib/getDictionary";
 import BotaoFavorito from "./components/BotaoFavorito";
 
-// ARRAY DE PAÍSES (Com imagens novas de alta qualidade)
+// ARRAY DE PAÍSES
 const PAISES_DESTAQUE = [
   { nome: "Portugal", nome_en: "Portugal", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=1000", desc: "Aventura e Sol", desc_en: "Adventure and Sun" },
   { nome: "Espanha", nome_en: "Spain", imagem: "https://images.unsplash.com/photo-1543783207-ec64e4d95325?auto=format&fit=crop&q=80&w=1000", desc: "Cultura e Diversão", desc_en: "Culture and Fun" },
@@ -106,7 +104,7 @@ export default async function Home({
               </Link>
             </div>
 
-            <form action={`/${lang}/pesquisa`} method="GET" className="mt-4 flex flex-col gap-6">
+            <form action={`/${lang}/pesquisa`} method="GET" className="mt-4 flex flex-col gap-6 pb-6 md:pb-8">
               
               {/* MAIN SEARCH BAR + SUBMIT BUTTON ALIGNED */}
               <div className="flex flex-col md:flex-row gap-4">
@@ -117,8 +115,8 @@ export default async function Home({
                   <input 
                     type="text" 
                     name="q" 
-                    placeholder={isEn ? "Search by camp name, sport, or city..." : "O que procura? Ex: Ténis no Porto, Campo Aventura..."} 
-                    className="w-full pl-14 pr-4 py-4 md:py-5 rounded-2xl bg-slate-50 border-2 border-slate-100 text-slate-900 text-lg md:text-xl font-bold outline-none focus:border-emerald-500 focus:bg-white transition-all placeholder:text-slate-400 placeholder:font-medium"
+                    placeholder={isEn ? "What are you looking for? (e.g. Tennis in Porto, Surf...)" : "O que procura? (ex: Ténis no Porto, Surf na Caparica...)"} 
+                    className="w-full pl-14 pr-4 py-4 md:py-5 rounded-2xl bg-slate-50 border-2 border-slate-100 text-slate-900 text-lg md:text-xl font-bold outline-none focus:border-emerald-500 focus:bg-white transition-all placeholder:text-slate-400 placeholder:font-medium shadow-inner"
                   />
                 </div>
                 
