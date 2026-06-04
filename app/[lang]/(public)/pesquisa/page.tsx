@@ -16,7 +16,7 @@ export default function PaginaPesquisa({
   const isEn = lang === 'en';
   const searchParams = useSearchParams();
 
-  // CAPTURAR O NOVO PARÂMETRO TEXTO LIVRE ("q")
+  // CAPTURAR OS PARÂMETROS DO URL
   const qParam = searchParams.get("q") || "";
   const catParam = searchParams.get("categoria") || "";
   const distParam = searchParams.get("distrito") || "";
@@ -37,12 +37,16 @@ export default function PaginaPesquisa({
       setLoading(true);
       let query = supabase.from("campos").select("*").not("contrato_parceiro_url", "is", null);
 
-      // FILTRAGEM INTELIGENTE DE TEXTO LIVRE
+      // CORREÇÃO: FILTRAGEM INTELIGENTE PALAVRA A PALAVRA (ESTILO GOOGLE)
       if (qParam) {
-        // Remove espaços extra para evitar erros na BD
-        const termo = qParam.trim();
-        // Procura a palavra no Nome, Descrição, Categoria, Distrito e Local Específico (tanto em PT como EN)
-        query = query.or(`nome.ilike.%${termo}%,descricao.ilike.%${termo}%,categoria.ilike.%${termo}%,local.ilike.%${termo}%,Distrito.ilike.%${termo}%,nome_en.ilike.%${termo}%,descricao_en.ilike.%${termo}%`);
+        // Parte a frase em palavras isoladas usando os espaços como separador
+        const termos = qParam.trim().split(/\s+/);
+        
+        // Aplica um filtro para cada palavra individual. 
+        // No Supabase, encadear múltiplos .or() cria uma relação de "E" (AND) entre eles.
+        termos.forEach(termo => {
+          query = query.or(`nome.ilike.%${termo}%,descricao.ilike.%${termo}%,categoria.ilike.%${termo}%,local.ilike.%${termo}%,Distrito.ilike.%${termo}%,nome_en.ilike.%${termo}%,descricao_en.ilike.%${termo}%`);
+        });
       }
 
       if (catParam) query = query.eq("categoria", catParam);
@@ -92,7 +96,7 @@ export default function PaginaPesquisa({
           
           <form method="GET" action={`/${lang}/pesquisa`} className="flex flex-col gap-4">
             
-            {/* NOVA BARRA DE TEXTO LIVRE NA PESQUISA */}
+            {/* BARRA DE TEXTO LIVRE NA PESQUISA */}
             <div className="relative w-full">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <span className="text-slate-400">🔍</span>
