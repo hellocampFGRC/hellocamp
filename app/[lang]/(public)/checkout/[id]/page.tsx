@@ -31,9 +31,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const [user, setUser] = useState<any>(null);
   const [processingStripe, setProcessingStripe] = useState(false);
 
+  // Parâmetros do URL
   const quantidade = parseInt(searchParams.get("quantidade_criancas") || "1");
   const diasInscritosParam = searchParams.get("dias_inscritos");
-  
   const extAlimentacao = searchParams.get("ext_alimentacao") === "true";
   const extAlojamento = searchParams.get("ext_alojamento") === "true";
   const extProlongamento = searchParams.get("ext_prolongamento") === "true";
@@ -43,16 +43,17 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   try {
     const turnoParam = searchParams.get("turno");
     if (turnoParam) turnoSelecionado = JSON.parse(turnoParam);
-  } catch (e) { console.error(e); }
+  } catch (e) { 
+    console.error(e); 
+  }
 
   const diasBaseShift = Number(turnoSelecionado?.dias) || Number(campo?.duracao_dias) || 5;
   const diasEfetivos = (diasInscritosParam && diasInscritosParam !== 'full') ? Number(diasInscritosParam) : diasBaseShift;
   
   const [selecoesCriancas, setSelecoesCriancas] = useState<string[]>(Array(quantidade).fill(""));
-
-  // ESTADO PARA AS RESPOSTAS CUSTOMIZADAS
   const [respostasCustomizadas, setRespostasCustomizadas] = useState<Record<number, Record<string, string>>>({});
 
+  // Modais e Estado
   const [showModal, setShowModal] = useState(false);
   const [indexToAssign, setIndexToAssign] = useState<number | null>(null);
   const [savingChild, setSavingChild] = useState(false);
@@ -75,7 +76,10 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       setUser(session.user);
 
       const { data: campoData } = await supabase.from("campos").select("*").eq("id", id).single();
-      if (!campoData) { router.push(`/${lang}`); return; }
+      if (!campoData) { 
+        router.push(`/${lang}`); 
+        return; 
+      }
       setCampo(campoData);
 
       const { data: orgData } = await supabase.from("perfis").select("*").eq("id", campoData.organizador_id).single();
@@ -89,9 +93,11 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
       setLoading(false);
     };
+    
     fetchDados();
   }, [id, lang, router]);
 
+  // Cálculos Financeiros
   const noites = Math.max(1, diasEfetivos - 1);
   const valAlimentacao = extAlimentacao ? (Number(campo?.extra_alimentacao) || 0) * diasEfetivos : 0;
   const valAlojamento = extAlojamento ? (Number(campo?.extra_alojamento) || 0) * noites : 0;
@@ -107,6 +113,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
   const precoFinalTotal = (precoBaseUnitario + totalExtrasPorCrianca) * quantidade;
 
+  // Lógica de Participantes
   const openNewChildModal = (index: number) => {
     setNewChild({ 
       nome: '', nif: '', data_nascimento: '', sexo: '', 
@@ -121,6 +128,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const handleSaveNewChild = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingChild(true);
+    
     const { data, error } = await supabase.from('criancas').insert({
       cliente_id: user.id,
       ...newChild
@@ -141,6 +149,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const handleUpdateLocalCrianca = (idDaCrianca: string, campoTabela: string, valor: string) => {
     setCriancas(prev => prev.map(c => c.id === idDaCrianca ? { ...c, [campoTabela]: valor } : c));
   };
+
   const handleSaveDBCrianca = async (idDaCrianca: string, campoTabela: string, valor: string) => {
     await supabase.from('criancas').update({ [campoTabela]: valor }).eq('id', idDaCrianca);
   };
@@ -155,10 +164,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     }));
   };
 
+  // Processamento Seguro da Reserva com RPC (Bloqueio de Overbooking)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (selecoesCriancas.some(c => c === "")) {
-      alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione um participante válido para todas as vagas."); return;
+      alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione um participante válido para todas as vagas."); 
+      return;
     }
 
     setProcessingStripe(true);
@@ -174,16 +186,20 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         turno_nome: turnoSelecionado?.nome || 'Programa Base',
         status_pagamento: 'Pendente',
         extras_escolhidos: { extAlimentacao, extAlojamento, extProlongamento, extTransporte, dias_inscritos: diasEfetivos },
-        respostas_customizadas: respostasCustomizadas[index] || {}
+        respostas_customizadas: respostasCustomizadas[index] || {} 
       }));
 
-      const { data: reservasData, error: supabaseError } = await supabase.from('reservas').insert(insercoes).select('id');
+      // CHAMADA ATÓMICA DE SEGURANÇA À BASE DE DADOS
+      const { data: idsCriados, error: rpcError } = await supabase.rpc('criar_reserva_segura', {
+        p_insercoes: insercoes
+      });
       
-      if (supabaseError) {
-        throw new Error("Erro Base de Dados: " + supabaseError.message);
+      if (rpcError) {
+        if (rpcError.message.includes('ESGOTADO')) {
+          throw new Error(isEn ? "We're sorry, but the last spots for this shift were just taken by another user." : "Lamentamos, mas as vagas para este turno acabaram de esgotar.");
+        }
+        throw new Error("Erro na Base de Dados: " + rpcError.message);
       }
-      
-      const idsCriados = reservasData.map(r => r.id);
 
       if (organizador?.modelo_pagamento === 'parceiro_recebe') {
         router.push(`/${lang}/sucesso`);
@@ -217,7 +233,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       }
 
     } catch (error: any) { 
-      alert("ATENÇÃO - Erro Técnico:\n" + error.message); 
+      alert(error.message); 
       setProcessingStripe(false); 
     }
   };
@@ -229,19 +245,20 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#f3f4f6', fontFamily: 'sans-serif', paddingBottom: '5rem', paddingTop: '3rem', position: 'relative' }}>
       
+      {/* OVERLAY DE CARREGAMENTO */}
       {processingStripe && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <div className="spinner" style={{ width: '50px', height: '50px', border: '5px solid #e2e8f0', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }}></div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0f172a' }}>A redirecionar para pagamento seguro...</h2>
-          <p style={{ color: '#64748b' }}>Por favor, aguarde.</p>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0f172a' }}>{isEn ? 'Securing your spot...' : 'A garantir a sua vaga e iniciar pagamento seguro...'}</h2>
+          <p style={{ color: '#64748b' }}>{isEn ? 'Please wait.' : 'Por favor, aguarde.'}</p>
           <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
-      {/* MODAL ADICIONAR NOVA CRIANÇA */}
+      {/* MODAL ADICIONAR NOVO PARTICIPANTE */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.7)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
-          <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '600px', borderRadius: '1.5rem', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '650px', borderRadius: '1.5rem', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
             <button onClick={() => setShowModal(false)} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748b' }}>×</button>
             <h3 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0f172a', marginBottom: '1.5rem' }}>{isEn ? 'Add New Participant' : 'Adicionar Novo Participante'}</h3>
             
@@ -250,29 +267,44 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                 <label style={labelStyle}>{isEn ? 'Full Name' : 'Nome Completo'} *</label>
                 <input type="text" required value={newChild.nome} onChange={e => setNewChild({...newChild, nome: e.target.value})} style={inputStyle} />
               </div>
+              
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 150px' }}>
+                <div style={{ flex: '1 1 200px' }}>
                   <label style={labelStyle}>{isEn ? 'Date of Birth' : 'Data Nasc.'} *</label>
                   <input type="date" required value={newChild.data_nascimento} onChange={e => setNewChild({...newChild, data_nascimento: e.target.value})} style={inputStyle} />
                 </div>
-                <div style={{ flex: '1 1 150px' }}>
+                
+                <div style={{ flex: '1 1 200px' }}>
                   <label style={labelStyle}>{isEn ? 'Gender' : 'Sexo'} *</label>
                   <select required value={newChild.sexo} onChange={e => setNewChild({...newChild, sexo: e.target.value})} style={selectStyle}>
-                    <option value="">Selecione...</option><option value="Masculino">{isEn ? 'Male' : 'Masculino'}</option><option value="Feminino">{isEn ? 'Female' : 'Feminino'}</option><option value="Prefiro não dizer">{isEn ? 'Prefer not to say' : 'Prefiro não dizer'}</option>
+                    <option value="">Selecione...</option>
+                    <option value="Masculino">{isEn ? 'Male' : 'Masculino'}</option>
+                    <option value="Feminino">{isEn ? 'Female' : 'Feminino'}</option>
+                    <option value="Prefiro não dizer">{isEn ? 'Prefer not to say' : 'Prefiro não dizer'}</option>
                   </select>
                 </div>
-                <div style={{ flex: '1 1 150px' }}>
+                
+                <div style={{ flex: '1 1 200px' }}>
                   <label style={labelStyle}>{isEn ? 'Blood Type' : 'Tipo Sanguíneo'}</label>
-                  {/* CORRIGIDO NO MODAL (newChild em vez de childInfo) */}
                   <select value={newChild.tipo_sanguineo} onChange={e => setNewChild({...newChild, tipo_sanguineo: e.target.value})} style={selectStyle}>
-                    <option value="">N/A</option><option value="A+">A+</option><option value="A-">A-</option><option value="B+">B+</option><option value="B-">B-</option><option value="AB+">AB+</option><option value="AB-">AB-</option><option value="O+">O+</option><option value="O-">O-</option>
+                    <option value="">N/A</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
                   </select>
                 </div>
               </div>
+
               <div>
                 <label style={labelStyle}>{isEn ? 'Allergies / Restrictions' : 'Alergias / Restrições'}</label>
                 <textarea rows={2} value={newChild.restricoes_alimentares} onChange={e => setNewChild({...newChild, restricoes_alimentares: e.target.value})} style={{...inputStyle, resize: 'vertical'}} placeholder={isEn ? "None" : "Nenhuma"} />
               </div>
+              
               <button type="submit" disabled={savingChild} style={{ marginTop: '0.5rem', width: '100%', padding: '1rem', backgroundColor: '#059669', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: 'pointer' }}>
                 {savingChild ? 'A guardar...' : (isEn ? 'Save Participant' : 'Guardar Participante')}
               </button>
@@ -281,12 +313,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         </div>
       )}
 
+      {/* ÁREA PRINCIPAL DO CHECKOUT */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem', display: 'flex', flexWrap: 'wrap', gap: '3rem', alignItems: 'flex-start' }}>
         
         <div style={{ flex: '1 1 60%', minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             
-            {/* SELEÇÃO DE PARTICIPANTES */}
+            {/* 1. SELEÇÃO DE PARTICIPANTES */}
             <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0, marginBottom: '1.5rem' }}>{isEn ? 'Select Participants' : 'Selecionar Participantes'}</h2>
 
@@ -339,47 +372,67 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                           <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>💾 {isEn ? 'Auto-saves' : 'Grava autom.'}</span>
                         </div>
                         
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                          
                           {/* Dados Pessoais */}
                           <div style={{ gridColumn: '1 / -1' }}>
                             <label style={labelStyle}>{isEn ? 'Full Name' : 'Nome Completo'}</label>
                             <input type="text" required value={childInfo.nome || ''} onChange={e => handleUpdateLocalCrianca(childId, 'nome', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'nome', e.target.value)} style={inputStyle} />
                           </div>
+                          
                           <div>
                             <label style={labelStyle}>{isEn ? 'Date of Birth' : 'Data Nascimento'}</label>
                             <input type="date" required value={childInfo.data_nascimento || ''} onChange={e => handleUpdateLocalCrianca(childId, 'data_nascimento', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'data_nascimento', e.target.value)} style={inputStyle} />
                           </div>
+                          
                           <div>
                             <label style={labelStyle}>{isEn ? 'Gender' : 'Sexo'}</label>
                             <select value={childInfo.sexo || ''} onChange={e => {handleUpdateLocalCrianca(childId, 'sexo', e.target.value); handleSaveDBCrianca(childId, 'sexo', e.target.value);}} style={selectStyle}>
-                              <option value="Masculino">{isEn ? 'Male' : 'Masculino'}</option><option value="Feminino">{isEn ? 'Female' : 'Feminino'}</option><option value="Prefiro não dizer">{isEn ? 'Prefer not to say' : 'Prefiro não dizer'}</option>
+                              <option value="Masculino">{isEn ? 'Male' : 'Masculino'}</option>
+                              <option value="Feminino">{isEn ? 'Female' : 'Feminino'}</option>
+                              <option value="Prefiro não dizer">{isEn ? 'Prefer not to say' : 'Prefiro não dizer'}</option>
                             </select>
                           </div>
                           
-                          {/* Logística */}
                           <div>
                             <label style={labelStyle}>{isEn ? 'T-Shirt Size' : 'Tamanho T-Shirt'}</label>
                             <select value={childInfo.tamanho_tshirt || ''} onChange={e => {handleUpdateLocalCrianca(childId, 'tamanho_tshirt', e.target.value); handleSaveDBCrianca(childId, 'tamanho_tshirt', e.target.value);}} style={selectStyle}>
-                              <option value="">N/A</option><option value="5-6 Anos">5-6 Anos</option><option value="7-8 Anos">7-8 Anos</option><option value="9-11 Anos">9-11 Anos</option><option value="12-14 Anos">12-14 Anos</option><option value="S Adulto">S</option><option value="M Adulto">M</option><option value="L Adulto">L</option>
+                              <option value="">N/A</option>
+                              <option value="5-6 Anos">5-6 Anos</option>
+                              <option value="7-8 Anos">7-8 Anos</option>
+                              <option value="9-11 Anos">9-11 Anos</option>
+                              <option value="12-14 Anos">12-14 Anos</option>
+                              <option value="S Adulto">S</option>
+                              <option value="M Adulto">M</option>
+                              <option value="L Adulto">L</option>
                             </select>
                           </div>
                           
-                          {/* CORRIGIDO TIPO SANGUINEO - Exatamente igual à T-shirt */}
                           <div>
                             <label style={labelStyle}>{isEn ? 'Blood Type' : 'Tipo Sanguíneo'}</label>
                             <select value={childInfo.tipo_sanguineo || ''} onChange={e => {handleUpdateLocalCrianca(childId, 'tipo_sanguineo', e.target.value); handleSaveDBCrianca(childId, 'tipo_sanguineo', e.target.value);}} style={selectStyle}>
-                              <option value="">N/A</option><option value="A+">A+</option><option value="A-">A-</option><option value="B+">B+</option><option value="B-">B-</option><option value="AB+">AB+</option><option value="AB-">AB-</option><option value="O+">O+</option><option value="O-">O-</option>
+                              <option value="">N/A</option>
+                              <option value="A+">A+</option>
+                              <option value="A-">A-</option>
+                              <option value="B+">B+</option>
+                              <option value="B-">B-</option>
+                              <option value="AB+">AB+</option>
+                              <option value="AB-">AB-</option>
+                              <option value="O+">O+</option>
+                              <option value="O-">O-</option>
                             </select>
                           </div>
-                          
+
                           {/* Dados Médicos */}
                           <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #cbd5e1', paddingTop: '1rem', marginTop: '0.5rem' }}>
                             <label style={{...labelStyle, color: '#991b1b'}}>{isEn ? 'Medical Profile' : 'Perfil Médico (Alergias e Condições)'}</label>
                           </div>
+                          
                           <div style={{ gridColumn: '1 / -1' }}>
                             <label style={labelStyle}>{isEn ? 'Food Allergies / Restrictions' : 'Alergias Alimentares'}</label>
                             <input type="text" value={childInfo.restricoes_alimentares || ''} onChange={e => handleUpdateLocalCrianca(childId, 'restricoes_alimentares', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'restricoes_alimentares', e.target.value)} style={inputStyle} placeholder={isEn ? "None" : "Nenhuma"} />
                           </div>
+                          
                           <div style={{ gridColumn: '1 / -1' }}>
                             <label style={labelStyle}>{isEn ? 'Chronic Diseases / Medication' : 'Doenças Crónicas ou Medicação Regular'}</label>
                             <input type="text" value={childInfo.doencas_cronicas || ''} onChange={e => handleUpdateLocalCrianca(childId, 'doencas_cronicas', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'doencas_cronicas', e.target.value)} style={inputStyle} placeholder={isEn ? "None" : "Nenhuma"} />
@@ -390,14 +443,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
                     {/* PERGUNTAS CUSTOMIZADAS DO CAMPO DE FÉRIAS */}
                     {childInfo && temPerguntasCustomizadas && (
-                      <div style={{ marginTop: '1rem', backgroundColor: '#eff6ff', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #bfdbfe' }}>
+                      <div style={{ marginTop: '1.5rem', backgroundColor: '#eff6ff', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #bfdbfe' }}>
                         <h4 style={{ fontSize: '13px', fontWeight: '800', color: '#1e40af', textTransform: 'uppercase', marginBottom: '1.25rem' }}>
                           {isEn ? 'Specific Questions for this Camp' : 'Perguntas Específicas do Programa'}
                         </h4>
                         
-                        <div style={{ display: 'grid', gap: '1rem' }}>
+                        <div style={{ display: 'grid', gap: '1.25rem' }}>
                           {campo.perguntas_customizadas.map((perguntaOriginal: string, pIdx: number) => {
-                            // Mostrar a versão traduzida se for inglês e existir tradução
                             const perguntaVisivel = isEn && campo.perguntas_customizadas_en && campo.perguntas_customizadas_en[pIdx] 
                                                     ? campo.perguntas_customizadas_en[pIdx] 
                                                     : perguntaOriginal;
@@ -409,11 +461,11 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                                   required
                                   value={respostasCustomizadas[i]?.[perguntaOriginal] || ''} 
                                   onChange={e => handleRespostaCustomizada(i, perguntaOriginal, e.target.value)} 
-                                  style={{...inputStyle, borderColor: '#93c5fd'}}
+                                  style={{...inputStyle, borderColor: '#93c5fd', backgroundColor: 'white'}}
                                   placeholder={isEn ? 'Your answer...' : 'A sua resposta...'}
                                 />
                               </div>
-                            )
+                            );
                           })}
                         </div>
                       </div>
@@ -423,6 +475,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
               })}
             </section>
 
+            {/* 2. INFORMAÇÃO DE PAGAMENTO */}
             <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{isEn ? 'Secure Payment' : 'Pagamento Seguro'}</h2>
               
@@ -431,7 +484,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                   <p style={{ fontWeight: 'bold', color: '#064e3b', marginBottom: '0.5rem' }}>Transferência Bancária Direta (Parceiro)</p>
                   <p style={{ fontSize: '14px', color: '#334155', margin: 0 }}>Entidade: {organizador.empresa_nome}</p>
                   <p style={{ fontSize: '14px', color: '#334155', margin: 0 }}>IBAN: {organizador.iban}</p>
-                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '1rem' }}>* A sua reserva ficará pendente. O parceiro irá processar este pagamento diretamente e validar a sua inscrição.</p>
+                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '1rem' }}>* A sua reserva ficará pendente e o seu lugar fica temporariamente bloqueado. O parceiro irá processar o seu comprovativo e validar a inscrição final.</p>
                 </div>
               ) : (
                 <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
@@ -448,12 +501,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
             </section>
 
             <button type="submit" disabled={processingStripe} style={{ width: '100%', padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontSize: '1.125rem', fontWeight: '900', borderRadius: '1rem', border: 'none', cursor: processingStripe ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.3)', transition: 'transform 0.2s' }}>
-              Confirmar e Pagar {precoFinalTotal}€
+              {isEn ? `Confirm and Pay ${precoFinalTotal}€` : `Confirmar e Pagar ${precoFinalTotal}€`}
             </button>
           </form>
         </div>
 
-        {/* SIDEBAR RESUMO FINANCEIRO */}
+        {/* SIDEBAR DE RESUMO */}
         <aside style={{ flex: '1 1 30%', minWidth: '320px', position: 'sticky', top: '2rem' }}>
           <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
             <h3 style={{ fontSize: '1.125rem', fontWeight: '900', marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
@@ -496,5 +549,4 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
 const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' as const, marginBottom: '0.4rem' };
 const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: 'white', fontSize: '14px', color: '#0f172a', outline: 'none' };
-// PaddingRight 2.5rem adicionado aqui para resolver o texto cortado
 const selectStyle = { padding: '0.75rem 1rem', paddingRight: '2.5rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', fontWeight: '600', color: '#0f172a', outline: 'none', appearance: 'none' as const, cursor: 'pointer', backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2em' };
