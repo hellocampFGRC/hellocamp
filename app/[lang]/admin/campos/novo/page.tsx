@@ -214,15 +214,6 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     return () => clearTimeout(delayDebounce);
   }, [formData.local, formData.Distrito, pais]);
 
-  const traduzirParaIngles = async (texto: string) => {
-    if (!texto) return "";
-    try {
-      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=pt|en`);
-      const data = await res.json();
-      return data.responseData.translatedText;
-    } catch (e) { return texto; }
-  };
-
   const sanitizeFileName = (name: string) => {
     return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
   };
@@ -263,54 +254,52 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
         return { nome: doc.name, url: publicUrlData.publicUrl };
       }));
 
-      setStatusText(isEn ? "Translating data..." : "A traduzir dados...");
+      setStatusText(isEn ? "Saving camp..." : "A gravar o campo principal...");
       const linguasFinais = getLinguasString();
-
       const perguntasValidas = perguntasCustomizadas.filter(p => p.trim() !== "");
-      const perguntasEn = await Promise.all(perguntasValidas.map(p => traduzirParaIngles(p)));
-
-      const [
-        nome_en, categoria_en, local_en, idade_en, descricao_en,
-        alimentacao_en, alojamento_en, seguro_en, Distrito_en, regras_termos_en, politica_cancelamento_en
-      ] = await Promise.all([
-        traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
-        traduzirParaIngles(stringIdadesCompleta), traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
-        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.Distrito),
-        traduzirParaIngles(formData.regras_termos), traduzirParaIngles(formData.politica_cancelamento)
-      ]);
-
-      const turnos_en = await Promise.all(turnos.map(async (t) => ({ ...t, nome: await traduzirParaIngles(t.nome) })));
       
       const precoGlobal = turnos[0]?.preco || 0;
       const formatarDataStr = (d: string) => d ? new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) : '';
       const textoDatas = turnos.map(t => `${formatarDataStr(t.data_inicio)} a ${formatarDataStr(t.data_fim)}`).join(", ");
-      const textoDatasEn = turnos.map(t => `${formatarDataStr(t.data_inicio)} to ${formatarDataStr(t.data_fim)}`).join(", ");
-
       const totalVagasCalculado = turnos.reduce((acc, curr) => acc + (Number(curr.vagas) || 0), 0);
 
-      setStatusText(isEn ? "Saving..." : "A guardar e submeter para validação...");
-      const { error } = await supabase.from("campos").insert([{
+      // INSERÇÃO IMEDIATA (Otimização: Inicializa campos EN vazios ou cópias simples)
+      const { data: novoCampoInserido, error: insertError } = await supabase.from("campos").insert([{
         ...formData,
         idade: stringIdadesCompleta,
         vagas_totais: totalVagasCalculado,
         preco: precoGlobal,                      
         datas_disponiveis: textoDatas,           
-        datas_disponiveis_en: textoDatasEn,     
-        pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
+        datas_disponiveis_en: textoDatas,     
+        pais, pais_en: pais, 
         linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais,
         imagem: mainImageUrl, galeria: galeriaUrls,
-        programas_pdf: programasDocs, regras_termos_en, politica_cancelamento_en,
+        programas_pdf: programasDocs, regras_termos_en: formData.regras_termos, politica_cancelamento_en: formData.politica_cancelamento,
         latitude: mapPreview.lat, longitude: mapPreview.lon,
-        turnos, turnos_en, organizador_id: session.user.id,
-        nome_en, categoria_en, local_en, idade_en, descricao_en,
-        alimentacao_en, alojamento_en, seguro_en, Distrito_en,
+        turnos, turnos_en: turnos, organizador_id: session.user.id,
+        nome_en: formData.nome, categoria_en: formData.categoria, local_en: formData.local, idade_en: stringIdadesCompleta, descricao_en: formData.descricao,
+        alimentacao_en: formData.alimentacao, alojamento_en: formData.alojamento, seguro_en: formData.seguro, Distrito_en: formData.Distrito,
         perguntas_customizadas: perguntasValidas,
-        perguntas_customizadas_en: perguntasEn
-      }]);
+        perguntas_customizadas_en: perguntasValidas
+      }]).select("id").single();
 
-      if (error) throw error;
+      if (insertError) throw insertError;
+
+      // DISPARO DA TRADUÇÃO EM SEGUNDO PLANO (Não-bloqueante / Fire and Forget)
+      fetch(`/api/translate-camp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: novoCampoInserido.id })
+      }).catch(err => console.error("Erro assíncrono de tradução:", err));
+
+      // Redirecionamento instantâneo do utilizador
       router.push(`/${lang}/admin/campos`);
-    } catch (error: any) { alert("Erro: " + error.message); } finally { setLoading(false); setStatusText(""); }
+    } catch (error: any) { 
+      alert("Erro: " + error.message); 
+      setLoading(false);
+    } finally { 
+      setStatusText(""); 
+    }
   };
 
   return (

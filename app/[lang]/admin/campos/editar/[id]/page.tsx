@@ -101,7 +101,9 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     descricao: "", regras_termos: "",
     extra_alimentacao: 0, tipo_cobranca_alimentacao: "Por Turno", extra_alojamento: 0, tipo_cobranca_alojamento: "Por Turno",
     extra_prolongamento: 0, tipo_cobranca_prolongamento: "Por Turno", extra_transporte: 0, tipo_cobranca_transporte: "Por Turno",
-    contrato_parceiro_url: ""
+    contrato_parceiro_url: "",
+    imagem: "",
+    galeria: [] as string[]
   });
 
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
@@ -114,7 +116,9 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         setFormData({
           ...data,
           contrato_parceiro_url: data.contrato_parceiro_url || "",
-          politica_cancelamento: data.politica_cancelamento || "Moderada (Reembolso a 50% até 15 dias antes)"
+          politica_cancelamento: data.politica_cancelamento || "Moderada (Reembolso a 50% até 15 dias antes)",
+          imagem: data.imagem || "",
+          galeria: data.galeria || []
         });
         
         if (data.idade) {
@@ -228,15 +232,6 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     setAddressSuggestions([]);
   };
 
-  const traduzirParaIngles = async (texto: string) => {
-    if (!texto) return "";
-    try {
-      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=pt|en`);
-      const data = await res.json();
-      return data.responseData.translatedText;
-    } catch (e) { return texto; }
-  };
-
   const handleUpdate = async (e?: React.FormEvent, isAutoSave = false) => {
     if (e) e.preventDefault();
     
@@ -255,26 +250,25 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     else setAutoSaveStatus('saving');
 
     try {
-      if (!isAutoSave) setStatusText(isEn ? "Processing images..." : "A processar fotografias...");
-      
-      const uploadedImages = await Promise.all(images.map(async (img) => {
-        if (!img.file) return { url: img.url, isMain: img.isMain };
-        const compressedFile = await imageCompression(img.file, { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true });
-        const fileName = `${Date.now()}-${sanitizeFileName(compressedFile.name)}`;
-        const { error } = await supabase.storage.from('campos-imagens').upload(fileName, compressedFile);
-        if (error) throw error;
-        const { data: publicUrlData } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
-        return { url: publicUrlData.publicUrl, isMain: img.isMain };
-      }));
+      let mainImageUrl: string = formData.imagem;
+      let galeriaUrls: string[] = formData.galeria || [];
 
-      if (images.some(img => img.file)) {
-        setImages(uploadedImages.map(img => ({ url: img.url, preview: img.url || '', isMain: img.isMain })));
+      if (!isAutoSave) {
+        setStatusText(isEn ? "Processing images..." : "A processar fotografias...");
+        const uploadedImages = await Promise.all(images.map(async (img) => {
+          if (!img.file) return { url: img.url || "", isMain: img.isMain };
+          const compressedFile = await imageCompression(img.file, { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true });
+          const fileName = `${Date.now()}-${sanitizeFileName(compressedFile.name)}`;
+          const { error } = await supabase.storage.from('campos-imagens').upload(fileName, compressedFile);
+          if (error) throw error;
+          const { data: publicUrlData } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
+          return { url: publicUrlData.publicUrl, isMain: img.isMain };
+        }));
+
+        mainImageUrl = uploadedImages.find(i => i.isMain)?.url || uploadedImages[0]?.url || "";
+        galeriaUrls = uploadedImages.filter(i => !i.isMain).map(i => i.url || "").filter(url => url !== "");
       }
 
-      const mainImageUrl = uploadedImages.find(i => i.isMain)?.url || uploadedImages[0]?.url;
-      const galeriaUrls = uploadedImages.filter(i => !i.isMain).map(i => i.url);
-
-      if (!isAutoSave) setStatusText(isEn ? "Uploading documents..." : "A processar documentos...");
       const novosDocs = await Promise.all(documentos.map(async (doc) => {
         const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`;
         const { error } = await supabase.storage.from('campos-documentos').upload(fileName, doc);
@@ -283,57 +277,46 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
         return { nome: doc.name, url: publicUrlData.publicUrl };
       }));
 
+      const programasDocsFinais = [...documentosExistentes, ...novosDocs];
       if (novosDocs.length > 0) {
-        setDocumentosExistentes(prev => [...prev, ...novosDocs]);
+        setDocumentosExistentes(programasDocsFinais);
         setDocumentos([]);
       }
-      const programasDocsFinais = [...documentosExistentes, ...novosDocs];
 
-      if (!isAutoSave) setStatusText(isEn ? "Translating data..." : "A traduzir dados...");
       const linguasFinais = getLinguasString();
-
       const perguntasValidas = perguntasCustomizadas.filter(p => p.trim() !== "");
-      const perguntasEn = await Promise.all(perguntasValidas.map(p => traduzirParaIngles(p)));
 
-      const [
-        nome_en, categoria_en, local_en, idade_en, descricao_en,
-        alimentacao_en, alojamento_en, seguro_en, Distrito_en, regras_termos_en, politica_cancelamento_en
-      ] = await Promise.all([
-        traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
-        traduzirParaIngles(stringIdadesCompleta), traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
-        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.Distrito),
-        traduzirParaIngles(formData.regras_termos), traduzirParaIngles(formData.politica_cancelamento)
-      ]);
-
-      const turnos_en = await Promise.all(turnos.map(async (t) => ({ ...t, nome: await traduzirParaIngles(t.nome) })));
       const precoGlobal = turnos[0]?.preco || 0;
       const formatarDataStr = (d: string) => d ? new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) : '';
       const textoDatas = turnos.map(t => `${formatarDataStr(t.data_inicio)} a ${formatarDataStr(t.data_fim)}`).join(", ");
-      const textoDatasEn = turnos.map(t => `${formatarDataStr(t.data_inicio)} to ${formatarDataStr(t.data_fim)}`).join(", ");
       const totalVagasCalculado = turnos.reduce((acc, curr) => acc + (Number(curr.vagas) || 0), 0);
 
-      if (!isAutoSave) setStatusText(isEn ? "Saving..." : "A guardar alterações...");
-      
       const { error } = await supabase.from("campos").update({
         nome: formData.nome, categoria: formData.categoria, idade: stringIdadesCompleta, local: formData.local, Distrito: formData.Distrito,
         vagas_totais: totalVagasCalculado, racio_monitores: formData.racio_monitores, duracao_dias: formData.duracao_dias,
-        alimentacao: formData.alimentacao, alojamento: formData.alojamento, seguro: formData.seguro, politica_cancelamento: formData.politica_cancelamento, politica_cancelamento_en,
+        alimentacao: formData.alimentacao, alojamento: formData.alojamento, seguro: formData.seguro, politica_cancelamento: formData.politica_cancelamento,
         descricao: formData.descricao, regras_termos: formData.regras_termos,
         extra_alimentacao: formData.extra_alimentacao, extra_alojamento: formData.extra_alojamento,
         extra_prolongamento: formData.extra_prolongamento, extra_transporte: formData.extra_transporte,
-        preco: precoGlobal, datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatasEn, pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
-        linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais, imagem: mainImageUrl, galeria: galeriaUrls,
-        programas_pdf: programasDocsFinais, regras_termos_en, latitude: mapPreview.lat, longitude: mapPreview.lon,
-        turnos, turnos_en, nome_en, categoria_en, local_en, idade_en, descricao_en, alimentacao_en, alojamento_en, seguro_en, Distrito_en,
-        perguntas_customizadas: perguntasValidas, perguntas_customizadas_en: perguntasEn
+        preco: precoGlobal, datas_disponiveis: textoDatas, pais, linguas_faladas: linguasFinais, imagem: mainImageUrl, galeria: galeriaUrls,
+        programas_pdf: programasDocsFinais, latitude: mapPreview.lat, longitude: mapPreview.lon, turnos,
+        perguntas_customizadas: perguntasValidas
       }).eq('id', id);
 
       if (error) throw error;
       
       if (!isAutoSave) {
+        fetch(`/api/translate-camp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id })
+        }).catch(err => console.error(err));
+
         alert(isEn ? "Camp updated successfully!" : "Campo atualizado com sucesso!");
         router.push(`/${lang}/admin/campos`);
-      } else { setAutoSaveStatus('saved'); }
+      } else { 
+        setAutoSaveStatus('saved'); 
+      }
     } catch (error: any) { 
       if (!isAutoSave) alert("Erro: " + error.message); 
       else setAutoSaveStatus('error');
@@ -346,9 +329,9 @@ export default function EditarCampo({ params }: { params: Promise<{ lang: string
     if (loading) return; 
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     setAutoSaveStatus('pending');
-    const timer = setTimeout(() => { handleUpdate(undefined, true); }, 3000);
+    const timer = setTimeout(() => { handleUpdate(undefined, true); }, 5000);
     return () => clearTimeout(timer);
-  }, [formData, turnos, linguas, faixasSelecionadas, mapPreview, pais, idadeManual, images, documentos, documentosExistentes, perguntasCustomizadas]);
+  }, [formData.nome, formData.categoria, formData.local, formData.Distrito, formData.descricao, formData.regras_termos, turnos, linguas, faixasSelecionadas, mapPreview, pais, idadeManual, perguntasCustomizadas]);
 
   if (loading) return <div style={{ padding: '4rem', textAlign: 'center' }}>{isEn ? 'Loading...' : 'A carregar dados do campo...'}</div>;
 
