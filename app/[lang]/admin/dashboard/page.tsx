@@ -31,12 +31,20 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
 
       const userId = session.user.id;
 
-      // 1. Busca Perfil (Correção da coluna empresa_nome e fallback para primeiro nome)
+      // 1. Busca Perfil (Total Prioridade ao Nome da Empresa)
       const { data: perfil } = await supabase.from('perfis').select('empresa_nome, nome_completo').eq('id', userId).single();
       
       if (perfil) {
-        const primeiroNome = perfil.nome_completo ? perfil.nome_completo.split(' ')[0] : null;
-        setNomeEmpresa(perfil.empresa_nome || primeiroNome || (isEn ? "Organizer" : "Organizador"));
+        // Se empresa_nome tem texto e não está vazio, é a prioridade #1
+        if (perfil.empresa_nome && perfil.empresa_nome.trim() !== "") {
+          setNomeEmpresa(perfil.empresa_nome);
+        } else if (perfil.nome_completo && perfil.nome_completo.trim() !== "") {
+          // Fallback #2: Primeiro nome da pessoa
+          setNomeEmpresa(perfil.nome_completo.split(' ')[0]);
+        } else {
+          // Fallback #3: Desconhecido
+          setNomeEmpresa(isEn ? "Organizer" : "Organizador");
+        }
       } else {
         setNomeEmpresa(isEn ? "Organizer" : "Organizador");
       }
