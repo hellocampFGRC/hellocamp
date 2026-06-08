@@ -19,7 +19,8 @@ export async function POST(req: Request) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.hellocamp.pt';
 
     const sessionData: any = {
-      payment_method_types: ['card', 'mbway'],
+      // A linha payment_method_types foi REMOVIDA. 
+      // A Stripe vai ler as suas configurações do Dashboard automaticamente!
       customer_email: userEmail,
       line_items: [
         {
