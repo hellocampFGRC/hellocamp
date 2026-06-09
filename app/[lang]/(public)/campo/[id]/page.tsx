@@ -336,10 +336,12 @@ export default async function DetalhesDoCampo({
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
                   <span className="text-5xl mb-4 block">✅</span>
                   <h4 className="text-xl font-black text-emerald-800 mb-2">{isEn ? 'Message Sent Successfully!' : 'Mensagem Enviada com Sucesso!'}</h4>
-                  <p className="text-emerald-700 font-medium">{isEn ? 'Our team will review your question and get back to you shortly.' : 'A nossa equipa ou o organizador irá analisar a sua dúvida e responder brevemente.'}</p>
+                  <p className="text-emerald-700 font-medium">{isEn ? 'Our team will review your question and get back to you shortly.' : 'O organizador do campo (ou a nossa equipa) irá analisar a sua dúvida e responder brevemente.'}</p>
                 </div>
               ) : (
                 <form action="/api/enviar-duvida" method="POST" className="flex flex-col gap-6">
+                  {/* IMPORTANTE: Passamos o organizador_id em vez de o deixar adivinhar */}
+                  <input type="hidden" name="organizador_id" value={campo.organizador_id || ''} />
                   <input type="hidden" name="_subject" value={`${isEn ? 'Question regarding HelloCamp:' : 'Dúvida sobre o campo HelloCamp:'} ${nomeCampo}`} />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
