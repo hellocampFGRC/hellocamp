@@ -172,8 +172,9 @@ export default function PaginaPesquisa({
             <p className="text-base text-slate-500 font-medium max-w-md mx-auto">
               {isEn ? 'Try adjusting your filters or searching for something else.' : 'Tente pesquisar por uma palavra mais genérica ou limpar alguns filtros.'}
             </p>
+            {/* CORREÇÃO DO BOTÃO AQUI */}
             <Link href={`/${lang}/pesquisa`} className="mt-2 text-emerald-600 font-bold hover:text-emerald-700 transition-colors">
-              {isEn ? 'Clear all filters &rarr;' : 'Ver todos os campos &rarr;'}
+              {isEn ? 'Clear filters and try again &rarr;' : 'Limpar filtros e tentar de novo &rarr;'}
             </Link>
           </div>
         ) : (

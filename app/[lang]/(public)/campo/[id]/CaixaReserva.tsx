@@ -150,9 +150,19 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
         <div className="mb-8 border-t border-slate-100 pt-6">
           <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-3">{isEn ? 'Number of Children' : 'Quantidade de Crianças'}</label>
           <div className="flex items-center gap-4">
-            <button onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-10 h-10 rounded-full border border-slate-200 bg-slate-50 text-slate-600 font-black text-lg hover:bg-slate-100 transition-colors shadow-sm flex items-center justify-center">-</button>
+            <button 
+              type="button" 
+              onClick={(e) => { e.preventDefault(); setQuantidade(q => Math.max(1, q - 1)); }} 
+              className="w-10 h-10 rounded-full border border-slate-200 bg-slate-50 text-slate-600 font-black text-lg hover:bg-slate-100 transition-colors shadow-sm flex items-center justify-center"
+            >-</button>
+            
             <span className="text-2xl font-black text-slate-900 w-8 text-center">{quantidade}</span>
-            <button onClick={() => setQuantidade(q => Math.min(vagasTurno, q + 1))} className="w-10 h-10 rounded-full border border-slate-200 bg-slate-50 text-slate-600 font-black text-lg hover:bg-slate-100 transition-colors shadow-sm flex items-center justify-center">+</button>
+            
+            <button 
+              type="button" 
+              onClick={(e) => { e.preventDefault(); setQuantidade(q => Math.min(vagasTurno || 99, q + 1)); }} 
+              className="w-10 h-10 rounded-full border border-slate-200 bg-slate-50 text-slate-600 font-black text-lg hover:bg-slate-100 transition-colors shadow-sm flex items-center justify-center"
+            >+</button>
           </div>
         </div>
       )}
@@ -175,7 +185,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
           {isEn ? 'Join Waitlist' : 'Juntar à Lista de Espera'}
         </a>
       ) : (
-        <button onClick={handleReservar} disabled={disabledReserva} className={`w-full py-4 rounded-xl text-lg font-black transition-all ${disabledReserva ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-[#EBA914] hover:bg-amber-500 text-white shadow-lg shadow-amber-500/30 hover:-translate-y-1'}`}>
+        <button type="button" onClick={handleReservar} disabled={disabledReserva} className={`w-full py-4 rounded-xl text-lg font-black transition-all ${disabledReserva ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-[#EBA914] hover:bg-amber-500 text-white shadow-lg shadow-amber-500/30 hover:-translate-y-1'}`}>
           {isEn ? 'Book Spot Now' : 'Reservar Vaga Agora'}
         </button>
       )}
