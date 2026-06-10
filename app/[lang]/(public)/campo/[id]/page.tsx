@@ -6,7 +6,7 @@ import BotaoFavorito from "../../components/BotaoFavorito";
 import BotaoPartilha from "../../components/BotaoPartilha";
 import { getDictionary } from "@/lib/getDictionary";
 
-// 1. CHEF DO SEO PARA A PÁGINA DO CAMPO
+// 1. CHEFE DO SEO PARA A PÁGINA DO CAMPO
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; id: string }> }): Promise<Metadata> {
   const { lang, id } = await params;
   const isEn = lang === 'en';
@@ -135,6 +135,7 @@ export default async function DetalhesDoCampo({
 
   return (
     <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24">
+      {/* SCRIPTS INVISÍVEIS PARA SEO */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }} />
 
@@ -200,6 +201,7 @@ export default async function DetalhesDoCampo({
               <p className="leading-relaxed text-slate-600 text-base whitespace-pre-wrap font-medium mb-0">{descCampo}</p>
               
               {campo.organizador_id && parceiroInfo && (
+                /* CORREÇÃO: Redireciona para a rota pública de luxo /parceiro/ e não para /admin/ */
                 <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="mt-8 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors no-underline group">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm flex-shrink-0">
@@ -327,7 +329,7 @@ export default async function DetalhesDoCampo({
               )}
             </div>
 
-            {/* FORMULÁRIO DE CONTACTO (AGORA COM RESEND) */}
+            {/* FORMULÁRIO DE CONTACTO (VIA RESEND) */}
             <div id="duvidas" className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10 scroll-mt-24">
               <h3 className="text-xl font-bold text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
               <p className="text-sm text-slate-500 font-medium mb-8">{dict.detalhe.duvidas_sub}</p>
@@ -336,11 +338,10 @@ export default async function DetalhesDoCampo({
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
                   <span className="text-5xl mb-4 block">✅</span>
                   <h4 className="text-xl font-black text-emerald-800 mb-2">{isEn ? 'Message Sent Successfully!' : 'Mensagem Enviada com Sucesso!'}</h4>
-                  <p className="text-emerald-700 font-medium">{isEn ? 'Our team will review your question and get back to you shortly.' : 'O organizador do campo (ou a nossa equipa) irá analisar a sua dúvida e responder brevemente.'}</p>
+                  <p className="text-emerald-700 font-medium">{isEn ? 'The camp organizer will review your question and get back to you shortly.' : 'O organizador do campo irá analisar a sua dúvida e responder diretamente para o seu email brevemente.'}</p>
                 </div>
               ) : (
                 <form action="/api/enviar-duvida" method="POST" className="flex flex-col gap-6">
-                  {/* IMPORTANTE: Passamos o organizador_id em vez de o deixar adivinhar */}
                   <input type="hidden" name="organizador_id" value={campo.organizador_id || ''} />
                   <input type="hidden" name="_subject" value={`${isEn ? 'Question regarding HelloCamp:' : 'Dúvida sobre o campo HelloCamp:'} ${nomeCampo}`} />
 
@@ -385,7 +386,7 @@ export default async function DetalhesDoCampo({
 
           </div>
 
-          {/* SIDEBAR COM CAIXA DE RESERVA */}
+          {/* SIDEBAR COM CAIXA DE RESERVA DINÂMICA */}
           <div className="w-full lg:w-[400px] flex-shrink-0 lg:sticky lg:top-8 relative z-30">
             <CaixaReserva campo={campo} lang={lang} dict={dict} />
           </div>

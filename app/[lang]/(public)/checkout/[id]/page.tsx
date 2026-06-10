@@ -97,7 +97,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     fetchDados();
   }, [id, lang, router]);
 
-  // Cálculos Financeiros
+  // Cálculos Financeiros Base
   const noites = Math.max(1, diasEfetivos - 1);
   const valAlimentacao = extAlimentacao ? (Number(campo?.extra_alimentacao) || 0) * diasEfetivos : 0;
   const valAlojamento = extAlojamento ? (Number(campo?.extra_alojamento) || 0) * noites : 0;
@@ -112,6 +112,11 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   }
 
   const precoFinalTotal = (precoBaseUnitario + totalExtrasPorCrianca) * quantidade;
+
+  // Lógica de Fracionamento de Pagamento (50% ou 100%)
+  const isPagamentoFracionado = campo?.tipo_pagamento === '50_sinal';
+  const valorACobrarAgora = isPagamentoFracionado ? (precoFinalTotal / 2) : precoFinalTotal;
+  const valorPendente = isPagamentoFracionado ? (precoFinalTotal / 2) : 0;
 
   // Lógica de Participantes
   const openNewChildModal = (index: number) => {
@@ -211,11 +216,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reservasIds: idsCriados,
-          totalAmount: precoFinalTotal,
+          totalAmount: precoFinalTotal, // Passamos o total, o backend encarrega-se da divisão
           userEmail: user.email,
           lang: lang,
           campoNome: campo.nome,
-          stripeAccountId: organizador?.stripe_account_id
+          stripeAccountId: organizador?.stripe_account_id,
+          tipoPagamento: campo?.tipo_pagamento // Enviamos a regra escolhida pelo organizador
         })
       });
 
@@ -475,15 +481,36 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
               })}
             </section>
 
-            {/* 2. INFORMAÇÃO DE PAGAMENTO */}
+            {/* 2. INFORMAÇÃO DE PAGAMENTO & REGRAS */}
             <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{isEn ? 'Secure Payment' : 'Pagamento Seguro'}</h2>
               
+              {/* LÓGICA DE AVISOS CLAROS: 50% SINAL OU 100% TOTAL */}
+              {isPagamentoFracionado ? (
+                <div style={{ padding: '1.5rem', backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '1rem', marginBottom: '1.5rem' }}>
+                  <p style={{ fontWeight: '900', color: '#1e3a8a', margin: '0 0 0.5rem 0' }}>{isEn ? 'Payment Plan (50% Deposit)' : 'Facilidade de Pagamento (Sinal de 50%)'}</p>
+                  <p style={{ fontSize: '14px', color: '#1e40af', margin: 0, lineHeight: 1.5 }}>
+                    {isEn 
+                      ? `To secure your spot today, you only pay a deposit of ${valorACobrarAgora.toFixed(2)}€. The remaining balance (${valorPendente.toFixed(2)}€) will be automatically charged 1 week before the camp starts.` 
+                      : `Para garantir a sua vaga hoje, paga apenas um sinal de ${valorACobrarAgora.toFixed(2)}€. O valor remanescente (${valorPendente.toFixed(2)}€) será cobrado automaticamente 1 semana antes do início do programa.`}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ padding: '1.5rem', backgroundColor: '#f0fdf4', border: '1px solid #6ee7b7', borderRadius: '1rem', marginBottom: '1.5rem' }}>
+                  <p style={{ fontWeight: '900', color: '#064e3b', margin: '0 0 0.5rem 0' }}>{isEn ? 'Full Payment' : 'Pagamento a Pronto (100%)'}</p>
+                  <p style={{ fontSize: '14px', color: '#065f46', margin: 0, lineHeight: 1.5 }}>
+                    {isEn 
+                      ? `This camp requires full payment upfront to secure your spot. The total amount is ${valorACobrarAgora.toFixed(2)}€.` 
+                      : `Este programa requer o pagamento da totalidade no ato da reserva. O valor a pagar agora é de ${valorACobrarAgora.toFixed(2)}€.`}
+                  </p>
+                </div>
+              )}
+
               {organizador?.modelo_pagamento === 'parceiro_recebe' ? (
-                <div style={{ padding: '1.5rem', backgroundColor: '#f0fdf4', border: '1px solid #059669', borderRadius: '1rem' }}>
-                  <p style={{ fontWeight: 'bold', color: '#064e3b', marginBottom: '0.5rem' }}>Transferência Bancária Direta (Parceiro)</p>
-                  <p style={{ fontSize: '14px', color: '#334155', margin: 0 }}>Entidade: {organizador.empresa_nome}</p>
-                  <p style={{ fontSize: '14px', color: '#334155', margin: 0 }}>IBAN: {organizador.iban}</p>
+                <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '1rem' }}>
+                  <p style={{ fontWeight: 'bold', color: '#334155', marginBottom: '0.5rem' }}>Transferência Bancária Direta (Parceiro)</p>
+                  <p style={{ fontSize: '14px', color: '#475569', margin: 0 }}>Entidade: {organizador.empresa_nome}</p>
+                  <p style={{ fontSize: '14px', color: '#475569', margin: 0 }}>IBAN: {organizador.iban}</p>
                   <p style={{ fontSize: '12px', color: '#64748b', marginTop: '1rem' }}>* A sua reserva ficará pendente e o seu lugar fica temporariamente bloqueado. O parceiro irá processar o seu comprovativo e validar a inscrição final.</p>
                 </div>
               ) : (
@@ -501,7 +528,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
             </section>
 
             <button type="submit" disabled={processingStripe} style={{ width: '100%', padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontSize: '1.125rem', fontWeight: '900', borderRadius: '1rem', border: 'none', cursor: processingStripe ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.3)', transition: 'transform 0.2s' }}>
-              {isEn ? `Confirm and Pay ${precoFinalTotal}€` : `Confirmar e Pagar ${precoFinalTotal}€`}
+              {isEn ? `Confirm and Pay ${valorACobrarAgora.toFixed(2)}€` : `Confirmar e Pagar ${valorACobrarAgora.toFixed(2)}€`} {isPagamentoFracionado ? '(Sinal)' : ''}
             </button>
           </form>
         </div>
@@ -523,22 +550,35 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                 <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>{diasEfetivos} {diasEfetivos === 1 ? 'Dia' : 'Dias'}</p>
               </div>
               <div>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Preço Programa (x{quantidade})</span>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>{precoBaseUnitario * quantidade}€</p>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Preço Base (x{quantidade})</span>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>{(precoBaseUnitario * quantidade).toFixed(2)}€</p>
               </div>
               
               {totalExtrasPorCrianca > 0 && (
                 <div>
                   <span style={{ fontSize: '12px', color: '#059669', fontWeight: 'bold', textTransform: 'uppercase' }}>+ Extras Selecionados</span>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>{totalExtrasPorCrianca * quantidade}€</p>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>{(totalExtrasPorCrianca * quantidade).toFixed(2)}€</p>
                 </div>
               )}
             </div>
 
+            {/* SEPARADOR FINANCEIRO */}
             <div style={{ borderTop: '2px dashed #e2e8f0', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#0f172a' }}>Total a Pagar</span>
-              <span style={{ fontSize: '2rem', fontWeight: '900', color: '#059669' }}>{precoFinalTotal}€</span>
+              <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#0f172a' }}>{isEn ? 'Total Cost' : 'Custo Total'}</span>
+              <span style={{ fontSize: '1.125rem', fontWeight: '900', color: '#0f172a' }}>{precoFinalTotal.toFixed(2)}€</span>
             </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', backgroundColor: '#f0fdf4', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid #bbf7d0' }}>
+              <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#064e3b' }}>{isEn ? 'To Pay Now' : 'A Pagar Agora'}</span>
+              <span style={{ fontSize: '1.5rem', fontWeight: '900', color: '#059669' }}>{valorACobrarAgora.toFixed(2)}€</span>
+            </div>
+
+            {isPagamentoFracionado && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', padding: '0.5rem 1rem' }}>
+                <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#64748b' }}>{isEn ? 'Pending Balance' : 'Faltará Pagar'}</span>
+                <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#eab308' }}>{valorPendente.toFixed(2)}€</span>
+              </div>
+            )}
           </div>
         </aside>
 
