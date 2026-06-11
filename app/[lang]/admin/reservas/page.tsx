@@ -20,43 +20,36 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const { data: camposData } = await supabase
-        .from('campos')
-        .select(`
-          id, nome, nome_en, vagas_totais, turnos, contrato_parceiro_url,
-          reservas (
-            id, turno_nome, valor_total, created_at, extras_escolhidos, status_pagamento, status_reembolso, respostas_customizadas, nome_encarregado, email_encarregado, telefone_encarregado, nif_encarregado,
-            criancas (
-              nome, nif, data_nascimento, sexo, restricoes_alimentares,
-              tipo_sanguineo, doencas_cronicas, medicacao_regular, limitacoes_fisicas,
-              sabe_nadar, sabe_andar_bicicleta, tamanho_tshirt
-            ),
-            perfis:cliente_id (
-              nome_completo, email, telefone, nif, contacto_emergencia, pessoas_autorizadas_recolha
-            )
-          )
-        `)
-        .eq('organizador_id', session.user.id);
+      // 1. Busca Plana e Segura
+      const { data: camposData } = await supabase.from('campos').select('id, nome, nome_en, vagas_totais, turnos, contrato_parceiro_url').eq('organizador_id', session.user.id);
+      const { data: reservasData } = await supabase.from('reservas').select('*').eq('organizador_id', session.user.id);
+      const { data: perfisData } = await supabase.from('perfis').select('id, nome_completo, email, telefone, nif, contacto_emergencia, pessoas_autorizadas_recolha');
+      const { data: criancasData } = await supabase.from('criancas').select('*');
 
       if (camposData) {
         const listaGrupos = camposData.map((c: any) => {
           const dataOrdenacao = c.turnos && c.turnos[0]?.data_inicio ? c.turnos[0].data_inicio : '9999-12-31';
           
-          const inscritos = (c.reservas || []).map((reserva: any) => {
+          // Filtra as reservas que pertencem a este campo específico
+          const reservasDesteCampo = (reservasData || []).filter(r => r.campo_id === c.id);
+
+          const inscritos = reservasDesteCampo.map((reserva: any) => {
             const dataReserva = new Date(reserva.created_at).getTime();
             const agora = new Date().getTime();
             const minutosPassados = (agora - dataReserva) / (1000 * 60);
 
             let statusCalculado = reserva.status_pagamento || 'Pendente';
             
-            // "Reembolsado" reflete o cancelamento do lado B2B
+            // Tratamento explícito dos estados
             if (statusCalculado === 'Reembolsado') {
                statusCalculado = 'Cancelada';
             } else if (statusCalculado === 'Pendente' && minutosPassados > 15) {
                statusCalculado = 'Abandonada';
             }
 
-            const pai = Array.isArray(reserva.perfis) ? reserva.perfis[0] : reserva.perfis;
+            // CORREÇÃO TYPESCRIPT: Declarar como 'any' para aceitar fallback vazio
+            const pai: any = perfisData?.find(p => p.id === reserva.cliente_id) || {};
+            const crianca: any = criancasData?.find(cr => cr.id === reserva.crianca_id) || {};
 
             return {
               reservaId: reserva.id,
@@ -64,16 +57,16 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
               valor: reserva.valor_total,
               dataReserva: reserva.created_at,
               statusPagamento: statusCalculado,
-              extras: reserva.extras_escolhidos,
+              extras: reserva.extras_escolhidos || {},
               respostasCustomizadas: reserva.respostas_customizadas || {},
-              crianca: Array.isArray(reserva.criancas) ? reserva.criancas[0] : reserva.criancas,
+              crianca: crianca,
               paiEncarregado: {
-                nome: reserva.nome_encarregado || pai?.nome_completo || 'N/D',
-                email: reserva.email_encarregado || pai?.email || 'N/D',
-                telefone: reserva.telefone_encarregado || pai?.telefone || 'N/D',
-                nif: reserva.nif_encarregado || pai?.nif || 'N/D',
-                emergencia: pai?.contacto_emergencia || 'N/D',
-                recolha: pai?.pessoas_autorizadas_recolha || 'Apenas o Encarregado'
+                nome: reserva.nome_encarregado || pai.nome_completo || 'N/D',
+                email: reserva.email_encarregado || pai.email || 'N/D',
+                telefone: reserva.telefone_encarregado || pai.telefone || 'N/D',
+                nif: reserva.nif_encarregado || pai.nif || 'N/D',
+                emergencia: pai.contacto_emergencia || 'Não preenchido',
+                recolha: pai.pessoas_autorizadas_recolha || 'Apenas o Encarregado'
               },
               campNome: isEn && c.nome_en ? c.nome_en : c.nome
             };
@@ -119,6 +112,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   let turnosDoCampoSelecionado: any[] = [];
   let campoNomeFicheiro = "global";
 
+  // Lógica de Filtros (Dropdowns)
   if (filtroCampoId === 'todos') {
     campoGrupos.forEach(g => {
       vagasTotaisExibidas += g.vagas_totais;
@@ -245,7 +239,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
           <div style={{ overflowX: 'auto' }}>
             {inscritosRows.length === 0 ? (
               <div style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8', fontSize: '14px', fontWeight: 'bold' }}>
-                Não existem inscrições registadas.
+                Não existem inscrições registadas no sistema.
               </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
@@ -382,11 +376,11 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     </div>
                     <div>
                       <div style={{ padding: '1rem', backgroundColor: '#fef2f2', borderRadius: '0.5rem', border: '1px solid #fecaca', marginBottom: '1rem' }}>
-                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#e11d48', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Contacto de Emergência (Em caso de falha do pai)</span>
+                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#e11d48', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Contacto de Emergência (Alternativo)</span>
                         <span style={{ fontSize: '14px', color: '#9f1239', fontWeight: 'bold' }}>{reservaSelecionada.paiEncarregado?.emergencia}</span>
                       </div>
                       <div style={{ padding: '1rem', backgroundColor: '#f0fdf4', borderRadius: '0.5rem', border: '1px solid #bbf7d0' }}>
-                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Identificação de quem levanta a criança</span>
+                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Pessoas Autorizadas a Levantar a Criança</span>
                         <span style={{ fontSize: '13px', color: '#064e3b', fontWeight: '600', whiteSpace: 'pre-wrap' }}>{reservaSelecionada.paiEncarregado?.recolha}</span>
                       </div>
                     </div>
