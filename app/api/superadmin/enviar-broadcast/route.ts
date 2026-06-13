@@ -84,7 +84,6 @@ export async function POST(req: Request) {
                         
                         <!-- MENSAGEM -->
                         <p style="font-size: 16px; color: #475569; line-height: 1.6; text-align: left; margin: 0 0 30px 0;">
-                          Olá ${dest.nome},<br/><br/>
                           ${mensagemFormatada}
                         </p>
                         
