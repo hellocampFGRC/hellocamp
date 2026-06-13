@@ -1,0 +1,109 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+
+// 1. Inicializa o Supabase com Service Role (Bypass ao RLS para poder editar as tabelas administrativas)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// 2. Inicializa o Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { campoId, status, parceiroEmail, nomeCampo } = body;
+
+    // Validação básica
+    if (!campoId || !status || !parceiroEmail) {
+      return NextResponse.json({ error: 'Dados insuficientes fornecidos (campoId, status ou parceiroEmail em falta).' }, { status: 400 });
+    }
+
+    // ==========================================
+    // FLUXO 1: CONTRATO REJEITADO
+    // ==========================================
+    if (status === 'Rejeitado') {
+      
+      const { error: updateError } = await supabaseAdmin
+        .from('campos')
+        .update({ status_aprovacao: 'Rejeitado' })
+        .eq('id', campoId);
+
+      if (updateError) throw updateError;
+
+      // Dispara o email de rejeição via Resend
+      await resend.emails.send({
+        from: 'HelloCamp Parceiros <parceiros@hellocamp.pt>', // Substitua pelo seu email verificado no Resend
+        to: parceiroEmail,
+        subject: `[HelloCamp] Revisão do Contrato: ${nomeCampo}`,
+        html: `
+          <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333;">
+            <h2>Olá!</h2>
+            <p>Revimos o contrato submetido para o programa <strong>${nomeCampo}</strong>, mas encontrámos algumas inconformidades.</p>
+            <p>Por favor, aceda ao seu Dashboard de Parceiro para verificar os dados (nome da empresa, NIF ou assinatura) e submeta novamente o documento corrigido.</p>
+            <br/>
+            <p>A Equipa HelloCamp</p>
+          </div>
+        `
+      });
+
+      return NextResponse.json({ success: true, message: 'Contrato rejeitado e parceiro notificado.' });
+    }
+
+    // ==========================================
+    // FLUXO 2: CONTRATO APROVADO
+    // ==========================================
+    if (status === 'Aprovado') {
+      
+      // NOTA: Para gerar o PDF real de forma robusta no futuro, pode conectar aqui uma API como a API2PDF 
+      // ou gerar no cliente antes de enviar. Por enquanto, assumimos a ativação lógica do contrato.
+      const urlDocumentoOficial = `https://hellocamp.pt/contratos/aprovado_${campoId}.pdf`;
+
+      // Atualiza a tabela do campo
+      const { error: updateError } = await supabaseAdmin
+        .from('campos')
+        .update({
+          status_aprovacao: 'Aprovado',
+          ativo: true, // Opcional: Torna o campo visível aos pais
+          contrato_parceiro_url: urlDocumentoOficial // Destranca a notificação no Dashboard do Parceiro
+        })
+        .eq('id', campoId);
+
+      if (updateError) throw updateError;
+
+      // Dispara o email de aprovação via Resend
+      await resend.emails.send({
+        from: 'HelloCamp Parceiros <parceiros@hellocamp.pt>', // Substitua pelo seu email verificado no Resend
+        to: parceiroEmail,
+        subject: `[HelloCamp] Contrato Aprovado - O seu campo está online! 🎉`,
+        html: `
+          <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333;">
+            <div style="background-color: #0f172a; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+              <h1 style="color: white; margin: 0;">Bem-vindo à HelloCamp!</h1>
+            </div>
+            <div style="padding: 20px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+              <p>O contrato para o programa <strong>${nomeCampo}</strong> foi revisto e validado com sucesso pela nossa equipa legal.</p>
+              <p>O seu campo já se encontra ativo na plataforma e pronto a receber inscrições de encarregados de educação.</p>
+              <br/>
+              <a href="https://hellocamp.pt/admin/dashboard" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                Aceder ao Dashboard
+              </a>
+              <br/><br/>
+              <p>Boas reservas,<br/>A Equipa HelloCamp</p>
+            </div>
+          </div>
+        `
+      });
+
+      return NextResponse.json({ success: true, message: 'Contrato aprovado, campo ativado e email enviado.' });
+    }
+
+    return NextResponse.json({ error: 'Status de aprovação inválido.' }, { status: 400 });
+
+  } catch (error: any) {
+    console.error('Erro na API de aprovação de contrato:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
