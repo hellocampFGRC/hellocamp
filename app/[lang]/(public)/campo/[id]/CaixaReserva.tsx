@@ -8,6 +8,10 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   const router = useRouter();
   const isEn = lang === 'en';
 
+  // Verifica qual a modalidade escolhida no contrato do parceiro
+  const modalidadeReserva = campo?.contrato_dados?.modalidadeReserva || 'direta';
+  const isEmailMode = modalidadeReserva === 'email';
+
   const [quantidade, setQuantidade] = useState(1);
   
   const turnos = isEn && campo.turnos_en && campo.turnos_en.length > 0 ? campo.turnos_en : (campo.turnos || []);
@@ -70,11 +74,13 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     if (extraAlojamento) params.set("ext_alojamento", "true");
     if (extraProlongamento) params.set("ext_prolongamento", "true");
     if (extraTransporte) params.set("ext_transporte", "true");
+    
+    // Injeca a modalidade para adaptar a página de checkout
+    if (isEmailMode) params.set("modo", "email");
 
     router.push(`/${lang}/checkout/${campo.id}?${params.toString()}`);
   };
 
-  // LÓGICA DA LISTA DE ESPERA E ESCASSEZ
   const vagasTurno = turnoSelecionado ? Number(turnoSelecionado.vagas) : 0;
   const isEsgotado = turnoSelecionado && vagasTurno <= 0;
   const mostrarEscassez = turnoSelecionado && vagasTurno > 0 && vagasTurno <= 3;
@@ -186,7 +192,9 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
         </a>
       ) : (
         <button type="button" onClick={handleReservar} disabled={disabledReserva} className={`w-full py-4 rounded-xl text-lg font-black transition-all ${disabledReserva ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-[#EBA914] hover:bg-amber-500 text-white shadow-lg shadow-amber-500/30 hover:-translate-y-1'}`}>
-          {isEn ? 'Book Spot Now' : 'Reservar Vaga Agora'}
+          {isEmailMode 
+            ? (isEn ? 'Request to Book' : 'Reservar e Enviar E-mail')
+            : (isEn ? 'Book & Pay Now' : 'Reservar e Pagar Agora')}
         </button>
       )}
 
@@ -196,8 +204,14 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
           <span className="text-base leading-none">🛡️</span> 
           {isEn ? (campo.politica_cancelamento_en || 'Flexible Cancelation*') : (campo.politica_cancelamento || 'Cancelamento Moderado*')}
         </div>
+        
+        {/* SELO DE PAGAMENTO ADAPTA-SE À ESCOLHA DO PARCEIRO */}
         <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-          <span className="text-base leading-none">🔒</span> {isEn ? 'Secure Payment via Stripe' : 'Pagamento Seguro via Stripe'}
+          {isEmailMode ? (
+            <><span className="text-base leading-none">✉️</span> {isEn ? 'Payment managed by organizer' : 'Pagamento a combinar com a entidade'}</>
+          ) : (
+            <><span className="text-base leading-none">🔒</span> {isEn ? 'Secure Payment via Stripe' : 'Pagamento Seguro via Stripe'}</>
+          )}
         </div>
       </div>
     </div>

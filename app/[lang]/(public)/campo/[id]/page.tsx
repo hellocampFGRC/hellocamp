@@ -39,7 +39,7 @@ export default async function DetalhesDoCampo({
   const dict = await getDictionary(lang as "pt" | "en");
   const isEn = lang === 'en';
 
-  // 2. Busca do Campo e Reviews
+  // 2. Busca do Campo e Reviews (Inclui agora os dados do contrato)
   const { data: campo } = await supabase.from("campos").select("*").eq("id", id).single();
   const { data: reviews } = await supabase.from("reviews").select("*").eq("campo_id", id).order('created_at', { ascending: false });
 
@@ -201,7 +201,6 @@ export default async function DetalhesDoCampo({
               <p className="leading-relaxed text-slate-600 text-base whitespace-pre-wrap font-medium mb-0">{descCampo}</p>
               
               {campo.organizador_id && parceiroInfo && (
-                /* CORREÇÃO: Redireciona para a rota pública de luxo /parceiro/ e não para /admin/ */
                 <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="mt-8 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors no-underline group">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm flex-shrink-0">
@@ -329,7 +328,7 @@ export default async function DetalhesDoCampo({
               )}
             </div>
 
-            {/* FORMULÁRIO DE CONTACTO (VIA RESEND) */}
+            {/* FORMULÁRIO DE CONTACTO */}
             <div id="duvidas" className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10 scroll-mt-24">
               <h3 className="text-xl font-bold text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
               <p className="text-sm text-slate-500 font-medium mb-8">{dict.detalhe.duvidas_sub}</p>
