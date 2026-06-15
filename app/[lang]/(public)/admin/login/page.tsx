@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, use } from "react";
-import { supabase } from "@/lib/supabase"; // Verifique se este caminho está correto para o seu projeto
+import { supabase } from "@/lib/supabase"; 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import React from "react";
@@ -21,7 +21,10 @@ export default function LoginAdmin({ params }: { params: Promise<{ lang: string 
     setLoading(true);
     setError(null);
 
-    // 1. Tenta autenticar na plataforma
+    // 1. FORÇAR LIMPEZA DE SESSÕES (Prevenção de Loop de Redirecionamento)
+    await supabase.auth.signOut();
+
+    // 2. Tenta autenticar na plataforma
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -34,14 +37,14 @@ export default function LoginAdmin({ params }: { params: Promise<{ lang: string 
     }
 
     if (authData?.user) {
-      // 2. Procura pela flag 'is_superadmin' exata que definiu no Layout
+      // 3. Procura pela flag 'is_superadmin' exata que definiu no Layout
       const { data: perfil } = await supabase
         .from('perfis')
         .select('is_superadmin')
         .eq('id', authData.user.id)
         .single();
 
-      // 3. Encaminha para o HQ se for a direção, ou para o Dashboard normal se for parceiro
+      // 4. Encaminha para o HQ se for a direção, ou para o Dashboard normal se for parceiro
       if (perfil?.is_superadmin === true) {
         router.push(`/${lang}/superadmin/parceiros`); // Encaminha direto para a primeira aba do HQ
       } else {
