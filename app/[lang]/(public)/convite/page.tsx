@@ -47,8 +47,12 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     }
 
     setLoading(true);
+    console.log("🚀 [INÍCIO] A iniciar submissão do contrato...");
 
-    // 1. Criar Utilizador
+    // ==========================================
+    // PASSO 1: CRIAR UTILIZADOR (Auth)
+    // ==========================================
+    console.log("⏳ [PASSO 1] A criar utilizador no Supabase Auth...");
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: auth.emailAcesso,
       password: auth.passwordAcesso,
@@ -62,13 +66,29 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     });
 
     if (authError || !authData.user) {
-      alert((isEn ? "Error creating account: " : "Erro ao criar conta: ") + (authError?.message || "Desconhecido"));
+      console.error("🛑 [ERRO AUTH] Falha na criação da conta:", {
+        mensagem: authError?.message,
+        status: authError?.status,
+        name: authError?.name,
+        objCompleto: authError
+      });
+      
+      const msgErro = authError?.message || "Erro desconhecido no Auth. (Verifique rate limits ou se a password tem 6+ caracteres)";
+      alert((isEn ? "Error creating account: " : "Erro ao criar conta: ") + msgErro);
       setLoading(false);
       return;
     }
 
+    console.log("✅ [PASSO 1] Conta criada com sucesso! User ID:", authData.user.id);
+
+    // Pequena pausa para garantir que o trigger de criação de perfil (caso exista) termina
     await new Promise(resolve => setTimeout(resolve, 1500));
 
+    // ==========================================
+    // PASSO 2: GUARDAR O CONTRATO NA BD (campos)
+    // ==========================================
+    console.log("⏳ [PASSO 2] A inserir contrato na tabela 'campos'...");
+    
     const payloadJSON = {
       pessoaContacto: form.pessoaContacto,
       formaJuridica: form.formaJuridica,
@@ -91,7 +111,6 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       ipAssinatura: isEn ? "Captured via Unified Registration" : "Capturado via Registo Unificado"
     };
 
-    // 2. Guardar o Campo e Contrato
     const { error: campoError } = await supabase
       .from('campos')
       .insert([
@@ -107,23 +126,54 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       ]);
 
     if (campoError) {
-      alert(isEn ? "Account created, but there was an error attaching the contract. Contact support." : "Conta criada, mas houve um erro ao anexar o contrato. Contacte o suporte.");
-    } else {
-      
-      // 3. DISPARAR OS E-MAILS DE NOTIFICAÇÃO (Parceiro + Direção HelloCamp)
-      try {
-        await fetch('/api/notificacoes/novo-contrato', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ form, emailAcesso: auth.emailAcesso, lang })
-        });
-      } catch (err) {
-        console.error("Erro ao enviar emails de notificação", err);
-      }
+      console.error("🛑 [ERRO BASE DE DADOS] Falha ao gravar na tabela 'campos':", {
+        mensagem: campoError.message,
+        codigoErro: campoError.code,
+        detalhes: campoError.details,
+        dica: campoError.hint
+      });
 
-      alert(isEn ? "Contract signed and account successfully created! You can now access your portal." : "Contrato assinado e conta criada com sucesso! Pode agora aceder ao seu portal.");
-      router.push(`/${lang}/admin/login`);
+      let alertMsg = isEn ? "Database error: " : "Erro ao gravar contrato na Base de Dados: ";
+      if (campoError.code === '42703') alertMsg += "(Coluna não existe/Nome incorreto)";
+      else if (campoError.code === '42501') alertMsg += "(Bloqueado pelo RLS - Verifique as Policies da tabela campos)";
+      else alertMsg += campoError.message;
+
+      alert(alertMsg);
+      setLoading(false);
+      return;
     }
+
+    console.log("✅ [PASSO 2] Contrato guardado na base de dados com sucesso!");
+
+    // ==========================================
+    // PASSO 3: DISPARAR EMAILS DE NOTIFICAÇÃO (API Brevo/Resend)
+    // ==========================================
+    console.log("⏳ [PASSO 3] A enviar emails de confirmação através da API...");
+    
+    try {
+      const emailRes = await fetch('/api/notificacoes/novo-contrato', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ form, emailAcesso: auth.emailAcesso, lang })
+      });
+
+      if (!emailRes.ok) {
+        const emailErr = await emailRes.json();
+        console.error("🛑 [ERRO EMAILS] A API de envio de emails respondeu com erro:", emailErr);
+        // Não bloqueamos a navegação porque a conta já foi criada, mas avisamos a consola.
+      } else {
+        console.log("✅ [PASSO 3] E-mails de notificação disparados com sucesso!");
+      }
+    } catch (err) {
+      console.error("🛑 [ERRO DE REDE - EMAILS] Falha ao comunicar com a nossa API de envio:", err);
+    }
+
+    // ==========================================
+    // PASSO FINAL: REDIRECIONAR O UTILIZADOR
+    // ==========================================
+    alert(isEn ? "Contract signed and account successfully created! You can now access your portal." : "Contrato assinado e conta criada com sucesso! Pode agora aceder ao seu portal.");
+    router.push(`/${lang}/admin/login`);
+    
     setLoading(false);
   };
 
