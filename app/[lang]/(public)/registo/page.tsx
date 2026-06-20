@@ -15,7 +15,6 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
   const [password, setPassword] = useState("");
   const [nome, setNome] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sucesso, setSucesso] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleRegisto = async (e: React.FormEvent) => {
@@ -30,9 +29,8 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
       options: {
         data: { 
           nome_completo: nome, 
-          role: 'cliente' // <--- Crucial para a BD saber que é o Pai
-        },
-        emailRedirectTo: `${window.location.origin}/${lang}/login`
+          role: 'cliente' 
+        }
       }
     });
 
@@ -42,7 +40,7 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
       return;
     }
 
-    // 2. Gravar no perfil público para ter acesso imediato
+    // 2. Gravar no perfil público
     if (authData.user) {
       await supabase.from('perfis').upsert({
         id: authData.user.id,
@@ -52,7 +50,7 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
       });
     }
 
-    // 3. Disparar o Email (a nossa API unificada agora processa isto graças ao 'role')
+    // 3. Disparar o Email 
     fetch('/api/notificacoes/boas-vindas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -64,8 +62,8 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
       })
     }).catch(err => console.error("Falha ao enviar e-mail de boas-vindas:", err));
     
-    setSucesso(true);
-    setLoading(false);
+    // 4. Redirecionar Imediatamente para a Homepage (ou perfil)
+    router.push(`/${lang}`);
   };
 
   return (
@@ -75,22 +73,17 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
           {isEn ? 'Create Parent Account' : 'Criar Conta de Encarregado'}
         </h1>
 
-        {sucesso ? (
-          <div style={{ backgroundColor: '#ecfdf5', color: '#065f46', padding: '1rem', borderRadius: '0.5rem', textAlign: 'center', fontWeight: 'bold' }}>
-            {isEn ? 'Check your email to verify your account.' : 'Verifique o seu email (e a pasta de SPAM) para ativar a conta.'}
-          </div>
-        ) : (
-          <form onSubmit={handleRegisto} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {error && <div style={{ color: '#dc2626', backgroundColor: '#fef2f2', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '13px', fontWeight: 'bold' }}>{error}</div>}
-            
-            <input type="text" placeholder={isEn ? 'Full Name' : 'Nome Completo'} required onChange={e => setNome(e.target.value)} style={inputStyle} />
-            <input type="email" placeholder="E-mail" required onChange={e => setEmail(e.target.value)} style={inputStyle} />
-            <input type="password" placeholder="Password" minLength={6} required onChange={e => setPassword(e.target.value)} style={inputStyle} />
-            <button type="submit" disabled={loading} style={btnStyle}>
-              {loading ? '...' : (isEn ? 'Register' : 'Registar')}
-            </button>
-          </form>
-        )}
+        <form onSubmit={handleRegisto} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {error && <div style={{ color: '#dc2626', backgroundColor: '#fef2f2', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '13px', fontWeight: 'bold' }}>{error}</div>}
+          
+          <input type="text" placeholder={isEn ? 'Full Name' : 'Nome Completo'} required onChange={e => setNome(e.target.value)} style={inputStyle} />
+          <input type="email" placeholder="E-mail" required onChange={e => setEmail(e.target.value)} style={inputStyle} />
+          <input type="password" placeholder="Password" minLength={6} required onChange={e => setPassword(e.target.value)} style={inputStyle} />
+          <button type="submit" disabled={loading} style={btnStyle}>
+            {loading ? '...' : (isEn ? 'Register' : 'Registar')}
+          </button>
+        </form>
+
         <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '14px', color: '#64748b' }}>
           {isEn ? 'Already have an account?' : 'Já tem conta?'} <Link href={`/${lang}/login`} style={{ color: '#059669', fontWeight: 'bold', textDecoration: 'none' }}>Login</Link>
         </p>

@@ -16,7 +16,6 @@ export default function RegistoAdmin({ params }: { params: Promise<{ lang: strin
   const [nomeEmpresa, setNomeEmpresa] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sucesso, setSucesso] = useState(false);
 
   const handleRegisto = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,8 +30,7 @@ export default function RegistoAdmin({ params }: { params: Promise<{ lang: strin
         data: {
           empresa_nome: nomeEmpresa,
           role: 'organizador'
-        },
-        emailRedirectTo: `${window.location.origin}/${lang}/admin/login`
+        }
       }
     });
 
@@ -42,7 +40,7 @@ export default function RegistoAdmin({ params }: { params: Promise<{ lang: strin
       return;
     }
 
-    // 2. Gravar explicitamente na tabela 'perfis' para aparecer no Superadmin!
+    // 2. Gravar explicitamente na tabela 'perfis'
     if (authData.user) {
       const { error: perfilError } = await supabase.from('perfis').upsert({
         id: authData.user.id,
@@ -57,15 +55,15 @@ export default function RegistoAdmin({ params }: { params: Promise<{ lang: strin
       }
     }
 
-    // 3. Disparar API do Email de Boas-Vindas (Não usamos await para não bloquear o ecrã)
+    // 3. Disparar API do Email de Boas-Vindas
     fetch('/api/notificacoes/boas-vindas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, nomeEmpresa, lang })
+      body: JSON.stringify({ email, nomeEmpresa, role: 'organizador', lang })
     }).catch(err => console.error("Falha ao pedir envio de email:", err));
 
-    setSucesso(true);
-    setLoading(false);
+    // 4. Redirecionar Imediatamente para o Dashboard!
+    router.push(`/${lang}/admin/dashboard`);
   };
 
   return (
@@ -79,35 +77,28 @@ export default function RegistoAdmin({ params }: { params: Promise<{ lang: strin
           </p>
         </div>
 
-        {sucesso ? (
-          <div style={{ backgroundColor: '#ecfdf5', color: '#065f46', padding: '1.5rem', borderRadius: '1rem', textAlign: 'center' }}>
-            <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{isEn ? 'Check your email!' : 'Verifique o seu email!'}</h3>
-            <p style={{ fontSize: '14px', margin: 0 }}>{isEn ? 'We sent a confirmation link to activate your account.' : 'Enviámos um link de confirmação para ativar a sua conta.'}</p>
+        <form onSubmit={handleRegisto} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {error && <div style={{ color: '#dc2626', backgroundColor: '#fef2f2', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '13px', fontWeight: 'bold' }}>{error}</div>}
+          
+          <div>
+            <label style={labelStyle}>{isEn ? 'Company / Camp Name' : 'Nome da Empresa / Campo'}</label>
+            <input type="text" value={nomeEmpresa} onChange={(e) => setNomeEmpresa(e.target.value)} required style={inputStyle} />
           </div>
-        ) : (
-          <form onSubmit={handleRegisto} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {error && <div style={{ color: '#dc2626', backgroundColor: '#fef2f2', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '13px', fontWeight: 'bold' }}>{error}</div>}
-            
-            <div>
-              <label style={labelStyle}>{isEn ? 'Company / Camp Name' : 'Nome da Empresa / Campo'}</label>
-              <input type="text" value={nomeEmpresa} onChange={(e) => setNomeEmpresa(e.target.value)} required style={inputStyle} />
-            </div>
 
-            <div>
-              <label style={labelStyle}>E-mail</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} />
-            </div>
+          <div>
+            <label style={labelStyle}>E-mail</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} />
+          </div>
 
-            <div>
-              <label style={labelStyle}>Password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} style={inputStyle} />
-            </div>
+          <div>
+            <label style={labelStyle}>Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} style={inputStyle} />
+          </div>
 
-            <button type="submit" disabled={loading} style={{ marginTop: '1rem', width: '100%', padding: '1rem', backgroundColor: '#0f172a', color: 'white', fontWeight: 'bold', borderRadius: '0.75rem', border: 'none', cursor: loading ? 'not-allowed' : 'pointer' }}>
-              {loading ? (isEn ? 'Creating account...' : 'A criar conta...') : (isEn ? 'Register' : 'Registar')}
-            </button>
-          </form>
-        )}
+          <button type="submit" disabled={loading} style={{ marginTop: '1rem', width: '100%', padding: '1rem', backgroundColor: '#0f172a', color: 'white', fontWeight: 'bold', borderRadius: '0.75rem', border: 'none', cursor: loading ? 'not-allowed' : 'pointer' }}>
+            {loading ? (isEn ? 'Creating account...' : 'A criar conta...') : (isEn ? 'Register' : 'Registar')}
+          </button>
+        </form>
 
         <div style={{ textAlign: 'center', marginTop: '2rem', fontSize: '14px', color: '#64748b' }}>
           {isEn ? 'Already have an account?' : 'Já tem uma conta?'} <Link href={`/${lang}/admin/login`} style={{ color: '#059669', fontWeight: 'bold', textDecoration: 'none' }}>{isEn ? 'Log in' : 'Entrar'}</Link>
