@@ -81,7 +81,6 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
 
     console.log("✅ [PASSO 1] Conta criada com sucesso! User ID:", authData.user.id);
 
-    // Pequena pausa para garantir que o trigger de criação de perfil (caso exista) termina
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     // ==========================================
@@ -111,6 +110,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       ipAssinatura: isEn ? "Captured via Unified Registration" : "Capturado via Registo Unificado"
     };
 
+    // INSERÇÃO OTIMIZADA COM TODOS OS DEFAULTS E COMISSÃO
     const { error: campoError } = await supabase
       .from('campos')
       .insert([
@@ -121,7 +121,21 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
           status_aprovacao: 'Pendente de Revisão',
           tipo_pagamento: form.tipo_pagamento,
           politica_cancelamento: form.politica_cancelamento,
-          ativo: false
+          ativo: false,
+          categoria: 'Por definir',
+          taxa_comissao: 12, // A comissão base de 12%
+          pais: 'Portugal',
+          vagas_totais: 20, 
+          turnos: [],
+          galeria: [],
+          perguntas_customizadas: [],
+          linguas_faladas: [],
+          tipo_cobranca_alimentacao: 'Por Turno',
+          tipo_cobranca_alojamento: 'Por Turno',
+          tipo_cobranca_prolongamento: 'Por Turno',
+          tipo_cobranca_transporte: 'Por Turno',
+          rating_score: 0,
+          total_reviews: 0
         }
       ]);
 
@@ -146,7 +160,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     console.log("✅ [PASSO 2] Contrato guardado na base de dados com sucesso!");
 
     // ==========================================
-    // PASSO 3: DISPARAR EMAILS DE NOTIFICAÇÃO (API Brevo/Resend)
+    // PASSO 3: DISPARAR EMAILS DE NOTIFICAÇÃO
     // ==========================================
     console.log("⏳ [PASSO 3] A enviar emails de confirmação através da API...");
     
@@ -160,7 +174,6 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       if (!emailRes.ok) {
         const emailErr = await emailRes.json();
         console.error("🛑 [ERRO EMAILS] A API de envio de emails respondeu com erro:", emailErr);
-        // Não bloqueamos a navegação porque a conta já foi criada, mas avisamos a consola.
       } else {
         console.log("✅ [PASSO 3] E-mails de notificação disparados com sucesso!");
       }
