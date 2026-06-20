@@ -216,12 +216,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reservasIds: idsCriados,
-          totalAmount: precoFinalTotal, // Passamos o total, o backend encarrega-se da divisão
+          totalAmount: precoFinalTotal,
           userEmail: user.email,
           lang: lang,
           campoNome: campo.nome,
           stripeAccountId: organizador?.stripe_account_id,
-          tipoPagamento: campo?.tipo_pagamento // Enviamos a regra escolhida pelo organizador
+          tipoPagamento: campo?.tipo_pagamento,
+          campoId: campo.id // AQUI ESTÁ A NOVA LINHA ADICIONADA
         })
       });
 
