@@ -66,14 +66,8 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     });
 
     if (authError || !authData.user) {
-      console.error("🛑 [ERRO AUTH] Falha na criação da conta:", {
-        mensagem: authError?.message,
-        status: authError?.status,
-        name: authError?.name,
-        objCompleto: authError
-      });
-      
-      const msgErro = authError?.message || "Erro desconhecido no Auth. (Verifique rate limits ou se a password tem 6+ caracteres)";
+      console.error("🛑 [ERRO AUTH] Falha na criação da conta:", authError);
+      const msgErro = authError?.message || "Erro desconhecido no Auth.";
       alert((isEn ? "Error creating account: " : "Erro ao criar conta: ") + msgErro);
       setLoading(false);
       return;
@@ -81,7 +75,33 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
 
     console.log("✅ [PASSO 1] Conta criada com sucesso! User ID:", authData.user.id);
 
+    // Pausa para dar tempo ao Supabase de criar a linha base na tabela perfis via trigger
     await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // ==========================================
+    // PASSO 1.5: ATUALIZAR O PERFIL PÚBLICO
+    // ==========================================
+    console.log("⏳ [PASSO 1.5] A guardar os dados na tabela 'perfis'...");
+    
+    // Usamos upsert para garantir que, caso a linha não exista, seja criada
+    const { error: perfilError } = await supabase.from('perfis').upsert({
+      id: authData.user.id,
+      email: auth.emailAcesso,
+      empresa_nome: form.nomeEmpresa,
+      nif_empresa: form.nif,
+      nome_completo: form.pessoaContacto,
+      telefone: form.telefone,
+      role: 'organizador',
+      parceiro_verificado: false
+    });
+
+    if (perfilError) {
+      console.error("⚠️ [AVISO] Falha ao atualizar tabela perfis:", perfilError);
+      // Não bloqueamos o resto do código porque o login já funciona, mas fica o aviso na consola
+    } else {
+      console.log("✅ [PASSO 1.5] Perfil público atualizado com sucesso!");
+    }
+
 
     // ==========================================
     // PASSO 2: GUARDAR O CONTRATO NA BD (campos)
@@ -110,7 +130,6 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       ipAssinatura: isEn ? "Captured via Unified Registration" : "Capturado via Registo Unificado"
     };
 
-    // INSERÇÃO OTIMIZADA COM TODOS OS DEFAULTS E COMISSÃO
     const { error: campoError } = await supabase
       .from('campos')
       .insert([
@@ -123,7 +142,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
           politica_cancelamento: form.politica_cancelamento,
           ativo: false,
           categoria: 'Por definir',
-          taxa_comissao: 12, // A comissão base de 12%
+          taxa_comissao: 12,
           pais: 'Portugal',
           vagas_totais: 20, 
           turnos: [],
@@ -140,19 +159,8 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       ]);
 
     if (campoError) {
-      console.error("🛑 [ERRO BASE DE DADOS] Falha ao gravar na tabela 'campos':", {
-        mensagem: campoError.message,
-        codigoErro: campoError.code,
-        detalhes: campoError.details,
-        dica: campoError.hint
-      });
-
-      let alertMsg = isEn ? "Database error: " : "Erro ao gravar contrato na Base de Dados: ";
-      if (campoError.code === '42703') alertMsg += "(Coluna não existe/Nome incorreto)";
-      else if (campoError.code === '42501') alertMsg += "(Bloqueado pelo RLS - Verifique as Policies da tabela campos)";
-      else alertMsg += campoError.message;
-
-      alert(alertMsg);
+      console.error("🛑 [ERRO BD] Falha ao gravar contrato:", campoError);
+      alert((isEn ? "Database error: " : "Erro ao gravar contrato na Base de Dados: ") + campoError.message);
       setLoading(false);
       return;
     }
@@ -172,8 +180,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       });
 
       if (!emailRes.ok) {
-        const emailErr = await emailRes.json();
-        console.error("🛑 [ERRO EMAILS] A API de envio de emails respondeu com erro:", emailErr);
+        console.error("🛑 [ERRO EMAILS] A API de envio de emails respondeu com erro");
       } else {
         console.log("✅ [PASSO 3] E-mails de notificação disparados com sucesso!");
       }
