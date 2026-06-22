@@ -9,406 +9,632 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const isEn = lang === 'en';
 
   const [loading, setLoading] = useState(true);
-  const [campoGrupos, setCampoGrupos] = useState<any[]>([]);
+  const [sessionUser, setSessionUser] = useState<any>(null);
+  
+  // Dados Core
+  const [camposParceiro, setCamposParceiro] = useState<any[]>([]);
+  const [todasReservas, setTodasReservas] = useState<any[]>([]);
+  
+  // Filtros
   const [filtroCampoId, setFiltroCampoId] = useState<string>('todos');
   const [filtroTurno, setFiltroTurno] = useState<string>('todos');
+  const [searchQuery, setSearchQuery] = useState("");
   
+  // UI States (Modais)
   const [reservaSelecionada, setReservaSelecionada] = useState<any>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [importMode, setImportMode] = useState<'selecao' | 'manual' | 'excel'>('selecao');
+  
+  const [savingExterno, setSavingExterno] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
 
-  useEffect(() => {
-    const fetchDadosInscritos = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+  // Form de Reserva Externa (1 a 1)
+  const [formExterno, setFormExterno] = useState({
+    campo_id: "", turno_nome: "", valor_pago: 0,
+    nome_crianca: "", idade: "", alergias: "", doencas: "",
+    nome_pai: "", email_pai: "", telefone_pai: ""
+  });
 
-      // 1. Busca Plana e Segura
-      const { data: camposData } = await supabase.from('campos').select('id, nome, nome_en, vagas_totais, turnos, contrato_parceiro_url').eq('organizador_id', session.user.id);
-      const { data: reservasData } = await supabase.from('reservas').select('*').eq('organizador_id', session.user.id);
-      const { data: perfisData } = await supabase.from('perfis').select('id, nome_completo, email, telefone, nif, contacto_emergencia, pessoas_autorizadas_recolha');
-      const { data: criancasData } = await supabase.from('criancas').select('*');
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    setSessionUser(session.user);
 
-      if (camposData) {
-        const listaGrupos = camposData.map((c: any) => {
-          const dataOrdenacao = c.turnos && c.turnos[0]?.data_inicio ? c.turnos[0].data_inicio : '9999-12-31';
-          
-          // Filtra as reservas que pertencem a este campo específico
-          const reservasDesteCampo = (reservasData || []).filter(r => r.campo_id === c.id);
+    // 1. Busca Campos
+    const { data: camposData } = await supabase.from('campos').select('id, nome, nome_en, vagas_totais, turnos').eq('organizador_id', session.user.id);
+    setCamposParceiro(camposData || []);
 
-          const inscritos = reservasDesteCampo.map((reserva: any) => {
-            const dataReserva = new Date(reserva.created_at).getTime();
-            const agora = new Date().getTime();
-            const minutosPassados = (agora - dataReserva) / (1000 * 60);
+    // 2. Busca Reservas e cruza com Crianças/Pais
+    const { data: reservasData } = await supabase.from('reservas').select('*, criancas(*), perfis(*)').eq('organizador_id', session.user.id).order('created_at', { ascending: false });
+    
+    if (reservasData) {
+      const reservasFormatadas = reservasData.map(res => {
+        const isExterna = res.cliente_id === session.user.id || res.status_pagamento === 'Externo';
+        
+        let statusFinal = res.status_pagamento || 'Pendente';
+        if (isExterna) statusFinal = 'Externo';
+        if (statusFinal === 'Reembolsado') statusFinal = 'Cancelada';
 
-            let statusCalculado = reserva.status_pagamento || 'Pendente';
-            
-            // Tratamento explícito dos estados
-            if (statusCalculado === 'Reembolsado') {
-               statusCalculado = 'Cancelada';
-            } else if (statusCalculado === 'Pendente' && minutosPassados > 15) {
-               statusCalculado = 'Abandonada';
-            }
+        const campoRelacionado = camposData?.find(c => c.id === res.campo_id);
 
-            // CORREÇÃO TYPESCRIPT: Declarar como 'any' para aceitar fallback vazio
-            const pai: any = perfisData?.find(p => p.id === reserva.cliente_id) || {};
-            const crianca: any = criancasData?.find(cr => cr.id === reserva.crianca_id) || {};
-
-            return {
-              reservaId: reserva.id,
-              turno: reserva.turno_nome,
-              valor: reserva.valor_total,
-              dataReserva: reserva.created_at,
-              statusPagamento: statusCalculado,
-              extras: reserva.extras_escolhidos || {},
-              respostasCustomizadas: reserva.respostas_customizadas || {},
-              crianca: crianca,
-              paiEncarregado: {
-                nome: reserva.nome_encarregado || pai.nome_completo || 'N/D',
-                email: reserva.email_encarregado || pai.email || 'N/D',
-                telefone: reserva.telefone_encarregado || pai.telefone || 'N/D',
-                nif: reserva.nif_encarregado || pai.nif || 'N/D',
-                emergencia: pai.contacto_emergencia || 'Não preenchido',
-                recolha: pai.pessoas_autorizadas_recolha || 'Apenas o Encarregado'
-              },
-              campNome: isEn && c.nome_en ? c.nome_en : c.nome
-            };
-          });
-
-          const realVagasTotais = c.turnos && c.turnos.length > 0
-            ? c.turnos.reduce((acc: number, curr: any) => acc + (Number(curr.vagas) || 0), 0)
-            : (Number(c.vagas_totais) || 0);
-
-          return {
-            id: c.id,
-            nome: isEn && c.nome_en ? c.nome_en : c.nome,
-            vagas_totais: realVagasTotais,
-            turnosDisponiveis: c.turnos || [],
-            dataInicioCronologica: dataOrdenacao,
-            inscritos: inscritos.sort((a: any, b: any) => new Date(b.dataReserva).getTime() - new Date(a.dataReserva).getTime()),
-          };
-        });
-
-        setCampoGrupos(listaGrupos.sort((a: any, b: any) => new Date(a.dataInicioCronologica).getTime() - new Date(b.dataInicioCronologica).getTime()));
-      }
-      setLoading(false);
-    };
-
-    fetchDadosInscritos();
-  }, [isEn]);
-
-  const obterIdade = (dataNasc: string) => {
-    if (!dataNasc) return 0;
-    const diff = Date.now() - new Date(dataNasc).getTime();
-    return Math.abs(new Date(diff).getUTCFullYear() - 1970);
-  };
-
-  const temAlertaMedico = (texto: string) => {
-    if (!texto) return false;
-    const textoLimpo = texto.toLowerCase().trim();
-    const palavrasIgnoradas = ["nenhuma", "nenhum", "nao", "não", "nada", "n/a", "no", "none", "-", "sem alergias", "saudavel", "saudável"];
-    return !palavrasIgnoradas.includes(textoLimpo);
-  };
-
-  let vagasTotaisExibidas = 0;
-  let inscritosRows: any[] = [];
-  let turnosDoCampoSelecionado: any[] = [];
-  let campoNomeFicheiro = "global";
-
-  // Lógica de Filtros (Dropdowns)
-  if (filtroCampoId === 'todos') {
-    campoGrupos.forEach(g => {
-      vagasTotaisExibidas += g.vagas_totais;
-      inscritosRows = [...inscritosRows, ...g.inscritos];
-    });
-  } else {
-    const grupoSelecao = campoGrupos.find(g => g.id === filtroCampoId);
-    if (grupoSelecao) {
-      vagasTotaisExibidas = grupoSelecao.vagas_totais;
-      turnosDoCampoSelecionado = grupoSelecao.turnosDisponiveis;
-      campoNomeFicheiro = grupoSelecao.nome.toLowerCase().replace(/\s+/g, '_');
-      inscritosRows = [...grupoSelecao.inscritos];
-      
-      if (filtroTurno !== 'todos') {
-        inscritosRows = inscritosRows.filter(i => i.turno === filtroTurno);
-        campoNomeFicheiro += `_${filtroTurno.toLowerCase().replace(/\s+/g, '_')}`;
-      }
+        return {
+          id: res.id,
+          campo_id: res.campo_id,
+          campo_nome: campoRelacionado ? (isEn && campoRelacionado.nome_en ? campoRelacionado.nome_en : campoRelacionado.nome) : 'Desconhecido',
+          turno: res.turno_nome,
+          valor: Number(res.valor_total) || 0,
+          data: res.created_at,
+          status: statusFinal,
+          isExterna: isExterna,
+          crianca: res.criancas || { nome: res.respostas_customizadas?.nome_crianca_externo || 'N/D' },
+          pai: {
+            nome: res.nome_encarregado || res.perfis?.nome_completo || 'N/D',
+            email: res.email_encarregado || res.perfis?.email || 'N/D',
+            telefone: res.telefone_encarregado || res.perfis?.telefone || 'N/D',
+            emergencia: res.perfis?.contacto_emergencia || res.telefone_encarregado || 'N/D'
+          },
+          respostasCustomizadas: res.respostas_customizadas || {}
+        };
+      });
+      setTodasReservas(reservasFormatadas);
     }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchDashboardData(); }, [isEn]);
+
+  // ==========================================
+  // FILTRAGEM INTELIGENTE
+  // ==========================================
+  let reservasFiltradas = [...todasReservas];
+  
+  if (filtroCampoId !== 'todos') reservasFiltradas = reservasFiltradas.filter(r => r.campo_id === filtroCampoId);
+  if (filtroTurno !== 'todos') reservasFiltradas = reservasFiltradas.filter(r => r.turno === filtroTurno);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    reservasFiltradas = reservasFiltradas.filter(r => 
+      (r.crianca?.nome || '').toLowerCase().includes(q) || 
+      (r.pai?.nome || '').toLowerCase().includes(q)
+    );
   }
 
-  // APENAS AS RESERVAS VÁLIDAS CONTAM PARA A LOTAÇÃO
-  const inscritosValidosCount = inscritosRows.filter(r => r.statusPagamento !== 'Abandonada' && r.statusPagamento !== 'Cancelada').length;
+  const turnosDoCampoFiltro = filtroCampoId === 'todos' ? [] : camposParceiro.find(c => c.id === filtroCampoId)?.turnos || [];
 
-  const exportarFichaMonitoresCSV = () => {
-    const validos = inscritosRows.filter(r => r.statusPagamento !== 'Abandonada' && r.statusPagamento !== 'Cancelada');
-    if (validos.length === 0) {
-      alert("Não existem inscrições ativas no contexto selecionado para exportar.");
-      return;
-    }
+  // ==========================================
+  // MÉTRICAS DO DASHBOARD
+  // ==========================================
+  const validas = reservasFiltradas.filter(r => r.status !== 'Cancelada' && r.status !== 'Abandonada');
+  const countHelloCamp = validas.filter(r => !r.isExterna).length;
+  const countExternas = validas.filter(r => r.isExterna).length;
+  const faturaçãoHelloCamp = validas.filter(r => !r.isExterna).reduce((acc, curr) => acc + curr.valor, 0);
+  const faturaçãoExterna = validas.filter(r => r.isExterna).reduce((acc, curr) => acc + curr.valor, 0);
 
-    let csv = "FICHA DE CAMPO - LISTA DE MONITORES\n";
-    csv += "Programa;Turno;Nome Participante;Idade;Sexo;Tipo Sanguineo;Alergias/Restricoes Alimentares;Doencas Cronicas;Medicacao Regular;Sabe Nadar;Sabe Andar Bicicleta;T-Shirt;Encarregado Educacao;Telefone Pai;Contacto Emergencia Alternativo;Pessoas Autorizadas Recolha;Respostas Perguntas Customizadas Campo\n";
-    
-    validos.forEach((item: any) => {
-      const c = item.crianca || {};
-      const p = item.paiEncarregado || {};
-      
-      const cAlergias = temAlertaMedico(c.restricoes_alimentares) ? c.restricoes_alimentares.replace(/;/g, ",").replace(/\n/g, " ") : "Nenhuma";
-      const cDoencas = temAlertaMedico(c.doencas_cronicas) ? c.doencas_cronicas.replace(/;/g, ",").replace(/\n/g, " ") : "Nenhuma";
-      const cMeds = temAlertaMedico(c.medicacao_regular) ? c.medicacao_regular.replace(/;/g, ",").replace(/\n/g, " ") : "Nenhuma";
-      const recolha = p.recolha ? p.recolha.replace(/[\;\,\n]/g, " | ") : "Apenas Encarregado";
+  // ==========================================
+  // INSERIR RESERVA EXTERNA (MANUAL 1 A 1)
+  // ==========================================
+  const handleAddExterno = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingExterno(true);
 
-      let respostasTexto = "";
-      if (item.respostasCustomizadas && Object.keys(item.respostasCustomizadas).length > 0) {
-        respostasTexto = Object.entries(item.respostasCustomizadas)
-          .map(([pergunta, resposta]) => `[${pergunta}: ${resposta}]`)
-          .join(" ");
-      } else {
-        respostasTexto = "Sem perguntas adicionais";
-      }
+    try {
+      const anoNasc = new Date().getFullYear() - (Number(formExterno.idade) || 10);
+      const dataNascAprox = `${anoNasc}-01-01`;
 
-      csv += `"${item.campNome}";"${item.turno}";"${c.nome || ""}";"${c.data_nascimento ? obterIdade(c.data_nascimento) : ""}";"${c.sexo || ""}";"${c.tipo_sanguineo || "N/A"}";"${cAlergias}";"${cDoencas}";"${cMeds}";"${c.sabe_nadar || "N/A"}";"${c.sabe_andar_bicicleta || "N/A"}";"${c.tamanho_tshirt || "N/A"}";"${p.nome || "N/A"}";"${p.telefone || "N/A"}";"${p.emergencia || "N/A"}";"${recolha}";"${respostasTexto}"\n`;
-    });
+      const { data: crianca, error: errC } = await supabase.from('criancas').insert({
+        cliente_id: sessionUser.id, nome: formExterno.nome_crianca, data_nascimento: dataNascAprox,
+        restricoes_alimentares: formExterno.alergias || 'Nenhuma', doencas_cronicas: formExterno.doencas || 'Nenhuma'
+      }).select('id').single();
 
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `ficha_monitores_${campoNomeFicheiro}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      if (errC) throw errC;
+
+      const { error: errR } = await supabase.from('reservas').insert({
+        organizador_id: sessionUser.id, cliente_id: sessionUser.id, crianca_id: crianca.id,
+        campo_id: formExterno.campo_id, turno_nome: formExterno.turno_nome, valor_total: formExterno.valor_pago,
+        status_pagamento: 'Externo', nome_encarregado: formExterno.nome_pai, email_encarregado: formExterno.email_pai,
+        telefone_encarregado: formExterno.telefone_pai, respostas_customizadas: { origem: "Inserção Manual 1 a 1" }
+      });
+
+      if (errR) throw errR;
+
+      setIsAddModalOpen(false);
+      setImportMode('selecao');
+      setFormExterno({ campo_id: "", turno_nome: "", valor_pago: 0, nome_crianca: "", idade: "", alergias: "", doencas: "", nome_pai: "", email_pai: "", telefone_pai: "" });
+      fetchDashboardData();
+      alert("Inscrição externa adicionada com sucesso!");
+
+    } catch (err: any) { alert("Erro ao inserir: " + err.message); }
+    setSavingExterno(false);
   };
 
-  if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>A carregar dados logísticos e nominais...</div>;
+  // ==========================================
+  // IMPORTAR VIA EXCEL/CSV
+  // ==========================================
+  const downloadTemplateCSV = () => {
+    const csv = "\ufeffNome_do_Campo_Exato;Nome_do_Turno_Exato;Valor_Pago;Nome_Crianca;Idade;Alergias;Doencas;Nome_Responsavel;Telefone;Email\n" +
+                "Surf Camp Caparica;1a Semana Julho;150;Joao Silva;12;Nenhuma;Asma;Maria Silva;912345678;maria@email.com\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `Template_Importacao_HelloCamp.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  const handleImportCSV = async () => {
+    if (!csvFile) return alert("Selecione um ficheiro CSV primeiro.");
+    setSavingExterno(true);
+
+    try {
+      const text = await csvFile.text();
+      const linhas = text.split('\n').filter(line => line.trim().length > 0);
+      
+      if (linhas.length < 2) throw new Error("Ficheiro vazio ou sem dados válidos.");
+
+      // Começa na linha 1 para saltar o cabeçalho
+      let sucessoCount = 0;
+      for (let i = 1; i < linhas.length; i++) {
+        const colunas = linhas[i].split(';');
+        if (colunas.length < 9) continue; // Linha inválida
+
+        const [nomeCampoCSV, nomeTurno, valorPago, nomeCrianca, idade, alergias, doencas, nomePai, telefone, email] = colunas.map(c => c.trim().replace(/"/g, ''));
+
+        // Encontrar o campo real na DB do parceiro
+        const campoAlvo = camposParceiro.find(c => c.nome.toLowerCase() === nomeCampoCSV.toLowerCase());
+        if (!campoAlvo) continue; // Se não encontrar o campo exato, ignora esta linha
+
+        const anoNasc = new Date().getFullYear() - (Number(idade) || 10);
+        const dataNascAprox = `${anoNasc}-01-01`;
+
+        const { data: crianca } = await supabase.from('criancas').insert({
+          cliente_id: sessionUser.id, nome: nomeCrianca, data_nascimento: dataNascAprox,
+          restricoes_alimentares: alergias || 'Nenhuma', doencas_cronicas: doencas || 'Nenhuma'
+        }).select('id').single();
+
+        if (crianca) {
+          await supabase.from('reservas').insert({
+            organizador_id: sessionUser.id, cliente_id: sessionUser.id, crianca_id: crianca.id,
+            campo_id: campoAlvo.id, turno_nome: nomeTurno, valor_total: Number(valorPago) || 0,
+            status_pagamento: 'Externo', nome_encarregado: nomePai, email_encarregado: email || "",
+            telefone_encarregado: telefone, respostas_customizadas: { origem: "Importação via Excel/CSV" }
+          });
+          sucessoCount++;
+        }
+      }
+
+      setIsAddModalOpen(false);
+      setImportMode('selecao');
+      setCsvFile(null);
+      fetchDashboardData();
+      alert(`Importação concluída! ${sucessoCount} inscrições inseridas com sucesso.`);
+
+    } catch (err: any) { alert("Erro ao processar ficheiro: " + err.message); }
+    setSavingExterno(false);
+  };
+
+  // ==========================================
+  // EXPORTAR EXCEL GLOBAL
+  // ==========================================
+  const exportarCSV = () => {
+    if (validas.length === 0) { alert("Não existem inscrições ativas para exportar."); return; }
+
+    // O BOM (\ufeff) garante que o Excel lê os acentos de forma perfeita
+    let csv = "\ufeffOrigem;Data Reserva;Programa;Turno;Valor Pago;Nome Participante;Alergias;Doenças;Encarregado de Educação;Telefone;Email\n";
+    validas.forEach(item => {
+      const origem = item.isExterna ? "Externa" : "HelloCamp";
+      const dataReserva = new Date(item.data).toLocaleDateString('pt-PT');
+      const alergias = (item.crianca?.restricoes_alimentares || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
+      const doencas = (item.crianca?.doencas_cronicas || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
+      
+      csv += `"${origem}";"${dataReserva}";"${item.campo_nome}";"${item.turno}";"${item.valor}€";"${item.crianca?.nome || ""}";"${alergias}";"${doencas}";"${item.pai?.nome || ""}";"${item.pai?.telefone || ""}";"${item.pai?.email || ""}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `Exportacao_Global_HelloCamp.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  if (loading) return <div className="p-20 text-center font-bold text-slate-500 animate-pulse">A carregar o seu Dashboard...</div>;
 
   return (
-    <div style={{ fontFamily: 'sans-serif', paddingBottom: '4rem', maxWidth: '1200px', margin: '0 auto', padding: '2rem 1.5rem' }}>
+    <div className="max-w-[1400px] mx-auto p-4 md:p-8 font-sans pb-24">
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1.5rem' }}>
+      {/* HEADER & ACÕES GLOBAIS */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 style={{ fontSize: '2.25rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>
-            {isEn ? 'Logistics Dashboard' : 'Gestão Logística de Vagas'}
-          </h1>
-          <p style={{ color: '#64748b', marginTop: '0.25rem' }}>
-            {isEn ? 'Real-time metrics, demography, and logistics data.' : 'Lista nominal, fichas clínicas e controlo de capacidade.'}
-          </p>
+          <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Booking Operations' : 'Central de Reservas'}</h1>
+          <p className="text-slate-500 mt-1 font-medium text-sm">{isEn ? 'Manage Hellocamp and manual bookings in one place.' : 'Gira inscrições da HelloCamp e centralize os seus clientes externos.'}</p>
         </div>
+        <div className="flex gap-3 w-full md:w-auto">
+          <button onClick={exportarCSV} className="flex-1 md:flex-none px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-colors text-sm">
+            📥 Exportar Lista (Excel)
+          </button>
+          <button onClick={() => { setImportMode('selecao'); setIsAddModalOpen(true); }} className="flex-1 md:flex-none px-5 py-2.5 bg-slate-900 text-white font-bold rounded-xl shadow-md hover:bg-orange-600 transition-colors text-sm">
+            + Adicionar Inscrições
+          </button>
+        </div>
+      </div>
 
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', minWidth: '350px' }}>
-          <div style={{ flex: '1 1 200px' }}>
-            <label style={dropdownLabelStyle}>{isEn ? 'Select Camp' : 'Filtrar por Campo'}</label>
-            <select value={filtroCampoId} onChange={(e) => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} style={selectDropdownStyle}>
-              <option value="todos">{isEn ? 'All Active Camps' : 'Visão Global (Todos os Campos)'}</option>
-              {campoGrupos.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+      {/* MÉTRICAS (KPIs) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Lotação Preenchida</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-4xl font-black text-slate-900">{validas.length}</span>
+            <span className="text-sm font-bold text-slate-500">participantes</span>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-emerald-500 relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center opacity-50 text-3xl">🟢</div>
+          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1 relative z-10">Origem: HelloCamp</span>
+          <div className="flex items-baseline justify-between relative z-10">
+            <span className="text-4xl font-black text-slate-900">{countHelloCamp}</span>
+            <span className="text-sm font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-md">+{faturaçãoHelloCamp}€</span>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-orange-500 relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center opacity-50 text-3xl">🟠</div>
+          <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1 relative z-10">Origem: Externos</span>
+          <div className="flex items-baseline justify-between relative z-10">
+            <span className="text-4xl font-black text-slate-900">{countExternas}</span>
+            <span className="text-sm font-black text-orange-600 bg-orange-50 border border-orange-100 px-2 py-1 rounded-md">+{faturaçãoExterna}€</span>
+          </div>
+        </div>
+      </div>
+
+      {/* BARRA DE FILTROS */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row gap-4">
+        <div className="flex-1">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Procurar Nome</label>
+          <input type="text" placeholder="Pesquisar miúdo ou encarregado..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-slate-400" />
+        </div>
+        <div className="flex-1">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Campo</label>
+          <select value={filtroCampoId} onChange={e => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none font-bold text-slate-700 cursor-pointer">
+            <option value="todos">Todos os Campos</option>
+            {camposParceiro.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+        </div>
+        {filtroCampoId !== 'todos' && (
+          <div className="flex-1 animate-in fade-in">
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Data/Turno</label>
+            <select value={filtroTurno} onChange={e => setFiltroTurno(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none font-bold text-slate-700 cursor-pointer">
+              <option value="todos">Todas as Datas</option>
+              {turnosDoCampoFiltro.map((t: any, i: number) => <option key={i} value={t.nome}>{t.nome}</option>)}
             </select>
           </div>
-
-          {filtroCampoId !== 'todos' && turnosDoCampoSelecionado.length > 0 && (
-            <div style={{ flex: '1 1 150px' }}>
-              <label style={dropdownLabelStyle}>{isEn ? 'Select Shift' : 'Filtrar por Turno'}</label>
-              <select value={filtroTurno} onChange={(e) => setFiltroTurno(e.target.value)} style={selectDropdownStyle}>
-                <option value="todos">{isEn ? 'All Shifts' : 'Todos os Turnos'}</option>
-                {turnosDoCampoSelecionado.map((t: any, idx: number) => (
-                  <option key={idx} value={t.nome}>{t.nome}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
-          <div style={statCardStyle}>
-            <span style={statLabelStyle}>{isEn ? 'TOTAL CAPACITY' : 'LOTAÇÃO MÁXIMA'}</span>
-            <span style={{ fontSize: '2rem', fontWeight: '900', color: '#0f172a' }}>{vagasTotaisExibidas}</span>
-          </div>
-          <div style={{ ...statCardStyle, borderLeft: '4px solid #059669' }}>
-            <span style={statLabelStyle}>{isEn ? 'ACTIVE ENROLLMENTS' : 'LUGARES OCUPADOS'}</span>
-            <span style={{ fontSize: '2rem', fontWeight: '900', color: '#059669' }}>{inscritosValidosCount}</span>
-          </div>
-          <div style={{ ...statCardStyle, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center' }}>
-            <button onClick={exportarFichaMonitoresCSV} disabled={inscritosValidosCount === 0} style={{ backgroundColor: inscritosValidosCount === 0 ? '#cbd5e1' : '#059669', color: 'white', border: 'none', padding: '0.75rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: inscritosValidosCount === 0 ? 'not-allowed' : 'pointer', fontSize: '13px', width: '100%', textAlign: 'center', boxShadow: '0 4px 12px rgba(5,150,105,0.15)' }}>
-              📥 {isEn ? 'Export Sheet for Monitors' : 'Ficha Excel (Monitores)'}
-            </button>
-          </div>
-        </div>
-
-        <div style={{ backgroundColor: 'white', borderRadius: '1.25rem', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '1.25rem 1.5rem', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-            <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#334155', textTransform: 'uppercase' }}>{isEn ? 'NOMINAL ROSTER' : 'LISTA DE PARTICIPANTES'}</h3>
-          </div>
-          
-          <div style={{ overflowX: 'auto' }}>
-            {inscritosRows.length === 0 ? (
-              <div style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8', fontSize: '14px', fontWeight: 'bold' }}>
-                Não existem inscrições registadas no sistema.
-              </div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: '#fdfdfd' }}>
-                    <th style={thStyle}>{isEn ? 'PARTICIPANT' : 'MIÚDO / PROGRAMA'}</th>
-                    <th style={thStyle}>{isEn ? 'AGE' : 'IDADE'}</th>
-                    <th style={thStyle}>{isEn ? 'HEALTH/DIET' : 'SAÚDE'}</th>
-                    <th style={thStyle}>{isEn ? 'SHIFT' : 'TURNO / VALOR'}</th>
-                    <th style={thStyle}>{isEn ? 'PAYMENT' : 'ESTADO FINANÇAS'}</th>
-                    <th style={thStyle}>{isEn ? 'ACTIONS' : 'AÇÕES'}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inscritosRows.map((item: any, idx: number) => {
-                    const temAlerta = temAlertaMedico(item.crianca?.restricoes_alimentares) || temAlertaMedico(item.crianca?.doencas_cronicas) || temAlertaMedico(item.crianca?.medicacao_regular);
-                    const isInativa = item.statusPagamento === 'Abandonada' || item.statusPagamento === 'Cancelada';
-                    
-                    return (
-                      <tr key={idx} style={{ borderBottom: idx !== inscritosRows.length - 1 ? '1px solid #f1f5f9' : 'none', opacity: isInativa ? 0.6 : 1 }}>
-                        <td style={tdStyle}>
-                          <div style={{ fontWeight: 'bold', color: '#0f172a', textDecoration: isInativa ? 'line-through' : 'none' }}>{item.crianca?.nome || 'N/A'}</div>
-                          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>🏕️ {item.campNome}</div>
-                        </td>
-                        <td style={tdStyle}>{item.crianca?.data_nascimento ? `${obterIdade(item.crianca.data_nascimento)} anos` : '-'}</td>
-                        <td style={tdStyle}>
-                          {temAlerta && !isInativa ? (
-                            <span style={{ backgroundColor: '#fef2f2', color: '#b91c1c', padding: '0.25rem 0.5rem', borderRadius: '0.5rem', fontSize: '11px', fontWeight: 'bold', border: '1px solid #fecaca' }}>
-                              ⚠️ Alerta Médico
-                            </span>
-                          ) : <span style={{ color: '#94a3b8' }}>-</span>}
-                        </td>
-                        <td style={{ ...tdStyle, fontWeight: '600' }}>
-                          {item.turno} <div style={{ fontSize: '11px', color: isInativa ? '#94a3b8' : '#0f172a', fontWeight: 'bold', marginTop: '2px' }}>{item.valor}€</div>
-                        </td>
-                        <td style={tdStyle}>
-                          <span style={{ 
-                            backgroundColor: item.statusPagamento === 'Pago' || item.statusPagamento === 'Sinal Pago' ? '#ecfdf5' : (item.statusPagamento === 'Cancelada' ? '#fef2f2' : '#f1f5f9'), 
-                            color: item.statusPagamento === 'Pago' || item.statusPagamento === 'Sinal Pago' ? '#059669' : (item.statusPagamento === 'Cancelada' ? '#dc2626' : '#64748b'), 
-                            border: `1px solid ${item.statusPagamento === 'Pago' || item.statusPagamento === 'Sinal Pago' ? '#a7f3d0' : (item.statusPagamento === 'Cancelada' ? '#fecaca' : '#cbd5e1')}`, 
-                            padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase'
-                          }}>
-                            {item.statusPagamento}
-                          </span>
-                        </td>
-                        <td style={tdStyle}>
-                          <button onClick={() => setReservaSelecionada(item)} style={{ padding: '0.5rem 1rem', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-                            {isEn ? 'View Data' : 'Ver Ficha'}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {reservaSelecionada && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(4px)' }}>
-          <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '850px', borderRadius: '1.5rem', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
-            
-            <div style={{ padding: '1.5rem 2rem', backgroundColor: reservaSelecionada.statusPagamento === 'Cancelada' || reservaSelecionada.statusPagamento === 'Abandonada' ? '#dc2626' : '#0f172a', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900' }}>Ficha de Participante {(reservaSelecionada.statusPagamento === 'Cancelada' || reservaSelecionada.statusPagamento === 'Abandonada') && '(Inscrição Anulada)'}</h2>
-                <p style={{ margin: '0.25rem 0 0 0', color: '#cbd5e1', fontSize: '12px', fontFamily: 'monospace' }}>Ref: {reservaSelecionada.reservaId}</p>
-              </div>
-              <button onClick={() => setReservaSelecionada(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '2rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
-            </div>
-
-            <div style={{ padding: '2rem', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-                
-                <div style={modalCardStyle}>
-                  <h3 style={modalTitleStyle}>👦 {isEn ? 'Participant Data' : 'Identificação'}</h3>
-                  <DetailRow label="Nome" value={reservaSelecionada.crianca?.nome} />
-                  <DetailRow label="Data Nasc." value={reservaSelecionada.crianca?.data_nascimento} />
-                  <DetailRow label="Género" value={reservaSelecionada.crianca?.sexo} />
-                  <DetailRow label="NIF Criança" value={reservaSelecionada.crianca?.nif} />
+      {/* TABELA UNIFICADA */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Participante</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Programa e Data</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Estado Clínico</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Origem / Pagamento</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {reservasFiltradas.length === 0 ? (
+                <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold text-sm">Nenhum resultado encontrado.</td></tr>
+              ) : (
+                reservasFiltradas.map((item, idx) => {
+                  const isInativa = item.status === 'Abandonada' || item.status === 'Cancelada';
+                  const isExterna = item.isExterna;
                   
-                  <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px dashed #e2e8f0' }}>
-                    <h4 style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Características Físicas</h4>
-                    <DetailRow label="Sabe nadar?" value={reservaSelecionada.crianca?.sabe_nadar} />
-                    <DetailRow label="Andar bicicleta?" value={reservaSelecionada.crianca?.sabe_andar_bicicleta} />
-                    <DetailRow label="T-Shirt" value={reservaSelecionada.crianca?.tamanho_tshirt} />
-                  </div>
-                </div>
+                  const alertaAlergia = item.crianca?.restricoes_alimentares && item.crianca.restricoes_alimentares.length > 8 && !item.crianca.restricoes_alimentares.toLowerCase().includes('nenhum');
+                  const alertaDoenca = item.crianca?.doencas_cronicas && item.crianca.doencas_cronicas.length > 8 && !item.crianca.doencas_cronicas.toLowerCase().includes('nenhum');
+                  const temRisco = !isInativa && (alertaAlergia || alertaDoenca);
 
-                <div style={{...modalCardStyle, borderColor: '#fecaca'}}>
-                  <h3 style={{...modalTitleStyle, color: '#991b1b'}}>🏥 {isEn ? 'Medical Profile' : 'Perfil Clínico e Restrições'}</h3>
-                  <DetailRow label="Tipo Sanguíneo" value={reservaSelecionada.crianca?.tipo_sanguineo} />
-                  
-                  <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fff7ed', borderRadius: '0.5rem', border: '1px solid #fed7aa' }}>
-                    <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#c2410c', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Alergias Alimentares</span>
-                    <span style={{ fontSize: '14px', color: '#9a3412', fontWeight: 'bold' }}>{reservaSelecionada.crianca?.restricoes_alimentares || 'Nenhuma declarada'}</span>
-                  </div>
-                  
-                  <div style={{ marginTop: '1rem' }}>
-                    <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#991b1b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Doenças Crónicas</span>
-                    <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#475569', fontWeight: '600' }}>{reservaSelecionada.crianca?.doencas_cronicas || 'Nenhuma'}</p>
-                    
-                    <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#991b1b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Medicação Regular</span>
-                    <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#475569', fontWeight: '600' }}>{reservaSelecionada.crianca?.medicacao_regular || 'Nenhuma'}</p>
-
-                    <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#991b1b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Limitações Físicas</span>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#475569', fontWeight: '600' }}>{reservaSelecionada.crianca?.limitacoes_fisicas || 'Nenhuma'}</p>
-                  </div>
-                </div>
-
-                {reservaSelecionada.respostasCustomizadas && Object.keys(reservaSelecionada.respostasCustomizadas).length > 0 && (
-                  <div style={{ ...modalCardStyle, gridColumn: '1 / -1', borderLeft: '4px solid #3b82f6', backgroundColor: '#eff6ff' }}>
-                    <h3 style={{...modalTitleStyle, color: '#1e40af', borderColor: '#bfdbfe'}}>📋 Respostas ao Formulário do Campo</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      {Object.entries(reservaSelecionada.respostasCustomizadas).map(([pergunta, resposta]: any, idx: number) => (
-                        <div key={idx} style={{ borderBottom: '1px solid #dbeafe', paddingBottom: '0.5rem' }}>
-                          <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#1e3a8a', marginBottom: '0.25rem' }}>{pergunta}</span>
-                          <span style={{ fontSize: '14px', color: '#334155', fontWeight: '700' }}>{resposta || 'Sem resposta'}</span>
+                  return (
+                    <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isInativa ? 'opacity-50 grayscale' : ''}`}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-black ${isExterna ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {item.crianca?.nome ? item.crianca.nome.charAt(0) : '?'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 m-0 text-sm">{item.crianca?.nome || 'N/D'}</p>
+                            <p className="text-[11px] text-slate-500 font-medium m-0 truncate max-w-[150px]">{item.pai?.nome}</p>
+                          </div>
                         </div>
-                      ))}
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-slate-800 m-0 text-xs">{item.campo_nome}</p>
+                        <p className="text-[11px] font-bold text-slate-400 uppercase mt-0.5">{item.turno}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        {temRisco ? (
+                           <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">
+                             ⚠️ Alerta Ativo
+                           </span>
+                        ) : (
+                           <span className="text-slate-300 text-xs font-bold">- Ok -</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {isExterna ? (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="bg-orange-50 text-orange-700 border border-orange-200 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider shadow-sm">
+                              🟠 Externo / Manual
+                            </span>
+                            <span className="text-xs font-black text-slate-900">{item.valor}€</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border shadow-sm ${item.status === 'Pago' || item.status === 'Sinal Pago' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                              🟢 HelloCamp • {item.status}
+                            </span>
+                            <span className="text-xs font-black text-slate-900">{item.valor}€</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => setReservaSelecionada(item)} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-900 hover:text-white transition-colors shadow-sm">
+                          Abrir Ficha
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES (SELEÇÃO DE MODO) */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 m-0">Adicionar Inscrições Externas</h2>
+                <p className="text-xs font-bold text-slate-500 mt-1 mb-0">Centralize os clientes que reservaram por fora da plataforma.</p>
+              </div>
+              <button onClick={() => { setIsAddModalOpen(false); setImportMode('selecao'); }} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 font-bold">&times;</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {importMode === 'selecao' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button onClick={() => setImportMode('manual')} className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-slate-200 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all group">
+                    <span className="text-4xl">✍️</span>
+                    <span className="font-black text-slate-800 group-hover:text-orange-700">Adicionar Manualmente</span>
+                    <span className="text-xs font-medium text-slate-500 text-center">Preencher um formulário rápido (ideal para 1 a 1).</span>
+                  </button>
+                  <button onClick={() => setImportMode('excel')} className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-slate-200 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
+                    <span className="text-4xl">📊</span>
+                    <span className="font-black text-slate-800 group-hover:text-emerald-700">Importar Excel/CSV</span>
+                    <span className="text-xs font-medium text-slate-500 text-center">Fazer upload de um ficheiro (ideal para muitas reservas).</span>
+                  </button>
+                </div>
+              )}
+
+              {/* MODO: MANUAL 1 a 1 */}
+              {importMode === 'manual' && (
+                <form id="form-manual" onSubmit={handleAddExterno} className="flex flex-col gap-6">
+                  {/* Onde vai o miúdo? */}
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Destino da Inscrição</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Para qual Campo?</label>
+                        <select required value={formExterno.campo_id} onChange={e => setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: ""})} className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none">
+                          <option value="">Selecione o Campo...</option>
+                          {camposParceiro.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Para quais Datas/Horário?</label>
+                        <select required disabled={!formExterno.campo_id} value={formExterno.turno_nome} onChange={e => setFormExterno({...formExterno, turno_nome: e.target.value})} className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none disabled:opacity-50">
+                          <option value="">Selecione o Turno...</option>
+                          {formExterno.campo_id && camposParceiro.find(c => c.id === formExterno.campo_id)?.turnos?.map((t: any, i: number) => (
+                            <option key={i} value={t.nome}>{t.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Valor Pago (€)</label>
+                        <input type="number" required value={formExterno.valor_pago} onChange={e => setFormExterno({...formExterno, valor_pago: Number(e.target.value)})} className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none" />
+                      </div>
                     </div>
                   </div>
+
+                  {/* Dados do Miúdo */}
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Dados do Participante</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Nome Completo</label>
+                        <input type="text" required value={formExterno.nome_crianca} onChange={e => setFormExterno({...formExterno, nome_crianca: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-slate-400" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Idade (Anos)</label>
+                        <input type="number" required value={formExterno.idade} onChange={e => setFormExterno({...formExterno, idade: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-slate-400" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-red-600 mb-1.5 uppercase">Alergias Alimentares</label>
+                        <input type="text" value={formExterno.alergias} onChange={e => setFormExterno({...formExterno, alergias: e.target.value})} placeholder="Ex: Amendoins" className="w-full p-3 bg-red-50 border border-red-200 rounded-xl text-sm outline-none focus:border-red-400" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-red-600 mb-1.5 uppercase">Doenças / Medicação</label>
+                        <input type="text" value={formExterno.doencas} onChange={e => setFormExterno({...formExterno, doencas: e.target.value})} placeholder="Ex: Asma" className="w-full p-3 bg-red-50 border border-red-200 rounded-xl text-sm outline-none focus:border-red-400" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dados do Pai */}
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Encarregado de Educação</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Nome do Responsável</label>
+                        <input type="text" required value={formExterno.nome_pai} onChange={e => setFormExterno({...formExterno, nome_pai: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Telemóvel</label>
+                        <input type="tel" required value={formExterno.telefone_pai} onChange={e => setFormExterno({...formExterno, telefone_pai: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Email</label>
+                        <input type="email" value={formExterno.email_pai} onChange={e => setFormExterno({...formExterno, email_pai: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              )}
+
+              {/* MODO: IMPORTAR EXCEL */}
+              {importMode === 'excel' && (
+                <div className="flex flex-col gap-6">
+                  <div className="bg-blue-50 border border-blue-200 p-5 rounded-2xl">
+                    <h3 className="text-sm font-black text-blue-900 mb-2">1. Descarregue o Template</h3>
+                    <p className="text-xs text-blue-700 mb-4">Para o sistema conseguir ler os seus dados, tem de usar o nosso formato exato. O nome do Campo e Turno têm de ser escritos exatamente como estão na HelloCamp.</p>
+                    <button onClick={downloadTemplateCSV} className="px-4 py-2 bg-white border border-blue-300 text-blue-800 font-bold rounded-lg shadow-sm hover:bg-blue-100 text-xs">
+                      ⬇️ Download Mockup CSV
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl">
+                    <h3 className="text-sm font-black text-slate-800 mb-2">2. Faça Upload do Ficheiro</h3>
+                    <p className="text-xs text-slate-500 mb-4">Aceitamos ficheiros .CSV guardados a partir do Excel.</p>
+                    <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files ? e.target.files[0] : null)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* BOTÕES DO MODAL */}
+            <div className="p-5 border-t border-slate-200 bg-white flex justify-between items-center">
+              {importMode !== 'selecao' ? (
+                <button onClick={() => setImportMode('selecao')} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800">&larr; Voltar</button>
+              ) : <div></div>}
+              
+              <div className="flex gap-3">
+                <button type="button" onClick={() => { setIsAddModalOpen(false); setImportMode('selecao'); }} className="px-6 py-2.5 font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors text-sm">Cancelar</button>
+                
+                {importMode === 'manual' && (
+                  <button type="submit" form="form-manual" disabled={savingExterno} className="px-8 py-2.5 font-bold text-white bg-orange-600 rounded-xl hover:bg-orange-700 transition-colors shadow-md text-sm disabled:opacity-50">
+                    {savingExterno ? 'A Guardar...' : '✓ Inserir Reserva'}
+                  </button>
                 )}
 
-                <div style={{ ...modalCardStyle, gridColumn: '1 / -1' }}>
-                  <h3 style={modalTitleStyle}>🛡️ Logística de Recolha e Responsável</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem' }}>
-                    <div>
-                      <DetailRow label="Responsável" value={reservaSelecionada.paiEncarregado?.nome} />
-                      <DetailRow label="Telefone" value={reservaSelecionada.paiEncarregado?.telefone} />
-                      <DetailRow label="Email" value={reservaSelecionada.paiEncarregado?.email} />
-                      <DetailRow label="NIF Cliente" value={reservaSelecionada.paiEncarregado?.nif} />
-                    </div>
-                    <div>
-                      <div style={{ padding: '1rem', backgroundColor: '#fef2f2', borderRadius: '0.5rem', border: '1px solid #fecaca', marginBottom: '1rem' }}>
-                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#e11d48', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Contacto de Emergência (Alternativo)</span>
-                        <span style={{ fontSize: '14px', color: '#9f1239', fontWeight: 'bold' }}>{reservaSelecionada.paiEncarregado?.emergencia}</span>
-                      </div>
-                      <div style={{ padding: '1rem', backgroundColor: '#f0fdf4', borderRadius: '0.5rem', border: '1px solid #bbf7d0' }}>
-                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Pessoas Autorizadas a Levantar a Criança</span>
-                        <span style={{ fontSize: '13px', color: '#064e3b', fontWeight: '600', whiteSpace: 'pre-wrap' }}>{reservaSelecionada.paiEncarregado?.recolha}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
+                {importMode === 'excel' && (
+                  <button onClick={handleImportCSV} disabled={!csvFile || savingExterno} className="px-8 py-2.5 font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors shadow-md text-sm disabled:opacity-50">
+                    {savingExterno ? 'A Importar...' : '✓ Processar Excel'}
+                  </button>
+                )}
               </div>
             </div>
 
           </div>
         </div>
       )}
+
+      {/* MODAL: VER FICHA CLÍNICA */}
+      {reservaSelecionada && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            <div className={`p-6 text-white flex justify-between items-center ${reservaSelecionada.status === 'Cancelada' || reservaSelecionada.status === 'Abandonada' ? 'bg-red-600' : 'bg-slate-900'}`}>
+              <div>
+                <h2 className="m-0 text-2xl font-black">Ficha de Participante</h2>
+                <p className="m-0 text-slate-300 text-xs font-mono mt-1">REF: {reservaSelecionada.id}</p>
+              </div>
+              <button onClick={() => setReservaSelecionada(null)} className="text-white opacity-60 hover:opacity-100 text-3xl font-light">&times;</button>
+            </div>
+
+            <div className="p-8 overflow-y-auto bg-slate-50 flex flex-col gap-6">
+              
+              {/* Top Banner Origin */}
+              {reservaSelecionada.isExterna ? (
+                <div className="bg-orange-100 text-orange-800 p-3 rounded-xl border border-orange-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
+                  🟠 Reserva Inserida Manualmente (Externa)
+                </div>
+              ) : (
+                <div className="bg-emerald-100 text-emerald-800 p-3 rounded-xl border border-emerald-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
+                  🟢 Reserva Oficial HelloCamp • Pagamento: {reservaSelecionada.status}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">👦 Identificação</h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between"><span className="font-bold text-slate-500">Nome:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.nome}</span></div>
+                    <div className="flex justify-between"><span className="font-bold text-slate-500">Nascimento:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.data_nascimento || 'N/A'}</span></div>
+                    <div className="flex justify-between"><span className="font-bold text-slate-500">Género:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.sexo || 'N/A'}</span></div>
+                    <div className="flex justify-between"><span className="font-bold text-slate-500">T-Shirt:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.tamanho_tshirt || 'N/A'}</span></div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border-2 border-red-100 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-red-50 rounded-bl-full flex items-start justify-end p-2 text-xl">🏥</div>
+                  <h3 className="text-sm font-black text-red-400 uppercase tracking-widest mb-4 pb-2 border-b border-red-50">Perfil Clínico e Alertas</h3>
+                  
+                  <div className="mb-4 bg-red-50 p-3 rounded-xl border border-red-100">
+                    <span className="block text-[10px] font-black text-red-500 uppercase mb-1">Alergias Alimentares</span>
+                    <span className="text-sm font-black text-red-900">{reservaSelecionada.crianca?.restricoes_alimentares || 'Não preenchido'}</span>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <span className="block text-[10px] font-black text-slate-400 uppercase mb-0.5">Doenças Crónicas</span>
+                      <p className="m-0 text-sm font-bold text-slate-700">{reservaSelecionada.crianca?.doencas_cronicas || 'Nenhuma declarada'}</p>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-black text-slate-400 uppercase mb-0.5">Medicação Regular</span>
+                      <p className="m-0 text-sm font-bold text-slate-700">{reservaSelecionada.crianca?.medicacao_regular || 'Nenhuma'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {reservaSelecionada.respostasCustomizadas && Object.keys(reservaSelecionada.respostasCustomizadas).length > 0 && (
+                <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl shadow-sm">
+                   <h3 className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4 pb-2 border-b border-blue-200/50">📋 Respostas Específicas do Campo</h3>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     {Object.entries(reservaSelecionada.respostasCustomizadas).map(([pergunta, resposta]: any, idx: number) => (
+                        <div key={idx} className="bg-white p-3 rounded-xl border border-blue-50">
+                          <span className="block text-[10px] font-bold text-blue-500 mb-1">{pergunta}</span>
+                          <span className="text-sm font-black text-slate-800">{resposta}</span>
+                        </div>
+                     ))}
+                   </div>
+                </div>
+              )}
+
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">🛡️ Contactos e Recolha</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between"><span className="font-bold text-slate-500">Responsável:</span> <span className="font-black text-slate-900">{reservaSelecionada.pai?.nome}</span></div>
+                    <div className="flex justify-between"><span className="font-bold text-slate-500">Telefone:</span> <span className="font-black text-slate-900">{reservaSelecionada.pai?.telefone}</span></div>
+                    <div className="flex justify-between"><span className="font-bold text-slate-500">Email:</span> <span className="font-black text-slate-900">{reservaSelecionada.pai?.email}</span></div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl">
+                      <span className="block text-[10px] font-black text-amber-600 uppercase mb-1">Telefone de Emergência</span>
+                      <span className="text-sm font-black text-amber-900">{reservaSelecionada.pai?.emergencia}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-const statCardStyle = { display: 'flex', flexDirection: 'column' as const, gap: '0.25rem', backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' };
-const statLabelStyle = { fontSize: '11px', fontWeight: '800', color: '#64748b', letterSpacing: '0.05em' };
-const dropdownLabelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#334155', textTransform: 'uppercase' as const, marginBottom: '0.4rem' };
-const thStyle = { padding: '1rem 1.5rem', fontSize: '11px', fontWeight: '800', color: '#475569', letterSpacing: '0.05em', whiteSpace: 'nowrap' as const };
-const tdStyle = { padding: '1.25rem 1.5rem', color: '#334155', verticalAlign: 'middle' };
-const selectDropdownStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', color: '#0f172a', fontWeight: '700', fontSize: '14px', outline: 'none', appearance: 'none' as const, cursor: 'pointer', backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2em' };
-const modalCardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' };
-const modalTitleStyle = { margin: '0 0 1.5rem 0', fontSize: '1.125rem', fontWeight: '900', color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' };
-
-const DetailRow = ({ label, value }: { label: string, value: string }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', borderBottom: '1px dashed #f1f5f9', paddingBottom: '0.25rem' }}>
-    <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>{label}:</span>
-    <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '700', textAlign: 'right', marginLeft: '1rem' }}>{value || 'N/D'}</span>
-  </div>
-);
