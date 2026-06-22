@@ -16,7 +16,7 @@ type ImagePreview = {
 type OpcaoVenda = {
   id: number;
   tipo_venda: "pacote" | "dias_soltos";
-  horario: string; // <- ALTERADO: agora aceita qualquer string (PT ou EN)
+  horario: string; // <--- ÚNICA ALTERAÇÃO: de union para string
   preco: number;
 };
 
