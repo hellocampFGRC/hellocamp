@@ -415,7 +415,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
 
               <div style={{ backgroundColor: 'white', borderRadius: '0.75rem', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                 <div style={{ backgroundColor: '#f1f5f9', padding: '1rem', borderBottom: '1px solid #e2e8f0' }}>
-                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🎟️ Bilhetes à Venda nestas Datas</span>
+                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🎟️ Vagas à Venda nestas Datas</span>
                 </div>
                 
                 <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>

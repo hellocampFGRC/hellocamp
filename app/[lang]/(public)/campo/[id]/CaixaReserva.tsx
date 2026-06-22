@@ -23,9 +23,9 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   const [modalidade, setModalidade] = useState<"pacote" | "dia_solto">(defaultMod);
   const [pacoteSelecionado, setPacoteSelecionado] = useState<any>(null);
   
-  // Para Dias Soltos
-  const [diaSelecionado, setDiaSelecionado] = useState<string>("");
-  const [horarioDiaSelecionado, setHorarioDiaSelecionado] = useState<any>(null);
+  // Novos Estados para Dias Soltos (Multi-Seleção)
+  const [horarioGeral, setHorarioGeral] = useState<string>("");
+  const [diasSelecionados, setDiasSelecionados] = useState<string[]>([]);
   
   const [quantidade, setQuantidade] = useState(1);
   const [extraAlimentacao, setExtraAlimentacao] = useState(false);
@@ -33,30 +33,40 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   const [extraProlongamento, setExtraProlongamento] = useState(false);
   const [extraTransporte, setExtraTransporte] = useState(false);
 
-  // Garante que o estado acompanha a disponibilidade real
+  // Inicialização Inteligente
   useEffect(() => {
     if (pacotesDisponiveis.length === 0 && diasSoltosDisponiveis.length > 0) setModalidade("dia_solto");
     if (pacotesDisponiveis.length > 0 && diasSoltosDisponiveis.length === 0) setModalidade("pacote");
-    
     if (pacotesDisponiveis.length > 0 && !pacoteSelecionado) setPacoteSelecionado(pacotesDisponiveis[0]);
   }, [turnos]);
 
-  // Obter dias únicos disponíveis para construir o "Mini-Calendário"
-  const datasUnicasDiasSoltos = Array.from(new Set(diasSoltosDisponiveis.map((t: any) => t.data_inicio))).sort();
+  // Identificar quais os Horários disponíveis nos Dias Soltos (Dia Completo, Manhã, Tarde)
+  const horariosUnicos = Array.from(new Set(diasSoltosDisponiveis.map((t: any) => {
+    if (t.nome.includes("Completo") || t.nome.includes("Full")) return "Dia Completo";
+    if (t.nome.includes("Manhã") || t.nome.includes("Morning")) return "Só Manhã";
+    if (t.nome.includes("Tarde") || t.nome.includes("Afternoon")) return "Só Tarde";
+    return "Geral";
+  }))).filter(h => h !== "Geral");
 
   useEffect(() => {
-    if (datasUnicasDiasSoltos.length > 0 && !diaSelecionado) setDiaSelecionado(datasUnicasDiasSoltos[0] as string);
-  }, [datasUnicasDiasSoltos]);
+    if (horariosUnicos.length > 0 && !horarioGeral) setHorarioGeral(horariosUnicos[0] as string);
+  }, [horariosUnicos]);
 
-  // Auto-selecionar o primeiro horário quando clica num dia
+  const datasUnicasDiasSoltos = Array.from(new Set(diasSoltosDisponiveis.map((t: any) => t.data_inicio))).sort() as string[];
+
+  // 3. FUNÇÃO DE TOGGLE DO CALENDÁRIO (Clica seleciona / Clica remove)
+  const toggleDia = (data: string) => {
+    setDiasSelecionados(prev => 
+      prev.includes(data) ? prev.filter(d => d !== data) : [...prev, data]
+    );
+  };
+
+  // Se mudar o horário (ex: de Manhã para Tarde), limpamos o calendário para evitar erros de preço
   useEffect(() => {
-    if (diaSelecionado && modalidade === "dia_solto") {
-      const horariosDesteDia = diasSoltosDisponiveis.filter((t: any) => t.data_inicio === diaSelecionado);
-      if (horariosDesteDia.length > 0) setHorarioDiaSelecionado(horariosDesteDia[0]);
-    }
-  }, [diaSelecionado, modalidade, diasSoltosDisponiveis]);
+    setDiasSelecionados([]);
+  }, [horarioGeral, modalidade]);
 
-  // 3. CÁLCULO DE PREÇOS
+  // 4. CÁLCULO DE PREÇOS
   const valAlimentacao = campo.extra_alimentacao || 0;
   const valAlojamento = campo.extra_alojamento || 0;
   const valProlongamento = campo.extra_prolongamento || 0;
@@ -64,7 +74,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
 
   let precoBase = 0;
   let diasParaCalculo = 1;
-  let turnoParaCheckout = null;
+  let turnoParaCheckout: any = null;
 
   if (temTurnos) {
     if (modalidade === "pacote" && pacoteSelecionado) {
@@ -74,10 +84,27 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
       const end = new Date(pacoteSelecionado.data_fim);
       diasParaCalculo = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     } 
-    else if (modalidade === "dia_solto" && horarioDiaSelecionado) {
-      precoBase = Number(horarioDiaSelecionado.preco);
-      turnoParaCheckout = horarioDiaSelecionado;
-      diasParaCalculo = 1; 
+    else if (modalidade === "dia_solto" && horarioGeral && diasSelecionados.length > 0) {
+      // Vai procurar os bilhetes exatos para os dias que escolheu, no horário que escolheu
+      const turnosEscolhidos = diasSelecionados.map(dia => {
+        return diasSoltosDisponiveis.find((t: any) => 
+          t.data_inicio === dia && 
+          (t.nome.includes(horarioGeral) || (horarioGeral === "Dia Completo" && t.nome.includes("Full")) || (horarioGeral === "Só Manhã" && t.nome.includes("Morning")) || (horarioGeral === "Só Tarde" && t.nome.includes("Afternoon")))
+        );
+      }).filter(Boolean);
+
+      precoBase = turnosEscolhidos.reduce((sum, t) => sum + Number(t.preco), 0);
+      diasParaCalculo = diasSelecionados.length;
+
+      // Criação de um Turno Virtual Agregado para enviar para o Checkout
+      turnoParaCheckout = {
+        id: "multi_dias",
+        nome: `${isEn ? 'Selected Days' : 'Dias Soltos'} (${horarioGeral}) - ${diasSelecionados.length} ${isEn ? 'days' : 'dias'}`,
+        data_inicio: diasSelecionados.sort()[0],
+        data_fim: diasSelecionados.sort()[diasSelecionados.length - 1],
+        preco: precoBase,
+        vagas: Math.min(...turnosEscolhidos.map(t => Number((t as any).vagas)))
+      };
     }
   } else {
     precoBase = Number(campo.preco) || 0;
@@ -93,22 +120,21 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
 
   const precoTotal = (precoBase + totalExtras) * quantidade;
 
-  // 4. HELPERS VISUAIS
+  // 5. HELPERS VISUAIS
   const formatarDataExibicao = (dStr: string) => {
     if (!dStr) return '';
     return new Date(dStr).toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
   };
-  
   const limparNomeParaExibicao = (nomeCru: string) => nomeCru.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
 
-  const getHorarioTag = (nome: string) => {
-    if (nome.includes("Completo") || nome.includes("Full")) return { tag: isEn ? "Full Day" : "Dia Completo", icon: "🌅" };
-    if (nome.includes("Manhã") || nome.includes("Morning")) return { tag: isEn ? "Morning" : "Manhã", icon: "🥞" };
-    if (nome.includes("Tarde") || nome.includes("Afternoon")) return { tag: isEn ? "Afternoon" : "Tarde", icon: "🥪" };
-    return { tag: isEn ? "Program" : "Programa", icon: "🎟️" };
+  const getHorarioInfo = (horario: string) => {
+    if (horario === "Dia Completo") return { tag: isEn ? "Full Day" : "Dia Completo", icon: "🌅" };
+    if (horario === "Só Manhã") return { tag: isEn ? "Morning" : "Só Manhã", icon: "🥞" };
+    if (horario === "Só Tarde") return { tag: isEn ? "Afternoon" : "Só Tarde", icon: "🥪" };
+    return { tag: horario, icon: "🎟️" };
   };
 
-  // 5. SUBMETER
+  // 6. SUBMETER
   const handleReservar = () => {
     if (!turnoParaCheckout) return;
 
@@ -136,7 +162,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
       
       <div className="mb-8">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-          {modalidade === 'pacote' ? (isEn ? 'Package Price' : 'Preço Pacote Inteiro') : (isEn ? 'Daily Rate' : 'Preço por Dia')}
+          {modalidade === 'pacote' ? (isEn ? 'Package Price' : 'Preço Pacote Inteiro') : (isEn ? 'Price per selection' : 'Preço da Seleção')}
         </p>
         <div className="flex items-baseline gap-2">
           <span className="text-4xl font-black text-slate-900 leading-none">{precoBase}€</span>
@@ -150,7 +176,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
          </div>
       ) : (
         <>
-          {/* ABAS INTELIGENTES (Esconde se não houver opção) */}
+          {/* ABAS INTELIGENTES */}
           {(pacotesDisponiveis.length > 0 && diasSoltosDisponiveis.length > 0) && (
             <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-6">
               <button onClick={() => setModalidade('pacote')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-all ${modalidade === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
@@ -162,15 +188,19 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
             </div>
           )}
 
-          {/* FLUXO 1: PACOTES (SEMANAS) */}
+          {/* FLUXO 1: PACOTES (SEMANAS INTEIRAS) */}
           {modalidade === "pacote" && pacotesDisponiveis.length > 0 && (
             <div className="mb-6 animate-in fade-in duration-300">
-              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">{isEn ? 'Select Dates & Schedule' : 'Escolha a Semana e Horário'}</label>
+              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">{isEn ? 'Select Program / Dates' : 'Escolha a Semana e Horário'}</label>
               <div className="flex flex-col gap-3">
                 {pacotesDisponiveis.map((pac: any) => {
                   const isActive = pacoteSelecionado?.id === pac.id;
                   const isFull = Number(pac.vagas) <= 0;
-                  const tagInfo = getHorarioTag(pac.nome);
+                  
+                  let tagInfo = { tag: "Geral", icon: "🎟️" };
+                  if (pac.nome.includes("Completo") || pac.nome.includes("Full")) tagInfo = { tag: isEn ? "Full Day" : "Dia Completo", icon: "🌅" };
+                  if (pac.nome.includes("Manhã") || pac.nome.includes("Morning")) tagInfo = { tag: isEn ? "Morning" : "Manhã", icon: "🥞" };
+                  if (pac.nome.includes("Tarde") || pac.nome.includes("Afternoon")) tagInfo = { tag: isEn ? "Afternoon" : "Tarde", icon: "🥪" };
 
                   return (
                     <div 
@@ -195,62 +225,66 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
             </div>
           )}
 
-          {/* FLUXO 2: MINI-CALENDÁRIO (DIAS SOLTOS) */}
+          {/* FLUXO 2: MINI-CALENDÁRIO DE MÚLTIPLA SELEÇÃO (DIAS SOLTOS) */}
           {modalidade === "dia_solto" && diasSoltosDisponiveis.length > 0 && (
-            <div className="mb-6 animate-in fade-in duration-300 bg-emerald-50/50 p-4 rounded-3xl border border-emerald-100">
+            <div className="mb-6 animate-in fade-in duration-300">
               
-              {/* Grelha de Calendário */}
-              <label className="block text-[11px] font-black text-emerald-800 uppercase tracking-widest mb-3">{isEn ? '1. Pick a Date' : '1. Escolha o Dia Específico'}</label>
-              
-              <div className="grid grid-cols-5 sm:grid-cols-6 gap-1.5 mb-5">
-                {datasUnicasDiasSoltos.map((data: any) => {
-                  const isActive = diaSelecionado === data;
-                  const dateObj = new Date(data);
-                  const diaSemana = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.', '');
-                  const diaNumero = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' });
-
+              {/* Passo A: Botões pequenos de Horário Lado-a-Lado */}
+              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">{isEn ? '1. Select Schedule' : '1. Escolha o Horário'}</label>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {horariosUnicos.map((h: any) => {
+                  const isActive = horarioGeral === h;
+                  const info = getHorarioInfo(h);
                   return (
-                    <div 
-                      key={data} 
-                      onClick={() => setDiaSelecionado(data)}
-                      className={`flex flex-col items-center justify-center py-2 rounded-xl cursor-pointer transition-all border ${isActive ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105' : 'bg-white border-emerald-100 text-slate-600 hover:border-emerald-300'}`}
+                    <button 
+                      key={h} 
+                      onClick={() => setHorarioGeral(h)} 
+                      className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 border ${isActive ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'}`}
                     >
-                      <span className={`text-[9px] font-black uppercase tracking-wider mb-0.5 ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{diaSemana}</span>
-                      <span className={`text-base font-black leading-none ${isActive ? 'text-white' : 'text-slate-700'}`}>{diaNumero}</span>
-                    </div>
-                  );
+                      <span className="text-sm">{info.icon}</span> {info.tag}
+                    </button>
+                  )
                 })}
               </div>
 
-              {/* Botões de Horário para o dia selecionado */}
-              {diaSelecionado && (
-                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 border-t border-emerald-100 pt-4">
-                  <label className="block text-[11px] font-black text-emerald-800 uppercase tracking-widest mb-3">{isEn ? '2. Select the Schedule' : '2. Qual é o Horário?'}</label>
-                  <div className="flex flex-col gap-2.5">
-                    {diasSoltosDisponiveis.filter((t: any) => t.data_inicio === diaSelecionado).map((horario: any) => {
-                      const isActive = horarioDiaSelecionado?.id === horario.id;
-                      const isFull = Number(horario.vagas) <= 0;
-                      const tagInfo = getHorarioTag(horario.nome);
-
-                      return (
-                        <div 
-                          key={horario.id} 
-                          onClick={() => !isFull && setHorarioDiaSelecionado(horario)}
-                          className={`relative flex items-center justify-between p-3.5 rounded-xl border-2 transition-all cursor-pointer ${isFull ? 'bg-slate-50 border-slate-200 opacity-50 grayscale' : (isActive ? 'bg-emerald-700 border-emerald-700 text-white shadow-md' : 'bg-white border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50/50')}`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-xl bg-white/20 p-1.5 rounded-lg leading-none">{tagInfo.icon}</span>
-                            <span className={`text-sm font-black ${isActive ? 'text-white' : 'text-emerald-950'}`}>{tagInfo.tag}</span>
-                          </div>
-                          <span className={`text-sm font-black ${isActive ? 'text-emerald-100' : 'text-emerald-700'}`}>{horario.preco}€</span>
-                          
-                          {isFull && <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-[1px] rounded-lg"><span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded shadow-sm">{isEn ? 'SOLD OUT' : 'ESGOTADO'}</span></div>}
-                        </div>
-                      );
-                    })}
-                  </div>
+              {/* Passo B: Calendário Grid Interativo */}
+              <div className="bg-emerald-50/50 p-5 rounded-3xl border border-emerald-100">
+                <div className="flex justify-between items-center mb-4">
+                  <label className="text-[11px] font-black text-emerald-800 uppercase tracking-widest m-0">{isEn ? '2. Pick your Days' : '2. Selecione os Dias'}</label>
+                  <span className="text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-1 rounded-md">{diasSelecionados.length} {isEn ? 'Selected' : 'Selecionados'}</span>
                 </div>
-              )}
+                
+                <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                  {datasUnicasDiasSoltos.map((data: string) => {
+                    const isSelected = diasSelecionados.includes(data);
+                    
+                    // Verifica se há bilhete disponível para este dia no horário selecionado
+                    const turnosDesteDia = diasSoltosDisponiveis.filter((t: any) => t.data_inicio === data && (t.nome.includes(horarioGeral) || (horarioGeral === "Dia Completo" && t.nome.includes("Full")) || (horarioGeral === "Só Manhã" && t.nome.includes("Morning")) || (horarioGeral === "Só Tarde" && t.nome.includes("Afternoon"))));
+                    const isAvailable = turnosDesteDia.length > 0 && turnosDesteDia.some((t:any) => Number(t.vagas) > 0);
+
+                    const dateObj = new Date(data);
+                    const diaSemana = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.', '');
+                    const diaNumero = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' });
+
+                    return (
+                      <button 
+                        key={data} 
+                        type="button"
+                        onClick={() => toggleDia(data)}
+                        disabled={!isAvailable}
+                        className={`flex flex-col items-center justify-center py-2.5 rounded-xl cursor-pointer transition-all border-2 ${isSelected ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105' : (isAvailable ? 'bg-white border-emerald-100 text-slate-600 hover:border-emerald-400' : 'bg-slate-50 border-slate-100 text-slate-300 opacity-50 cursor-not-allowed')}`}
+                      >
+                        <span className={`text-[9px] font-black uppercase tracking-wider mb-0.5 ${isSelected ? 'text-emerald-100' : (isAvailable ? 'text-emerald-600/70' : 'text-slate-300')}`}>{diaSemana}</span>
+                        <span className="text-base font-black leading-none">{diaNumero}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {diasSelecionados.length === 0 && (
+                  <p className="text-xs text-center text-emerald-700/60 font-bold mt-4 mb-0">👆 {isEn ? 'Click on the dates you want to attend.' : 'Pode clicar em vários dias para adicionar à sua seleção.'}</p>
+                )}
+              </div>
             </div>
           )}
         </>
@@ -283,7 +317,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
 
           <div className="bg-slate-50 p-5 rounded-2xl mb-6 flex justify-between items-center border border-slate-200 border-dashed">
             <span className="text-sm font-black text-slate-900 uppercase tracking-wider">Total</span>
-            <span className="text-2xl font-black text-emerald-600">{precoTotal}€</span>
+            <span className="text-2xl font-black text-emerald-600">{precoTotal > 0 ? `${precoTotal}€` : '--'}</span>
           </div>
         </>
       )}
