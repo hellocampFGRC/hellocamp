@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, use, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import imageCompression from 'browser-image-compression';
-import React from "react";
+import React, { use } from "react";
 
 type ImagePreview = {
   file?: File;
@@ -82,7 +82,13 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
   });
   const [idadeManual, setIdadeManual] = useState("");
 
-  const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
+  const [turnos, setTurnos] = useState([{ 
+    nome: "", data_inicio: "", data_fim: "", vagas: 20, 
+    vender_pacote: true, vender_dias: false, excluir_fins_de_semana: true,
+    tem_dia_completo: true, preco_pacote_dia_completo: 0, preco_dia_dia_completo: 0,
+    tem_manha: false, preco_pacote_manha: 0, preco_dia_manha: 0,
+    tem_tarde: false, preco_pacote_tarde: 0, preco_dia_tarde: 0
+  }]);
 
   const [perguntasCustomizadas, setPerguntasCustomizadas] = useState<string[]>([]);
 
@@ -91,7 +97,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     racio_monitores: "", duracao_dias: 7,
     alimentacao: "Não tem", alojamento: "Não tem", seguro: "Incluído no Preço",
     politica_cancelamento: "Moderada (Reembolso a 50% até 15 dias antes)",
-    tipo_pagamento: "100_total", // <--- Adicionado para controlar a estratégia de tesouraria
+    tipo_pagamento: "100_total",
     descricao: "", regras_termos: "",
     extra_alimentacao: 0, tipo_cobranca_alimentacao: "Por Turno",
     extra_alojamento: 0, tipo_cobranca_alojamento: "Por Turno",
@@ -123,7 +129,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
   const removeImage = (indexToRemove: number) => {
     setImages(prev => {
       const newImages = prev.filter((_, idx) => idx !== indexToRemove);
-      if (prev[indexToRemove].isMain && newImages.length > 0) newImages[0].isMain = true;
+      if (prev[indexToRemove]?.isMain && newImages.length > 0) newImages[0].isMain = true;
       if (newImages.length === 0) setUsarFotoPadrao(false);
       return newImages;
     });
@@ -164,8 +170,16 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     return lista.join(", ");
   };
 
-  const handleAddTurno = () => setTurnos([...turnos, { nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
+  const handleAddTurno = () => setTurnos([...turnos, { 
+    nome: "", data_inicio: "", data_fim: "", vagas: 20, 
+    vender_pacote: true, vender_dias: false, excluir_fins_de_semana: true,
+    tem_dia_completo: true, preco_pacote_dia_completo: 0, preco_dia_dia_completo: 0,
+    tem_manha: false, preco_pacote_manha: 0, preco_dia_manha: 0,
+    tem_tarde: false, preco_pacote_tarde: 0, preco_dia_tarde: 0
+  }]);
+  
   const handleRemoveTurno = (index: number) => setTurnos(turnos.filter((_, i) => i !== index));
+  
   const handleTurnoChange = (index: number, field: string, value: string | number | boolean) => {
     const novosTurnos = [...turnos];
     novosTurnos[index] = { ...novosTurnos[index], [field]: value };
@@ -181,14 +195,10 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
   };
 
   const adicionarPerguntaSugerida = (pergunta: string) => {
-    if (!perguntasCustomizadas.includes(pergunta)) {
-      setPerguntasCustomizadas([...perguntasCustomizadas, pergunta]);
-    }
+    if (!perguntasCustomizadas.includes(pergunta)) setPerguntasCustomizadas([...perguntasCustomizadas, pergunta]);
   };
 
-  const sugestoesAtuais = formData.categoria 
-    ? PERGUNTAS_SUGERIDAS[formData.categoria as keyof typeof PERGUNTAS_SUGERIDAS] || [] 
-    : [];
+  const sugestoesAtuais = formData.categoria ? PERGUNTAS_SUGERIDAS[formData.categoria as keyof typeof PERGUNTAS_SUGERIDAS] || [] : [];
 
   const buscarNoMapaManual = async () => {
     if (formData.local.length < 3) return;
@@ -215,9 +225,7 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
     return () => clearTimeout(delayDebounce);
   }, [formData.local, formData.Distrito, pais]);
 
-  const sanitizeFileName = (name: string) => {
-    return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
-  };
+  const sanitizeFileName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,11 +233,82 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
 
     const stringIdadesCompleta = construirStringIdades();
 
+    // Validações Base
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     if (!mapPreview) { alert(isEn ? "Please ensure the map is loaded." : "Por favor, garanta que o mapa carregou."); setLoading(false); return; }
     if (images.length === 0) { alert(isEn ? "Please select a photo." : "Por favor, adicione uma fotografia."); setLoading(false); return; }
     if (!stringIdadesCompleta) { alert(isEn ? "Please select or type at least one age range." : "Por favor, selecione ou digite pelo menos uma faixa etária."); setLoading(false); return; }
+
+    // Validação Lógica de Turnos
+    for (const t of turnos) {
+      if (!t.tem_dia_completo && !t.tem_manha && !t.tem_tarde) {
+        alert(isEn ? "Select at least one schedule (Full Day, Morning, Afternoon)." : "Selecione pelo menos um horário (Dia Completo, Manhã ou Tarde) num dos turnos.");
+        setLoading(false); return;
+      }
+      if (!t.vender_pacote && !t.vender_dias) {
+        alert(isEn ? "Select how you want to sell the shift (Package or Days)." : "Selecione como quer vender o turno (Pacote Completo ou Dias Soltos).");
+        setLoading(false); return;
+      }
+    }
+
+    // ==============================================================
+    // LÓGICA MÁGICA 2.0: MOTOR GERADOR DE OPÇÕES E TRADUÇÃO
+    // ==============================================================
+    setStatusText(isEn ? "Generating schedules..." : "A calcular algoritmos de horários...");
+    
+    const turnosFinaisPT: any[] = [];
+    const turnosFinaisEN: any[] = [];
+    let precoMaisBaixo = Infinity;
+
+    turnos.forEach(t => {
+      // Função Auxiliar para Injetar Opções
+      const pushOption = (horarioPT: string, horarioEN: string, isPacote: boolean, preco: number, dateStart: string, dateEnd: string, dayLabel?: string) => {
+        if (preco <= 0 && !isPacote) return; // Ignora se o preço individual do dia estiver a zero ou negativo
+        
+        const nomePT = isPacote ? `${t.nome} (Pacote) - ${horarioPT}` : `${t.nome} - Dia ${dayLabel} - ${horarioPT}`;
+        const nomeEN = isPacote ? `${t.nome} (Package) - ${horarioEN}` : `${t.nome} - Day ${dayLabel} - ${horarioEN}`;
+
+        turnosFinaisPT.push({ nome: nomePT, data_inicio: dateStart, data_fim: dateEnd, preco: preco, vagas: t.vagas });
+        turnosFinaisEN.push({ nome: nomeEN, data_inicio: dateStart, data_fim: dateEnd, preco: preco, vagas: t.vagas });
+        
+        if (preco < precoMaisBaixo) precoMaisBaixo = preco;
+      };
+
+      // 1. GERAR PACOTES (A semana/mês inteiro)
+      if (t.vender_pacote) {
+        if (t.tem_dia_completo) pushOption("Dia Completo", "Full Day", true, t.preco_pacote_dia_completo, t.data_inicio, t.data_fim);
+        if (t.tem_manha) pushOption("Só Manhã", "Morning Only", true, t.preco_pacote_manha, t.data_inicio, t.data_fim);
+        if (t.tem_tarde) pushOption("Só Tarde", "Afternoon Only", true, t.preco_pacote_tarde, t.data_inicio, t.data_fim);
+      }
+
+      // 2. GERAR DIAS SOLTOS (Expansão Matemática)
+      if (t.vender_dias) {
+        const currentDate = new Date(t.data_inicio + "T12:00:00Z");
+        const endDate = new Date(t.data_fim + "T12:00:00Z");
+
+        while (currentDate <= endDate) {
+          const dayOfWeek = currentDate.getUTCDay(); // 0 = Dom, 6 = Sáb
+          
+          if (t.excluir_fins_de_semana && (dayOfWeek === 0 || dayOfWeek === 6)) {
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+            continue;
+          }
+
+          const dateString = currentDate.toISOString().split('T')[0];
+          const [, mm, dd] = dateString.split('-');
+          const dateFormatted = `${dd}/${mm}`;
+          
+          if (t.tem_dia_completo) pushOption("Dia Completo", "Full Day", false, t.preco_dia_dia_completo, dateString, dateString, dateFormatted);
+          if (t.tem_manha) pushOption("Só Manhã", "Morning Only", false, t.preco_dia_manha, dateString, dateString, dateFormatted);
+          if (t.tem_tarde) pushOption("Só Tarde", "Afternoon Only", false, t.preco_dia_tarde, dateString, dateString, dateFormatted);
+
+          currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        }
+      }
+    });
+
+    if (precoMaisBaixo === Infinity) precoMaisBaixo = 0;
 
     try {
       setStatusText(isEn ? "Processing images..." : "A processar fotografias...");
@@ -259,24 +338,30 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
       const linguasFinais = getLinguasString();
       const perguntasValidas = perguntasCustomizadas.filter(p => p.trim() !== "");
       
-      const precoGlobal = turnos[0]?.preco || 0;
       const formatarDataStr = (d: string) => d ? new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) : '';
       const textoDatas = turnos.map(t => `${formatarDataStr(t.data_inicio)} a ${formatarDataStr(t.data_fim)}`).join(", ");
       const totalVagasCalculado = turnos.reduce((acc, curr) => acc + (Number(curr.vagas) || 0), 0);
 
+      // Tratamento extra do objeto dinâmico formData (para prevenir erro de Tipagem na interpolação das variáveis)
+      const formPayload: Record<string, any> = { ...formData };
+
       const { data: novoCampoInserido, error: insertError } = await supabase.from("campos").insert([{
-        ...formData,
+        ...formPayload,
         idade: stringIdadesCompleta,
         vagas_totais: totalVagasCalculado,
-        preco: precoGlobal,                      
+        preco: precoMaisBaixo,                      
         datas_disponiveis: textoDatas,           
         datas_disponiveis_en: textoDatas,     
         pais, pais_en: pais, 
         linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais,
         imagem: mainImageUrl, galeria: galeriaUrls,
-        programas_pdf: programasDocs, regras_termos_en: formData.regras_termos, politica_cancelamento_en: formData.politica_cancelamento,
+        programas_pdf: programasDocs, 
+        regras_termos_en: formData.regras_termos, 
+        politica_cancelamento_en: formData.politica_cancelamento,
         latitude: mapPreview.lat, longitude: mapPreview.lon,
-        turnos, turnos_en: turnos, organizador_id: session.user.id,
+        turnos: turnosFinaisPT, 
+        turnos_en: turnosFinaisEN, 
+        organizador_id: session.user.id,
         nome_en: formData.nome, categoria_en: formData.categoria, local_en: formData.local, idade_en: stringIdadesCompleta, descricao_en: formData.descricao,
         alimentacao_en: formData.alimentacao, alojamento_en: formData.alojamento, seguro_en: formData.seguro, Distrito_en: formData.Distrito,
         perguntas_customizadas: perguntasValidas,
@@ -407,11 +492,14 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
           )}
         </div>
 
-        {/* 3. TURNOS E FLEXIBILIDADE */}
+        {/* 3. O NOVO MOTOR GERADOR DE TURNOS E FLEXIBILIDADE */}
         <div style={sectionStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '3. Shifts & Flexibility' : '3. Turnos e Flexibilidade'}</h2>
-            <button type="button" onClick={handleAddTurno} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>+ {isEn ? 'Add Shift' : 'Adicionar Turno'}</button>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{isEn ? '3. Shifts & Flexibility' : '3. Construção do Calendário'}</h2>
+              <p style={{ margin: '0.25rem 0 0 0', fontSize: '13px', color: '#64748b' }}>Configure os módulos e deixe o sistema gerar os bilhetes aos pais automaticamente.</p>
+            </div>
+            <button type="button" onClick={handleAddTurno} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>+ {isEn ? 'Add Block' : 'Adicionar Bloco de Datas'}</button>
           </div>
           
           <div style={{ marginBottom: '1.5rem', display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
@@ -422,27 +510,103 @@ export default function NovoCampo({ params }: { params: Promise<{ lang: string }
           </div>
 
           {turnos.map((turno, index) => (
-            <div key={index} style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '0.75rem', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
+            <div key={index} style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '1rem', marginBottom: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+              
+              {/* CABEÇALHO DO BLOCO */}
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
-                <div style={{ flex: '1 1 180px' }}><label style={labelStyle}>{isEn ? 'Shift Name' : 'Nome do Turno'}</label><input type="text" required value={turno.nome} onChange={e => handleTurnoChange(index, 'nome', e.target.value)} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>{isEn ? 'Start Date' : 'Data Início'}</label><input type="date" required value={turno.data_inicio} onChange={e => handleTurnoChange(index, 'data_inicio', e.target.value)} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>{isEn ? 'End Date' : 'Data Fim'}</label><input type="date" required value={turno.data_fim} onChange={e => handleTurnoChange(index, 'data_fim', e.target.value)} style={inputStyle} /></div>
-                <div style={{ width: '90px' }}><label style={labelStyle}>{isEn ? 'Spots' : 'Vagas'}</label><input type="number" required value={turno.vagas} onChange={e => handleTurnoChange(index, 'vagas', Number(e.target.value))} style={inputStyle} /></div>
-                <div style={{ width: '100px' }}><label style={labelStyle}>{isEn ? 'Price (€)' : 'Preço (€)'}</label><input type="number" required value={turno.preco} onChange={e => handleTurnoChange(index, 'preco', Number(e.target.value))} style={inputStyle} /></div>
-                {turnos.length > 1 && <button type="button" onClick={() => handleRemoveTurno(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>}
+                <div style={{ flex: '1 1 200px' }}><label style={labelStyle}>{isEn ? 'Block Name' : 'Nome do Bloco'}</label><input type="text" placeholder="Ex: Semana 1 / Mês Julho" required value={turno.nome} onChange={e => handleTurnoChange(index, 'nome', e.target.value)} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 120px' }}><label style={labelStyle}>{isEn ? 'Start Date' : 'Data Início'}</label><input type="date" required value={turno.data_inicio} onChange={e => handleTurnoChange(index, 'data_inicio', e.target.value)} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 120px' }}><label style={labelStyle}>{isEn ? 'End Date' : 'Data Fim'}</label><input type="date" required value={turno.data_fim} onChange={e => handleTurnoChange(index, 'data_fim', e.target.value)} style={inputStyle} /></div>
+                <div style={{ width: '90px' }}><label style={labelStyle}>{isEn ? 'Total Spots' : 'Vagas Totais'}</label><input type="number" required value={turno.vagas} onChange={e => handleTurnoChange(index, 'vagas', Number(e.target.value))} style={inputStyle} /></div>
+                {turnos.length > 1 && <button type="button" onClick={() => handleRemoveTurno(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>Remover</button>}
               </div>
 
-              <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '1rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                <label style={checkboxLabelStyle}>
-                  <input type="checkbox" checked={turno.permite_dias} onChange={e => handleTurnoChange(index, 'permite_dias', e.target.checked)} />
-                  {isEn ? 'Allow booking specific days?' : 'Permitir inscrição em dias isolados?'}
-                </label>
-                {turno.permite_dias && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>{isEn ? 'Price/Day (€):' : 'Preço/Dia (€):'}</label>
-                    <input type="number" required={turno.permite_dias} value={turno.preco_dia} onChange={e => handleTurnoChange(index, 'preco_dia', Number(e.target.value))} style={{ ...inputStyle, width: '100px', padding: '0.5rem' }} />
-                  </div>
-                )}
+              {/* MODALIDADES DE VENDA */}
+              <div style={{ backgroundColor: '#f8fafc', padding: '1.25rem', borderRadius: '0.75rem', marginBottom: '1.5rem' }}>
+                <label style={{ ...labelStyle, fontSize: '11px', color: '#64748b' }}>{isEn ? 'Selling Methods' : 'Métodos de Venda para os Pais'}</label>
+                <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                  <label style={checkboxLabelStyle}>
+                    <input type="checkbox" checked={turno.vender_pacote} onChange={e => handleTurnoChange(index, 'vender_pacote', e.target.checked)} />
+                    Vender Pacote Completo (Para as datas acima)
+                  </label>
+                  <label style={checkboxLabelStyle}>
+                    <input type="checkbox" checked={turno.vender_dias} onChange={e => handleTurnoChange(index, 'vender_dias', e.target.checked)} />
+                    Vender Dias Soltos Internos (Gerar Auto)
+                  </label>
+                  {turno.vender_dias && (
+                    <label style={{...checkboxLabelStyle, color: '#059669'}}>
+                      <input type="checkbox" checked={turno.excluir_fins_de_semana} onChange={e => handleTurnoChange(index, 'excluir_fins_de_semana', e.target.checked)} />
+                      Ocultar Fins-de-Semana
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* HORÁRIOS E PREÇOS (MATRIZ DINÂMICA) */}
+              <label style={{ ...labelStyle, fontSize: '11px', color: '#64748b', marginBottom: '1rem' }}>{isEn ? 'Schedules & Prices' : 'Configurar Horários e Preços (€)'}</label>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                
+                {/* LINHA: DIA COMPLETO */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.75rem', backgroundColor: turno.tem_dia_completo ? '#fff' : '#f8fafc', opacity: turno.tem_dia_completo ? 1 : 0.6 }}>
+                  <label style={{ ...checkboxLabelStyle, width: '160px', fontWeight: '800' }}>
+                    <input type="checkbox" checked={turno.tem_dia_completo} onChange={e => handleTurnoChange(index, 'tem_dia_completo', e.target.checked)} />
+                    🌅 Dia Completo
+                  </label>
+                  {turno.tem_dia_completo && turno.vender_pacote && (
+                    <div style={{ flex: 1, minWidth: '130px' }}>
+                      <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '2px' }}>PREÇO PACOTE (€)</span>
+                      <input type="number" required value={turno.preco_pacote_dia_completo} onChange={e => handleTurnoChange(index, 'preco_pacote_dia_completo', Number(e.target.value))} style={{...inputStyle, padding: '0.5rem'}} />
+                    </div>
+                  )}
+                  {turno.tem_dia_completo && turno.vender_dias && (
+                    <div style={{ flex: 1, minWidth: '130px' }}>
+                      <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '2px' }}>PREÇO DIA SOLTO (€)</span>
+                      <input type="number" required value={turno.preco_dia_dia_completo} onChange={e => handleTurnoChange(index, 'preco_dia_dia_completo', Number(e.target.value))} style={{...inputStyle, padding: '0.5rem'}} />
+                    </div>
+                  )}
+                </div>
+
+                {/* LINHA: SÓ MANHÃ */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.75rem', backgroundColor: turno.tem_manha ? '#fff' : '#f8fafc', opacity: turno.tem_manha ? 1 : 0.6 }}>
+                  <label style={{ ...checkboxLabelStyle, width: '160px', fontWeight: '800' }}>
+                    <input type="checkbox" checked={turno.tem_manha} onChange={e => handleTurnoChange(index, 'tem_manha', e.target.checked)} />
+                    🥞 Só Manhã
+                  </label>
+                  {turno.tem_manha && turno.vender_pacote && (
+                    <div style={{ flex: 1, minWidth: '130px' }}>
+                      <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '2px' }}>PREÇO PACOTE (€)</span>
+                      <input type="number" required value={turno.preco_pacote_manha} onChange={e => handleTurnoChange(index, 'preco_pacote_manha', Number(e.target.value))} style={{...inputStyle, padding: '0.5rem'}} />
+                    </div>
+                  )}
+                  {turno.tem_manha && turno.vender_dias && (
+                    <div style={{ flex: 1, minWidth: '130px' }}>
+                      <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '2px' }}>PREÇO DIA SOLTO (€)</span>
+                      <input type="number" required value={turno.preco_dia_manha} onChange={e => handleTurnoChange(index, 'preco_dia_manha', Number(e.target.value))} style={{...inputStyle, padding: '0.5rem'}} />
+                    </div>
+                  )}
+                </div>
+
+                {/* LINHA: SÓ TARDE */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.75rem', backgroundColor: turno.tem_tarde ? '#fff' : '#f8fafc', opacity: turno.tem_tarde ? 1 : 0.6 }}>
+                  <label style={{ ...checkboxLabelStyle, width: '160px', fontWeight: '800' }}>
+                    <input type="checkbox" checked={turno.tem_tarde} onChange={e => handleTurnoChange(index, 'tem_tarde', e.target.checked)} />
+                    🥪 Só Tarde
+                  </label>
+                  {turno.tem_tarde && turno.vender_pacote && (
+                    <div style={{ flex: 1, minWidth: '130px' }}>
+                      <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '2px' }}>PREÇO PACOTE (€)</span>
+                      <input type="number" required value={turno.preco_pacote_tarde} onChange={e => handleTurnoChange(index, 'preco_pacote_tarde', Number(e.target.value))} style={{...inputStyle, padding: '0.5rem'}} />
+                    </div>
+                  )}
+                  {turno.tem_tarde && turno.vender_dias && (
+                    <div style={{ flex: 1, minWidth: '130px' }}>
+                      <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '2px' }}>PREÇO DIA SOLTO (€)</span>
+                      <input type="number" required value={turno.preco_dia_tarde} onChange={e => handleTurnoChange(index, 'preco_dia_tarde', Number(e.target.value))} style={{...inputStyle, padding: '0.5rem'}} />
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
           ))}
@@ -654,4 +818,4 @@ const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minm
 const labelStyle = { display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '0.5rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
 const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '15px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };
 const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
-const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '14px', color: '#334155', cursor: 'pointer', fontWeight: '600' };
+const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '14px', color: '#334155', cursor: 'pointer', fontWeight: '600' };
