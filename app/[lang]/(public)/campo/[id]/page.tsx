@@ -25,11 +25,7 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
   };
 }
 
-export default async function DetalhesDoCampo({ 
-  params
-}: { 
-  params: Promise<{ lang: string; id: string }>;
-}) {
+export default async function DetalhesDoCampo({ params }: { params: Promise<{ lang: string; id: string }>; }) {
   const { lang, id } = await params;
   
   const dict = await getDictionary(lang as "pt" | "en");
@@ -81,27 +77,36 @@ export default async function DetalhesDoCampo({
   const dataMaisCedo = campo.turnos && campo.turnos.length > 0 ? campo.turnos[0].data_inicio : "2026-07-01";
   
   // ==========================================
-  // AGRUPAMENTO INTELIGENTE PARA RESUMO DE DATAS
+  // AGRUPAMENTO MÁXIMO E INTELIGENTE DE DATAS
   // ==========================================
   const turnosOriginais = isEn && campo.turnos_en ? campo.turnos_en : (campo.turnos || []);
-  const pacotes = turnosOriginais.filter((t: any) => t.nome.includes("(Pacote)") || t.nome.includes("(Package)"));
-  const diasSoltos = turnosOriginais.filter((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
   
-  const blocosUnicosResumo: any[] = [];
-  const chavesVistas = new Set();
-  
-  // Usamos os pacotes (ou os dias se não houver pacotes) para criar o "esqueleto" do resumo
-  const baseAgrupamento = pacotes.length > 0 ? pacotes : diasSoltos;
+  // Agrupar todos os turnos pelo NOME BASE (ex: "1ª Semana Julho") para encontrar a data mínima e máxima
+  const blocosAgrupados = new Map();
 
-  baseAgrupamento.forEach((t: any) => {
-    const chave = `${t.data_inicio}_${t.data_fim}`; // Evita repetir a mesma semana se houver Manhã, Tarde e Dia Completo
-    if (!chavesVistas.has(chave)) {
-      chavesVistas.add(chave);
-      // Limpa o nome logístico (ex: "Semana 1 (Pacote) - Manhã" vira apenas "Semana 1")
-      const nomeLimpo = t.nome.split('(')[0].split('- Dia')[0].trim();
-      blocosUnicosResumo.push({ ...t, nomeExibicao: nomeLimpo });
+  turnosOriginais.forEach((t: any) => {
+    // Retira os sufixos logísticos " (Dia Completo)" ou " - Dia 10/07"
+    let baseName = t.nome.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
+    
+    if (!blocosAgrupados.has(baseName)) {
+      blocosAgrupados.set(baseName, {
+        nomeExibicao: baseName,
+        data_inicio: t.data_inicio,
+        data_fim: t.data_fim,
+        vagas: Number(t.vagas) || 0
+      });
+    } else {
+      let bloco = blocosAgrupados.get(baseName);
+      // Ajustar extremos de datas se houver dias além do esperado
+      if (t.data_inicio < bloco.data_inicio) bloco.data_inicio = t.data_inicio;
+      if (t.data_fim > bloco.data_fim) bloco.data_fim = t.data_fim;
+      // Manter a maior capacidade encontrada para este bloco
+      if ((Number(t.vagas) || 0) > bloco.vagas) bloco.vagas = Number(t.vagas);
     }
   });
+
+  const blocosUnicosResumo = Array.from(blocosAgrupados.values());
+  const temDiasSoltos = turnosOriginais.some((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
 
   const eventSchema = {
     "@context": "https://schema.org",
@@ -268,8 +273,7 @@ export default async function DetalhesDoCampo({
                       })}
                     </ul>
                     
-                    {/* BANNER AVISO DIAS SOLTOS / HORÁRIOS PARCIAIS */}
-                    {diasSoltos.length > 0 && (
+                    {temDiasSoltos && (
                       <div className="mt-2 p-4 bg-white border border-emerald-200 rounded-xl flex items-start gap-3 shadow-sm">
                         <span className="text-2xl leading-none">📅</span>
                         <div>
@@ -350,7 +354,7 @@ export default async function DetalhesDoCampo({
               )}
             </div>
 
-            {/* FORMULÁRIO DE CONTACTO INTELIGENTE LIGADO À INBOX */}
+            {/* FORMULÁRIO DE CONTACTO */}
             <div id="duvidas" className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10 scroll-mt-24">
               <h3 className="text-xl font-bold text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
               <p className="text-sm text-slate-500 font-medium mb-8">{dict.detalhe.duvidas_sub}</p>
@@ -368,7 +372,7 @@ export default async function DetalhesDoCampo({
           </div>
 
           {/* SIDEBAR COM CAIXA DE RESERVA DINÂMICA */}
-          <div className="w-full lg:w-[400px] flex-shrink-0 lg:sticky lg:top-8 relative z-30">
+          <div className="w-full lg:w-[420px] flex-shrink-0 lg:sticky lg:top-8 relative z-30">
             <CaixaReserva campo={campo} lang={lang} dict={dict} />
           </div>
         </div>
