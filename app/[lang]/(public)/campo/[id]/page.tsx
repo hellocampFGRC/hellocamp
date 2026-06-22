@@ -5,7 +5,6 @@ import CaixaReserva from "./CaixaReserva";
 import BotaoFavorito from "../../components/BotaoFavorito";
 import BotaoPartilha from "../../components/BotaoPartilha";
 import { getDictionary } from "@/lib/getDictionary";
-// Importamos o novo formulário interativo de Chat
 import FormContactoCampo from "../../components/FormContactoCampo"; 
 
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; id: string }> }): Promise<Metadata> {
@@ -81,6 +80,29 @@ export default async function DetalhesDoCampo({
   const campoUrlCompleto = `${baseUrl}/${lang}/campo/${campo.id}`;
   const dataMaisCedo = campo.turnos && campo.turnos.length > 0 ? campo.turnos[0].data_inicio : "2026-07-01";
   
+  // ==========================================
+  // AGRUPAMENTO INTELIGENTE PARA RESUMO DE DATAS
+  // ==========================================
+  const turnosOriginais = isEn && campo.turnos_en ? campo.turnos_en : (campo.turnos || []);
+  const pacotes = turnosOriginais.filter((t: any) => t.nome.includes("(Pacote)") || t.nome.includes("(Package)"));
+  const diasSoltos = turnosOriginais.filter((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
+  
+  const blocosUnicosResumo: any[] = [];
+  const chavesVistas = new Set();
+  
+  // Usamos os pacotes (ou os dias se não houver pacotes) para criar o "esqueleto" do resumo
+  const baseAgrupamento = pacotes.length > 0 ? pacotes : diasSoltos;
+
+  baseAgrupamento.forEach((t: any) => {
+    const chave = `${t.data_inicio}_${t.data_fim}`; // Evita repetir a mesma semana se houver Manhã, Tarde e Dia Completo
+    if (!chavesVistas.has(chave)) {
+      chavesVistas.add(chave);
+      // Limpa o nome logístico (ex: "Semana 1 (Pacote) - Manhã" vira apenas "Semana 1")
+      const nomeLimpo = t.nome.split('(')[0].split('- Dia')[0].trim();
+      blocosUnicosResumo.push({ ...t, nomeExibicao: nomeLimpo });
+    }
+  });
+
   const eventSchema = {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -219,36 +241,44 @@ export default async function DetalhesDoCampo({
               )}
             </div>
 
-            {/* DATAS E DISPONIBILIDADE */}
+            {/* RESUMO INTELIGENTE DE DATAS E DISPONIBILIDADE */}
             <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-5">{dict.detalhe.datas_disponibilidade}</h2>
               <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100">
-                {campo.turnos && campo.turnos.length > 0 ? (
-                  <ul className="flex flex-col m-0 p-0 list-none gap-4">
-                    {campo.turnos.map((t: any, idx: number) => {
-                      const vagasDisponiveis = Number(t.vagas);
-                      const isEsgotado = vagasDisponiveis <= 0;
-
-                      return (
-                        <li key={idx} className={`pb-4 ${idx !== campo.turnos.length - 1 ? 'border-b border-emerald-100' : ''}`}>
-                          <div className="flex items-center gap-2 text-slate-700 text-sm md:text-base font-bold">
-                            <span className="text-emerald-500 text-xl leading-none">•</span>
-                            <span className={isEsgotado ? 'line-through text-slate-400' : ''}>{t.nome}: <span className="font-medium text-slate-600">{formatarDataExtenso(t.data_inicio)} {isEn ? 'to' : 'a'} {formatarDataExtenso(t.data_fim)}</span></span>
-                          </div>
-                          <div className="ml-7 mt-2 flex flex-wrap gap-4 items-center">
-                            <span className={`text-xs font-bold px-3 py-1 rounded-full shadow-sm ${isEsgotado ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-white border border-slate-200 text-slate-600'}`}>
-                              {isEsgotado ? (isEn ? 'SOLD OUT' : 'ESGOTADO') : `👥 Vagas: ${vagasDisponiveis}`}
-                            </span>
-                            {t.permite_dias && !isEsgotado && (
-                              <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
-                                ↳ {isEn ? 'Available per day' : 'Disponível dias soltos'} ({t.preco_dia}€)
+                {blocosUnicosResumo.length > 0 ? (
+                  <div className="flex flex-col gap-4">
+                    <ul className="flex flex-col m-0 p-0 list-none gap-4">
+                      {blocosUnicosResumo.map((t: any, idx: number) => {
+                        const isEsgotado = Number(t.vagas) <= 0;
+                        return (
+                          <li key={idx} className={`pb-4 ${idx !== blocosUnicosResumo.length - 1 ? 'border-b border-emerald-100' : ''}`}>
+                            <div className="flex items-center gap-2 text-slate-700 text-sm md:text-base font-bold">
+                              <span className="text-emerald-500 text-xl leading-none">•</span>
+                              <span className={isEsgotado ? 'line-through text-slate-400' : ''}>
+                                {t.nomeExibicao}: <span className="font-medium text-slate-600">{formatarDataExtenso(t.data_inicio)} {isEn ? 'to' : 'a'} {formatarDataExtenso(t.data_fim)}</span>
                               </span>
-                            )}
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
+                            </div>
+                            <div className="ml-7 mt-2 flex flex-wrap gap-3 items-center">
+                              <span className={`text-xs font-bold px-3 py-1 rounded-full shadow-sm ${isEsgotado ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-white border border-slate-200 text-slate-600'}`}>
+                                {isEsgotado ? (isEn ? 'SOLD OUT' : 'ESGOTADO') : `👥 Vagas: ${t.vagas}`}
+                              </span>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                    
+                    {/* BANNER AVISO DIAS SOLTOS / HORÁRIOS PARCIAIS */}
+                    {diasSoltos.length > 0 && (
+                      <div className="mt-2 p-4 bg-white border border-emerald-200 rounded-xl flex items-start gap-3 shadow-sm">
+                        <span className="text-2xl leading-none">📅</span>
+                        <div>
+                          <p className="text-sm font-black text-emerald-900 m-0">{isEn ? 'Flexible Booking Available' : 'Flexibilidade Diária Disponível'}</p>
+                          <p className="text-xs font-bold text-emerald-700 m-0 mt-1 leading-relaxed">{isEn ? 'You can book specific single days and half-days (morning/afternoon) directly in the booking box.' : 'Pode inscrever-se em dias soltos específicos e escolher horários parciais (só manhã / só tarde) diretamente na caixa de reserva ao lado.'}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-slate-600 font-medium text-sm m-0">{campo.datas_disponiveis || dict.detalhe.definir_atualizacoes}</p>
                 )}
