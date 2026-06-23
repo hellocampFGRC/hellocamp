@@ -150,6 +150,51 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
   };
 
   // ==========================================
+  // HANDLERS: FUNÇÕES EM FALTA (CORRIGIDAS)
+  // ==========================================
+  const adicionarVariante = () => {
+    setNovoPacote(prev => ({
+      ...prev,
+      variantes: [...prev.variantes, { nome: "", preco: 0 }]
+    }));
+  };
+
+  const removerVariante = (index: number) => {
+    setNovoPacote(prev => ({
+      ...prev,
+      variantes: prev.variantes.filter((_, i) => i !== index)
+    }));
+  };
+
+  const eliminarPacote = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      pacotes: prev.pacotes.filter(p => p.id !== id)
+    }));
+  };
+
+  const addPergunta = () => {
+    setFormData(prev => ({
+      ...prev,
+      perguntas: [...prev.perguntas, ""]
+    }));
+  };
+
+  const removePergunta = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      perguntas: prev.perguntas.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updatePergunta = (index: number, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      perguntas: prev.perguntas.map((p, i) => i === index ? value : p)
+    }));
+  };
+
+  // ==========================================
   // GUARDA FINAL NA BASE DE DADOS (COM UPLOAD DE STORAGE)
   // ==========================================
   const handleGravarCampo = async () => {
@@ -172,12 +217,12 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
           const fileName = `${session.user.id}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
           
           const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('galeria') // IMPORTANTE: O nome do bucket tem de ser 'galeria'
+            .from('campos-imagens') // IMPORTANTE: O nome do bucket tem de ser 'campos-imagens'
             .upload(fileName, img.file);
 
           if (uploadError) throw new Error(`Erro ao enviar foto: ${uploadError.message}`);
           
-          const { data: { publicUrl } } = supabase.storage.from('galeria').getPublicUrl(fileName);
+          const { data: { publicUrl } } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
           uploadedUrls.push(publicUrl);
           if (img.isCapa) capaUrl = publicUrl;
         }
