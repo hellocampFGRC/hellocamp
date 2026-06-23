@@ -4,6 +4,15 @@ import { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import React from "react";
 
+// Estilo unificado para os Dropdowns em todo o site
+const customSelectStyle = {
+  appearance: 'none' as const,
+  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 1rem center',
+  backgroundSize: '1.2em'
+};
+
 export default function GestaoReservasParceiro({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const isEn = lang === 'en';
@@ -35,6 +44,10 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     nome_pai: "", email_pai: "", telefone_pai: ""
   });
 
+  // Estados Inteligentes para o Mini-Calendário no Modal
+  const [modalidadeExterna, setModalidadeExterna] = useState<'pacote' | 'dia_solto'>('pacote');
+  const [diaExterno, setDiaExterno] = useState<string>('');
+
   const fetchDashboardData = async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -51,7 +64,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     if (reservasData) {
       const reservasFormatadas = reservasData.map(res => {
         const isExterna = res.cliente_id === session.user.id || res.status_pagamento === 'Externo';
-        
         let statusFinal = res.status_pagamento || 'Pendente';
         if (isExterna) statusFinal = 'Externo';
         if (statusFinal === 'Reembolsado') statusFinal = 'Cancelada';
@@ -111,10 +123,44 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const faturaçãoExterna = validas.filter(r => r.isExterna).reduce((acc, curr) => acc + curr.valor, 0);
 
   // ==========================================
+  // LÓGICA DO MINI-CALENDÁRIO (MODAL)
+  // ==========================================
+  const campoSelecionadoModal = camposParceiro.find(c => c.id === formExterno.campo_id);
+  const turnosModal = campoSelecionadoModal?.turnos || [];
+  const pacotesModal = turnosModal.filter((t: any) => !t.nome.includes("- Dia ") && !t.nome.includes("- Day "));
+  const diasSoltosModal = turnosModal.filter((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
+  const datasUnicasModal = Array.from(new Set(diasSoltosModal.map((t: any) => t.data_inicio))).sort() as string[];
+
+  useEffect(() => {
+    if (pacotesModal.length === 0 && diasSoltosModal.length > 0) setModalidadeExterna("dia_solto");
+    if (pacotesModal.length > 0 && diasSoltosModal.length === 0) setModalidadeExterna("pacote");
+    if (datasUnicasModal.length > 0 && !diaExterno) setDiaExterno(datasUnicasModal[0]);
+  }, [formExterno.campo_id]);
+
+  const setTurnoEscolhido = (turno: any) => {
+    setFormExterno(prev => ({ ...prev, turno_nome: turno.nome, valor_pago: Number(turno.preco) }));
+  };
+
+  const getHorarioInfo = (nome: string) => {
+    if (nome.includes("Completo") || nome.includes("Full")) return { tag: isEn ? "Full Day" : "Dia Completo", icon: "🌅" };
+    if (nome.includes("Manhã") || nome.includes("Morning")) return { tag: isEn ? "Morning" : "Só Manhã", icon: "🥞" };
+    if (nome.includes("Tarde") || nome.includes("Afternoon")) return { tag: isEn ? "Afternoon" : "Só Tarde", icon: "🥪" };
+    return { tag: "Geral", icon: "🎟️" };
+  };
+
+  const formatarDataExibicao = (dStr: string) => {
+    if (!dStr) return '';
+    return new Date(dStr).toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
+  };
+  const limparNomeParaExibicao = (nomeCru: string) => nomeCru.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
+
+  // ==========================================
   // INSERIR RESERVA EXTERNA (MANUAL 1 A 1)
   // ==========================================
   const handleAddExterno = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formExterno.turno_nome) return alert("Por favor, selecione um turno ou dia no calendário.");
+    
     setSavingExterno(true);
 
     try {
@@ -148,7 +194,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   };
 
   // ==========================================
-  // IMPORTAR VIA EXCEL/CSV
+  // IMPORTAR / EXPORTAR EXCEL
   // ==========================================
   const downloadTemplateCSV = () => {
     const csv = "\ufeffNome_do_Campo_Exato;Nome_do_Turno_Exato;Valor_Pago;Nome_Crianca;Idade;Alergias;Doencas;Nome_Responsavel;Telefone;Email\n" +
@@ -170,17 +216,15 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
       
       if (linhas.length < 2) throw new Error("Ficheiro vazio ou sem dados válidos.");
 
-      // Começa na linha 1 para saltar o cabeçalho
       let sucessoCount = 0;
       for (let i = 1; i < linhas.length; i++) {
         const colunas = linhas[i].split(';');
-        if (colunas.length < 9) continue; // Linha inválida
+        if (colunas.length < 9) continue;
 
         const [nomeCampoCSV, nomeTurno, valorPago, nomeCrianca, idade, alergias, doencas, nomePai, telefone, email] = colunas.map(c => c.trim().replace(/"/g, ''));
 
-        // Encontrar o campo real na DB do parceiro
         const campoAlvo = camposParceiro.find(c => c.nome.toLowerCase() === nomeCampoCSV.toLowerCase());
-        if (!campoAlvo) continue; // Se não encontrar o campo exato, ignora esta linha
+        if (!campoAlvo) continue;
 
         const anoNasc = new Date().getFullYear() - (Number(idade) || 10);
         const dataNascAprox = `${anoNasc}-01-01`;
@@ -211,13 +255,9 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setSavingExterno(false);
   };
 
-  // ==========================================
-  // EXPORTAR EXCEL GLOBAL
-  // ==========================================
   const exportarCSV = () => {
     if (validas.length === 0) { alert("Não existem inscrições ativas para exportar."); return; }
 
-    // O BOM (\ufeff) garante que o Excel lê os acentos de forma perfeita
     let csv = "\ufeffOrigem;Data Reserva;Programa;Turno;Valor Pago;Nome Participante;Alergias;Doenças;Encarregado de Educação;Telefone;Email\n";
     validas.forEach(item => {
       const origem = item.isExterna ? "Externa" : "HelloCamp";
@@ -283,7 +323,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
       </div>
 
-      {/* BARRA DE FILTROS */}
+      {/* BARRA DE FILTROS COM DROPDOWNS CUSTOMIZADOS */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row gap-4">
         <div className="flex-1">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Procurar Nome</label>
@@ -291,7 +331,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
         <div className="flex-1">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Campo</label>
-          <select value={filtroCampoId} onChange={e => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none font-bold text-slate-700 cursor-pointer">
+          <select value={filtroCampoId} onChange={e => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
             <option value="todos">Todos os Campos</option>
             {camposParceiro.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
@@ -299,7 +339,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         {filtroCampoId !== 'todos' && (
           <div className="flex-1 animate-in fade-in">
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Data/Turno</label>
-            <select value={filtroTurno} onChange={e => setFiltroTurno(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none font-bold text-slate-700 cursor-pointer">
+            <select value={filtroTurno} onChange={e => setFiltroTurno(e.target.value)} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
               <option value="todos">Todas as Datas</option>
               {turnosDoCampoFiltro.map((t: any, i: number) => <option key={i} value={t.nome}>{t.nome}</option>)}
             </select>
@@ -421,36 +461,103 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
               {/* MODO: MANUAL 1 a 1 */}
               {importMode === 'manual' && (
                 <form id="form-manual" onSubmit={handleAddExterno} className="flex flex-col gap-6">
-                  {/* Onde vai o miúdo? */}
+                  {/* Onde vai o miúdo? (COM MINI-CALENDÁRIO) */}
                   <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Destino da Inscrição</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">1. Destino e Horário</h3>
+                    <div className="flex flex-col gap-4">
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Para qual Campo?</label>
-                        <select required value={formExterno.campo_id} onChange={e => setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: ""})} className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none">
+                        <select required value={formExterno.campo_id} onChange={e => { setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: ""}); setDiaExterno(""); }} style={customSelectStyle} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-orange-500 cursor-pointer">
                           <option value="">Selecione o Campo...</option>
                           {camposParceiro.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Para quais Datas/Horário?</label>
-                        <select required disabled={!formExterno.campo_id} value={formExterno.turno_nome} onChange={e => setFormExterno({...formExterno, turno_nome: e.target.value})} className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none disabled:opacity-50">
-                          <option value="">Selecione o Turno...</option>
-                          {formExterno.campo_id && camposParceiro.find(c => c.id === formExterno.campo_id)?.turnos?.map((t: any, i: number) => (
-                            <option key={i} value={t.nome}>{t.nome}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Valor Pago (€)</label>
-                        <input type="number" required value={formExterno.valor_pago} onChange={e => setFormExterno({...formExterno, valor_pago: Number(e.target.value)})} className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none" />
+
+                      {formExterno.campo_id && (
+                        <div className="bg-white p-4 border border-slate-200 rounded-xl animate-in fade-in">
+                          {/* Tabs Inteligentes */}
+                          {(pacotesModal.length > 0 && diasSoltosModal.length > 0) && (
+                            <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
+                              <button type="button" onClick={() => setModalidadeExterna('pacote')} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Programa Inteiro</button>
+                              <button type="button" onClick={() => setModalidadeExterna('dia_solto')} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'dia_solto' ? 'bg-white text-orange-700 shadow-sm border border-orange-100' : 'text-slate-500'}`}>Dias Soltos</button>
+                            </div>
+                          )}
+
+                          {/* Se for Pacote Completo */}
+                          {modalidadeExterna === 'pacote' && pacotesModal.length > 0 && (
+                            <div className="flex flex-col gap-2">
+                              {pacotesModal.map((pac: any) => {
+                                const isActive = formExterno.turno_nome === pac.nome;
+                                const tagInfo = getHorarioInfo(pac.nome);
+                                return (
+                                  <div key={pac.id} onClick={() => setTurnoEscolhido(pac)} className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${isActive ? 'bg-orange-50 border-orange-500' : 'border-slate-100 hover:border-orange-200'}`}>
+                                    <div>
+                                      <p className={`text-sm font-black m-0 ${isActive ? 'text-orange-900' : 'text-slate-800'}`}>{limparNomeParaExibicao(pac.nome)}</p>
+                                      <p className="text-[10px] text-slate-500 m-0 mt-0.5">{tagInfo.icon} {tagInfo.tag}</p>
+                                    </div>
+                                    <span className={`text-sm font-black ${isActive ? 'text-orange-700' : 'text-slate-400'}`}>{pac.preco}€</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* Se for Dias Soltos (Mini-Calendário) */}
+                          {modalidadeExterna === 'dia_solto' && diasSoltosModal.length > 0 && (
+                            <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100">
+                              <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">A. Escolher o Dia</label>
+                              <div className="grid grid-cols-5 sm:grid-cols-7 gap-1.5 mb-4">
+                                {datasUnicasModal.map((data: string) => {
+                                  const isActive = diaExterno === data;
+                                  const dateObj = new Date(data);
+                                  const diaSemana = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.', '');
+                                  const diaNumero = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' });
+
+                                  return (
+                                    <div key={data} onClick={() => { setDiaExterno(data); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex flex-col items-center justify-center py-1.5 rounded-lg cursor-pointer border ${isActive ? 'bg-orange-600 border-orange-600 text-white shadow-sm' : 'bg-white border-orange-200 text-slate-600 hover:border-orange-400'}`}>
+                                      <span className="text-[8px] font-black uppercase">{diaSemana}</span>
+                                      <span className="text-sm font-black">{diaNumero}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+
+                              {diaExterno && (
+                                <div className="border-t border-orange-200/50 pt-3">
+                                  <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">B. Escolher o Horário</label>
+                                  <div className="flex flex-col gap-2">
+                                    {diasSoltosModal.filter((t:any) => t.data_inicio === diaExterno).map((horario: any) => {
+                                      const isActive = formExterno.turno_nome === horario.nome;
+                                      const tagInfo = getHorarioInfo(horario.nome);
+                                      return (
+                                        <div key={horario.id} onClick={() => setTurnoEscolhido(horario)} className={`flex items-center justify-between p-2.5 rounded-lg border-2 cursor-pointer transition-all ${isActive ? 'bg-orange-700 border-orange-700 text-white' : 'bg-white border-orange-200 hover:border-orange-400'}`}>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm">{tagInfo.icon}</span>
+                                            <span className={`text-xs font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>{tagInfo.tag}</span>
+                                          </div>
+                                          <span className={`text-xs font-black ${isActive ? 'text-orange-200' : 'text-orange-700'}`}>{horario.preco}€</span>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                        </div>
+                      )}
+                      
+                      <div className="sm:col-span-2 mt-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Confirmação: Valor Cobrado ao Cliente (€)</label>
+                        <input type="number" required value={formExterno.valor_pago} onChange={e => setFormExterno({...formExterno, valor_pago: Number(e.target.value)})} className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-orange-500" />
                       </div>
                     </div>
                   </div>
 
                   {/* Dados do Miúdo */}
                   <div className="bg-white p-5 rounded-2xl border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Dados do Participante</h3>
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">2. Dados do Participante</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                       <div className="sm:col-span-2">
                         <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Nome Completo</label>
@@ -475,7 +582,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
                   {/* Dados do Pai */}
                   <div className="bg-white p-5 rounded-2xl border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Encarregado de Educação</h3>
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">3. Encarregado de Educação</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                       <div className="sm:col-span-2">
                         <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Nome do Responsável</label>
@@ -524,7 +631,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 <button type="button" onClick={() => { setIsAddModalOpen(false); setImportMode('selecao'); }} className="px-6 py-2.5 font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors text-sm">Cancelar</button>
                 
                 {importMode === 'manual' && (
-                  <button type="submit" form="form-manual" disabled={savingExterno} className="px-8 py-2.5 font-bold text-white bg-orange-600 rounded-xl hover:bg-orange-700 transition-colors shadow-md text-sm disabled:opacity-50">
+                  <button type="submit" form="form-manual" disabled={savingExterno || !formExterno.turno_nome} className="px-8 py-2.5 font-bold text-white bg-orange-600 rounded-xl hover:bg-orange-700 transition-colors shadow-md text-sm disabled:opacity-50">
                     {savingExterno ? 'A Guardar...' : '✓ Inserir Reserva'}
                   </button>
                 )}
