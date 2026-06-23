@@ -13,9 +13,20 @@ const customSelectStyle = {
   backgroundSize: '1.2em'
 };
 
+// Escopo Global: Garante visibilidade absoluta
+const limparNomeParaExibicao = (nomeCru: string) => {
+  if (!nomeCru) return "";
+  return nomeCru.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
+};
+
 export default function GestaoReservasParceiro({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const isEn = lang === 'en';
+
+  const formatarDataExibicao = (dStr: string) => {
+    if (!dStr) return '';
+    return new Date(dStr).toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
+  };
 
   const [loading, setLoading] = useState(true);
   const [sessionUser, setSessionUser] = useState<any>(null);
@@ -37,7 +48,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const [savingExterno, setSavingExterno] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
-  // Form de Reserva Externa (1 a 1)
+  // Form de Reserva Externa (1 a 1) - CORRIGIDO 'alergias'
   const [formExterno, setFormExterno] = useState({
     campo_id: "", turno_nome: "", valor_pago: 0,
     nome_crianca: "", idade: "", alergias: "", doencas: "",
@@ -123,6 +134,32 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const faturaçãoExterna = validas.filter(r => r.isExterna).reduce((acc, curr) => acc + curr.valor, 0);
 
   // ==========================================
+  // EXPORTAR VIA EXCEL (CORRIGIDO)
+  // ==========================================
+  const exportarCSV = () => {
+    if (validas.length === 0) { 
+      alert(isEn ? "No active bookings to export." : "Não existem inscrições ativas para exportar."); 
+      return; 
+    }
+
+    let csv = "\ufeffOrigem;Data Reserva;Programa;Turno;Valor Pago;Nome Participante;Alergias;Doenças;Encarregado de Educação;Telefone;Email\n";
+    validas.forEach(item => {
+      const origem = item.isExterna ? "Externa" : "HelloCamp";
+      const dataReserva = new Date(item.data).toLocaleDateString('pt-PT');
+      const alergias = (item.crianca?.restricoes_alimentares || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
+      const doencas = (item.crianca?.doencas_cronicas || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
+      
+      csv += `"${origem}";"${dataReserva}";"${item.campo_nome}";"${item.turno}";"${item.valor}€";"${item.crianca?.nome || ""}";"${alergias}";"${doencas}";"${item.pai?.nome || ""}";"${item.pai?.telefone || ""}";"${item.pai?.email || ""}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `Exportacao_Global_HelloCamp.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  // ==========================================
   // LÓGICA DO MINI-CALENDÁRIO INTERATIVO
   // ==========================================
   const campoSelecionadoModal = camposParceiro.find(c => c.id === formExterno.campo_id);
@@ -187,7 +224,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   };
 
   // ==========================================
-  // IMPORTAR / EXPORTAR EXCEL
+  // IMPORTAR EXCEL
   // ==========================================
   const downloadTemplateCSV = () => {
     const csv = "\ufeffNome_do_Campo_Exato;Nome_do_Turno_Exato;Valor_Pago;Nome_Crianca;Idade;Alergias;Doencas;Nome_Responsavel;Telefone;Email\n" +
@@ -248,26 +285,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setSavingExterno(false);
   };
 
-  const exportarCSV = () => {
-    if (validas.length === 0) { alert("Não existem inscrições ativas para exportar."); return; }
-
-    let csv = "\ufeffOrigem;Data Reserva;Programa;Turno;Valor Pago;Nome Participante;Alergias;Doenças;Encarregado de Educação;Telefone;Email\n";
-    validas.forEach(item => {
-      const origem = item.isExterna ? "Externa" : "HelloCamp";
-      const dataReserva = new Date(item.data).toLocaleDateString('pt-PT');
-      const alergias = (item.crianca?.restricoes_alimentares || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
-      const doencas = (item.crianca?.doencas_cronicas || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
-      
-      csv += `"${origem}";"${dataReserva}";"${item.campo_nome}";"${item.turno}";"${item.valor}€";"${item.crianca?.nome || ""}";"${alergias}";"${doencas}";"${item.pai?.nome || ""}";"${item.pai?.telefone || ""}";"${item.pai?.email || ""}"\n`;
-    });
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `Exportacao_Global_HelloCamp.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
   if (loading) return <div className="p-20 text-center font-bold text-slate-500 animate-pulse">A carregar o seu Dashboard...</div>;
 
   return (
@@ -308,7 +325,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-orange-500 relative overflow-hidden">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center opacity-50 text-3xl">🟠</div>
-          <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1 relative z-10">Origem: Externos</span>
+          <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1 relative z-10">Origem: Permanentes/Externos</span>
           <div className="flex items-baseline justify-between relative z-10">
             <span className="text-4xl font-black text-slate-900">{countExternas}</span>
             <span className="text-sm font-black text-orange-600 bg-orange-50 border border-orange-100 px-2 py-1 rounded-md">+{faturaçãoExterna}€</span>
@@ -513,9 +530,9 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                                     const diaNumero = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' });
 
                                     return (
-                                      <div key={data} onClick={() => { setDiaExterno(data); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex flex-col items-center justify-center py-2 rounded-xl cursor-pointer border-2 transition-all ${isActive ? 'bg-orange-600 border-orange-600 text-white shadow-sm scale-105' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-orange-300'}`}>
-                                        <span className={`text-[8px] font-black uppercase ${isActive ? 'text-orange-100' : 'text-slate-400'}`}>{diaSemana}</span>
-                                        <span className="text-sm font-black leading-none mt-0.5">{diaNumero}</span>
+                                      <div key={data} onClick={() => { setDiaExterno(data); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex flex-col items-center justify-center py-1.5 rounded-lg cursor-pointer border ${isActive ? 'bg-orange-600 border-orange-600 text-white shadow-sm' : 'bg-white border-orange-200 text-slate-600 hover:border-orange-400'}`}>
+                                        <span className="text-[8px] font-black uppercase">{diaSemana}</span>
+                                        <span className="text-sm font-black">{diaNumero}</span>
                                       </div>
                                     )
                                   })}
@@ -523,17 +540,19 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                               </div>
 
                               {diaExterno && (
-                                <div className="border-t border-slate-100 pt-3 animate-in fade-in">
-                                  <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">B. Selecione o Horário para este dia</label>
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {diasSoltosModal.filter((t: any) => t.data_inicio === diaExterno).map((horario: any) => {
+                                <div className="border-t border-orange-200/50 pt-3">
+                                  <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">B. Escolher o Horário</label>
+                                  <div className="flex flex-col gap-2">
+                                    {diasSoltosModal.filter((t:any) => t.data_inicio === diaExterno).map((horario: any) => {
                                       const isActive = formExterno.turno_nome === horario.nome;
                                       const tagInfo = getHorarioInfo(horario.nome);
                                       return (
-                                        <div key={horario.id} onClick={() => setTurnoEscolhido(horario)} className={`flex flex-col items-center justify-center p-2.5 rounded-xl border-2 cursor-pointer transition-all ${isActive ? 'bg-orange-50 border-orange-500 text-orange-900' : 'bg-white border-slate-200 hover:border-orange-300 text-slate-700'}`}>
-                                          <span className="text-lg mb-0.5">{tagInfo.icon}</span>
-                                          <span className="text-xs font-black">{tagInfo.tag}</span>
-                                          <span className="text-[11px] font-bold text-slate-400 mt-1">{horario.preco}€</span>
+                                        <div key={horario.id} onClick={() => setTurnoEscolhido(horario)} className={`flex items-center justify-between p-2.5 rounded-lg border-2 cursor-pointer transition-all ${isActive ? 'bg-orange-700 border-orange-700 text-white' : 'bg-white border-orange-200 hover:border-orange-400'}`}>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm">{tagInfo.icon}</span>
+                                            <span className={`text-xs font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>{tagInfo.tag}</span>
+                                          </div>
+                                          <span className={`text-xs font-black ${isActive ? 'text-orange-200' : 'text-orange-700'}`}>{horario.preco}€</span>
                                         </div>
                                       )
                                     })}
@@ -543,11 +562,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                             </div>
                           )}
 
-                          {formExterno.turno_nome && (
-                            <div className="mt-4 p-3 bg-orange-50 text-orange-800 rounded-xl border border-orange-200 text-xs font-bold">
-                              🎯 Módulo Ativo: <span className="font-black">{formExterno.turno_nome}</span> ({formExterno.valor_pago}€)
-                            </div>
-                          )}
                         </div>
                       )}
                       
