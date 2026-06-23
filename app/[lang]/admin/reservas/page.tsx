@@ -13,10 +13,19 @@ const customSelectStyle = {
   backgroundSize: '1.2em'
 };
 
-// Escopo Global: Garante visibilidade absoluta
+// ==========================================
+// FUNÇÕES AUXILIARES GLOBAIS
+// ==========================================
 const limparNomeParaExibicao = (nomeCru: string) => {
   if (!nomeCru) return "";
   return nomeCru.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
+};
+
+const getHorarioInfo = (nome: string, isEn: boolean) => {
+  if (nome.includes("Completo") || nome.includes("Full")) return { tag: isEn ? "Full Day" : "Dia Completo", icon: "🌅" };
+  if (nome.includes("Manhã") || nome.includes("Morning")) return { tag: isEn ? "Morning" : "Só Manhã", icon: "🥞" };
+  if (nome.includes("Tarde") || nome.includes("Afternoon")) return { tag: isEn ? "Afternoon" : "Só Tarde", icon: "🥪" };
+  return { tag: "Geral", icon: "🎟️" };
 };
 
 export default function GestaoReservasParceiro({ params }: { params: Promise<{ lang: string }> }) {
@@ -35,11 +44,16 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const [camposParceiro, setCamposParceiro] = useState<any[]>([]);
   const [todasReservas, setTodasReservas] = useState<any[]>([]);
   
-  // Filtros
+  // Filtros Globais da Tabela
   const [filtroCampoId, setFiltroCampoId] = useState<string>('todos');
   const [filtroTurno, setFiltroTurno] = useState<string>('todos');
   const [searchQuery, setSearchQuery] = useState("");
   
+  // Estados do Novo Popover de Filtro
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [filtroModo, setFiltroModo] = useState<'pacote' | 'dia_solto'>('pacote');
+  const [filtroDiaSelecionado, setFiltroDiaSelecionado] = useState<string>('');
+
   // UI States (Modais)
   const [reservaSelecionada, setReservaSelecionada] = useState<any>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -48,14 +62,14 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const [savingExterno, setSavingExterno] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
-  // Form de Reserva Externa (1 a 1) - CORRIGIDO 'alergias'
+  // Form de Reserva Externa (1 a 1)
   const [formExterno, setFormExterno] = useState({
     campo_id: "", turno_nome: "", valor_pago: 0,
     nome_crianca: "", idade: "", alergias: "", doencas: "",
     nome_pai: "", email_pai: "", telefone_pai: ""
   });
 
-  // Estados do Mini-Calendário no Modal
+  // Estados do Mini-Calendário no Modal (Adicionar)
   const [modalidadeExterna, setModalidadeExterna] = useState<'pacote' | 'dia_solto'>('pacote');
   const [diaExterno, setDiaExterno] = useState<string>('');
 
@@ -73,13 +87,13 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     const { data: reservasData } = await supabase.from('reservas').select('*, criancas(*), perfis(*)').eq('organizador_id', session.user.id).order('created_at', { ascending: false });
     
     if (reservasData) {
-      const reservasFormatadas = reservasData.map(res => {
+      const reservasFormatadas = reservasData.map((res: any) => {
         const isExterna = res.cliente_id === session.user.id || res.status_pagamento === 'Externo';
         let statusFinal = res.status_pagamento || 'Pendente';
         if (isExterna) statusFinal = 'Externo';
         if (statusFinal === 'Reembolsado') statusFinal = 'Cancelada';
 
-        const campoRelacionado = camposData?.find(c => c.id === res.campo_id);
+        const campoRelacionado = camposData?.find((c: any) => c.id === res.campo_id);
 
         return {
           id: res.id,
@@ -107,62 +121,52 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
   useEffect(() => { fetchDashboardData(); }, [isEn]);
 
+  // Resetar o filtro de turno sempre que o parceiro muda de campo
+  useEffect(() => {
+    setFiltroTurno('todos');
+    setFiltroDiaSelecionado('');
+    setIsFilterPanelOpen(false);
+  }, [filtroCampoId]);
+
   // ==========================================
-  // FILTRAGEM INTELIGENTE
+  // FILTRAGEM INTELIGENTE DA TABELA
   // ==========================================
   let reservasFiltradas = [...todasReservas];
   
-  if (filtroCampoId !== 'todos') reservasFiltradas = reservasFiltradas.filter(r => r.campo_id === filtroCampoId);
-  if (filtroTurno !== 'todos') reservasFiltradas = reservasFiltradas.filter(r => r.turno === filtroTurno);
+  if (filtroCampoId !== 'todos') reservasFiltradas = reservasFiltradas.filter((r: any) => r.campo_id === filtroCampoId);
+  if (filtroTurno !== 'todos') reservasFiltradas = reservasFiltradas.filter((r: any) => r.turno === filtroTurno);
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
-    reservasFiltradas = reservasFiltradas.filter(r => 
+    reservasFiltradas = reservasFiltradas.filter((r: any) => 
       (r.crianca?.nome || '').toLowerCase().includes(q) || 
       (r.pai?.nome || '').toLowerCase().includes(q)
     );
   }
 
-  const turnosDoCampoFiltro = filtroCampoId === 'todos' ? [] : camposParceiro.find(c => c.id === filtroCampoId)?.turnos || [];
+  // Prepara os dados para o NOVO POPOVER DE FILTRO
+  const turnosDoCampoFiltro = filtroCampoId === 'todos' ? [] : camposParceiro.find((c: any) => c.id === filtroCampoId)?.turnos || [];
+  const pacotesFiltro = turnosDoCampoFiltro.filter((t: any) => !t.nome.includes("- Dia ") && !t.nome.includes("- Day "));
+  const diasSoltosFiltro = turnosDoCampoFiltro.filter((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
+  const datasUnicasFiltro = Array.from(new Set(diasSoltosFiltro.map((t: any) => t.data_inicio))).sort() as string[];
+
+  useEffect(() => {
+    if (pacotesFiltro.length === 0 && diasSoltosFiltro.length > 0) setFiltroModo("dia_solto");
+    if (pacotesFiltro.length > 0 && diasSoltosFiltro.length === 0) setFiltroModo("pacote");
+  }, [turnosDoCampoFiltro]);
 
   // ==========================================
   // MÉTRICAS DO DASHBOARD
   // ==========================================
-  const validas = reservasFiltradas.filter(r => r.status !== 'Cancelada' && r.status !== 'Abandonada');
-  const countHelloCamp = validas.filter(r => !r.isExterna).length;
-  const countExternas = validas.filter(r => r.isExterna).length;
-  const faturaçãoHelloCamp = validas.filter(r => !r.isExterna).reduce((acc, curr) => acc + curr.valor, 0);
-  const faturaçãoExterna = validas.filter(r => r.isExterna).reduce((acc, curr) => acc + curr.valor, 0);
+  const validas = reservasFiltradas.filter((r: any) => r.status !== 'Cancelada' && r.status !== 'Abandonada');
+  const countHelloCamp = validas.filter((r: any) => !r.isExterna).length;
+  const countExternas = validas.filter((r: any) => r.isExterna).length;
+  const faturaçãoHelloCamp = validas.filter((r: any) => !r.isExterna).reduce((acc: number, curr: any) => acc + curr.valor, 0);
+  const faturaçãoExterna = validas.filter((r: any) => r.isExterna).reduce((acc: number, curr: any) => acc + curr.valor, 0);
 
   // ==========================================
-  // EXPORTAR VIA EXCEL (CORRIGIDO)
+  // LÓGICA DO MINI-CALENDÁRIO INTERATIVO (MODAL ADICIONAR)
   // ==========================================
-  const exportarCSV = () => {
-    if (validas.length === 0) { 
-      alert(isEn ? "No active bookings to export." : "Não existem inscrições ativas para exportar."); 
-      return; 
-    }
-
-    let csv = "\ufeffOrigem;Data Reserva;Programa;Turno;Valor Pago;Nome Participante;Alergias;Doenças;Encarregado de Educação;Telefone;Email\n";
-    validas.forEach(item => {
-      const origem = item.isExterna ? "Externa" : "HelloCamp";
-      const dataReserva = new Date(item.data).toLocaleDateString('pt-PT');
-      const alergias = (item.crianca?.restricoes_alimentares || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
-      const doencas = (item.crianca?.doencas_cronicas || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
-      
-      csv += `"${origem}";"${dataReserva}";"${item.campo_nome}";"${item.turno}";"${item.valor}€";"${item.crianca?.nome || ""}";"${alergias}";"${doencas}";"${item.pai?.nome || ""}";"${item.pai?.telefone || ""}";"${item.pai?.email || ""}"\n`;
-    });
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `Exportacao_Global_HelloCamp.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
-  // ==========================================
-  // LÓGICA DO MINI-CALENDÁRIO INTERATIVO
-  // ==========================================
-  const campoSelecionadoModal = camposParceiro.find(c => c.id === formExterno.campo_id);
+  const campoSelecionadoModal = camposParceiro.find((c: any) => c.id === formExterno.campo_id);
   const turnosModal = campoSelecionadoModal?.turnos || [];
   const pacotesModal = turnosModal.filter((t: any) => !t.nome.includes("- Dia ") && !t.nome.includes("- Day "));
   const diasSoltosModal = turnosModal.filter((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
@@ -176,13 +180,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
   const setTurnoEscolhido = (turno: any) => {
     setFormExterno(prev => ({ ...prev, turno_nome: turno.nome, valor_pago: Number(turno.preco) }));
-  };
-
-  const getHorarioInfo = (nome: string) => {
-    if (nome.includes("Completo") || nome.includes("Full")) return { tag: isEn ? "Full Day" : "Dia Completo", icon: "🌅" };
-    if (nome.includes("Manhã") || nome.includes("Morning")) return { tag: isEn ? "Morning" : "Só Manhã", icon: "🥞" };
-    if (nome.includes("Tarde") || nome.includes("Afternoon")) return { tag: isEn ? "Afternoon" : "Só Tarde", icon: "🥪" };
-    return { tag: "Geral", icon: "🎟️" };
   };
 
   // ==========================================
@@ -224,7 +221,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   };
 
   // ==========================================
-  // IMPORTAR EXCEL
+  // IMPORTAR E EXPORTAR EXCEL
   // ==========================================
   const downloadTemplateCSV = () => {
     const csv = "\ufeffNome_do_Campo_Exato;Nome_do_Turno_Exato;Valor_Pago;Nome_Crianca;Idade;Alergias;Doencas;Nome_Responsavel;Telefone;Email\n" +
@@ -242,7 +239,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
     try {
       const text = await csvFile.text();
-      const linhas = text.split('\n').filter(line => line.trim().length > 0);
+      const linhas = text.split('\n').filter((line: string) => line.trim().length > 0);
       
       if (linhas.length < 2) throw new Error("Ficheiro vazio ou sem dados válidos.");
 
@@ -251,9 +248,9 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         const colunas = linhas[i].split(';');
         if (colunas.length < 9) continue;
 
-        const [nomeCampoCSV, nomeTurno, valorPago, nomeCrianca, idade, alergias, doencas, nomePai, telefone, email] = colunas.map(c => c.trim().replace(/"/g, ''));
+        const [nomeCampoCSV, nomeTurno, valorPago, nomeCrianca, idade, alergias, doencas, nomePai, telefone, email] = colunas.map((c: string) => c.trim().replace(/"/g, ''));
 
-        const campoAlvo = camposParceiro.find(c => c.nome.toLowerCase() === nomeCampoCSV.toLowerCase());
+        const campoAlvo = camposParceiro.find((c: any) => c.nome.toLowerCase() === nomeCampoCSV.toLowerCase());
         if (!campoAlvo) continue;
 
         const anoNasc = new Date().getFullYear() - (Number(idade) || 10);
@@ -285,10 +282,33 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setSavingExterno(false);
   };
 
+  const exportarCSV = () => {
+    if (validas.length === 0) { 
+      alert(isEn ? "No active bookings to export." : "Não existem inscrições ativas para exportar."); 
+      return; 
+    }
+
+    let csv = "\ufeffOrigem;Data Reserva;Programa;Turno;Valor Pago;Nome Participante;Alergias;Doenças;Encarregado de Educação;Telefone;Email\n";
+    validas.forEach((item: any) => {
+      const origem = item.isExterna ? "Externa" : "HelloCamp";
+      const dataReserva = new Date(item.data).toLocaleDateString('pt-PT');
+      const alergias = (item.crianca?.restricoes_alimentares || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
+      const doencas = (item.crianca?.doencas_cronicas || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
+      
+      csv += `"${origem}";"${dataReserva}";"${item.campo_nome}";"${item.turno}";"${item.valor}€";"${item.crianca?.nome || ""}";"${alergias}";"${doencas}";"${item.pai?.nome || ""}";"${item.pai?.telefone || ""}";"${item.pai?.email || ""}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `Exportacao_Global_HelloCamp.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
   if (loading) return <div className="p-20 text-center font-bold text-slate-500 animate-pulse">A carregar o seu Dashboard...</div>;
 
   return (
-    <div className="max-w-[1400px] mx-auto p-4 md:p-8 font-sans pb-24">
+    <div className="max-w-[1400px] mx-auto p-4 md:p-8 font-sans pb-24 relative">
       
       {/* HEADER & ACÕES GLOBAIS */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -333,32 +353,116 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
       </div>
 
-      {/* BARRA DE FILTROS COM DROPDOWNS CUSTOMIZADOS */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row gap-4">
+      {/* BARRA DE FILTROS COM POPOVER */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row gap-4 relative z-20">
         <div className="flex-1">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Procurar Nome</label>
           <input type="text" placeholder="Pesquisar miúdo ou encarregado..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-slate-400" />
         </div>
+        
         <div className="flex-1">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Campo</label>
           <select value={filtroCampoId} onChange={e => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
             <option value="todos">Todos os Campos</option>
-            {camposParceiro.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            {camposParceiro.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         </div>
+
+        {/* O NOVO BOTÃO DE FILTRO DE DATA/TURNO */}
         {filtroCampoId !== 'todos' && (
-          <div className="flex-1 animate-in fade-in">
+          <div className="flex-1 relative animate-in fade-in">
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Data/Turno</label>
-            <select value={filtroTurno} onChange={e => setFiltroTurno(e.target.value)} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
-              <option value="todos">Todas as Datas</option>
-              {turnosDoCampoFiltro.map((t: any, i: number) => <option key={i} value={t.nome}>{t.nome}</option>)}
-            </select>
+            <div 
+              onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
+              className={`w-full border rounded-xl px-4 py-2.5 text-sm font-bold cursor-pointer flex justify-between items-center transition-colors ${isFilterPanelOpen ? 'bg-emerald-50 border-emerald-500 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'}`}
+            >
+              <span className="truncate">{filtroTurno === 'todos' ? 'Todas as Datas' : limparNomeParaExibicao(filtroTurno)}</span>
+              <span className="text-slate-400 text-[10px]">▼</span>
+            </div>
+
+            {/* O POPOVER DO MINI-CALENDÁRIO */}
+            {isFilterPanelOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsFilterPanelOpen(false)}></div>
+                <div className="absolute top-full right-0 md:left-0 mt-2 w-full md:w-[360px] bg-white border border-slate-200 rounded-2xl shadow-2xl z-40 p-5 animate-in slide-in-from-top-2">
+                  
+                  <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
+                    <span className="text-xs font-black text-slate-800 uppercase tracking-widest">Filtrar Reservas</span>
+                    {filtroTurno !== 'todos' && (
+                      <button onClick={() => { setFiltroTurno('todos'); setIsFilterPanelOpen(false); }} className="text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-md transition-colors">Limpar Filtro &times;</button>
+                    )}
+                  </div>
+
+                  {(pacotesFiltro.length > 0 && diasSoltosFiltro.length > 0) && (
+                    <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
+                      <button onClick={() => setFiltroModo('pacote')} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${filtroModo === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Programa Inteiro</button>
+                      <button onClick={() => setFiltroModo('dia_solto')} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${filtroModo === 'dia_solto' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Dias Soltos</button>
+                    </div>
+                  )}
+
+                  {/* Lista de Pacotes Completos */}
+                  {filtroModo === 'pacote' && (
+                    <div className="flex flex-col gap-2 max-h-[250px] overflow-y-auto pr-1">
+                      {pacotesFiltro.map((pac: any) => {
+                        const tagInfo = getHorarioInfo(pac.nome, isEn);
+                        return (
+                          <div key={pac.id} onClick={() => { setFiltroTurno(pac.nome); setIsFilterPanelOpen(false); }} className={`p-3 rounded-xl border cursor-pointer transition-colors flex justify-between items-center ${filtroTurno === pac.nome ? 'bg-emerald-50 border-emerald-500' : 'bg-slate-50 border-slate-200 hover:border-emerald-300'}`}>
+                            <div>
+                              <p className="text-xs font-black text-slate-800 m-0">{limparNomeParaExibicao(pac.nome)}</p>
+                              <p className="text-[10px] text-slate-500 m-0 mt-0.5">{formatarDataExibicao(pac.data_inicio)}</p>
+                            </div>
+                            <span className="text-lg opacity-80">{tagInfo.icon}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Calendário de Dias Soltos */}
+                  {filtroModo === 'dia_solto' && (
+                    <div>
+                      <span className="block text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-3">1. Escolha o Dia</span>
+                      <div className="grid grid-cols-5 gap-1.5 mb-4">
+                        {datasUnicasFiltro.map((data: string) => {
+                          const isActive = filtroDiaSelecionado === data;
+                          const dateObj = new Date(data);
+                          return (
+                            <div key={data} onClick={() => setFiltroDiaSelecionado(data)} className={`flex flex-col items-center justify-center py-2 rounded-lg border cursor-pointer transition-all ${isActive ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105' : 'bg-slate-50 border-slate-200 hover:border-emerald-300 text-slate-600'}`}>
+                              <span className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{dateObj.toLocaleDateString('pt-PT', {weekday: 'short'}).replace('.','')}</span>
+                              <span className="text-sm font-black leading-none">{dateObj.toLocaleDateString('pt-PT', {day: '2-digit'})}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {filtroDiaSelecionado && (
+                        <div className="border-t border-slate-100 pt-4 mt-2 animate-in fade-in">
+                          <span className="block text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-3">2. Qual o Horário?</span>
+                          <div className="grid grid-cols-3 gap-2">
+                            {diasSoltosFiltro.filter((t: any) => t.data_inicio === filtroDiaSelecionado).map((horario: any) => {
+                              const info = getHorarioInfo(horario.nome, isEn);
+                              const isActive = filtroTurno === horario.nome;
+                              return (
+                                <div key={horario.id} onClick={() => { setFiltroTurno(horario.nome); setIsFilterPanelOpen(false); }} className={`flex flex-col items-center p-2.5 rounded-xl border cursor-pointer transition-all ${isActive ? 'bg-emerald-700 border-emerald-700 text-white shadow-sm' : 'bg-white border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 text-slate-700'}`}>
+                                  <span className="text-xl mb-1">{info.icon}</span>
+                                  <span className="text-[10px] font-black text-center leading-tight">{info.tag}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
 
       {/* TABELA UNIFICADA */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative z-10">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -374,7 +478,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
               {reservasFiltradas.length === 0 ? (
                 <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold text-sm">Nenhum resultado encontrado.</td></tr>
               ) : (
-                reservasFiltradas.map((item) => {
+                reservasFiltradas.map((item: any) => {
                   const isInativa = item.status === 'Abandonada' || item.status === 'Cancelada';
                   const isExterna = item.isExterna;
                   
@@ -439,7 +543,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
       </div>
 
-      {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES (SELEÇÃO DE MODO) */}
+      {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -472,7 +576,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
               {importMode === 'manual' && (
                 <form id="form-manual" onSubmit={handleAddExterno} className="flex flex-col gap-6">
                   
-                  {/* ESCOLHA DO CAMPO E CALENDÁRIO VISUAL */}
                   <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">1. Destino, Calendário e Horário</h3>
                     <div className="flex flex-col gap-4">
@@ -480,13 +583,12 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                         <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Escolha o Programa/Campo de Férias</label>
                         <select required value={formExterno.campo_id} onChange={e => { setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: "", valor_pago: 0}); setDiaExterno(""); }} style={customSelectStyle} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-orange-500 cursor-pointer">
                           <option value="">Selecione o Campo...</option>
-                          {camposParceiro.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                          {camposParceiro.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </div>
 
                       {formExterno.campo_id && (
                         <div className="bg-white p-4 border border-slate-200 rounded-2xl animate-in fade-in">
-                          {/* Alternador de Modalidade */}
                           {(pacotesModal.length > 0 && diasSoltosModal.length > 0) && (
                             <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
                               <button type="button" onClick={() => { setModalidadeExterna('pacote'); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
@@ -498,12 +600,11 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                             </div>
                           )}
 
-                          {/* LISTAGEM DE PACOTES FECHADOS */}
                           {modalidadeExterna === 'pacote' && pacotesModal.length > 0 && (
                             <div className="flex flex-col gap-2">
                               {pacotesModal.map((pac: any) => {
                                 const isActive = formExterno.turno_nome === pac.nome;
-                                const tagInfo = getHorarioInfo(pac.nome);
+                                const tagInfo = getHorarioInfo(pac.nome, isEn);
                                 return (
                                   <div key={pac.id} onClick={() => setTurnoEscolhido(pac)} className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${isActive ? 'bg-orange-50 border-orange-500' : 'border-slate-100 hover:border-orange-200 bg-slate-50/50'}`}>
                                     <div>
@@ -517,7 +618,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                             </div>
                           )}
 
-                          {/* MINI CALENDÁRIO (GRID) PARA DIAS SOLTOS */}
                           {modalidadeExterna === 'dia_solto' && diasSoltosModal.length > 0 && (
                             <div className="flex flex-col gap-4">
                               <div>
@@ -545,7 +645,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                                   <div className="flex flex-col gap-2">
                                     {diasSoltosModal.filter((t:any) => t.data_inicio === diaExterno).map((horario: any) => {
                                       const isActive = formExterno.turno_nome === horario.nome;
-                                      const tagInfo = getHorarioInfo(horario.nome);
+                                      const tagInfo = getHorarioInfo(horario.nome, isEn);
                                       return (
                                         <div key={horario.id} onClick={() => setTurnoEscolhido(horario)} className={`flex items-center justify-between p-2.5 rounded-lg border-2 cursor-pointer transition-all ${isActive ? 'bg-orange-700 border-orange-700 text-white' : 'bg-white border-orange-200 hover:border-orange-400'}`}>
                                           <div className="flex items-center gap-2">
@@ -572,7 +672,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     </div>
                   </div>
 
-                  {/* Dados do Miúdo */}
                   <div className="bg-white p-5 rounded-2xl border border-slate-200">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">2. Dados do Participante</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -597,7 +696,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     </div>
                   </div>
 
-                  {/* Dados do Pai */}
                   <div className="bg-white p-5 rounded-2xl border border-slate-200">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">3. Encarregado de Educação</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -632,13 +730,12 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                   <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl">
                     <h3 className="text-sm font-black text-slate-800 mb-2">2. Faça Upload do Ficheiro</h3>
                     <p className="text-xs text-slate-500 mb-4">Aceitamos ficheiros .CSV guardados a partir do Excel.</p>
-                    <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files ? e.target.files[0] : null)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer" />
+                    <input type="file" accept=".csv" onChange={(e: any) => setCsvFile(e.target.files ? e.target.files[0] : null)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer" />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* BOTÕES DO MODAL */}
             <div className="p-5 border-t border-slate-200 bg-white flex justify-between items-center">
               {importMode !== 'selecao' ? (
                 <button onClick={() => setImportMode('selecao')} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800">&larr; Voltar</button>
