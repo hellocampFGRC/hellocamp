@@ -5,8 +5,27 @@ import CaixaReserva from "./CaixaReserva";
 import BotaoFavorito from "../../components/BotaoFavorito";
 import BotaoPartilha from "../../components/BotaoPartilha";
 import { getDictionary } from "@/lib/getDictionary";
-import FormContactoCampo from "../../components/FormContactoCampo"; 
+import FormContactoCampo from "../../components/FormContactoCampo";
 
+// ==========================================
+// TIPAGEM PARA PACOTES E VARIANTES
+// ==========================================
+interface Variante {
+  nome: string;
+  preco: number;
+}
+
+interface Pacote {
+  id: string;
+  titulo: string;
+  tipo: 'semana' | 'dia';
+  quantidade: number;
+  variantes: Variante[];
+}
+
+// ==========================================
+// METADATA
+// ==========================================
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; id: string }> }): Promise<Metadata> {
   const { lang, id } = await params;
   const isEn = lang === 'en';
@@ -27,7 +46,7 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
 
 export default async function DetalhesDoCampo({ params }: { params: Promise<{ lang: string; id: string }>; }) {
   const { lang, id } = await params;
-  
+
   const dict = await getDictionary(lang as "pt" | "en");
   const isEn = lang === 'en';
 
@@ -49,7 +68,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
     parceiroInfo = organizador;
   }
 
-  const viewsHoje = Math.floor(Math.random() * (campo.vagas_totais > 50 ? 25 : 8)) + 2; 
+  const viewsHoje = Math.floor(Math.random() * (campo.vagas_totais > 50 ? 25 : 8)) + 2;
 
   const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
   const descCampo = isEn && campo.descricao_en ? campo.descricao_en : campo.descricao;
@@ -60,8 +79,8 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
   const alojamentoCampo = isEn && campo.alojamento_en ? campo.alojamento_en : campo.alojamento;
   const seguroCampo = isEn && campo.seguro_en ? campo.seguro_en : campo.seguro;
   const regrasCampo = isEn && campo.regras_termos_en ? campo.regras_termos_en : campo.regras_termos;
-  
-  const paisReal = campo.pais || "Portugal"; 
+
+  const paisReal = campo.pais || "Portugal";
   const paisVisivel = isEn && campo.pais_en ? campo.pais_en : paisReal;
 
   const scoreAvaliacoes = campo.rating_score || 0;
@@ -74,40 +93,37 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
 
   const baseUrl = "https://www.hellocamp.pt";
   const campoUrlCompleto = `${baseUrl}/${lang}/campo/${campo.id}`;
-  const dataMaisCedo = campo.turnos && campo.turnos.length > 0 ? campo.turnos[0].data_inicio : "2026-07-01";
-  
+
   // ==========================================
-  // AGRUPAMENTO MÁXIMO E INTELIGENTE DE DATAS
+  // DADOS DA NOVA ESTRUTURA (COM TIPOS)
   // ==========================================
-  const turnosOriginais = isEn && campo.turnos_en ? campo.turnos_en : (campo.turnos || []);
-  
-  // Agrupar todos os turnos pelo NOME BASE (ex: "1ª Semana Julho") para encontrar a data mínima e máxima
-  const blocosAgrupados = new Map();
+  const calendario = campo.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [] };
+  const pacotes: Pacote[] = campo.pacotes || [];
+  const dataMaisCedo = calendario.data_inicio || "2026-07-01";
 
-  turnosOriginais.forEach((t: any) => {
-    // Retira os sufixos logísticos " (Dia Completo)" ou " - Dia 10/07"
-    let baseName = t.nome.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
-    
-    if (!blocosAgrupados.has(baseName)) {
-      blocosAgrupados.set(baseName, {
-        nomeExibicao: baseName,
-        data_inicio: t.data_inicio,
-        data_fim: t.data_fim,
-        vagas: Number(t.vagas) || 0
-      });
-    } else {
-      let bloco = blocosAgrupados.get(baseName);
-      // Ajustar extremos de datas se houver dias além do esperado
-      if (t.data_inicio < bloco.data_inicio) bloco.data_inicio = t.data_inicio;
-      if (t.data_fim > bloco.data_fim) bloco.data_fim = t.data_fim;
-      // Manter a maior capacidade encontrada para este bloco
-      if ((Number(t.vagas) || 0) > bloco.vagas) bloco.vagas = Number(t.vagas);
-    }
-  });
+  // Mapeamento dos dias da semana para exibição
+  const DIAS_SEMANA = [
+    { id: 1, pt: 'Seg', en: 'Mon' }, { id: 2, pt: 'Ter', en: 'Tue' },
+    { id: 3, pt: 'Qua', en: 'Wed' }, { id: 4, pt: 'Qui', en: 'Thu' },
+    { id: 5, pt: 'Sex', en: 'Fri' }, { id: 6, pt: 'Sáb', en: 'Sat' },
+    { id: 0, pt: 'Dom', en: 'Sun' }
+  ];
+  const diasAtivos: number[] = calendario.dias_semana || [];
+  const diasAtivosTexto = diasAtivos.map((diaId: number) => {
+    const dia = DIAS_SEMANA.find((d: { id: number; pt: string; en: string }) => d.id === diaId);
+    return dia ? (isEn ? dia.en : dia.pt) : '';
+  }).filter(Boolean).join(', ');
 
-  const blocosUnicosResumo = Array.from(blocosAgrupados.values());
-  const temDiasSoltos = turnosOriginais.some((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
+  // Preço mínimo (já está no campo.preco, mas podemos recalcular por segurança)
+  let precoMinimo = campo.preco || 0;
+  if (pacotes.length > 0 && !precoMinimo) {
+    const todosPrecos = pacotes.flatMap((p: Pacote) => p.variantes.map((v: Variante) => v.preco));
+    precoMinimo = Math.min(...todosPrecos);
+  }
 
+  // ==========================================
+  // SCHEMAS JSON-LD
+  // ==========================================
   const eventSchema = {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -124,7 +140,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
     },
     "offers": {
       "@type": "Offer",
-      "price": campo.preco,
+      "price": precoMinimo,
       "priceCurrency": "EUR",
       "availability": "https://schema.org/InStock",
       "validFrom": new Date().toISOString().split('T')[0]
@@ -176,7 +192,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
         </div>
 
         <div className="absolute top-6 left-4 z-30 sm:hidden">
-           <Link href={`/${lang}/distrito/${encodeURIComponent(campo.Distrito || localCampo)}`} className="inline-flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-sm px-4 py-2.5 text-xs font-bold text-slate-700 shadow-md border border-white/20 uppercase tracking-wider">
+          <Link href={`/${lang}/distrito/${encodeURIComponent(campo.Distrito || localCampo)}`} className="inline-flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-sm px-4 py-2.5 text-xs font-bold text-slate-700 shadow-md border border-white/20 uppercase tracking-wider">
             &larr; {localCampo}
           </Link>
         </div>
@@ -184,23 +200,23 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
 
       <div className="max-w-[1100px] mx-auto pt-10 pb-10 px-4 md:px-6">
         <div className="flex flex-col lg:flex-row gap-10 items-start w-full">
-          
+
           <div className="flex-1 w-full flex flex-col gap-6">
-            
+
             {/* CABEÇALHO DO CAMPO */}
             <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-40">
               <div className="absolute top-8 right-8 z-50 flex items-center gap-3">
                 <BotaoPartilha url={campoUrlCompleto} titulo={nomeCampo} isEn={isEn} />
                 <BotaoFavorito campoId={campo.id} />
               </div>
-              
+
               <div className="flex flex-wrap items-center gap-3 mb-5 pr-24">
                 <span className="rounded-full bg-emerald-50 border border-emerald-100 px-4 py-1.5 text-xs font-bold text-emerald-700 uppercase tracking-widest">{catCampo}</span>
                 <span className="text-sm font-bold text-slate-500">📍 {localCampo}</span>
               </div>
-              
+
               <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight mb-4">{nomeCampo}</h1>
-              
+
               <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
                   <span className="text-[#EBA914] text-lg font-black">★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : 'Novo'}</span>
@@ -218,15 +234,15 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
             <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{dict.detalhe.sobre_programa}</h2>
               <p className="leading-relaxed text-slate-600 text-base whitespace-pre-wrap font-medium mb-0">{descCampo}</p>
-              
+
               {campo.organizador_id && parceiroInfo && (
                 <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="mt-8 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors no-underline group">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm flex-shrink-0">
                       {parceiroInfo.logotipo_url ? (
-                         <img src={parceiroInfo.logotipo_url} alt="Logo" className="w-full h-full object-cover" />
+                        <img src={parceiroInfo.logotipo_url} alt="Logo" className="w-full h-full object-cover" />
                       ) : (
-                         <span className="text-slate-400 text-lg">🏢</span>
+                        <span className="text-slate-400 text-lg">🏢</span>
                       )}
                     </div>
                     <div>
@@ -246,45 +262,61 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
               )}
             </div>
 
-            {/* RESUMO INTELIGENTE DE DATAS E DISPONIBILIDADE */}
+            {/* CALENDÁRIO E PACOTES (NOVA ESTRUTURA) */}
             <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-5">{dict.detalhe.datas_disponibilidade}</h2>
-              <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100">
-                {blocosUnicosResumo.length > 0 ? (
-                  <div className="flex flex-col gap-4">
-                    <ul className="flex flex-col m-0 p-0 list-none gap-4">
-                      {blocosUnicosResumo.map((t: any, idx: number) => {
-                        const isEsgotado = Number(t.vagas) <= 0;
-                        return (
-                          <li key={idx} className={`pb-4 ${idx !== blocosUnicosResumo.length - 1 ? 'border-b border-emerald-100' : ''}`}>
-                            <div className="flex items-center gap-2 text-slate-700 text-sm md:text-base font-bold">
-                              <span className="text-emerald-500 text-xl leading-none">•</span>
-                              <span className={isEsgotado ? 'line-through text-slate-400' : ''}>
-                                {t.nomeExibicao}: <span className="font-medium text-slate-600">{formatarDataExtenso(t.data_inicio)} {isEn ? 'to' : 'a'} {formatarDataExtenso(t.data_fim)}</span>
-                              </span>
-                            </div>
-                            <div className="ml-7 mt-2 flex flex-wrap gap-3 items-center">
-                              <span className={`text-xs font-bold px-3 py-1 rounded-full shadow-sm ${isEsgotado ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-white border border-slate-200 text-slate-600'}`}>
-                                {isEsgotado ? (isEn ? 'SOLD OUT' : 'ESGOTADO') : `👥 Vagas: ${t.vagas}`}
-                              </span>
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                    
-                    {temDiasSoltos && (
-                      <div className="mt-2 p-4 bg-white border border-emerald-200 rounded-xl flex items-start gap-3 shadow-sm">
-                        <span className="text-2xl leading-none">📅</span>
-                        <div>
-                          <p className="text-sm font-black text-emerald-900 m-0">{isEn ? 'Flexible Booking Available' : 'Flexibilidade Diária Disponível'}</p>
-                          <p className="text-xs font-bold text-emerald-700 m-0 mt-1 leading-relaxed">{isEn ? 'You can book specific single days and half-days (morning/afternoon) directly in the booking box.' : 'Pode inscrever-se em dias soltos específicos e escolher horários parciais (só manhã / só tarde) diretamente na caixa de reserva ao lado.'}</p>
-                        </div>
-                      </div>
+              <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100 space-y-4">
+
+                {/* Período Global */}
+                {calendario.data_inicio && calendario.data_fim && (
+                  <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-700">
+                    <span className="text-emerald-500 text-xl leading-none">📅</span>
+                    <span>
+                      {formatarDataExtenso(calendario.data_inicio)} {isEn ? 'to' : 'a'} {formatarDataExtenso(calendario.data_fim)}
+                    </span>
+                    {diasAtivosTexto && (
+                      <span className="ml-2 rounded-full bg-white border border-emerald-200 px-3 py-1 text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                        {diasAtivosTexto}
+                      </span>
                     )}
                   </div>
+                )}
+
+                {/* Pacotes */}
+                {pacotes.length > 0 ? (
+                  <div className="space-y-4 mt-4">
+                    <p className="text-xs font-black text-slate-500 uppercase tracking-widest border-b border-emerald-200 pb-2">
+                      {isEn ? 'Available packages' : 'Pacotes disponíveis'}
+                    </p>
+                    {pacotes.map((pacote: Pacote, idx: number) => (
+                      <div key={idx} className="bg-white rounded-xl border border-emerald-200 p-4 shadow-sm">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <h3 className="font-black text-slate-900 text-base">{pacote.titulo}</h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              {pacote.tipo === 'semana' ? `${pacote.quantidade} Semana(s)` : `${pacote.quantidade} Dia(s)`}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {pacote.variantes.map((variante: Variante, vi: number) => (
+                              <span key={vi} className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">
+                                {variante.nome}: {variante.preco}€
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <p className="text-slate-600 font-medium text-sm m-0">{campo.datas_disponiveis || dict.detalhe.definir_atualizacoes}</p>
+                  <p className="text-slate-500 text-sm font-medium m-0">{isEn ? 'No packages defined yet.' : 'Ainda não há pacotes definidos.'}</p>
+                )}
+
+                {campo.vagas_totais && (
+                  <div className="mt-2 pt-2 border-t border-emerald-200 flex items-center gap-3">
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">👥 {isEn ? 'Total slots' : 'Vagas totais'}:</span>
+                    <span className="font-black text-emerald-700">{campo.vagas_totais}</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -328,14 +360,14 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                   <span className="text-[#EBA914] text-xl font-black">★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : 'Novo'}</span>
                 </div>
               </div>
-              
+
               {!reviews || reviews.length === 0 ? (
                 <div className="text-center py-6 text-slate-400 font-bold text-sm">
                   {isEn ? 'No reviews for this camp yet. Be the first!' : 'Ainda não há avaliações. Seja o primeiro a deixar opinião após o campo!'}
                 </div>
               ) : (
                 <div className="flex flex-col gap-6">
-                  {reviews.map((rev) => (
+                  {reviews.map((rev: any) => (
                     <div key={rev.id} className="flex flex-col gap-2 pb-6 border-b border-slate-50 last:border-0 last:pb-0">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-600 text-sm flex-shrink-0">
@@ -346,7 +378,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                           <p className="text-xs font-bold text-slate-400 m-0">{new Date(rev.created_at).toLocaleDateString(isEn ? 'en-US' : 'pt-PT')}</p>
                         </div>
                       </div>
-                      <div className="text-[#EBA914] text-xs">{'★'.repeat(rev.rating)}{'☆'.repeat(5-rev.rating)}</div>
+                      <div className="text-[#EBA914] text-xs">{'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}</div>
                       <p className="text-sm text-slate-600 m-0 font-medium">{rev.comentario}</p>
                     </div>
                   ))}
@@ -358,14 +390,14 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
             <div id="duvidas" className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10 scroll-mt-24">
               <h3 className="text-xl font-bold text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
               <p className="text-sm text-slate-500 font-medium mb-8">{dict.detalhe.duvidas_sub}</p>
-              
-              <FormContactoCampo 
-                campoId={campo.id} 
-                organizadorId={campo.organizador_id} 
-                nomeCampo={nomeCampo} 
-                dict={dict} 
-                isEn={isEn} 
-                lang={lang} 
+
+              <FormContactoCampo
+                campoId={campo.id}
+                organizadorId={campo.organizador_id}
+                nomeCampo={nomeCampo}
+                dict={dict}
+                isEn={isEn}
+                lang={lang}
               />
             </div>
 

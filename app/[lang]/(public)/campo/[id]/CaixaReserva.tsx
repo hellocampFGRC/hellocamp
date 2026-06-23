@@ -4,6 +4,22 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import React from "react";
 
+// ==========================================
+// TIPAGEM
+// ==========================================
+interface Variante {
+  nome: string;
+  preco: number;
+}
+
+interface Pacote {
+  id: string;
+  titulo: string;
+  tipo: 'semana' | 'dia';
+  quantidade: number;
+  variantes: Variante[];
+}
+
 export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: string, dict: any }) {
   const router = useRouter();
   const isEn = lang === 'en';
@@ -11,107 +27,50 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   const modalidadeReserva = campo?.contrato_dados?.modalidadeReserva || 'direta';
   const isEmailMode = modalidadeReserva === 'email';
 
-  // 1. CARREGAR E SEPARAR TURNOS
-  const turnos = isEn && campo.turnos_en && campo.turnos_en.length > 0 ? campo.turnos_en : (campo.turnos || []);
-  const temTurnos = turnos.length > 0;
+  // Dados da nova estrutura
+  const pacotes: Pacote[] = campo.pacotes || [];
+  const calendario = campo.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [] };
 
-  const pacotesDisponiveis = turnos.filter((t: any) => !t.nome.includes("- Dia ") && !t.nome.includes("- Day "));
-  const diasSoltosDisponiveis = turnos.filter((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
-
-  // 2. ESTADOS
-  const defaultMod = pacotesDisponiveis.length > 0 ? "pacote" : "dia_solto";
-  const [modalidade, setModalidade] = useState<"pacote" | "dia_solto">(defaultMod);
-  const [pacoteSelecionado, setPacoteSelecionado] = useState<any>(null);
-  
-  // Novos Estados para Dias Soltos (Multi-Seleção)
-  const [horarioGeral, setHorarioGeral] = useState<string>("");
-  const [diasSelecionados, setDiasSelecionados] = useState<string[]>([]);
-  
+  // Estado para seleção
+  const [pacoteSelecionado, setPacoteSelecionado] = useState<Pacote | null>(null);
+  const [varianteSelecionada, setVarianteSelecionada] = useState<Variante | null>(null);
   const [quantidade, setQuantidade] = useState(1);
+
+  // Extras (mantidos)
   const [extraAlimentacao, setExtraAlimentacao] = useState(false);
   const [extraAlojamento, setExtraAlojamento] = useState(false);
   const [extraProlongamento, setExtraProlongamento] = useState(false);
   const [extraTransporte, setExtraTransporte] = useState(false);
 
-  // Inicialização Inteligente
+  // Inicialização: selecionar o primeiro pacote e a primeira variante
   useEffect(() => {
-    if (pacotesDisponiveis.length === 0 && diasSoltosDisponiveis.length > 0) setModalidade("dia_solto");
-    if (pacotesDisponiveis.length > 0 && diasSoltosDisponiveis.length === 0) setModalidade("pacote");
-    if (pacotesDisponiveis.length > 0 && !pacoteSelecionado) setPacoteSelecionado(pacotesDisponiveis[0]);
-  }, [turnos]);
+    if (pacotes.length > 0) {
+      const primeiro = pacotes[0];
+      setPacoteSelecionado(primeiro);
+      if (primeiro.variantes.length > 0) {
+        setVarianteSelecionada(primeiro.variantes[0]);
+      }
+    }
+  }, [pacotes]);
 
-  // Identificar quais os Horários disponíveis nos Dias Soltos (Dia Completo, Manhã, Tarde)
-  const horariosUnicos = Array.from(new Set(diasSoltosDisponiveis.map((t: any) => {
-    if (t.nome.includes("Completo") || t.nome.includes("Full")) return "Dia Completo";
-    if (t.nome.includes("Manhã") || t.nome.includes("Morning")) return "Só Manhã";
-    if (t.nome.includes("Tarde") || t.nome.includes("Afternoon")) return "Só Tarde";
-    return "Geral";
-  }))).filter(h => h !== "Geral");
-
+  // Quando o pacote muda, selecionar a primeira variante
   useEffect(() => {
-    if (horariosUnicos.length > 0 && !horarioGeral) setHorarioGeral(horariosUnicos[0] as string);
-  }, [horariosUnicos]);
+    if (pacoteSelecionado && pacoteSelecionado.variantes.length > 0) {
+      setVarianteSelecionada(pacoteSelecionado.variantes[0]);
+    }
+  }, [pacoteSelecionado]);
 
-  const datasUnicasDiasSoltos = Array.from(new Set(diasSoltosDisponiveis.map((t: any) => t.data_inicio))).sort() as string[];
+  // Cálculo de preços
+  const precoBase = varianteSelecionada?.preco || 0;
+  const diasParaCalculo = pacoteSelecionado?.quantidade || 1;
+  const noitesDormida = Math.max(1, diasParaCalculo - 1);
 
-  // 3. FUNÇÃO DE TOGGLE DO CALENDÁRIO (Clica seleciona / Clica remove)
-  const toggleDia = (data: string) => {
-    setDiasSelecionados(prev => 
-      prev.includes(data) ? prev.filter(d => d !== data) : [...prev, data]
-    );
-  };
-
-  // Se mudar o horário (ex: de Manhã para Tarde), limpamos o calendário para evitar erros de preço
-  useEffect(() => {
-    setDiasSelecionados([]);
-  }, [horarioGeral, modalidade]);
-
-  // 4. CÁLCULO DE PREÇOS
+  // Extras
   const valAlimentacao = campo.extra_alimentacao || 0;
   const valAlojamento = campo.extra_alojamento || 0;
   const valProlongamento = campo.extra_prolongamento || 0;
   const valTransporte = campo.extra_transporte || 0;
 
-  let precoBase = 0;
-  let diasParaCalculo = 1;
-  let turnoParaCheckout: any = null;
-
-  if (temTurnos) {
-    if (modalidade === "pacote" && pacoteSelecionado) {
-      precoBase = Number(pacoteSelecionado.preco);
-      turnoParaCheckout = pacoteSelecionado;
-      const start = new Date(pacoteSelecionado.data_inicio);
-      const end = new Date(pacoteSelecionado.data_fim);
-      diasParaCalculo = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-    } 
-    else if (modalidade === "dia_solto" && horarioGeral && diasSelecionados.length > 0) {
-      // Vai procurar os bilhetes exatos para os dias que escolheu, no horário que escolheu
-      const turnosEscolhidos = diasSelecionados.map(dia => {
-        return diasSoltosDisponiveis.find((t: any) => 
-          t.data_inicio === dia && 
-          (t.nome.includes(horarioGeral) || (horarioGeral === "Dia Completo" && t.nome.includes("Full")) || (horarioGeral === "Só Manhã" && t.nome.includes("Morning")) || (horarioGeral === "Só Tarde" && t.nome.includes("Afternoon")))
-        );
-      }).filter(Boolean);
-
-      precoBase = turnosEscolhidos.reduce((sum, t) => sum + Number(t.preco), 0);
-      diasParaCalculo = diasSelecionados.length;
-
-      // Criação de um Turno Virtual Agregado para enviar para o Checkout
-      turnoParaCheckout = {
-        id: "multi_dias",
-        nome: `${isEn ? 'Selected Days' : 'Dias Soltos'} (${horarioGeral}) - ${diasSelecionados.length} ${isEn ? 'days' : 'dias'}`,
-        data_inicio: diasSelecionados.sort()[0],
-        data_fim: diasSelecionados.sort()[diasSelecionados.length - 1],
-        preco: precoBase,
-        vagas: Math.min(...turnosEscolhidos.map(t => Number((t as any).vagas)))
-      };
-    }
-  } else {
-    precoBase = Number(campo.preco) || 0;
-    diasParaCalculo = campo.duracao_dias || 5;
-  }
-
-  const noitesDormida = Math.max(1, diasParaCalculo - 1);
   let totalExtras = 0;
   if (extraAlimentacao) totalExtras += (valAlimentacao * diasParaCalculo);
   if (extraAlojamento) totalExtras += (valAlojamento * noitesDormida);
@@ -120,21 +79,36 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
 
   const precoTotal = (precoBase + totalExtras) * quantidade;
 
-  // 5. HELPERS VISUAIS
-  const formatarDataExibicao = (dStr: string) => {
-    if (!dStr) return '';
-    return new Date(dStr).toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
-  };
-  const limparNomeParaExibicao = (nomeCru: string) => nomeCru.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
+  // Verificar se há vagas (assumimos que o campo tem vagas totais, mas podemos verificar por pacote se houver)
+  const vagasTotais = campo.vagas_totais || 0;
+  const isEsgotado = vagasTotais <= 0;
+  const mostrarEscassez = vagasTotais > 0 && vagasTotais <= 3;
 
-  const getHorarioInfo = (horario: string) => {
-    if (horario === "Dia Completo") return { tag: isEn ? "Full Day" : "Dia Completo", icon: "🌅" };
-    if (horario === "Só Manhã") return { tag: isEn ? "Morning" : "Só Manhã", icon: "🥞" };
-    if (horario === "Só Tarde") return { tag: isEn ? "Afternoon" : "Só Tarde", icon: "🥪" };
-    return { tag: horario, icon: "🎟️" };
+  // Preparar dados para o checkout
+  const construirTurnoParaCheckout = () => {
+    if (!pacoteSelecionado || !varianteSelecionada) return null;
+
+    // Nome composto: título do pacote + variante
+    const nomeTurno = `${pacoteSelecionado.titulo} (${varianteSelecionada.nome})`;
+    // Usamos as datas do calendário global (se existirem)
+    const dataInicio = calendario.data_inicio || new Date().toISOString().split('T')[0];
+    const dataFim = calendario.data_fim || dataInicio;
+
+    return {
+      id: pacoteSelecionado.id,
+      nome: nomeTurno,
+      data_inicio: dataInicio,
+      data_fim: dataFim,
+      preco: varianteSelecionada.preco,
+      vagas: vagasTotais, // ou poderíamos ter vagas por pacote
+      tipo: pacoteSelecionado.tipo,
+      quantidade: pacoteSelecionado.quantidade
+    };
   };
 
-  // 6. SUBMETER
+  const turnoParaCheckout = construirTurnoParaCheckout();
+
+  // Submeter
   const handleReservar = () => {
     if (!turnoParaCheckout) return;
 
@@ -152,139 +126,118 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     router.push(`/${lang}/checkout/${campo.id}?${params.toString()}`);
   };
 
-  const vagasTurno = turnoParaCheckout ? Number(turnoParaCheckout.vagas) : 0;
-  const isEsgotado = turnoParaCheckout && vagasTurno <= 0;
-  const mostrarEscassez = turnoParaCheckout && vagasTurno > 0 && vagasTurno <= 3;
-  const disabledReserva = !temTurnos || precoBase === 0 || isEsgotado || !turnoParaCheckout;
+  const disabledReserva = !pacoteSelecionado || !varianteSelecionada || precoBase === 0 || isEsgotado || !turnoParaCheckout;
+
+  // Formatar datas
+  const formatarDataExibicao = (dStr: string) => {
+    if (!dStr) return '';
+    return new Date(dStr).toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const periodoTexto = calendario.data_inicio && calendario.data_fim
+    ? `${formatarDataExibicao(calendario.data_inicio)} - ${formatarDataExibicao(calendario.data_fim)}`
+    : (isEn ? 'Dates to be defined' : 'Datas a definir');
 
   return (
     <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 w-full relative">
       
+      {/* Cabeçalho com preço */}
       <div className="mb-8">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-          {modalidade === 'pacote' ? (isEn ? 'Package Price' : 'Preço Pacote Inteiro') : (isEn ? 'Price per selection' : 'Preço da Seleção')}
+          {isEn ? 'Price per child' : 'Preço por criança'}
         </p>
         <div className="flex items-baseline gap-2">
           <span className="text-4xl font-black text-slate-900 leading-none">{precoBase}€</span>
           <span className="text-sm font-bold text-slate-500">/ {isEn ? 'child' : 'criança'}</span>
         </div>
+        <p className="text-xs font-bold text-slate-400 mt-1">{periodoTexto}</p>
       </div>
 
-      {!temTurnos ? (
-         <div className="w-full p-4 mb-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-sm font-bold text-slate-400">
-           🗓️ {isEn ? 'Dates to be defined' : 'Datas a definir pela organização'}
-         </div>
+      {pacotes.length === 0 ? (
+        <div className="w-full p-4 mb-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-sm font-bold text-slate-400">
+          🗓️ {isEn ? 'No packages available' : 'Nenhum pacote disponível'}
+        </div>
       ) : (
         <>
-          {/* ABAS INTELIGENTES */}
-          {(pacotesDisponiveis.length > 0 && diasSoltosDisponiveis.length > 0) && (
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-6">
-              <button onClick={() => setModalidade('pacote')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-all ${modalidade === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                {isEn ? 'Full Package' : 'Programa Inteiro'}
-              </button>
-              <button onClick={() => setModalidade('dia_solto')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-all ${modalidade === 'dia_solto' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-100' : 'text-slate-500 hover:text-slate-700'}`}>
-                {isEn ? 'Single Days' : 'Dias Soltos'}
-              </button>
-            </div>
-          )}
+          {/* Seleção do Pacote */}
+          <div className="mb-6">
+            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
+              {isEn ? 'Select Package' : 'Escolha o Pacote'}
+            </label>
+            <div className="flex flex-col gap-3">
+              {pacotes.map((pac) => {
+                const isActive = pacoteSelecionado?.id === pac.id;
+                const isFull = isEsgotado; // ou podemos ter vagas por pacote
 
-          {/* FLUXO 1: PACOTES (SEMANAS INTEIRAS) */}
-          {modalidade === "pacote" && pacotesDisponiveis.length > 0 && (
-            <div className="mb-6 animate-in fade-in duration-300">
-              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">{isEn ? 'Select Program / Dates' : 'Escolha a Semana e Horário'}</label>
-              <div className="flex flex-col gap-3">
-                {pacotesDisponiveis.map((pac: any) => {
-                  const isActive = pacoteSelecionado?.id === pac.id;
-                  const isFull = Number(pac.vagas) <= 0;
-                  
-                  let tagInfo = { tag: "Geral", icon: "🎟️" };
-                  if (pac.nome.includes("Completo") || pac.nome.includes("Full")) tagInfo = { tag: isEn ? "Full Day" : "Dia Completo", icon: "🌅" };
-                  if (pac.nome.includes("Manhã") || pac.nome.includes("Morning")) tagInfo = { tag: isEn ? "Morning" : "Manhã", icon: "🥞" };
-                  if (pac.nome.includes("Tarde") || pac.nome.includes("Afternoon")) tagInfo = { tag: isEn ? "Afternoon" : "Tarde", icon: "🥪" };
-
-                  return (
-                    <div 
-                      key={pac.id} 
-                      onClick={() => !isFull && setPacoteSelecionado(pac)}
-                      className={`relative p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col gap-2 ${isFull ? 'bg-slate-50 border-slate-200 opacity-50 grayscale' : (isActive ? 'bg-slate-900 border-slate-900 shadow-md' : 'bg-white border-slate-200 hover:border-slate-300')}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <span className={`text-sm font-black ${isActive ? 'text-white' : 'text-slate-900'}`}>{limparNomeParaExibicao(pac.nome)}</span>
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                          {tagInfo.icon} {tagInfo.tag}
+                return (
+                  <div
+                    key={pac.id}
+                    onClick={() => !isFull && setPacoteSelecionado(pac)}
+                    className={`relative p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col gap-2 ${
+                      isFull
+                        ? 'bg-slate-50 border-slate-200 opacity-50 grayscale'
+                        : isActive
+                        ? 'bg-slate-900 border-slate-900 shadow-md'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <span className={`text-sm font-black ${isActive ? 'text-white' : 'text-slate-900'}`}>
+                        {pac.titulo}
+                      </span>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {pac.tipo === 'semana' ? `${pac.quantidade} ${isEn ? 'Weeks' : 'Semanas'}` : `${pac.quantidade} ${isEn ? 'Days' : 'Dias'}`}
+                      </span>
+                    </div>
+                    {isFull && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[1px] rounded-xl">
+                        <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm">
+                          {isEn ? 'SOLD OUT' : 'ESGOTADO'}
                         </span>
                       </div>
-                      <div className={`text-[11px] font-bold ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
-                        🗓️ {formatarDataExibicao(pac.data_inicio)} &rarr; {formatarDataExibicao(pac.data_fim)}
-                      </div>
-                      {isFull && <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[1px] rounded-xl"><span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm">{isEn ? 'SOLD OUT' : 'ESGOTADO'}</span></div>}
-                    </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Seleção da Variante (se houver mais de uma) */}
+          {pacoteSelecionado && pacoteSelecionado.variantes.length > 1 && (
+            <div className="mb-6">
+              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
+                {isEn ? 'Choose Option' : 'Escolha a Opção'}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {pacoteSelecionado.variantes.map((varia) => {
+                  const isActive = varianteSelecionada?.nome === varia.nome;
+                  return (
+                    <button
+                      key={varia.nome}
+                      onClick={() => setVarianteSelecionada(varia)}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all border flex items-center gap-2 ${
+                        isActive
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'
+                      }`}
+                    >
+                      <span>{varia.nome}</span>
+                      <span className={`text-[10px] ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>
+                        {varia.preco}€
+                      </span>
+                    </button>
                   );
                 })}
               </div>
             </div>
           )}
 
-          {/* FLUXO 2: MINI-CALENDÁRIO DE MÚLTIPLA SELEÇÃO (DIAS SOLTOS) */}
-          {modalidade === "dia_solto" && diasSoltosDisponiveis.length > 0 && (
-            <div className="mb-6 animate-in fade-in duration-300">
-              
-              {/* Passo A: Botões pequenos de Horário Lado-a-Lado */}
-              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">{isEn ? '1. Select Schedule' : '1. Escolha o Horário'}</label>
-              <div className="flex flex-wrap gap-2 mb-6">
-                {horariosUnicos.map((h: any) => {
-                  const isActive = horarioGeral === h;
-                  const info = getHorarioInfo(h);
-                  return (
-                    <button 
-                      key={h} 
-                      onClick={() => setHorarioGeral(h)} 
-                      className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 border ${isActive ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'}`}
-                    >
-                      <span className="text-sm">{info.icon}</span> {info.tag}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Passo B: Calendário Grid Interativo */}
-              <div className="bg-emerald-50/50 p-5 rounded-3xl border border-emerald-100">
-                <div className="flex justify-between items-center mb-4">
-                  <label className="text-[11px] font-black text-emerald-800 uppercase tracking-widest m-0">{isEn ? '2. Pick your Days' : '2. Selecione os Dias'}</label>
-                  <span className="text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-1 rounded-md">{diasSelecionados.length} {isEn ? 'Selected' : 'Selecionados'}</span>
-                </div>
-                
-                <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
-                  {datasUnicasDiasSoltos.map((data: string) => {
-                    const isSelected = diasSelecionados.includes(data);
-                    
-                    // Verifica se há bilhete disponível para este dia no horário selecionado
-                    const turnosDesteDia = diasSoltosDisponiveis.filter((t: any) => t.data_inicio === data && (t.nome.includes(horarioGeral) || (horarioGeral === "Dia Completo" && t.nome.includes("Full")) || (horarioGeral === "Só Manhã" && t.nome.includes("Morning")) || (horarioGeral === "Só Tarde" && t.nome.includes("Afternoon"))));
-                    const isAvailable = turnosDesteDia.length > 0 && turnosDesteDia.some((t:any) => Number(t.vagas) > 0);
-
-                    const dateObj = new Date(data);
-                    const diaSemana = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.', '');
-                    const diaNumero = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' });
-
-                    return (
-                      <button 
-                        key={data} 
-                        type="button"
-                        onClick={() => toggleDia(data)}
-                        disabled={!isAvailable}
-                        className={`flex flex-col items-center justify-center py-2.5 rounded-xl cursor-pointer transition-all border-2 ${isSelected ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105' : (isAvailable ? 'bg-white border-emerald-100 text-slate-600 hover:border-emerald-400' : 'bg-slate-50 border-slate-100 text-slate-300 opacity-50 cursor-not-allowed')}`}
-                      >
-                        <span className={`text-[9px] font-black uppercase tracking-wider mb-0.5 ${isSelected ? 'text-emerald-100' : (isAvailable ? 'text-emerald-600/70' : 'text-slate-300')}`}>{diaSemana}</span>
-                        <span className="text-base font-black leading-none">{diaNumero}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                
-                {diasSelecionados.length === 0 && (
-                  <p className="text-xs text-center text-emerald-700/60 font-bold mt-4 mb-0">👆 {isEn ? 'Click on the dates you want to attend.' : 'Pode clicar em vários dias para adicionar à sua seleção.'}</p>
-                )}
-              </div>
+          {/* Exibir preço da variante selecionada */}
+          {varianteSelecionada && (
+            <div className="mb-4 text-sm font-bold text-slate-700">
+              {isEn ? 'Selected option' : 'Opção selecionada'}: {varianteSelecionada.nome} – {varianteSelecionada.preco}€
             </div>
           )}
         </>
@@ -293,12 +246,46 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
       {/* EXTRAS */}
       {!isEsgotado && (valAlimentacao > 0 || valAlojamento > 0 || valProlongamento > 0 || valTransporte > 0) && (
         <div className="mb-6 border-t border-slate-100 pt-6">
-          <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">{isEn ? 'Optional Extras' : 'Extras Opcionais'}</p>
+          <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
+            {isEn ? 'Optional Extras' : 'Extras Opcionais'}
+          </p>
           <div className="flex flex-col gap-2">
-            {valAlimentacao > 0 && <ExtraCheckbox icon="🍎" label={isEn ? 'Meals' : 'Alimentação'} price={valAlimentacao * diasParaCalculo} active={extraAlimentacao} onChange={() => setExtraAlimentacao(!extraAlimentacao)} />}
-            {valAlojamento > 0 && <ExtraCheckbox icon="🏕️" label={isEn ? 'Sleepover' : 'Dormida'} price={valAlojamento * noitesDormida} active={extraAlojamento} onChange={() => setExtraAlojamento(!extraAlojamento)} />}
-            {valProlongamento > 0 && <ExtraCheckbox icon="⏰" label={isEn ? 'Extended Hours' : 'Horário Extra'} price={valProlongamento * diasParaCalculo} active={extraProlongamento} onChange={() => setExtraProlongamento(!extraProlongamento)} />}
-            {valTransporte > 0 && <ExtraCheckbox icon="🚌" label={isEn ? 'Transport' : 'Transporte'} price={valTransporte * diasParaCalculo} active={extraTransporte} onChange={() => setExtraTransporte(!extraTransporte)} />}
+            {valAlimentacao > 0 && (
+              <ExtraCheckbox
+                icon="🍎"
+                label={isEn ? 'Meals' : 'Alimentação'}
+                price={valAlimentacao * diasParaCalculo}
+                active={extraAlimentacao}
+                onChange={() => setExtraAlimentacao(!extraAlimentacao)}
+              />
+            )}
+            {valAlojamento > 0 && (
+              <ExtraCheckbox
+                icon="🏕️"
+                label={isEn ? 'Sleepover' : 'Dormida'}
+                price={valAlojamento * noitesDormida}
+                active={extraAlojamento}
+                onChange={() => setExtraAlojamento(!extraAlojamento)}
+              />
+            )}
+            {valProlongamento > 0 && (
+              <ExtraCheckbox
+                icon="⏰"
+                label={isEn ? 'Extended Hours' : 'Horário Extra'}
+                price={valProlongamento * diasParaCalculo}
+                active={extraProlongamento}
+                onChange={() => setExtraProlongamento(!extraProlongamento)}
+              />
+            )}
+            {valTransporte > 0 && (
+              <ExtraCheckbox
+                icon="🚌"
+                label={isEn ? 'Transport' : 'Transporte'}
+                price={valTransporte * diasParaCalculo}
+                active={extraTransporte}
+                onChange={() => setExtraTransporte(!extraTransporte)}
+              />
+            )}
           </div>
         </div>
       )}
@@ -307,41 +294,74 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
       {!isEsgotado && (
         <>
           <div className="mb-6 border-t border-slate-100 pt-6 flex items-center justify-between">
-            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest">{isEn ? 'Children' : 'Crianças'}</label>
+            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest">
+              {isEn ? 'Children' : 'Crianças'}
+            </label>
             <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-1">
-              <button type="button" onClick={(e) => { e.preventDefault(); setQuantidade(q => Math.max(1, q - 1)); }} className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm">-</button>
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); setQuantidade(q => Math.max(1, q - 1)); }}
+                className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm"
+              >
+                -
+              </button>
               <span className="text-lg font-black text-slate-900 w-6 text-center">{quantidade}</span>
-              <button type="button" onClick={(e) => { e.preventDefault(); setQuantidade(q => Math.min(vagasTurno || 99, q + 1)); }} className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm">+</button>
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); setQuantidade(q => Math.min(vagasTotais || 99, q + 1)); }}
+                className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm"
+              >
+                +
+              </button>
             </div>
           </div>
 
           <div className="bg-slate-50 p-5 rounded-2xl mb-6 flex justify-between items-center border border-slate-200 border-dashed">
             <span className="text-sm font-black text-slate-900 uppercase tracking-wider">Total</span>
-            <span className="text-2xl font-black text-emerald-600">{precoTotal > 0 ? `${precoTotal}€` : '--'}</span>
+            <span className="text-2xl font-black text-emerald-600">
+              {precoTotal > 0 ? `${precoTotal}€` : '--'}
+            </span>
           </div>
         </>
       )}
 
       {mostrarEscassez && (
         <p className="text-center text-xs font-black text-red-500 mb-3 animate-pulse bg-red-50 py-2 rounded-lg">
-          🔥 {isEn ? `Only ${vagasTurno} spots left!` : `Apenas ${vagasTurno} vagas restantes!`}
+          🔥 {isEn ? `Only ${vagasTotais} spots left!` : `Apenas ${vagasTotais} vagas restantes!`}
         </p>
       )}
 
       {/* BOTÃO RESERVAR */}
       {isEsgotado ? (
-        <a href={`mailto:info@hellocamp.pt?subject=${encodeURIComponent(isEn ? 'Waitlist: ' : 'Lista de Espera: ')}${encodeURIComponent(campo.nome)}`} className="block w-full py-4 rounded-xl text-sm font-black text-center transition-all bg-slate-900 text-white hover:bg-slate-800 shadow-lg no-underline uppercase tracking-widest">
+        <a
+          href={`mailto:info@hellocamp.pt?subject=${encodeURIComponent(isEn ? 'Waitlist: ' : 'Lista de Espera: ')}${encodeURIComponent(campo.nome)}`}
+          className="block w-full py-4 rounded-xl text-sm font-black text-center transition-all bg-slate-900 text-white hover:bg-slate-800 shadow-lg no-underline uppercase tracking-widest"
+        >
           {isEn ? 'Join Waitlist' : 'Lista de Espera'}
         </a>
       ) : (
-        <button type="button" onClick={handleReservar} disabled={disabledReserva} className={`w-full py-4 rounded-xl text-sm font-black uppercase tracking-widest transition-all ${disabledReserva ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-[#EBA914] hover:bg-amber-500 text-white shadow-lg shadow-amber-500/30 hover:-translate-y-1'}`}>
-          {isEmailMode ? (isEn ? 'Request Booking' : 'Reservar c/ Entidade') : (isEn ? 'Book & Pay Now' : 'Reservar Vaga Agora')}
+        <button
+          type="button"
+          onClick={handleReservar}
+          disabled={disabledReserva}
+          className={`w-full py-4 rounded-xl text-sm font-black uppercase tracking-widest transition-all ${
+            disabledReserva
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              : 'bg-[#EBA914] hover:bg-amber-500 text-white shadow-lg shadow-amber-500/30 hover:-translate-y-1'
+          }`}
+        >
+          {isEmailMode
+            ? (isEn ? 'Request Booking' : 'Reservar c/ Entidade')
+            : (isEn ? 'Book & Pay Now' : 'Reservar Vaga Agora')}
         </button>
       )}
 
       <div className="flex flex-col gap-2 mt-5 pt-5 border-t border-slate-100">
         <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-          <span>🛡️</span> {isEn ? (campo.politica_cancelamento_en || 'Flexible Cancelation*') : (campo.politica_cancelamento || 'Cancelamento Moderado*')}
+          <span>🛡️</span>
+          {isEn
+            ? (campo.politica_cancelamento_en || 'Flexible Cancelation*')
+            : (campo.politica_cancelamento || 'Cancelamento Moderado*')}
         </div>
         <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
           {isEmailMode ? (
@@ -351,19 +371,27 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
           )}
         </div>
       </div>
-
     </div>
   );
 }
 
+// Componente auxiliar para extras
 function ExtraCheckbox({ icon, label, price, active, onChange }: { icon: string, label: string, price: number, active: boolean, onChange: () => void }) {
   return (
-    <label className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
+    <label
+      className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${
+        active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-300'
+      }`}
+    >
       <div className="flex items-center gap-3">
         <input type="checkbox" checked={active} onChange={onChange} className="w-4 h-4 accent-emerald-600 cursor-pointer rounded" />
-        <span className={`text-xs ${active ? 'font-black text-emerald-900' : 'font-bold text-slate-600'}`}>{icon} {label}</span>
+        <span className={`text-xs ${active ? 'font-black text-emerald-900' : 'font-bold text-slate-600'}`}>
+          {icon} {label}
+        </span>
       </div>
-      <span className={`text-xs font-black ${active ? 'text-emerald-600' : 'text-slate-400'}`}>+{price}€</span>
+      <span className={`text-xs font-black ${active ? 'text-emerald-600' : 'text-slate-400'}`}>
+        +{price}€
+      </span>
     </label>
   );
 }
