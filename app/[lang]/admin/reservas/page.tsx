@@ -164,6 +164,32 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const faturaçãoExterna = validas.filter((r: any) => r.isExterna).reduce((acc: number, curr: any) => acc + curr.valor, 0);
 
   // ==========================================
+  // EXPORTAR EXCEL GLOBAL
+  // ==========================================
+  const exportarCSV = () => {
+    if (validas.length === 0) { 
+      alert(isEn ? "No active bookings to export." : "Não existem inscrições ativas para exportar."); 
+      return; 
+    }
+
+    let csv = "\ufeffOrigem;Data Reserva;Programa;Turno;Valor Pago;Nome Participante;Alergias;Doenças;Encarregado de Educação;Telefone;Email\n";
+    validas.forEach((item: any) => {
+      const origem = item.isExterna ? "Externa" : "HelloCamp";
+      const dataReserva = new Date(item.data).toLocaleDateString('pt-PT');
+      const alergias = (item.crianca?.restricoes_alimentares || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
+      const doencas = (item.crianca?.doencas_cronicas || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
+      
+      csv += `"${origem}";"${dataReserva}";"${item.campo_nome}";"${item.turno}";"${item.valor}€";"${item.crianca?.nome || ""}";"${alergias}";"${doencas}";"${item.pai?.nome || ""}";"${item.pai?.telefone || ""}";"${item.pai?.email || ""}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `Exportacao_Global_HelloCamp.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  // ==========================================
   // LÓGICA DO MINI-CALENDÁRIO INTERATIVO (MODAL ADICIONAR)
   // ==========================================
   const campoSelecionadoModal = camposParceiro.find((c: any) => c.id === formExterno.campo_id);
@@ -221,7 +247,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   };
 
   // ==========================================
-  // IMPORTAR E EXPORTAR EXCEL
+  // IMPORTAR EXCEL
   // ==========================================
   const downloadTemplateCSV = () => {
     const csv = "\ufeffNome_do_Campo_Exato;Nome_do_Turno_Exato;Valor_Pago;Nome_Crianca;Idade;Alergias;Doencas;Nome_Responsavel;Telefone;Email\n" +
@@ -282,29 +308,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setSavingExterno(false);
   };
 
-  const exportarCSV = () => {
-    if (validas.length === 0) { 
-      alert(isEn ? "No active bookings to export." : "Não existem inscrições ativas para exportar."); 
-      return; 
-    }
-
-    let csv = "\ufeffOrigem;Data Reserva;Programa;Turno;Valor Pago;Nome Participante;Alergias;Doenças;Encarregado de Educação;Telefone;Email\n";
-    validas.forEach((item: any) => {
-      const origem = item.isExterna ? "Externa" : "HelloCamp";
-      const dataReserva = new Date(item.data).toLocaleDateString('pt-PT');
-      const alergias = (item.crianca?.restricoes_alimentares || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
-      const doencas = (item.crianca?.doencas_cronicas || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
-      
-      csv += `"${origem}";"${dataReserva}";"${item.campo_nome}";"${item.turno}";"${item.valor}€";"${item.crianca?.nome || ""}";"${alergias}";"${doencas}";"${item.pai?.nome || ""}";"${item.pai?.telefone || ""}";"${item.pai?.email || ""}"\n`;
-    });
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `Exportacao_Global_HelloCamp.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
   if (loading) return <div className="p-20 text-center font-bold text-slate-500 animate-pulse">A carregar o seu Dashboard...</div>;
 
   return (
@@ -362,90 +365,96 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         
         <div className="flex-1">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Campo</label>
-          <select value={filtroCampoId} onChange={e => setFiltroCampoId(e.target.value)} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
+          <select value={filtroCampoId} onChange={e => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
             <option value="todos">Todos os Campos</option>
             {camposParceiro.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         </div>
 
-        {/* O NOVO BOTÃO DE FILTRO DE DATA/TURNO */}
+        {/* BOTÃO DO FILTRO FIXO (FIXED) DE CALENDÁRIO */}
         {filtroCampoId !== 'todos' && (
           <div className="flex-1 relative animate-in fade-in">
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Data/Turno</label>
             <div 
               onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-              className={`w-full border rounded-xl px-4 py-2.5 text-sm font-bold cursor-pointer flex justify-between items-center transition-colors ${isFilterPanelOpen ? 'bg-emerald-50 border-emerald-500 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'}`}
+              className={`w-full border rounded-xl px-4 py-2.5 text-sm font-bold cursor-pointer flex justify-between items-center transition-colors ${filtroTurno === 'todos' ? 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300' : 'bg-emerald-50 border-emerald-500 text-emerald-900'}`}
             >
               <span className="truncate">{filtroTurno === 'todos' ? 'Todas as Datas' : limparNomeParaExibicao(filtroTurno)}</span>
               <span className="text-slate-400 text-[10px]">▼</span>
             </div>
 
-            {/* O POPOVER DO MINI-CALENDÁRIO */}
+            {/* O POPOVER CENTRALIZADO E COM SCROLL INTERNO */}
             {isFilterPanelOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsFilterPanelOpen(false)}></div>
-                {/* NOTA: max-h-[350px] e overflow-y-auto impedem que seja cortado no ecrã */}
-                <div className="absolute top-[calc(100%+0.5rem)] right-0 md:left-0 w-full md:w-[380px] bg-white border border-slate-200 rounded-2xl shadow-2xl z-[100] p-5 animate-in slide-in-from-top-2 max-h-[350px] overflow-y-auto">
+                <div className="fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsFilterPanelOpen(false)}></div>
+                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-[420px] bg-white rounded-3xl shadow-2xl z-[200] p-6 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
                   
-                  <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
-                    <span className="text-xs font-black text-slate-800 uppercase tracking-widest">Filtrar Reservas</span>
-                    {filtroTurno !== 'todos' && (
-                      <button onClick={() => { setFiltroTurno('todos'); setIsFilterPanelOpen(false); }} className="text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-md transition-colors">Limpar Filtro &times;</button>
-                    )}
+                  <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
+                    <span className="text-sm font-black text-slate-900 uppercase tracking-widest">Filtrar Reservas</span>
+                    <div className="flex gap-2">
+                      {filtroTurno !== 'todos' && (
+                        <button onClick={() => { setFiltroTurno('todos'); setIsFilterPanelOpen(false); }} className="text-[10px] font-black text-red-600 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-xl transition-colors">Limpar &times;</button>
+                      )}
+                      <button onClick={() => setIsFilterPanelOpen(false)} className="text-[10px] font-black text-slate-400 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-xl transition-colors">Fechar</button>
+                    </div>
                   </div>
 
                   {(pacotesFiltro.length > 0 && diasSoltosFiltro.length > 0) && (
-                    <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
-                      <button onClick={() => setFiltroModo('pacote')} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${filtroModo === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Programa Inteiro</button>
-                      <button onClick={() => setFiltroModo('dia_solto')} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${filtroModo === 'dia_solto' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Dias Soltos</button>
+                    <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-5">
+                      <button onClick={() => setFiltroModo('pacote')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${filtroModo === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Programa Inteiro</button>
+                      <button onClick={() => setFiltroModo('dia_solto')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${filtroModo === 'dia_solto' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-100' : 'text-slate-500 hover:text-slate-700'}`}>Dias Soltos</button>
                     </div>
                   )}
 
-                  {/* Lista de Pacotes Completos */}
+                  {/* Fluxo Pacotes */}
                   {filtroModo === 'pacote' && (
                     <div className="flex flex-col gap-2">
                       {pacotesFiltro.map((pac: any) => {
                         const tagInfo = getHorarioInfo(pac.nome, isEn);
                         return (
-                          <div key={pac.id} onClick={() => { setFiltroTurno(pac.nome); setIsFilterPanelOpen(false); }} className={`p-3 rounded-xl border cursor-pointer transition-colors flex justify-between items-center ${filtroTurno === pac.nome ? 'bg-emerald-50 border-emerald-500' : 'bg-slate-50 border-slate-200 hover:border-emerald-300'}`}>
+                          <div key={pac.id} onClick={() => { setFiltroTurno(pac.nome); setIsFilterPanelOpen(false); }} className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-colors flex justify-between items-center ${filtroTurno === pac.nome ? 'bg-emerald-50 border-emerald-500' : 'bg-slate-50 border-slate-200 hover:border-emerald-300'}`}>
                             <div>
-                              <p className="text-xs font-black text-slate-800 m-0">{limparNomeParaExibicao(pac.nome)}</p>
-                              <p className="text-[10px] text-slate-500 m-0 mt-0.5">{formatarDataExibicao(pac.data_inicio)}</p>
+                              <p className="text-sm font-black text-slate-800 m-0">{limparNomeParaExibicao(pac.nome)}</p>
+                              <p className="text-xs font-bold text-slate-400 m-0 mt-1">🗓️ {formatarDataExibicao(pac.data_inicio)} - {formatarDataExibicao(pac.data_fim)}</p>
                             </div>
-                            <span className="text-lg opacity-80">{tagInfo.icon}</span>
+                            <span className="text-xl bg-slate-100 p-2 rounded-xl leading-none">{tagInfo.icon}</span>
                           </div>
                         )
                       })}
                     </div>
                   )}
 
-                  {/* Calendário de Dias Soltos */}
+                  {/* Fluxo Calendário Digital para Filtro */}
                   {filtroModo === 'dia_solto' && (
-                    <div>
-                      <span className="block text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-3">1. Escolha o Dia</span>
-                      <div className="grid grid-cols-5 gap-1.5 mb-4">
+                    <div className="animate-in fade-in duration-200">
+                      <span className="block text-[11px] font-black text-emerald-800 uppercase tracking-widest mb-3">1. Escolha o Dia no Mapa</span>
+                      <div className="grid grid-cols-5 gap-1.5 mb-5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
                         {datasUnicasFiltro.map((data: string) => {
                           const isActive = filtroDiaSelecionado === data;
                           const dateObj = new Date(data);
+                          const diaSemana = dateObj.toLocaleDateString('pt-PT', {weekday: 'short'}).replace('.','');
+                          const diaNumero = dateObj.toLocaleDateString('pt-PT', {day: '2-digit'});
+
                           return (
-                            <div key={data} onClick={() => setFiltroDiaSelecionado(data)} className={`flex flex-col items-center justify-center py-2 rounded-lg border cursor-pointer transition-all ${isActive ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105' : 'bg-slate-50 border-slate-200 hover:border-emerald-300 text-slate-600'}`}>
-                              <span className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{dateObj.toLocaleDateString('pt-PT', {weekday: 'short'}).replace('.','')}</span>
-                              <span className="text-sm font-black leading-none">{dateObj.toLocaleDateString('pt-PT', {day: '2-digit'})}</span>
+                            <div key={data} onClick={() => setFiltroDiaSelecionado(data)} className={`flex flex-col items-center justify-center py-2.5 rounded-xl border-2 cursor-pointer transition-all ${isActive ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-400'}`}>
+                              <span className={`text-[8px] font-black uppercase mb-0.5 ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{diaSemana}</span>
+                              <span className="text-base font-black leading-none">{diaNumero}</span>
                             </div>
                           )
                         })}
                       </div>
 
+                      {/* Horários Horizontais */}
                       {filtroDiaSelecionado && (
-                        <div className="border-t border-slate-100 pt-4 mt-2 animate-in fade-in">
-                          <span className="block text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-3">2. Qual o Horário?</span>
+                        <div className="border-t border-slate-100 pt-4 animate-in fade-in">
+                          <span className="block text-[11px] font-black text-emerald-800 uppercase tracking-widest mb-3">2. Qual o Horário Pretendido?</span>
                           <div className="grid grid-cols-3 gap-2">
                             {diasSoltosFiltro.filter((t: any) => t.data_inicio === filtroDiaSelecionado).map((horario: any) => {
                               const info = getHorarioInfo(horario.nome, isEn);
                               const isActive = filtroTurno === horario.nome;
                               return (
-                                <div key={horario.id} onClick={() => { setFiltroTurno(horario.nome); setIsFilterPanelOpen(false); }} className={`flex flex-col items-center p-2.5 rounded-xl border cursor-pointer transition-all ${isActive ? 'bg-emerald-700 border-emerald-700 text-white shadow-sm' : 'bg-white border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 text-slate-700'}`}>
-                                  <span className="text-xl mb-1">{info.icon}</span>
+                                <div key={horario.id} onClick={() => { setFiltroTurno(horario.nome); setIsFilterPanelOpen(false); }} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-all ${isActive ? 'bg-emerald-700 border-emerald-700 text-white shadow-sm' : 'bg-white border-slate-200 hover:border-emerald-400 text-slate-700'}`}>
+                                  <span className="text-2xl mb-1 leading-none">{info.icon}</span>
                                   <span className="text-[10px] font-black text-center leading-tight">{info.tag}</span>
                                 </div>
                               )
@@ -673,6 +682,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     </div>
                   </div>
 
+                  {/* Dados do Miúdo */}
                   <div className="bg-white p-5 rounded-2xl border border-slate-200">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">2. Dados do Participante</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -697,6 +707,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     </div>
                   </div>
 
+                  {/* Dados do Pai */}
                   <div className="bg-white p-5 rounded-2xl border border-slate-200">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">3. Encarregado de Educação</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -778,6 +789,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
             <div className="p-8 overflow-y-auto bg-slate-50 flex flex-col gap-6">
               
+              {/* Top Banner Origin */}
               {reservaSelecionada.isExterna ? (
                 <div className="bg-orange-100 text-orange-800 p-3 rounded-xl border border-orange-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
                   <b>🟠 Inscrição Externa (Manual)</b>
