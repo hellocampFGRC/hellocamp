@@ -50,7 +50,7 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
       });
     }
 
-    // 3. Disparar o Email 
+    // 3. Disparar o Email de Boas-Vindas
     fetch('/api/notificacoes/boas-vindas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -62,7 +62,7 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
       })
     }).catch(err => console.error("Falha ao enviar e-mail de boas-vindas:", err));
     
-    // 4. Redirecionar Imediatamente para a Homepage (ou perfil)
+    // 4. Redirecionar Imediatamente para a Homepage
     router.push(`/${lang}`);
   };
 

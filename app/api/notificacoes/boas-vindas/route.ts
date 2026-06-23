@@ -58,6 +58,15 @@ export async function POST(req: Request) {
           </div>
         </div>
       `;
+
+      // Envia o email apenas para o Cliente
+      await resend.emails.send({
+        from: remetenteOficial,
+        to: email,
+        subject: subject,
+        html: htmlContent
+      });
+
     } 
     // ==============================================
     // 📩 EMAIL PARA PARCEIROS B2B (ORGANIZADORES)
@@ -98,16 +107,41 @@ export async function POST(req: Request) {
           </div>
         </div>
       `;
+
+      // 1. Envia email para o novo Parceiro
+      await resend.emails.send({
+        from: remetenteOficial,
+        to: email,
+        subject: subject,
+        html: htmlContent
+      });
+
+      // ==============================================
+      // 🚨 ALERTA INTERNO PARA A EQUIPA HELLOCAMP
+      // ==============================================
+      const alertaInternoHtml = `
+        <div style="font-family: sans-serif; color: #333;">
+          <h2 style="color: #0f172a;">🚨 Novo Parceiro Registado!</h2>
+          <p>Um novo organizador acabou de criar conta na plataforma HelloCamp.</p>
+          <ul style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <li><strong>Empresa:</strong> ${nomeUser}</li>
+            <li><strong>Email de Contacto:</strong> ${email}</li>
+            <li><strong>Data do Registo:</strong> ${new Date().toLocaleString('pt-PT')}</li>
+          </ul>
+          <p>Recomendamos que verifique o perfil no painel de administração do Supabase e prepare o processo de onboarding/verificação.</p>
+        </div>
+      `;
+
+      // 2. Envia email para a vossa caixa de entrada geral
+      await resend.emails.send({
+        from: remetenteOficial,
+        to: 'info@hellocamp.pt', // O seu email oficial da HelloCamp
+        subject: `🚨 Novo Parceiro: ${nomeUser}`,
+        html: alertaInternoHtml
+      });
     }
 
-    await resend.emails.send({
-      from: remetenteOficial,
-      to: email,
-      subject: subject,
-      html: htmlContent
-    });
-
-    return NextResponse.json({ success: true, message: 'Email de boas-vindas enviado.' });
+    return NextResponse.json({ success: true, message: 'Emails enviados com sucesso.' });
   } catch (error: any) {
     console.error('Erro ao enviar email de boas-vindas:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
