@@ -362,7 +362,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         
         <div className="flex-1">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Campo</label>
-          <select value={filtroCampoId} onChange={e => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
+          <select value={filtroCampoId} onChange={e => setFiltroCampoId(e.target.value)} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
             <option value="todos">Todos os Campos</option>
             {camposParceiro.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
@@ -383,8 +383,9 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
             {/* O POPOVER DO MINI-CALENDÁRIO */}
             {isFilterPanelOpen && (
               <>
-                <div className="fixed inset-0 z-30" onClick={() => setIsFilterPanelOpen(false)}></div>
-                <div className="absolute top-full right-0 md:left-0 mt-2 w-full md:w-[360px] bg-white border border-slate-200 rounded-2xl shadow-2xl z-40 p-5 animate-in slide-in-from-top-2">
+                <div className="fixed inset-0 z-40" onClick={() => setIsFilterPanelOpen(false)}></div>
+                {/* NOTA: max-h-[350px] e overflow-y-auto impedem que seja cortado no ecrã */}
+                <div className="absolute top-[calc(100%+0.5rem)] right-0 md:left-0 w-full md:w-[380px] bg-white border border-slate-200 rounded-2xl shadow-2xl z-[100] p-5 animate-in slide-in-from-top-2 max-h-[350px] overflow-y-auto">
                   
                   <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
                     <span className="text-xs font-black text-slate-800 uppercase tracking-widest">Filtrar Reservas</span>
@@ -402,7 +403,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
                   {/* Lista de Pacotes Completos */}
                   {filtroModo === 'pacote' && (
-                    <div className="flex flex-col gap-2 max-h-[250px] overflow-y-auto pr-1">
+                    <div className="flex flex-col gap-2">
                       {pacotesFiltro.map((pac: any) => {
                         const tagInfo = getHorarioInfo(pac.nome, isEn);
                         return (
@@ -543,7 +544,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
       </div>
 
-      {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES */}
+      {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES (SELEÇÃO DE MODO) */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -572,7 +573,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 </div>
               )}
 
-              {/* MODO: MANUAL COM MOTOR DE MINI-CALENDÁRIO */}
+              {/* MODO: MANUAL COM MOTOR DE MINI-CALENDÁRIO CORRIGIDO */}
               {importMode === 'manual' && (
                 <form id="form-manual" onSubmit={handleAddExterno} className="flex flex-col gap-6">
                   
