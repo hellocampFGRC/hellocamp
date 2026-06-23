@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import React from "react";
 
-// Estilo unificado para os Dropdowns em todo o site
+// Estilo unificado para os Dropdowns da plataforma
 const customSelectStyle = {
   appearance: 'none' as const,
   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
@@ -44,7 +44,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     nome_pai: "", email_pai: "", telefone_pai: ""
   });
 
-  // Estados Inteligentes para o Mini-Calendário no Modal
+  // Estados do Mini-Calendário no Modal
   const [modalidadeExterna, setModalidadeExterna] = useState<'pacote' | 'dia_solto'>('pacote');
   const [diaExterno, setDiaExterno] = useState<string>('');
 
@@ -123,7 +123,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const faturaçãoExterna = validas.filter(r => r.isExterna).reduce((acc, curr) => acc + curr.valor, 0);
 
   // ==========================================
-  // LÓGICA DO MINI-CALENDÁRIO (MODAL)
+  // LÓGICA DO MINI-CALENDÁRIO INTERATIVO
   // ==========================================
   const campoSelecionadoModal = camposParceiro.find(c => c.id === formExterno.campo_id);
   const turnosModal = campoSelecionadoModal?.turnos || [];
@@ -134,7 +134,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   useEffect(() => {
     if (pacotesModal.length === 0 && diasSoltosModal.length > 0) setModalidadeExterna("dia_solto");
     if (pacotesModal.length > 0 && diasSoltosModal.length === 0) setModalidadeExterna("pacote");
-    if (datasUnicasModal.length > 0 && !diaExterno) setDiaExterno(datasUnicasModal[0]);
+    if (datasUnicasModal.length > 0) setDiaExterno(datasUnicasModal[0]);
   }, [formExterno.campo_id]);
 
   const setTurnoEscolhido = (turno: any) => {
@@ -148,19 +148,12 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     return { tag: "Geral", icon: "🎟️" };
   };
 
-  const formatarDataExibicao = (dStr: string) => {
-    if (!dStr) return '';
-    return new Date(dStr).toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
-  };
-  const limparNomeParaExibicao = (nomeCru: string) => nomeCru.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
-
   // ==========================================
-  // INSERIR RESERVA EXTERNA (MANUAL 1 A 1)
+  // INSERIR RESERVA EXTERNA (MANUAL)
   // ==========================================
   const handleAddExterno = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formExterno.turno_nome) return alert("Por favor, selecione um turno ou dia no calendário.");
-    
+    if (!formExterno.turno_nome) return alert("Por favor, selecione um turno ou dia específico no calendário.");
     setSavingExterno(true);
 
     try {
@@ -364,7 +357,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
               {reservasFiltradas.length === 0 ? (
                 <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold text-sm">Nenhum resultado encontrado.</td></tr>
               ) : (
-                reservasFiltradas.map((item, idx) => {
+                reservasFiltradas.map((item) => {
                   const isInativa = item.status === 'Abandonada' || item.status === 'Cancelada';
                   const isExterna = item.isExterna;
                   
@@ -448,7 +441,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                   <button onClick={() => setImportMode('manual')} className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-slate-200 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all group">
                     <span className="text-4xl">✍️</span>
                     <span className="font-black text-slate-800 group-hover:text-orange-700">Adicionar Manualmente</span>
-                    <span className="text-xs font-medium text-slate-500 text-center">Preencher um formulário rápido (ideal para 1 a 1).</span>
+                    <span className="text-xs font-medium text-slate-500 text-center">Preencher um formulário rápido c/ calendário (ideal para 1 a 1).</span>
                   </button>
                   <button onClick={() => setImportMode('excel')} className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-slate-200 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
                     <span className="text-4xl">📊</span>
@@ -458,84 +451,89 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 </div>
               )}
 
-              {/* MODO: MANUAL 1 a 1 */}
+              {/* MODO: MANUAL COM MOTOR DE MINI-CALENDÁRIO */}
               {importMode === 'manual' && (
                 <form id="form-manual" onSubmit={handleAddExterno} className="flex flex-col gap-6">
-                  {/* Onde vai o miúdo? (COM MINI-CALENDÁRIO) */}
+                  
+                  {/* ESCOLHA DO CAMPO E CALENDÁRIO VISUAL */}
                   <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">1. Destino e Horário</h3>
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">1. Destino, Calendário e Horário</h3>
                     <div className="flex flex-col gap-4">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Para qual Campo?</label>
-                        <select required value={formExterno.campo_id} onChange={e => { setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: ""}); setDiaExterno(""); }} style={customSelectStyle} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-orange-500 cursor-pointer">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Escolha o Programa/Campo de Férias</label>
+                        <select required value={formExterno.campo_id} onChange={e => { setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: "", valor_pago: 0}); setDiaExterno(""); }} style={customSelectStyle} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-orange-500 cursor-pointer">
                           <option value="">Selecione o Campo...</option>
                           {camposParceiro.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </div>
 
                       {formExterno.campo_id && (
-                        <div className="bg-white p-4 border border-slate-200 rounded-xl animate-in fade-in">
-                          {/* Tabs Inteligentes */}
+                        <div className="bg-white p-4 border border-slate-200 rounded-2xl animate-in fade-in">
+                          {/* Alternador de Modalidade */}
                           {(pacotesModal.length > 0 && diasSoltosModal.length > 0) && (
                             <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
-                              <button type="button" onClick={() => setModalidadeExterna('pacote')} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Programa Inteiro</button>
-                              <button type="button" onClick={() => setModalidadeExterna('dia_solto')} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'dia_solto' ? 'bg-white text-orange-700 shadow-sm border border-orange-100' : 'text-slate-500'}`}>Dias Soltos</button>
+                              <button type="button" onClick={() => { setModalidadeExterna('pacote'); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+                                Programa Inteiro (Pacote)
+                              </button>
+                              <button type="button" onClick={() => { setModalidadeExterna('dia_solto'); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'dia_solto' ? 'bg-white text-orange-700 shadow-sm border border-orange-100' : 'text-slate-500'}`}>
+                                Dias Soltos Avulso
+                              </button>
                             </div>
                           )}
 
-                          {/* Se for Pacote Completo */}
+                          {/* LISTAGEM DE PACOTES FECHADOS */}
                           {modalidadeExterna === 'pacote' && pacotesModal.length > 0 && (
                             <div className="flex flex-col gap-2">
                               {pacotesModal.map((pac: any) => {
                                 const isActive = formExterno.turno_nome === pac.nome;
                                 const tagInfo = getHorarioInfo(pac.nome);
                                 return (
-                                  <div key={pac.id} onClick={() => setTurnoEscolhido(pac)} className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${isActive ? 'bg-orange-50 border-orange-500' : 'border-slate-100 hover:border-orange-200'}`}>
+                                  <div key={pac.id} onClick={() => setTurnoEscolhido(pac)} className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${isActive ? 'bg-orange-50 border-orange-500' : 'border-slate-100 hover:border-orange-200 bg-slate-50/50'}`}>
                                     <div>
                                       <p className={`text-sm font-black m-0 ${isActive ? 'text-orange-900' : 'text-slate-800'}`}>{limparNomeParaExibicao(pac.nome)}</p>
-                                      <p className="text-[10px] text-slate-500 m-0 mt-0.5">{tagInfo.icon} {tagInfo.tag}</p>
+                                      <p className="text-[10px] text-slate-500 m-0 mt-0.5">{tagInfo.icon} {tagInfo.tag} ({formatarDataExibicao(pac.data_inicio)} - {formatarDataExibicao(pac.data_fim)})</p>
                                     </div>
-                                    <span className={`text-sm font-black ${isActive ? 'text-orange-700' : 'text-slate-400'}`}>{pac.preco}€</span>
+                                    <span className={`text-sm font-black ${isActive ? 'text-orange-700' : 'text-slate-500'}`}>{pac.preco}€</span>
                                   </div>
                                 )
                               })}
                             </div>
                           )}
 
-                          {/* Se for Dias Soltos (Mini-Calendário) */}
+                          {/* MINI CALENDÁRIO (GRID) PARA DIAS SOLTOS */}
                           {modalidadeExterna === 'dia_solto' && diasSoltosModal.length > 0 && (
-                            <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100">
-                              <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">A. Escolher o Dia</label>
-                              <div className="grid grid-cols-5 sm:grid-cols-7 gap-1.5 mb-4">
-                                {datasUnicasModal.map((data: string) => {
-                                  const isActive = diaExterno === data;
-                                  const dateObj = new Date(data);
-                                  const diaSemana = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.', '');
-                                  const diaNumero = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' });
+                            <div className="flex flex-col gap-4">
+                              <div>
+                                <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">A. Clique no Dia Pretendido</label>
+                                <div className="grid grid-cols-5 sm:grid-cols-7 gap-1.5">
+                                  {datasUnicasModal.map((data: string) => {
+                                    const isActive = diaExterno === data;
+                                    const dateObj = new Date(data);
+                                    const diaSemana = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.', '');
+                                    const diaNumero = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' });
 
-                                  return (
-                                    <div key={data} onClick={() => { setDiaExterno(data); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex flex-col items-center justify-center py-1.5 rounded-lg cursor-pointer border ${isActive ? 'bg-orange-600 border-orange-600 text-white shadow-sm' : 'bg-white border-orange-200 text-slate-600 hover:border-orange-400'}`}>
-                                      <span className="text-[8px] font-black uppercase">{diaSemana}</span>
-                                      <span className="text-sm font-black">{diaNumero}</span>
-                                    </div>
-                                  )
-                                })}
+                                    return (
+                                      <div key={data} onClick={() => { setDiaExterno(data); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex flex-col items-center justify-center py-2 rounded-xl cursor-pointer border-2 transition-all ${isActive ? 'bg-orange-600 border-orange-600 text-white shadow-sm scale-105' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                                        <span className={`text-[8px] font-black uppercase ${isActive ? 'text-orange-100' : 'text-slate-400'}`}>{diaSemana}</span>
+                                        <span className="text-sm font-black leading-none mt-0.5">{diaNumero}</span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
                               </div>
 
                               {diaExterno && (
-                                <div className="border-t border-orange-200/50 pt-3">
-                                  <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">B. Escolher o Horário</label>
-                                  <div className="flex flex-col gap-2">
-                                    {diasSoltosModal.filter((t:any) => t.data_inicio === diaExterno).map((horario: any) => {
+                                <div className="border-t border-slate-100 pt-3 animate-in fade-in">
+                                  <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">B. Selecione o Horário para este dia</label>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {diasSoltosModal.filter((t: any) => t.data_inicio === diaExterno).map((horario: any) => {
                                       const isActive = formExterno.turno_nome === horario.nome;
                                       const tagInfo = getHorarioInfo(horario.nome);
                                       return (
-                                        <div key={horario.id} onClick={() => setTurnoEscolhido(horario)} className={`flex items-center justify-between p-2.5 rounded-lg border-2 cursor-pointer transition-all ${isActive ? 'bg-orange-700 border-orange-700 text-white' : 'bg-white border-orange-200 hover:border-orange-400'}`}>
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-sm">{tagInfo.icon}</span>
-                                            <span className={`text-xs font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>{tagInfo.tag}</span>
-                                          </div>
-                                          <span className={`text-xs font-black ${isActive ? 'text-orange-200' : 'text-orange-700'}`}>{horario.preco}€</span>
+                                        <div key={horario.id} onClick={() => setTurnoEscolhido(horario)} className={`flex flex-col items-center justify-center p-2.5 rounded-xl border-2 cursor-pointer transition-all ${isActive ? 'bg-orange-50 border-orange-500 text-orange-900' : 'bg-white border-slate-200 hover:border-orange-300 text-slate-700'}`}>
+                                          <span className="text-lg mb-0.5">{tagInfo.icon}</span>
+                                          <span className="text-xs font-black">{tagInfo.tag}</span>
+                                          <span className="text-[11px] font-bold text-slate-400 mt-1">{horario.preco}€</span>
                                         </div>
                                       )
                                     })}
@@ -545,6 +543,11 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                             </div>
                           )}
 
+                          {formExterno.turno_nome && (
+                            <div className="mt-4 p-3 bg-orange-50 text-orange-800 rounded-xl border border-orange-200 text-xs font-bold">
+                              🎯 Módulo Ativo: <span className="font-black">{formExterno.turno_nome}</span> ({formExterno.valor_pago}€)
+                            </div>
+                          )}
                         </div>
                       )}
                       
@@ -608,7 +611,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     <h3 className="text-sm font-black text-blue-900 mb-2">1. Descarregue o Template</h3>
                     <p className="text-xs text-blue-700 mb-4">Para o sistema conseguir ler os seus dados, tem de usar o nosso formato exato. O nome do Campo e Turno têm de ser escritos exatamente como estão na HelloCamp.</p>
                     <button onClick={downloadTemplateCSV} className="px-4 py-2 bg-white border border-blue-300 text-blue-800 font-bold rounded-lg shadow-sm hover:bg-blue-100 text-xs">
-                      ⬇️ Download Mockup CSV
+                      ⬇️ Download Template CSV
                     </button>
                   </div>
 
@@ -648,7 +651,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
       )}
 
-      {/* MODAL: VER FICHA CLÍNICA */}
+      {/* MODAL: VER FICHA CLÍNICA DETALHADA */}
       {reservaSelecionada && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -663,14 +666,13 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
             <div className="p-8 overflow-y-auto bg-slate-50 flex flex-col gap-6">
               
-              {/* Top Banner Origin */}
               {reservaSelecionada.isExterna ? (
                 <div className="bg-orange-100 text-orange-800 p-3 rounded-xl border border-orange-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
-                  🟠 Reserva Inserida Manualmente (Externa)
+                  <b>🟠 Inscrição Externa (Manual)</b>
                 </div>
               ) : (
                 <div className="bg-emerald-100 text-emerald-800 p-3 rounded-xl border border-emerald-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
-                  🟢 Reserva Oficial HelloCamp • Pagamento: {reservaSelecionada.status}
+                  <b>🟢 Inscrição Online HelloCamp • Estado: {reservaSelecionada.status}</b>
                 </div>
               )}
 
