@@ -18,6 +18,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
     camposAtivos: 0,
     camposPendentes: 0,
     mediaEstrelas: 0,
+    pedidosPendentes: 0 // NOVO: Contador de pedidos de alteração/extras dos pais
   });
 
   const [sugestoes, setSugestoes] = useState<any[]>([]);
@@ -74,14 +75,13 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
           totalComReviews++;
         }
 
-        // REDIRECIONAMENTO ATUALIZADO PARA A PÁGINA DO CONTRATO
         if (!c.contrato_parceiro_url) {
           novasSugestoes.push({ 
             tipo: 'critical', 
             icon: '📝', 
             titulo: isEn ? 'Contract Signature Required' : 'Assinatura de Contrato Pendente',
             texto: isEn ? `The camp "${c.nome}" needs a signed agreement to be published.` : `O campo "${c.nome}" aguarda a assinatura do Acordo de Parceria para poder ser publicado.`, 
-            link: `/${lang}/admin/contratos/${c.id}`, // <-- Rota para a página de contrato gerada anteriormente
+            link: `/${lang}/admin/contratos/${c.id}`,
             actionText: isEn ? 'Review and Sign' : 'Ler e Assinar Contrato'
           });
         }
@@ -120,12 +120,24 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
         }
       });
 
-      // 3. Busca Total de Reservas (Apenas as pagas contam como sucesso no Marketing!)
-      const { count: countReservas } = await supabase
+      // 3. Busca de Reservas: Obter status e respostas para calcular a Faturação e os Upsells Pendentes
+      const { data: reservasDados } = await supabase
         .from('reservas')
-        .select('*', { count: 'exact', head: true })
-        .eq('organizador_id', userId)
-        .in('status_pagamento', ['Pago', 'Sinal Pago']);
+        .select('status_pagamento, respostas_customizadas')
+        .eq('organizador_id', userId);
+
+      let countReservas = 0;
+      let countPedidosUpsell = 0;
+
+      reservasDados?.forEach(res => {
+        if (res.status_pagamento === 'Pago' || res.status_pagamento === 'Sinal Pago') {
+          countReservas++;
+        }
+        // Se a reserva tiver o JSON e lá dentro a propriedade do pedido pendente
+        if (res.respostas_customizadas && res.respostas_customizadas.pedido_pai_pendente) {
+          countPedidosUpsell++;
+        }
+      });
 
       // 4. Busca Wishlists 
       let vezesGuardadoTotal = 0;
@@ -135,11 +147,12 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
       }
 
       setMetricas({
-        totalReservas: countReservas || 0,
+        totalReservas: countReservas,
         vezesGuardado: vezesGuardadoTotal,
         camposAtivos: ativos,
         camposPendentes: pendentes,
         mediaEstrelas: totalComReviews > 0 ? (somaEstrelas / totalComReviews) : 0,
+        pedidosPendentes: countPedidosUpsell // Injeta o novo valor
       });
 
       const prioridade: Record<string, number> = { 'critical': 1, 'warning': 2, 'info': 3, 'idea': 4 };
@@ -157,7 +170,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
   return (
     <main style={{ maxWidth: '1200px', margin: '0 auto', fontFamily: 'sans-serif', padding: '2rem 1.5rem', paddingBottom: '4rem' }}>
       
-      <div style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '2.25rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
             {isEn ? `Welcome, ${nomeEmpresa}` : `Olá, ${nomeEmpresa} 👋`}
@@ -172,6 +185,26 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
           </Link>
         </div>
       </div>
+
+      {/* NOVO: BANNER DE ALERTA PARA PEDIDOS DE UPSELL DOS PAIS */}
+      {metricas.pedidosPendentes > 0 && (
+        <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', padding: '1.5rem', borderRadius: '1.25rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.5rem', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+            <span style={{ fontSize: '2.5rem', animation: 'pulse 2s infinite' }}>📬</span>
+            <div>
+              <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.125rem', fontWeight: '900', color: '#1e3a8a' }}>
+                {isEn ? `You have ${metricas.pedidosPendentes} pending change request(s)!` : `Tem ${metricas.pedidosPendentes} pedido(s) de alteração pendente(s)!`}
+              </h3>
+              <p style={{ margin: 0, fontSize: '14px', color: '#1e40af', fontWeight: '500' }}>
+                {isEn ? 'Parents are waiting for your approval to add extras.' : 'Os encarregados de educação solicitaram novos extras. Aprove para lhes enviar o pagamento.'}
+              </p>
+            </div>
+          </div>
+          <Link href={`/${lang}/admin/reservas`} style={{ backgroundColor: '#2563eb', color: 'white', padding: '0.875rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', whiteSpace: 'nowrap', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)', transition: 'background-color 0.2s' }}>
+            {isEn ? 'Review Requests' : 'Analisar Pedidos'} &rarr;
+          </Link>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2.5rem', alignItems: 'start' }}>
         

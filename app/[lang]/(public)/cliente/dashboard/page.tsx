@@ -34,8 +34,11 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
   // Estado para o Modal Detalhado da Reserva
   const [reservaModal, setReservaModal] = useState<any>(null);
   
-  // Estado para gerir o fluxo de Cancelamento dentro da Lightbox
+  // Estado para gerir Cancelamentos
   const [cancelState, setCancelState] = useState({ loading: false, confirm: false });
+
+  // Estado para gerir Pedidos de Alteração / Upsell
+  const [changeRequest, setChangeRequest] = useState({ active: false, text: "", loading: false });
 
   // Estados para o Modal de Partilha (Lightbox)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -58,11 +61,9 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
 
     const userId = session.user.id;
 
-    // Busca Plana e Segura de tabelas paralelas
     const { data: perfilData } = await supabase.from('perfis').select('*').eq('id', userId).single();
     const { data: reservasData } = await supabase.from('reservas').select('*').eq('cliente_id', userId).order('created_at', { ascending: false });
     
-    // CRÍTICO: Buscar APENAS campos visíveis e com contrato aprovado para gerar sugestões seguras
     const { data: camposData } = await supabase
       .from('campos')
       .select('id, nome, nome_en, imagem, local, local_en, organizador_id, preco, politica_cancelamento')
@@ -83,12 +84,8 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
       setDadosEmFalta(verificarFaltas(perfilData));
     }
 
-    // Cruzamento Manual de Reservas
     const camposCompradosIds: string[] = [];
     if (reservasData) {
-      // Como o camposData agora só tem aprovados, para o cruzamento de reservas (histórico) 
-      // precisamos de buscar os dados do campo específico, mesmo se entretanto tiver sido desativado
-      // É mais seguro fazer um fetch isolado dos IDs da reserva
       const idsDeCamposReservados = Array.from(new Set(reservasData.map(r => r.campo_id)));
       
       const { data: todosCamposHistorico } = await supabase
@@ -106,11 +103,8 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
       setReservas(reservasCruzadas);
     }
 
-    // Gerar Sugestões de Conversão (Apenas sobre campos válidos, não comprados)
     if (camposData) {
-      const recomendacoes = camposData
-        .filter(c => !camposCompradosIds.includes(c.id))
-        .slice(0, 3);
+      const recomendacoes = camposData.filter(c => !camposCompradosIds.includes(c.id)).slice(0, 3);
       setSugestoesVerdes(recomendacoes);
     }
 
@@ -118,27 +112,21 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [lang, isEn]);
+  useEffect(() => { fetchData(); }, [lang, isEn]);
 
   const handleSavePerfil = async () => {
     if (!perfilForm.nome_completo || !perfilForm.nif || !perfilForm.telefone || !perfilForm.contacto_emergencia) {
       alert(isEn ? "Please fill in all required fields." : "Por favor preencha todos os campos obrigatórios.");
       return;
     }
-
     setSavingPerfil(true);
 
-    const { error } = await supabase
-      .from('perfis')
-      .update({
+    const { error } = await supabase.from('perfis').update({
         nome_completo: perfilForm.nome_completo,
         nif: perfilForm.nif,
         telefone: perfilForm.telefone,
         contacto_emergencia: perfilForm.contacto_emergencia
-      })
-      .eq('id', perfilPai.id);
+    }).eq('id', perfilPai.id);
 
     if (error) {
       alert((isEn ? "Error updating profile: " : "Erro ao atualizar perfil: ") + error.message);
@@ -151,7 +139,7 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
     setSavingPerfil(false);
   };
 
-  const handlePagarRestante = async (reserva: any) => {
+  const handlePagarRestante = async (reserva: any, valorFaltaCobrar: number) => {
     setLoadingStripe(reserva.id);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -162,12 +150,12 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reservasIds: [reserva.id],
-          totalAmount: reserva.valor_em_falta, 
+          totalAmount: valorFaltaCobrar, 
           userEmail: user?.email,
           lang: lang,
           campoNome: isEn && reserva.campos.nome_en ? reserva.campos.nome_en : reserva.campos.nome,
           stripeAccountId: orgData?.stripe_account_id,
-          tipoPagamento: 'pagamento_final'
+          tipoPagamento: 'pagamento_final' // O Stripe Checkout no backend tratará disto
         })
       });
 
@@ -192,14 +180,42 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao cancelar a inscrição.");
 
-      alert(isEn ? "Booking successfully cancelled. The refund logic was applied." : "Inscrição cancelada com sucesso. A regra de reembolso foi aplicada.");
+      alert(isEn ? "Booking successfully cancelled." : "Inscrição cancelada com sucesso.");
       
       setReservaModal(null);
       setCancelState({ loading: false, confirm: false });
-      fetchData(); // Atualiza o Dashboard com a reserva no estado 'Reembolsado'
+      fetchData(); 
     } catch (err: any) {
       alert(err.message);
       setCancelState({ loading: false, confirm: false });
+    }
+  };
+
+  // Enviar Pedido de Alteração para o Organizador (Inbox/Email)
+  const handleEnviarPedidoAlteracao = async (reserva: any) => {
+    if (!changeRequest.text.trim()) return alert(isEn ? "Please describe your request." : "Por favor, descreva a alteração que pretende.");
+    
+    setChangeRequest(prev => ({ ...prev, loading: true }));
+    try {
+      const res = await fetch('/api/inbox/send-change-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reservaId: reserva.id,
+          organizadorId: reserva.campos.organizador_id,
+          campoNome: isEn && reserva.campos.nome_en ? reserva.campos.nome_en : reserva.campos.nome,
+          mensagem: changeRequest.text,
+          lang: lang
+        })
+      });
+
+      if (!res.ok) throw new Error("Erro no envio do pedido.");
+
+      alert(isEn ? "Change request sent! The organizer will review it." : "Pedido enviado com sucesso! O organizador irá rever a sua solicitação.");
+      setChangeRequest({ active: false, text: "", loading: false });
+    } catch (err: any) {
+      alert((isEn ? "Error sending request: " : "Erro ao enviar pedido: ") + err.message);
+      setChangeRequest(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -218,6 +234,7 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
   const fecharReservaModal = () => {
     setReservaModal(null);
     setCancelState({ loading: false, confirm: false });
+    setChangeRequest({ active: false, text: "", loading: false });
   };
 
   if (loading) return <div className="p-12 text-center text-slate-500 font-bold">{isEn ? 'Loading your dashboard...' : 'A organizar a sua área pessoal...'}</div>;
@@ -259,7 +276,7 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
         </div>
       )}
 
-      {/* MÓDULO DE SUGESTÕES LIMPO E SEGURO (Apenas campos públicos e aprovados) */}
+      {/* MÓDULO DE SUGESTÕES */}
       {sugestoesVerdes.length > 0 && (
         <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-8 mb-12 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-100 rounded-full blur-3xl opacity-50 -mr-20 -mt-20"></div>
@@ -297,11 +314,15 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
             const localCampo = isEn && campo?.local_en ? campo.local_en : campo?.local;
             
             const isReembolsada = reserva.status_pagamento === 'Reembolsado' || reserva.status_reembolso === 'Reembolsado';
+            const isAguardandoExtra = reserva.status_pagamento === 'Aguardando Pagamento Extra';
             const isSinalPago = !isReembolsada && reserva.status_pagamento === 'Sinal Pago';
             const isPago = !isReembolsada && reserva.status_pagamento === 'Pago';
-            const isPendente = !isReembolsada && !isSinalPago && !isPago;
+            const isPendente = !isReembolsada && !isSinalPago && !isPago && !isAguardandoExtra;
             
-            const valorFalta = Number(reserva.valor_em_falta) || 0;
+            // Cálculo dinâmico do que falta pagar
+            const valorTotal = Number(reserva.valor_total) || 0;
+            const valorJaPago = Number(reserva.valor_pago) || 0;
+            const valorFalta = valorTotal - valorJaPago;
 
             return (
               <div key={reserva.id} className="group flex flex-col bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm relative transition-all duration-300 hover:shadow-xl">
@@ -338,7 +359,7 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
                     <div className="text-right">
                       <span className="block text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">TOTAL</span>
                       <span className={`text-lg font-black leading-none ${isReembolsada ? 'text-slate-400 line-through' : 'text-emerald-600'}`}>
-                        {reserva.valor_total}€
+                        {valorTotal}€
                       </span>
                     </div>
                   </div>
@@ -349,6 +370,20 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
                     <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
                       <span className="text-xs font-black uppercase tracking-widest text-red-600">❌ Inscrição e Pagamento Anulados</span>
                     </div>
+                  ) : isAguardandoExtra && valorFalta > 0 ? (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between shadow-inner">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 m-0">Ajuste Pendente</p>
+                        <p className="text-lg font-black text-blue-600 m-0">{valorFalta.toFixed(2)}€</p>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handlePagarRestante(reserva, valorFalta); }}
+                        disabled={loadingStripe === reserva.id}
+                        className="bg-blue-600 text-white font-bold text-sm px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-sm"
+                      >
+                        {loadingStripe === reserva.id ? 'A processar...' : 'Pagar Alteração'}
+                      </button>
+                    </div>
                   ) : isSinalPago && valorFalta > 0 ? (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between shadow-inner">
                       <div>
@@ -356,7 +391,7 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
                         <p className="text-lg font-black text-amber-600 m-0">{valorFalta.toFixed(2)}€</p>
                       </div>
                       <button 
-                        onClick={(e) => { e.stopPropagation(); handlePagarRestante(reserva); }}
+                        onClick={(e) => { e.stopPropagation(); handlePagarRestante(reserva, valorFalta); }}
                         disabled={loadingStripe === reserva.id}
                         className="bg-amber-600 text-white font-bold text-sm px-4 py-2.5 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 shadow-sm"
                       >
@@ -403,11 +438,10 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
         )}
       </div>
 
-      {/* LIGHTBOX: COMPLETAR PERFIL (DADOS EN ENCARREGADO / FATURAÇÃO) */}
+      {/* LIGHTBOX: COMPLETAR PERFIL */}
       {isPerfilModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-opacity" onClick={() => setIsPerfilModalOpen(false)}>
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col transform transition-transform" onClick={e => e.stopPropagation()}>
-            
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div>
                 <h3 className="font-black text-slate-900 text-xl m-0">{isEn ? 'Complete Profile' : 'Dados do Encarregado'}</h3>
@@ -417,28 +451,23 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
-
             <div className="p-6 flex flex-col gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">{isEn ? 'Full Name' : 'Nome Completo Encarregado'}</label>
                 <input type="text" required value={perfilForm.nome_completo} onChange={e => setPerfilForm({...perfilForm, nome_completo: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-500 bg-slate-50" />
               </div>
-
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">{isEn ? 'Tax ID / NIF' : 'NIF (Para Emissão de Faturas)'}</label>
                 <input type="text" required value={perfilForm.nif} onChange={e => setPerfilForm({...perfilForm, nif: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-500 bg-slate-50" />
               </div>
-
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">{isEn ? 'Phone Number' : 'Telemóvel Contacto Direto'}</label>
                 <input type="tel" required value={perfilForm.telefone} onChange={e => setPerfilForm({...perfilForm, telefone: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-500 bg-slate-50" />
               </div>
-
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">{isEn ? 'Emergency Contact' : 'Contacto de Emergência Alternativo'}</label>
-                <input type="tel" required value={perfilForm.contacto_emergencia} onChange={e => setPerfilForm({...perfilForm, contacto_emergencia: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-500 bg-slate-50" placeholder="Ex: Contacto dos Avós / Cônjuge" />
+                <input type="tel" required value={perfilForm.contacto_emergencia} onChange={e => setPerfilForm({...perfilForm, contacto_emergencia: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-500 bg-slate-50" placeholder="Ex: Contacto dos Avós" />
               </div>
-
               <button onClick={handleSavePerfil} disabled={savingPerfil} className="w-full p-3.5 bg-slate-900 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm transition-colors mt-2 disabled:opacity-50 cursor-pointer">
                 {savingPerfil ? (isEn ? 'Saving data...' : 'A gravar dados...') : (isEn ? 'Save and Update Profile' : 'Gravar e Atualizar Perfil')}
               </button>
@@ -447,7 +476,7 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
         </div>
       )}
 
-      {/* MODAL DETALHADO DA RESERVA E CANCELAMENTO */}
+      {/* MODAL DETALHADO DA RESERVA E CANCELAMENTO/ALTERAÇÃO */}
       {reservaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-opacity" onClick={fecharReservaModal}>
           <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -462,6 +491,46 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
             </div>
             
             <div className="p-6 overflow-y-auto bg-white flex flex-col gap-8">
+              
+              {/* STATUS FINANCEIRO TOPO */}
+              <div className="bg-slate-900 rounded-2xl p-6 text-white">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">{isEn ? 'Financial Status' : 'Situação Financeira'}</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${reservaModal.status_pagamento === 'Reembolsado' || reservaModal.status_reembolso === 'Reembolsado' ? 'bg-red-500/20 text-red-400' : (reservaModal.status_pagamento === 'Aguardando Pagamento Extra' ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400')}`}>
+                    {reservaModal.status_pagamento === 'Reembolsado' || reservaModal.status_reembolso === 'Reembolsado' ? 'Cancelada' : reservaModal.status_pagamento || 'Pendente'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-end border-t border-slate-700 pt-4">
+                  <div>
+                    <p className="text-xs text-slate-400 font-bold mb-1">{isEn ? 'Amount Paid' : 'Valor já liquidado'}</p>
+                    <p className="text-lg font-black m-0">{reservaModal.valor_pago || 0}€</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-400 font-bold mb-1">{isEn ? 'Total Cost' : 'Custo Total'}</p>
+                    <p className={`text-2xl font-black m-0 ${reservaModal.status_pagamento === 'Reembolsado' || reservaModal.status_reembolso === 'Reembolsado' ? 'line-through text-slate-600' : ''}`}>
+                      {reservaModal.valor_total}€
+                    </p>
+                  </div>
+                </div>
+
+                {/* BOTÃO DE PAGAMENTO EXTRA DIRETO NO MODAL */}
+                {reservaModal.status_pagamento === 'Aguardando Pagamento Extra' && (Number(reservaModal.valor_total) - Number(reservaModal.valor_pago || 0) > 0) && (
+                  <div className="mt-5 bg-blue-600/20 border border-blue-500/30 p-4 rounded-xl flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-300 m-0">Ajuste Pendente</p>
+                      <p className="text-lg font-black text-blue-100 m-0">{(Number(reservaModal.valor_total) - Number(reservaModal.valor_pago || 0)).toFixed(2)}€</p>
+                    </div>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handlePagarRestante(reservaModal, Number(reservaModal.valor_total) - Number(reservaModal.valor_pago || 0)); }}
+                      disabled={loadingStripe === reservaModal.id}
+                      className="bg-blue-500 text-white font-bold text-sm px-4 py-2.5 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+                    >
+                      {loadingStripe === reservaModal.id ? 'A processar...' : 'Pagar Ajuste Agora'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
                   <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">{isEn ? 'Program Details' : 'O Programa'}</h4>
@@ -499,56 +568,43 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {reservaModal.extras_escolhidos && Object.keys(reservaModal.extras_escolhidos).length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">{isEn ? 'Selected Extras' : 'Extras Subscritos'}</h4>
-                    <ul className="list-disc pl-5 text-sm font-bold text-slate-700 space-y-1">
-                      {reservaModal.extras_escolhidos.extAlimentacao && <li>Alimentação Extra</li>}
-                      {reservaModal.extras_escolhidos.extAlojamento && <li>Alojamento Extra</li>}
-                      {reservaModal.extras_escolhidos.extTransporte && <li>Transporte</li>}
-                      {reservaModal.extras_escolhidos.extProlongamento && <li>Prolongamento de Horário</li>}
-                    </ul>
-                  </div>
-                )}
-                
-                {reservaModal.respostas_customizadas && Object.keys(reservaModal.respostas_customizadas).length > 0 && (
-                  <div className={!reservaModal.extras_escolhidos ? "md:col-span-2" : ""}>
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">{isEn ? 'Custom Answers' : 'Formulário do Organizador'}</h4>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col gap-3">
-                      {Object.entries(reservaModal.respostas_customizadas).map(([pergunta, resposta]: any, i) => (
-                        <div key={i}>
-                          <p className="text-xs font-bold text-slate-500 mb-0.5">{pergunta}</p>
-                          <p className="text-sm font-bold text-slate-900 m-0">{resposta}</p>
-                        </div>
-                      ))}
+              {/* SEÇÃO PEDIDO DE ALTERAÇÃO / EXTRAS */}
+              {reservaModal.status_pagamento !== 'Reembolsado' && reservaModal.status_reembolso !== 'Reembolsado' && (
+                <div className="border border-indigo-100 bg-indigo-50/50 rounded-2xl p-5 overflow-hidden transition-all">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4 className="text-sm font-black text-indigo-900 m-0">{isEn ? 'Need to add an extra or change days?' : 'Precisa de adicionar extras ou alterar os dias?'}</h4>
+                      <p className="text-xs text-indigo-700 m-0 mt-1">{isEn ? 'Send a request directly to the organizer.' : 'Envie um pedido ao organizador e pague a diferença de forma fácil.'}</p>
                     </div>
+                    {!changeRequest.active && (
+                      <button onClick={() => setChangeRequest({ ...changeRequest, active: true })} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-indigo-700 transition-colors whitespace-nowrap">
+                        {isEn ? 'Request Change' : 'Solicitar Alteração'}
+                      </button>
+                    )}
                   </div>
-                )}
-              </div>
 
-              <div className="bg-slate-900 rounded-2xl p-6 text-white mt-auto">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">{isEn ? 'Financial Status' : 'Situação Financeira'}</span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${reservaModal.status_pagamento === 'Reembolsado' || reservaModal.status_reembolso === 'Reembolsado' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                    {reservaModal.status_pagamento === 'Reembolsado' || reservaModal.status_reembolso === 'Reembolsado' ? 'Cancelada' : reservaModal.status_pagamento || 'Pendente'}
-                  </span>
+                  {changeRequest.active && (
+                    <div className="mt-4 pt-4 border-t border-indigo-100 animate-in fade-in slide-in-from-top-2">
+                      <label className="block text-[10px] font-black uppercase text-indigo-800 mb-2">{isEn ? 'Describe what you need:' : 'Descreva a alteração ou extras pretendidos:'}</label>
+                      <textarea 
+                        rows={3} 
+                        placeholder={isEn ? "E.g., I would like to add lunch for all days." : "Ex: Olá, gostava de adicionar a opção de alimentação para todos os dias do meu filho."}
+                        value={changeRequest.text}
+                        onChange={(e) => setChangeRequest({ ...changeRequest, text: e.target.value })}
+                        className="w-full p-3 rounded-xl border border-indigo-200 text-sm outline-none focus:border-indigo-500 bg-white resize-none mb-3"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => setChangeRequest({ active: false, text: "", loading: false })} className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancelar</button>
+                        <button onClick={() => handleEnviarPedidoAlteracao(reservaModal)} disabled={changeRequest.loading} className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50">
+                          {changeRequest.loading ? (isEn ? 'Sending...' : 'A enviar...') : (isEn ? 'Send Request' : 'Enviar Pedido ao Organizador')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex justify-between items-end border-t border-slate-700 pt-4">
-                  <div>
-                    <p className="text-xs text-slate-400 font-bold mb-1">{isEn ? 'Amount Paid' : 'Valor já liquidado'}</p>
-                    <p className="text-lg font-black m-0">{reservaModal.valor_pago || 0}€</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-400 font-bold mb-1">{isEn ? 'Total Cost' : 'Custo Total'}</p>
-                    <p className={`text-2xl font-black m-0 ${reservaModal.status_pagamento === 'Reembolsado' || reservaModal.status_reembolso === 'Reembolsado' ? 'line-through text-slate-600' : ''}`}>
-                      {reservaModal.valor_total}€
-                    </p>
-                  </div>
-                </div>
-              </div>
+              )}
 
-              {/* LÓGICA E AVISO DE CANCELAMENTO */}
+              {/* LÓGICA DE CANCELAMENTO E DESISTÊNCIA */}
               {reservaModal.status_pagamento !== 'Reembolsado' && reservaModal.status_reembolso !== 'Reembolsado' && (
                 <div className="border-t border-slate-200 pt-6">
                   {(() => {
@@ -563,7 +619,7 @@ export default function DashboardCliente({ params }: { params: Promise<{ lang: s
                         onClick={() => setCancelState({ loading: false, confirm: true })}
                         className="w-full py-3 rounded-xl border border-red-200 text-red-600 font-bold hover:bg-red-50 transition-colors"
                       >
-                        {isEn ? 'Cancel Booking' : 'Cancelar Inscrição'}
+                        {isEn ? 'Cancel Booking' : 'Cancelar Inscrição (Desistência)'}
                       </button>
                     ) : (
                       <div className="bg-red-50 p-5 rounded-xl border border-red-200 animate-in fade-in zoom-in duration-200">

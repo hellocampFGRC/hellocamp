@@ -62,6 +62,11 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const [savingExterno, setSavingExterno] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
+  // Estados de Gestão Financeira (Upsell/Ajuste)
+  const [isAjusteModalOpen, setIsAjusteModalOpen] = useState(false);
+  const [savingAjuste, setSavingAjuste] = useState(false);
+  const [ajusteForm, setAjusteForm] = useState({ valor: 0, motivo: "" });
+
   // Form de Reserva Externa (1 a 1)
   const [formExterno, setFormExterno] = useState({
     campo_id: "", turno_nome: "", valor_pago: 0,
@@ -101,9 +106,12 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
           campo_nome: campoRelacionado ? (isEn && campoRelacionado.nome_en ? campoRelacionado.nome_en : campoRelacionado.nome) : 'Desconhecido',
           turno: res.turno_nome,
           valor: Number(res.valor_total) || 0,
+          valor_pago: Number(res.valor_pago) || 0,
+          valor_pendente_extra: Number(res.valor_pendente_extra) || 0,
           data: res.created_at,
           status: statusFinal,
           isExterna: isExterna,
+          pedido_pendente: res.respostas_customizadas?.pedido_pai_pendente || null, // O pai enviou pedido?
           crianca: res.criancas || { nome: res.respostas_customizadas?.nome_crianca_externo || 'N/D' },
           pai: {
             nome: res.nome_encarregado || res.perfis?.nome_completo || 'N/D',
@@ -111,7 +119,8 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
             telefone: res.telefone_encarregado || res.perfis?.telefone || 'N/D',
             emergencia: res.perfis?.contacto_emergencia || res.telefone_encarregado || 'N/D'
           },
-          respostasCustomizadas: res.respostas_customizadas || {}
+          respostasCustomizadas: res.respostas_customizadas || {},
+          historico_ajustes: res.respostas_customizadas?.historico_ajustes || []
         };
       });
       setTodasReservas(reservasFormatadas);
@@ -127,6 +136,50 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setFiltroDiaSelecionado('');
     setIsFilterPanelOpen(false);
   }, [filtroCampoId]);
+
+  const fecharModalReserva = () => {
+    setReservaSelecionada(null);
+    setIsAjusteModalOpen(false);
+    setAjusteForm({ valor: 0, motivo: "" });
+  };
+
+  // ==========================================
+  // LÓGICA DE COBRANÇA EXTRA (UPSELL)
+  // ==========================================
+  const handleSubmeterAjuste = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ajusteForm.motivo || ajusteForm.valor <= 0) return alert("Preencha um motivo e um valor superior a 0.");
+    
+    setSavingAjuste(true);
+    try {
+      const novoAjuste = {
+        data: new Date().toISOString(),
+        motivo: ajusteForm.motivo,
+        valor_pedido: ajusteForm.valor
+      };
+
+      const historicoAtualizado = [...(reservaSelecionada.historico_ajustes || []), novoAjuste];
+      
+      // Limpar o aviso de pedido pendente do pai (pois o parceiro já respondeu cobrando)
+      const novasRespostas = { ...reservaSelecionada.respostasCustomizadas, historico_ajustes: historicoAtualizado };
+      delete novasRespostas.pedido_pai_pendente;
+
+      const { error } = await supabase.from('reservas').update({
+        status_pagamento: 'Aguardando Pagamento Extra',
+        valor_pendente_extra: ajusteForm.valor,
+        respostas_customizadas: novasRespostas
+      }).eq('id', reservaSelecionada.id);
+
+      if (error) throw error;
+
+      alert(isEn ? "Payment request sent to the parent!" : "Pedido de pagamento enviado ao encarregado de educação com sucesso!");
+      
+      fecharModalReserva();
+      fetchDashboardData();
+
+    } catch (err: any) { alert("Erro ao processar ajuste: " + err.message); }
+    setSavingAjuste(false);
+  };
 
   // ==========================================
   // FILTRAGEM INTELIGENTE DA TABELA
@@ -371,7 +424,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
           </select>
         </div>
 
-        {/* BOTÃO DO FILTRO FIXO (FIXED) DE CALENDÁRIO */}
         {filtroCampoId !== 'todos' && (
           <div className="flex-1 relative animate-in fade-in">
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Data/Turno</label>
@@ -383,7 +435,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
               <span className="text-slate-400 text-[10px]">▼</span>
             </div>
 
-            {/* O POPOVER CENTRALIZADO E COM SCROLL INTERNO */}
             {isFilterPanelOpen && (
               <>
                 <div className="fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsFilterPanelOpen(false)}></div>
@@ -406,7 +457,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     </div>
                   )}
 
-                  {/* Fluxo Pacotes */}
                   {filtroModo === 'pacote' && (
                     <div className="flex flex-col gap-2">
                       {pacotesFiltro.map((pac: any) => {
@@ -424,7 +474,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     </div>
                   )}
 
-                  {/* Fluxo Calendário Digital para Filtro */}
                   {filtroModo === 'dia_solto' && (
                     <div className="animate-in fade-in duration-200">
                       <span className="block text-[11px] font-black text-emerald-800 uppercase tracking-widest mb-3">1. Escolha o Dia no Mapa</span>
@@ -432,21 +481,17 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                         {datasUnicasFiltro.map((data: string) => {
                           const isActive = filtroDiaSelecionado === data;
                           const dateObj = new Date(data);
-                          const diaSemana = dateObj.toLocaleDateString('pt-PT', {weekday: 'short'}).replace('.','');
-                          const diaNumero = dateObj.toLocaleDateString('pt-PT', {day: '2-digit'});
-
                           return (
                             <div key={data} onClick={() => setFiltroDiaSelecionado(data)} className={`flex flex-col items-center justify-center py-2.5 rounded-xl border-2 cursor-pointer transition-all ${isActive ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-400'}`}>
-                              <span className={`text-[8px] font-black uppercase mb-0.5 ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{diaSemana}</span>
-                              <span className="text-base font-black leading-none">{diaNumero}</span>
+                              <span className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{dateObj.toLocaleDateString('pt-PT', {weekday: 'short'}).replace('.','')}</span>
+                              <span className="text-base font-black leading-none">{dateObj.toLocaleDateString('pt-PT', {day: '2-digit'})}</span>
                             </div>
                           )
                         })}
                       </div>
 
-                      {/* Horários Horizontais */}
                       {filtroDiaSelecionado && (
-                        <div className="border-t border-slate-100 pt-4 animate-in fade-in">
+                        <div className="border-t border-slate-100 pt-4 mt-2 animate-in fade-in">
                           <span className="block text-[11px] font-black text-emerald-800 uppercase tracking-widest mb-3">2. Qual o Horário Pretendido?</span>
                           <div className="grid grid-cols-3 gap-2">
                             {diasSoltosFiltro.filter((t: any) => t.data_inicio === filtroDiaSelecionado).map((horario: any) => {
@@ -471,7 +516,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         )}
       </div>
 
-      {/* TABELA UNIFICADA */}
+      {/* TABELA UNIFICADA COM ALERTAS */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative z-10">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -495,6 +540,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                   const alertaAlergia = item.crianca?.restricoes_alimentares && item.crianca.restricoes_alimentares.length > 8 && !item.crianca.restricoes_alimentares.toLowerCase().includes('nenhum');
                   const alertaDoenca = item.crianca?.doencas_cronicas && item.crianca.doencas_cronicas.length > 8 && !item.crianca.doencas_cronicas.toLowerCase().includes('nenhum');
                   const temRisco = !isInativa && (alertaAlergia || alertaDoenca);
+                  const temPedidoAlteracao = item.pedido_pendente != null;
 
                   return (
                     <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isInativa ? 'opacity-50 grayscale' : ''}`}>
@@ -523,7 +569,13 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {isExterna ? (
+                        {temPedidoAlteracao ? (
+                           <div className="flex flex-col gap-1 items-start">
+                             <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider shadow-sm animate-pulse">
+                               📬 Pedido do Pai
+                             </span>
+                           </div>
+                        ) : isExterna ? (
                           <div className="flex flex-col gap-1 items-start">
                             <span className="bg-orange-50 text-orange-700 border border-orange-200 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider shadow-sm">
                               🟠 Externo / Manual
@@ -540,7 +592,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                         )}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button onClick={() => setReservaSelecionada(item)} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-900 hover:text-white transition-colors shadow-sm">
+                        <button onClick={() => setReservaSelecionada(item)} className={`px-4 py-2 bg-white border rounded-lg text-xs font-bold transition-colors shadow-sm ${temPedidoAlteracao ? 'border-blue-300 text-blue-700 hover:bg-blue-600 hover:text-white' : 'border-slate-200 text-slate-700 hover:bg-slate-900 hover:text-white'}`}>
                           Abrir Ficha
                         </button>
                       </td>
@@ -553,7 +605,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
       </div>
 
-      {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES (SELEÇÃO DE MODO) */}
+      {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -582,7 +634,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 </div>
               )}
 
-              {/* MODO: MANUAL COM MOTOR DE MINI-CALENDÁRIO CORRIGIDO */}
               {importMode === 'manual' && (
                 <form id="form-manual" onSubmit={handleAddExterno} className="flex flex-col gap-6">
                   
@@ -728,7 +779,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 </form>
               )}
 
-              {/* MODO: IMPORTAR EXCEL */}
               {importMode === 'excel' && (
                 <div className="flex flex-col gap-6">
                   <div className="bg-blue-50 border border-blue-200 p-5 rounded-2xl">
@@ -774,7 +824,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
       )}
 
-      {/* MODAL: VER FICHA CLÍNICA DETALHADA */}
+      {/* MODAL: VER FICHA CLÍNICA DETALHADA E UPSALES */}
       {reservaSelecionada && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -784,21 +834,96 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 <h2 className="m-0 text-2xl font-black">Ficha de Participante</h2>
                 <p className="m-0 text-slate-300 text-xs font-mono mt-1">REF: {reservaSelecionada.id}</p>
               </div>
-              <button onClick={() => setReservaSelecionada(null)} className="text-white opacity-60 hover:opacity-100 text-3xl font-light">&times;</button>
+              <button onClick={fecharModalReserva} className="text-white opacity-60 hover:opacity-100 text-3xl font-light">&times;</button>
             </div>
 
             <div className="p-8 overflow-y-auto bg-slate-50 flex flex-col gap-6">
               
-              {/* Top Banner Origin */}
               {reservaSelecionada.isExterna ? (
                 <div className="bg-orange-100 text-orange-800 p-3 rounded-xl border border-orange-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
                   <b>🟠 Inscrição Externa (Manual)</b>
                 </div>
               ) : (
                 <div className="bg-emerald-100 text-emerald-800 p-3 rounded-xl border border-emerald-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
-                  <b>🟢 Inscrição Online HelloCamp • Estado: {reservaSelecionada.status}</b>
+                  <b>🟢 Inscrição Online HelloCamp</b>
                 </div>
               )}
+
+              {/* CARTÃO: GESTÃO FINANCEIRA (ONDE O PARCEIRO RESPONDE E COBRA) */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
+                <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest m-0">💳 Gestão Financeira</h3>
+                  {(!reservaSelecionada.isExterna && reservaSelecionada.status !== 'Cancelada') && (
+                    <button onClick={() => setIsAjusteModalOpen(!isAjusteModalOpen)} className="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-200">
+                      + Solicitar Pagamento Extra
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-xs text-slate-500 font-bold mb-1">Valor Atual da Reserva</p>
+                    <p className="text-2xl font-black text-slate-900 m-0">{reservaSelecionada.valor}€</p>
+                  </div>
+                  <div>
+                    <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${reservaSelecionada.status === 'Pago' || reservaSelecionada.status === 'Sinal Pago' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : (reservaSelecionada.status === 'Aguardando Pagamento Extra' ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-amber-50 text-amber-800 border-amber-200')}`}>
+                      Estado: {reservaSelecionada.status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* ALERTA: PEDIDO DO PAI PENDENTE */}
+                {reservaSelecionada.pedido_pendente && (
+                  <div className="mt-5 bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-start gap-3">
+                    <span className="text-2xl">📬</span>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 m-0 mb-1">Pedido de Alteração do Encarregado</p>
+                      <p className="text-sm font-bold text-blue-900 m-0 italic">"{reservaSelecionada.pedido_pendente}"</p>
+                      <button onClick={() => setIsAjusteModalOpen(true)} className="mt-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors">
+                        Cobrar Valor Extra
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {reservaSelecionada.historico_ajustes?.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-dashed border-slate-200">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Histórico de Pedidos de Pagamento:</p>
+                    {reservaSelecionada.historico_ajustes.map((aj: any, i: number) => (
+                      <div key={i} className="flex justify-between items-center text-xs font-bold text-slate-600 mb-1">
+                        <span>• {aj.motivo}</span>
+                        <span>+{aj.valor_pedido}€</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* FORMULÁRIO DE COBRANÇA */}
+                {isAjusteModalOpen && (
+                  <form onSubmit={handleSubmeterAjuste} className="mt-6 pt-5 border-t border-slate-100 animate-in fade-in">
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-4">
+                      <h4 className="text-xs font-black text-blue-900 uppercase tracking-widest mb-1">Enviar Pedido de Pagamento Adicional</h4>
+                      <p className="text-xs text-blue-700 m-0 leading-relaxed">O encarregado de educação receberá um email com uma referência de pagamento da Stripe para liquidar este valor extra.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Motivo (Ex: Adição de Transporte)</label>
+                        <input type="text" required value={ajusteForm.motivo} onChange={e => setAjusteForm({...ajusteForm, motivo: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Valor Extra (€)</label>
+                        <input type="number" required min="1" value={ajusteForm.valor} onChange={e => setAjusteForm({...ajusteForm, valor: Number(e.target.value)})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400" />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 mt-2">
+                      <button type="button" onClick={() => setIsAjusteModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">Cancelar</button>
+                      <button type="submit" disabled={savingAjuste} className="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm disabled:opacity-50">
+                        {savingAjuste ? 'A Enviar...' : 'Enviar Pedido de Pagamento'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -837,7 +962,9 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl shadow-sm">
                    <h3 className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4 pb-2 border-b border-blue-200/50">📋 Respostas Específicas do Campo</h3>
                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                     {Object.entries(reservaSelecionada.respostasCustomizadas).map(([pergunta, resposta]: any, idx: number) => (
+                     {Object.entries(reservaSelecionada.respostasCustomizadas)
+                        .filter(([p]) => p !== 'origem' && p !== 'historico_ajustes' && p !== 'pedido_pai_pendente')
+                        .map(([pergunta, resposta]: any, idx: number) => (
                         <div key={idx} className="bg-white p-3 rounded-xl border border-blue-50">
                           <span className="block text-[10px] font-bold text-blue-500 mb-1">{pergunta}</span>
                           <span className="text-sm font-black text-slate-800">{resposta}</span>
