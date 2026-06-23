@@ -68,8 +68,6 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
     parceiroInfo = organizador;
   }
 
-  const viewsHoje = Math.floor(Math.random() * (campo.vagas_totais > 50 ? 25 : 8)) + 2;
-
   const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
   const descCampo = isEn && campo.descricao_en ? campo.descricao_en : campo.descricao;
   const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
@@ -95,26 +93,24 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
   const campoUrlCompleto = `${baseUrl}/${lang}/campo/${campo.id}`;
 
   // ==========================================
-  // DADOS DA NOVA ESTRUTURA (COM TIPOS)
+  // DADOS DA NOVA ESTRUTURA
   // ==========================================
   const calendario = campo.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [] };
   const pacotes: Pacote[] = campo.pacotes || [];
   const dataMaisCedo = calendario.data_inicio || "2026-07-01";
 
-  // Mapeamento dos dias da semana para exibição
   const DIAS_SEMANA = [
     { id: 1, pt: 'Seg', en: 'Mon' }, { id: 2, pt: 'Ter', en: 'Tue' },
     { id: 3, pt: 'Qua', en: 'Wed' }, { id: 4, pt: 'Qui', en: 'Thu' },
-    { id: 5, pt: 'Sex', en: 'Fri' }, { id: 6, pt: 'Sáb', en: 'Sat' },
+    { id: 5, pt: 'Sex', en: 'Fri' }, { id: 6, pt: 'Sáb', Sat: 'Sat' },
     { id: 0, pt: 'Dom', en: 'Sun' }
   ];
   const diasAtivos: number[] = calendario.dias_semana || [];
   const diasAtivosTexto = diasAtivos.map((diaId: number) => {
-    const dia = DIAS_SEMANA.find((d: { id: number; pt: string; en: string }) => d.id === diaId);
+    const dia = DIAS_SEMANA.find((d: any) => d.id === diaId);
     return dia ? (isEn ? dia.en : dia.pt) : '';
   }).filter(Boolean).join(', ');
 
-  // Preço mínimo (já está no campo.preco, mas podemos recalcular por segurança)
   let precoMinimo = campo.preco || 0;
   if (pacotes.length > 0 && !precoMinimo) {
     const todosPrecos = pacotes.flatMap((p: Pacote) => p.variantes.map((v: Variante) => v.preco));
@@ -224,9 +220,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                     ({totalAvaliacoes} {isEn ? 'reviews' : 'avaliações'})
                   </span>
                 </div>
-                <div className="bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 animate-pulse">
-                  🔥 {viewsHoje} {isEn ? 'parents viewing right now' : 'pais a ver agora'}
-                </div>
+                {/* O bloco "pais a ver agora" foi removido temporariamente daqui de forma limpa para manter o layout intocado */}
               </div>
             </div>
 
@@ -262,7 +256,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
               )}
             </div>
 
-            {/* CALENDÁRIO E PACOTES (NOVA ESTRUTURA) */}
+            {/* CALENDÁRIO E PACOTES */}
             <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-5">{dict.detalhe.datas_disponibilidade}</h2>
               <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100 space-y-4">
