@@ -3,777 +3,782 @@
 import { useState, useEffect, useRef, use } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import imageCompression from 'browser-image-compression';
-import Link from "next/link";
 import React from "react";
 
-// --- TIPAGENS ---
-type ImagePreview = { file?: File; url?: string; preview: string; isMain: boolean; };
-type OpcaoVenda = { id: number; tipo_venda: string; horario: string; preco: number; };
-type BlocoDatas = { id: number; nome: string; data_inicio: string; data_fim: string; vagas: number; excluir_fins_semana: boolean; opcoes: OpcaoVenda[]; };
+// ==========================================
+// 1. TIPAGEM TYPESCRIPT (STRICT MODE)
+// ==========================================
+interface Variante { nome: string; preco: number; }
+interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; }
+interface Desconto { id: string; nome: string; percentagem: number; acumulavel: boolean; }
+interface GaleriaUpload { id: string; file?: File; previewUrl: string; isCapa: boolean; }
 
-// --- CONSTANTES ---
-const FOTOS_PADRAO = [
-  { url: "https://images.unsplash.com/photo-1502680390469-be75c86b636f?q=80&w=1200&auto=format&fit=crop", nome: "Surf / Aquáticos" },
-  { url: "https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?q=80&w=1200&auto=format&fit=crop", nome: "Acampamento" },
-  { url: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop", nome: "Tecnologia" },
-  { url: "https://images.unsplash.com/photo-1516627145497-ae6968895b74?q=80&w=1200&auto=format&fit=crop", nome: "Artes / Pintura" },
-  { url: "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=1200&auto=format&fit=crop", nome: "Desporto" },
-  { url: "https://images.unsplash.com/photo-1606092195730-5d7b9af1efc5?q=80&w=1200&auto=format&fit=crop", nome: "Diversão" },
-  { url: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?q=80&w=1200&auto=format&fit=crop", nome: "Inglês / Londres" }
+const DIAS_SEMANA = [
+  { id: 1, pt: 'Seg', en: 'Mon' }, { id: 2, pt: 'Ter', en: 'Tue' },
+  { id: 3, pt: 'Qua', en: 'Wed' }, { id: 4, pt: 'Qui', en: 'Thu' },
+  { id: 5, pt: 'Sex', en: 'Fri' }, { id: 6, pt: 'Sáb', en: 'Sat' },
+  { id: 0, pt: 'Dom', en: 'Sun' }
 ];
 
-const PERGUNTAS_SUGERIDAS: Record<string, string[]> = {
-  "Desporto": ["Qual o nível de experiência do participante na modalidade?", "É federado nalgum clube?", "Qual o peso e altura? (Para preparação de equipamentos)", "Traz equipamento próprio ou precisa de alugar?"],
-  "Aventura & Natureza": ["A criança tem experiência prévia a dormir em tendas?", "Tem saco de cama e esteira próprios?", "Existe algum fobia relevante? (ex: escuro, alturas)"],
-  "Tecnologia & Ciência": ["Qual o nível de conhecimentos de informática da criança?", "Vai trazer equipamento próprio (Portátil/Tablet)?", "Qual o sistema operativo que utiliza habitualmente?"],
-  "Artes & Criatividade": ["Toca algum instrumento musical? Se sim, qual?", "Tem experiência prévia com teatro ou dança?", "Traz os seus próprios materiais de expressão plástica?"],
-  "Línguas": ["O participante já estudou este idioma antes?", "Se sim, qual o nível de proficiência atual estimado?", "Fez algum exame oficial recentemente?"]
-};
+const CATEGORIAS = [
+  { id: 'Desporto', icon: '⚽', pt: 'Desporto Geral', en: 'Sports' },
+  { id: 'Surf', icon: '🏄', pt: 'Surf / Desportos Aquáticos', en: 'Surf & Water Sports' },
+  { id: 'Robotica', icon: '🤖', pt: 'Tecnologia & Robótica', en: 'Tech & Robotics' },
+  { id: 'Aventura', icon: '⛺', pt: 'Natureza & Aventura', en: 'Nature & Adventure' },
+  { id: 'Artes', icon: '🎨', pt: 'Artes & Teatro', en: 'Arts & Theater' },
+  { id: 'Linguas', icon: '🇬🇧', pt: 'Línguas', en: 'Languages' },
+];
 
-const PERGUNTAS_GERAIS = ["Autoriza saída sozinha?", "Outra pessoa vai recolher?"];
-
-const sanitizeFileName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
-
-export default function EditarCampo({ params }: { params: Promise<{ lang: string; id: string }> }) {
-  const resolvedParams = use(params);
-  const { lang, id } = resolvedParams;
-  
-  const router = useRouter();
+export default function EditarCampoParceiro({ params }: { params: Promise<{ lang: string; id: string }> }) {
+  const { lang, id } = use(params);
   const isEn = lang === 'en';
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [statusText, setStatusText] = useState("");
-  
-  const isFirstRender = useRef(true);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
-  
-  // Imagens & Docs
-  const [images, setImages] = useState<ImagePreview[]>([]);
-  const [usarFotoPadrao, setUsarFotoPadrao] = useState(false);
-  const [documentos, setDocumentos] = useState<File[]>([]);
-  const [documentosExistentes, setDocumentosExistentes] = useState<{nome: string, url: string}[]>([]);
-  
-  // Localização
-  const [mapPreview, setMapPreview] = useState<{lat: number, lon: number} | null>(null);
-  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
-  const [pais, setPais] = useState("Portugal");
 
-  // Detalhes Conceptuais
-  const [linguas, setLinguas] = useState({ pt: false, en: false, es: false, fr: false, de: false });
-  const [faixasSelecionadas, setFaixasSelecionadas] = useState({ ca6_9: false, ca10_13: false, ca14_17: false, outra: false });
-  const [idadeManual, setIdadeManual] = useState("");
-  const [perguntasCustomizadas, setPerguntasCustomizadas] = useState<string[]>([]);
-
-  // Motor de Blocos (Novo)
-  const [blocos, setBlocos] = useState<BlocoDatas[]>([]);
-
-  const [formData, setFormData] = useState({
-    nome: "", categoria: "", local: "", Distrito: "", racio_monitores: "", duracao_dias: 7,
-    alimentacao: "Não tem", alojamento: "Não tem", seguro: "Incluído no Preço", 
-    politica_cancelamento: "Moderada (Reembolso a 50% até 15 dias antes)",
-    tipo_pagamento: "100_total",
-    descricao: "", regras_termos: "",
-    extra_alimentacao: 0, tipo_cobranca_alimentacao: "Por Turno", extra_alojamento: 0, tipo_cobranca_alojamento: "Por Turno",
-    extra_prolongamento: 0, tipo_cobranca_prolongamento: "Por Turno", extra_transporte: 0, tipo_cobranca_transporte: "Por Turno",
-    imagem: "", galeria: [] as string[]
-  });
-
-  const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
-  const paises = [{ pt: "Portugal", en: "Portugal" }, { pt: "Espanha", en: "Spain" }, { pt: "Outro", en: "Other" }];
+  // Dropdowns Customizados States
+  const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
+  const [isPolDropdownOpen, setIsPolDropdownOpen] = useState(false);
 
   // ==========================================
-  // FETCH INICIAL E RECONSTRUÇÃO DE BLOCOS
+  // 2. ESTADO DO FORMULÁRIO COMPLETO
+  // ==========================================
+  const [formData, setFormData] = useState({
+    nome: "", local: "", idade_min: 6, idade_max: 14, vagas_totais: 50,
+    categoria: "", politica_cancelamento: "Flexível (100% até 7 dias)",
+    calendario_funcionamento: { data_inicio: "", data_fim: "", dias_semana: [1, 2, 3, 4, 5] },
+    pacotes: [] as Pacote[],
+    descontos: [] as Desconto[],
+    descricao: "", 
+    perguntas: [] as string[]
+  });
+
+  const [galeria, setGaleria] = useState<GaleriaUpload[]>([]);
+  const [mapIframeUrl, setMapIframeUrl] = useState("");
+
+  // Estados Modal Pacotes
+  const [isPacoteModalOpen, setIsPacoteModalOpen] = useState(false);
+  const [novoPacote, setNovoPacote] = useState<Pacote>({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
+
+  // Estados Modal Descontos
+  const [isDescontoModalOpen, setIsDescontoModalOpen] = useState(false);
+  const [novoDesconto, setNovoDesconto] = useState<Desconto>({ id: "", nome: "", percentagem: 10, acumulavel: false });
+
+  // ==========================================
+  // 3. CARREGAR DADOS EXISTENTES
   // ==========================================
   useEffect(() => {
     const fetchCampo = async () => {
       const { data, error } = await supabase.from('campos').select('*').eq('id', id).single();
+      if (error) {
+        alert("Erro ao carregar campo: " + error.message);
+        router.push(`/${lang}/admin/campos`);
+        return;
+      }
       if (data) {
+        // Preencher formData
         setFormData({
-          ...data,
-          politica_cancelamento: data.politica_cancelamento || "Moderada (Reembolso a 50% até 15 dias antes)",
-          tipo_pagamento: data.tipo_pagamento || "100_total",
-          imagem: data.imagem || "",
-          galeria: data.galeria || []
+          nome: data.nome || "",
+          local: data.local || "",
+          idade_min: data.idade_min || 6,
+          idade_max: data.idade_max || 14,
+          vagas_totais: data.vagas_totais || 50,
+          categoria: data.categoria || "",
+          politica_cancelamento: data.politica_cancelamento || "Flexível (100% até 7 dias)",
+          calendario_funcionamento: data.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [1,2,3,4,5] },
+          pacotes: data.pacotes || [],
+          descontos: data.descontos || [],
+          descricao: data.descricao || "",
+          perguntas: data.perguntas_customizadas || []
         });
-        
-        if (data.idade) {
-          const idadesGuardadas = data.idade.split(",").map((s: string) => s.trim());
-          const c6_9 = idadesGuardadas.includes("6-9 anos");
-          const c10_13 = idadesGuardadas.includes("10-13 anos");
-          const c14_17 = idadesGuardadas.includes("14-17 anos");
-          const padroes = ["6-9 anos", "10-13 anos", "14-17 anos"];
-          const customizadas = idadesGuardadas.filter((s: string) => !padroes.includes(s));
-          
-          setFaixasSelecionadas({ ca6_9: c6_9, ca10_13: c10_13, ca14_17: c14_17, outra: customizadas.length > 0 });
-          if (customizadas.length > 0) setIdadeManual(customizadas.join(", "));
-        }
 
-        // --- ENGENHARIA REVERSA: RECONSTRUIR OS BLOCOS A PARTIR DA LISTA PLANA ---
-        if (data.turnos && data.turnos.length > 0) {
-          const blocosReconstruidos = reconstruirBlocosDaBaseDeDados(data.turnos);
-          setBlocos(blocosReconstruidos);
-        } else {
-          // Fallback se estiver vazio
-          setBlocos([{ id: Date.now(), nome: "", data_inicio: "", data_fim: "", vagas: 20, excluir_fins_semana: true, opcoes: [{ id: Date.now() + 1, tipo_venda: "pacote", horario: "Dia Completo", preco: 0 }] }]);
+        // Galeria (imagem principal + galeria)
+        const loadedImages: GaleriaUpload[] = [];
+        if (data.imagem) {
+          loadedImages.push({
+            id: Math.random().toString(36).substring(2, 9),
+            previewUrl: data.imagem,
+            isCapa: true
+          });
         }
+        if (data.galeria && Array.isArray(data.galeria)) {
+          data.galeria.forEach((url: string) => {
+            loadedImages.push({
+              id: Math.random().toString(36).substring(2, 9),
+              previewUrl: url,
+              isCapa: false
+            });
+          });
+        }
+        // Se não houver nenhuma, a primeira fica como capa
+        if (loadedImages.length > 0 && !loadedImages.some(img => img.isCapa)) {
+          loadedImages[0].isCapa = true;
+        }
+        setGaleria(loadedImages);
 
-        if (data.perguntas_customizadas) setPerguntasCustomizadas(data.perguntas_customizadas);
-        if (data.pais) setPais(data.pais);
-        if (data.latitude && data.longitude) setMapPreview({ lat: data.latitude, lon: data.longitude });
-        if (data.linguas_faladas) {
-          setLinguas({ pt: data.linguas_faladas.includes("Português"), en: data.linguas_faladas.includes("Inglês"), es: data.linguas_faladas.includes("Espanhol"), fr: data.linguas_faladas.includes("Francês"), de: data.linguas_faladas.includes("Alemão") });
+        // Atualizar iframe do mapa
+        if (data.local) {
+          setMapIframeUrl(`https://maps.google.com/maps?q=${encodeURIComponent(data.local)}&t=&z=13&ie=UTF8&iwloc=&output=embed`);
         }
-        
-        const loadedImages: ImagePreview[] = [];
-        if (data.imagem) loadedImages.push({ url: data.imagem, preview: data.imagem, isMain: true });
-        if (data.galeria && Array.isArray(data.galeria)) data.galeria.forEach((url: string) => loadedImages.push({ url, preview: url, isMain: false }));
-        setImages(loadedImages);
-        
-        if (data.programas_pdf && Array.isArray(data.programas_pdf)) setDocumentosExistentes(data.programas_pdf);
       }
       setLoading(false);
     };
     fetchCampo();
-  }, [id]);
+  }, [id, lang, router]);
 
-  // Função Auxiliar para empacotar a BD de volta no Formulário
-  const reconstruirBlocosDaBaseDeDados = (turnosPlano: any[]) => {
-    const mapaBlocos = new Map<string, BlocoDatas>();
-    let counterId = 1;
-
-    turnosPlano.forEach(t => {
-      // Nome base sem sufixos
-      const nomeBase = t.nome.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
-      
-      let horarioEncontrado = "Dia Completo";
-      if (t.nome.includes("Manhã") || t.nome.includes("Morning")) horarioEncontrado = "Só Manhã";
-      else if (t.nome.includes("Tarde") || t.nome.includes("Afternoon")) horarioEncontrado = "Só Tarde";
-
-      const isDiaSolto = t.nome.includes("- Dia ") || t.nome.includes("- Day ");
-      const tipoVenda = isDiaSolto ? "dias_soltos" : "pacote";
-
-      if (!mapaBlocos.has(nomeBase)) {
-        mapaBlocos.set(nomeBase, {
-          id: counterId++,
-          nome: nomeBase,
-          data_inicio: t.data_inicio,
-          data_fim: t.data_fim,
-          vagas: Number(t.vagas) || 20,
-          excluir_fins_semana: true, // Assumimos true por defeito
-          opcoes: []
-        });
+  // ==========================================
+  // 4. HANDLERS (IGUAIS AO NOVO CAMPO)
+  // ==========================================
+  const handleSelectCategoria = (catId: string) => {
+    setFormData(prev => {
+      let novasPerguntas = [...prev.perguntas];
+      if (catId === 'Surf' && !novasPerguntas.includes("O participante sabe nadar de forma autónoma?")) {
+        novasPerguntas.push("O participante sabe nadar de forma autónoma?");
       }
-
-      const bloco = mapaBlocos.get(nomeBase)!;
-      
-      // Expande as datas do bloco se encontrar extremos maiores
-      if (t.data_inicio < bloco.data_inicio) bloco.data_inicio = t.data_inicio;
-      if (t.data_fim > bloco.data_fim) bloco.data_fim = t.data_fim;
-
-      // Adiciona a Opção se não existir
-      const opcaoExiste = bloco.opcoes.find(o => o.tipo_venda === tipoVenda && o.horario === horarioEncontrado);
-      if (!opcaoExiste) {
-        bloco.opcoes.push({
-          id: counterId++,
-          tipo_venda: tipoVenda,
-          horario: horarioEncontrado,
-          preco: Number(t.preco) || 0
-        });
+      if (catId === 'Robotica' && !novasPerguntas.includes("Qual o nível de experiência com computadores/programação?")) {
+        novasPerguntas.push("Qual o nível de experiência com computadores/programação?");
       }
+      return { ...prev, categoria: catId, perguntas: novasPerguntas };
     });
-
-    return Array.from(mapaBlocos.values());
+    setIsCatDropdownOpen(false);
   };
 
-  // ==========================================
-  // HANDLERS (FOTOS, MAPA, LÍNGUAS, ETC)
-  // ==========================================
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newImages = Array.from(e.target.files).map((file, index) => ({ file, preview: URL.createObjectURL(file), isMain: images.length === 0 && index === 0 }));
-      setImages(prev => [...prev, ...newImages]); setUsarFotoPadrao(false);
-    }
-  };
-  const selecionarFotoPadrao = (url: string) => { setImages([{ url, preview: url, isMain: true }]); setUsarFotoPadrao(true); };
-  const removeImage = (indexToRemove: number) => {
-    setImages(prev => {
-      const newImages = prev.filter((_, idx) => idx !== indexToRemove);
-      if (prev[indexToRemove]?.isMain && newImages.length > 0) newImages[0].isMain = true;
-      if (newImages.length === 0) setUsarFotoPadrao(false);
-      return newImages;
-    });
-  };
-  const setMainImage = (indexToMain: number) => setImages(prev => prev.map((img, idx) => ({ ...img, isMain: idx === indexToMain })));
-  
-  const handleDocSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) setDocumentos(prev => [...prev, ...Array.from(e.target.files as FileList)]); };
-  const removeNovoDoc = (indexToRemove: number) => setDocumentos(prev => prev.filter((_, idx) => idx !== indexToRemove));
-  const removeDocExistente = (indexToRemove: number) => setDocumentosExistentes(prev => prev.filter((_, idx) => idx !== indexToRemove));
-
-  const handleLinguasChange = (langKey: keyof typeof linguas) => setLinguas(prev => ({ ...prev, [langKey]: !prev[langKey] }));
-  const getLinguasString = () => Object.entries(linguas).filter(([_, v]) => v).map(([k]) => k.toUpperCase()).join(", ");
-  const handleFaixasChange = (key: keyof typeof faixasSelecionadas) => { setFaixasSelecionadas(prev => ({ ...prev, [key]: !prev[key] })); };
-  
-  const construirStringIdades = () => {
-    const lista = [];
-    if (faixasSelecionadas.ca6_9) lista.push("6-9 anos");
-    if (faixasSelecionadas.ca10_13) lista.push("10-13 anos");
-    if (faixasSelecionadas.ca14_17) lista.push("14-17 anos");
-    if (faixasSelecionadas.outra && idadeManual.trim()) lista.push(idadeManual.trim());
-    return lista.join(", ");
-  };
-
-  const buscarNoMapaManual = async () => {
-    if (formData.local.length < 3) return;
-    try {
-      const queryStr = pais === "Portugal" && formData.Distrito ? `${formData.local}, ${formData.Distrito}, ${pais}` : `${formData.local}, ${pais}`;
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}`);
-      const data = await res.json();
-      if (data && data.length > 0) setMapPreview({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) });
-    } catch (e) { console.error(e); }
-    setAddressSuggestions([]);
-  };
-
-  useEffect(() => {
-    const delayDebounce = setTimeout(async () => {
-      if (formData.local.length > 4 && !mapPreview) {
-        try {
-          const queryStr = pais === "Portugal" && formData.Distrito ? `${formData.local}, ${formData.Distrito}, ${pais}` : `${formData.local}, ${pais}`;
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}&limit=5`);
-          const data = await res.json();
-          setAddressSuggestions(data || []);
-        } catch (e) { console.error(e); }
-      } else { setAddressSuggestions([]); }
-    }, 600);
-    return () => clearTimeout(delayDebounce);
-  }, [formData.local, formData.Distrito, pais]);
-
-  // ==========================================
-  // HANDLERS MOTOR DE BLOCOS
-  // ==========================================
-  const handleAddBloco = () => setBlocos([...blocos, { id: Date.now(), nome: "", data_inicio: "", data_fim: "", vagas: 20, excluir_fins_semana: true, opcoes: [{ id: Date.now() + 1, tipo_venda: "pacote", horario: "Dia Completo", preco: 0 }] }]);
-  const handleRemoveBloco = (idBloco: number) => setBlocos(blocos.filter(b => b.id !== idBloco));
-  const handleBlocoChange = (idBloco: number, field: keyof BlocoDatas, value: any) => setBlocos(blocos.map(b => b.id === idBloco ? { ...b, [field]: value } : b));
-  const handleAddOpcao = (idBloco: number) => setBlocos(blocos.map(b => b.id === idBloco ? { ...b, opcoes: [...b.opcoes, { id: Date.now(), tipo_venda: "pacote", horario: "Dia Completo", preco: 0 }] } : b));
-  const handleRemoveOpcao = (idBloco: number, idOpcao: number) => setBlocos(blocos.map(b => b.id === idBloco ? { ...b, opcoes: b.opcoes.filter(o => o.id !== idOpcao) } : b));
-  const handleOpcaoChange = (idBloco: number, idOpcao: number, field: keyof OpcaoVenda, value: any) => setBlocos(blocos.map(b => b.id === idBloco ? { ...b, opcoes: b.opcoes.map(o => o.id === idOpcao ? { ...o, [field]: value } : o) } : b));
-
-  // ==========================================
-  // HANDLERS PERGUNTAS
-  // ==========================================
-  const handleAddPergunta = () => setPerguntasCustomizadas([...perguntasCustomizadas, ""]);
-  const handleRemovePergunta = (index: number) => setPerguntasCustomizadas(perguntasCustomizadas.filter((_, i) => i !== index));
-  const handlePerguntaChange = (index: number, val: string) => {
-    const novas = [...perguntasCustomizadas]; novas[index] = val; setPerguntasCustomizadas(novas);
-  };
-  const adicionarPerguntaSugerida = (pergunta: string) => { 
-    if (!perguntasCustomizadas.includes(pergunta)) setPerguntasCustomizadas([...perguntasCustomizadas, pergunta]); 
-  };
-  const sugestoesAtuais = formData.categoria ? PERGUNTAS_SUGERIDAS[formData.categoria as keyof typeof PERGUNTAS_SUGERIDAS] || [] : [];
-
-  // ==========================================
-  // SUBMIT (AUTO-SAVE E MANUAL)
-  // ==========================================
-  const handleUpdate = async (e?: React.FormEvent, isAutoSave = false) => {
-    if (e) e.preventDefault();
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
     
-    const stringIdadesCompleta = construirStringIdades();
+    const novasImagens: GaleriaUpload[] = files.map((file, index) => ({
+      id: Math.random().toString(36).substring(2, 9),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      isCapa: galeria.length === 0 && index === 0
+    }));
 
-    if (!mapPreview || images.length === 0 || !stringIdadesCompleta) {
-      if (!isAutoSave) {
-        if (!mapPreview) alert(isEn ? "Ensure the map is loaded." : "Garanta que o mapa carregou.");
-        else if (images.length === 0) alert(isEn ? "Select a photo." : "Adicione uma fotografia.");
-        else alert(isEn ? "Select or enter an age range." : "Selecione ou digite uma faixa etária.");
-      } else { setAutoSaveStatus('error'); }
-      return;
+    setGaleria(prev => [...prev, ...novasImagens]);
+  };
+
+  const setComoCapa = (id: string) => {
+    setGaleria(galeria.map(img => ({ ...img, isCapa: img.id === id })));
+  };
+
+  const removerImagem = (id: string) => {
+    const novaGaleria = galeria.filter(img => img.id !== id);
+    if (novaGaleria.length > 0 && !novaGaleria.some(img => img.isCapa)) {
+      novaGaleria[0].isCapa = true;
     }
+    setGaleria(novaGaleria);
+  };
 
-    // Validação Blocos
-    for (const b of blocos) {
-      if (b.opcoes.length === 0) { 
-        if (!isAutoSave) alert(`Adicione opções de compra ao bloco "${b.nome}".`);
-        return; 
-      }
-    }
+  const toggleDiaSemana = (diaId: number) => {
+    const dias = formData.calendario_funcionamento.dias_semana.includes(diaId)
+      ? formData.calendario_funcionamento.dias_semana.filter((d: number) => d !== diaId)
+      : [...formData.calendario_funcionamento.dias_semana, diaId].sort();
+    setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, dias_semana: dias } });
+  };
 
-    if (!isAutoSave) setSaving(true);
-    else setAutoSaveStatus('saving');
+  const atualizarVariante = (index: number, campo: 'nome' | 'preco', valor: string | number) => {
+    const novasVariantes = [...novoPacote.variantes];
+    novasVariantes[index] = { ...novasVariantes[index], [campo]: valor } as Variante;
+    setNovoPacote({ ...novoPacote, variantes: novasVariantes });
+  };
 
+  const adicionarVariante = () => {
+    setNovoPacote(prev => ({
+      ...prev,
+      variantes: [...prev.variantes, { nome: "", preco: 0 }]
+    }));
+  };
+
+  const removerVariante = (index: number) => {
+    setNovoPacote(prev => ({
+      ...prev,
+      variantes: prev.variantes.filter((_, i) => i !== index)
+    }));
+  };
+
+  const guardarPacote = () => {
+    if (!novoPacote.titulo || novoPacote.variantes.length === 0) return alert("Preencha o título e pelo menos 1 preço.");
+    const pacoteFinal: Pacote = { ...novoPacote, id: novoPacote.id || Math.random().toString(36).substring(2, 9) };
+    const novosPacotes = novoPacote.id ? formData.pacotes.map((p: Pacote) => p.id === novoPacote.id ? pacoteFinal : p) : [...formData.pacotes, pacoteFinal];
+    setFormData({ ...formData, pacotes: novosPacotes });
+    setIsPacoteModalOpen(false);
+    setNovoPacote({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
+  };
+
+  const eliminarPacote = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      pacotes: prev.pacotes.filter(p => p.id !== id)
+    }));
+  };
+
+  const guardarDesconto = () => {
+    if (!novoDesconto.nome || novoDesconto.percentagem <= 0) return alert("Preencha o nome e um valor superior a 0.");
+    const descontoFinal = { ...novoDesconto, id: novoDesconto.id || Math.random().toString(36).substring(2, 9) };
+    const novosDescontos = novoDesconto.id ? formData.descontos.map((d: Desconto) => d.id === novoDesconto.id ? descontoFinal : d) : [...formData.descontos, descontoFinal];
+    setFormData({ ...formData, descontos: novosDescontos });
+    setIsDescontoModalOpen(false);
+    setNovoDesconto({ id: "", nome: "", percentagem: 10, acumulavel: false });
+  };
+
+  const addPergunta = () => {
+    setFormData(prev => ({
+      ...prev,
+      perguntas: [...prev.perguntas, ""]
+    }));
+  };
+
+  const removePergunta = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      perguntas: prev.perguntas.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updatePergunta = (index: number, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      perguntas: prev.perguntas.map((p, i) => i === index ? value : p)
+    }));
+  };
+
+  // ==========================================
+  // 5. GUARDAR ALTERAÇÕES (UPDATE)
+  // ==========================================
+  const handleGravarCampo = async () => {
+    if (!formData.nome || !formData.local || !formData.descricao) return alert("Preencha o nome, local e descrição.");
+    if (formData.pacotes.length === 0) return alert("Crie pelo menos 1 pacote de preços no Passo 2.");
+    if (galeria.length === 0) return alert("Adicione pelo menos 1 fotografia ao campo.");
+
+    setSaving(true);
     try {
-      // 1. Imagens e Documentos
-      let mainImageUrl: string = formData.imagem;
-      let galeriaUrls: string[] = formData.galeria || [];
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada");
 
-      if (!isAutoSave) {
-        setStatusText(isEn ? "Processing images..." : "A processar fotografias...");
-        const uploadedImages = await Promise.all(images.map(async (img) => {
-          if (!img.file) return { url: img.url || "", isMain: img.isMain };
-          const compressedFile = await imageCompression(img.file, { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true });
-          const fileName = `${Date.now()}-${sanitizeFileName(compressedFile.name)}`;
-          const { error } = await supabase.storage.from('campos-imagens').upload(fileName, compressedFile);
-          if (error) throw error;
-          const { data: publicUrlData } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
-          return { url: publicUrlData.publicUrl, isMain: img.isMain };
-        }));
+      // 1. Upload de novas imagens (as que têm file)
+      const uploadedUrls: string[] = [];
+      let capaUrl = "";
 
-        mainImageUrl = uploadedImages.find(i => i.isMain)?.url || uploadedImages[0]?.url || "";
-        galeriaUrls = uploadedImages.filter(i => !i.isMain).map(i => i.url || "").filter(url => url !== "");
+      for (const img of galeria) {
+        if (img.file) {
+          // É uma imagem nova (upload)
+          const fileExt = img.file.name.split('.').pop();
+          const fileName = `${session.user.id}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('campos-imagens')
+            .upload(fileName, img.file);
+
+          if (uploadError) throw new Error(`Erro ao enviar foto: ${uploadError.message}`);
+          
+          const { data: { publicUrl } } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
+          uploadedUrls.push(publicUrl);
+          if (img.isCapa) capaUrl = publicUrl;
+        } else {
+          // Já é uma URL existente (não foi alterada)
+          uploadedUrls.push(img.previewUrl);
+          if (img.isCapa) capaUrl = img.previewUrl;
+        }
       }
 
-      const novosDocs = await Promise.all(documentos.map(async (doc) => {
-        const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`;
-        const { error } = await supabase.storage.from('campos-documentos').upload(fileName, doc);
-        if (error) throw error;
-        const { data: publicUrlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
-        return { nome: doc.name, url: publicUrlData.publicUrl };
-      }));
+      if (!capaUrl && uploadedUrls.length > 0) capaUrl = uploadedUrls[0];
 
-      const programasDocsFinais = [...documentosExistentes, ...novosDocs];
-      if (novosDocs.length > 0) { setDocumentosExistentes(programasDocsFinais); setDocumentos([]); }
+      const perguntasLimpas = formData.perguntas.filter(p => p.trim() !== "");
 
-      // 2. Motor Gerador de Turnos (Matriz BD)
-      const turnosFinaisPT: any[] = [];
-      const turnosFinaisEN: any[] = [];
-      let precoMaisBaixo = Infinity;
-
-      blocos.forEach(bloco => {
-        bloco.opcoes.forEach(opcao => {
-          if (opcao.preco <= 0) return;
-
-          let horarioEN = opcao.horario;
-          if (opcao.horario === "Dia Completo") horarioEN = "Full Day";
-          if (opcao.horario === "Só Manhã") horarioEN = "Morning Only";
-          if (opcao.horario === "Só Tarde") horarioEN = "Afternoon Only";
-
-          if (opcao.tipo_venda === "pacote") {
-            turnosFinaisPT.push({ nome: `${bloco.nome} (${opcao.horario})`, data_inicio: bloco.data_inicio, data_fim: bloco.data_fim, preco: opcao.preco, vagas: bloco.vagas });
-            turnosFinaisEN.push({ nome: `${bloco.nome} (${horarioEN})`, data_inicio: bloco.data_inicio, data_fim: bloco.data_fim, preco: opcao.preco, vagas: bloco.vagas });
-            if (opcao.preco < precoMaisBaixo) precoMaisBaixo = opcao.preco;
-          } 
-          else if (opcao.tipo_venda === "dias_soltos") {
-            const currentDate = new Date(bloco.data_inicio + "T12:00:00Z");
-            const endDate = new Date(bloco.data_fim + "T12:00:00Z");
-
-            while (currentDate <= endDate) {
-              const dayOfWeek = currentDate.getUTCDay(); 
-              if (bloco.excluir_fins_semana && (dayOfWeek === 0 || dayOfWeek === 6)) {
-                currentDate.setUTCDate(currentDate.getUTCDate() + 1); continue;
-              }
-
-              const dateString = currentDate.toISOString().split('T')[0];
-              const [, mm, dd] = dateString.split('-');
-              
-              turnosFinaisPT.push({ nome: `${bloco.nome} - Dia ${dd}/${mm} (${opcao.horario})`, data_inicio: dateString, data_fim: dateString, preco: opcao.preco, vagas: bloco.vagas });
-              turnosFinaisEN.push({ nome: `${bloco.nome} - Day ${dd}/${mm} (${horarioEN})`, data_inicio: dateString, data_fim: dateString, preco: opcao.preco, vagas: bloco.vagas });
-              
-              if (opcao.preco < precoMaisBaixo) precoMaisBaixo = opcao.preco;
-              currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-            }
-          }
-        });
-      });
-
-      if (precoMaisBaixo === Infinity || precoMaisBaixo === 0) precoMaisBaixo = blocos[0]?.opcoes[0]?.preco || 0;
-
-      // 3. Atualização BD
-      const linguasFinais = getLinguasString();
-      const perguntasValidas = perguntasCustomizadas.filter(p => p.trim() !== "");
-
-      const formatarDataStr = (d: string) => d ? new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) : '';
-      const textoDatas = blocos.map(b => `${formatarDataStr(b.data_inicio)} a ${formatarDataStr(b.data_fim)}`).join(", ");
-      const totalVagasCalculado = blocos.reduce((acc, curr) => acc + (Number(curr.vagas) || 0), 0);
-
-      const formPayload: Record<string, any> = { ...formData };
-      delete formPayload.contrato_parceiro_url; // Remover chaves extras desnecessárias
-
-      const { error } = await supabase.from("campos").update({
-        ...formPayload,
-        idade: stringIdadesCompleta,
-        vagas_totais: totalVagasCalculado,
-        preco: precoMaisBaixo,                      
-        datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatas,     
-        pais, pais_en: pais, 
-        linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais,
-        imagem: mainImageUrl, galeria: galeriaUrls,
-        programas_pdf: programasDocsFinais, 
-        latitude: mapPreview.lat, longitude: mapPreview.lon,
-        turnos: turnosFinaisPT, turnos_en: turnosFinaisEN, 
-        perguntas_customizadas: perguntasValidas, perguntas_customizadas_en: perguntasValidas
+      // 2. Atualizar registo
+      const { error } = await supabase.from('campos').update({
+        nome: formData.nome,
+        nome_en: formData.nome,
+        local: formData.local,
+        local_en: formData.local,
+        idade_min: formData.idade_min,
+        idade_max: formData.idade_max,
+        vagas_totais: formData.vagas_totais,
+        categoria: formData.categoria,
+        politica_cancelamento: formData.politica_cancelamento,
+        descricao: formData.descricao,
+        imagem: capaUrl,
+        galeria: uploadedUrls,
+        perguntas_customizadas: perguntasLimpas,
+        calendario_funcionamento: formData.calendario_funcionamento,
+        pacotes: formData.pacotes,
+        descontos: formData.descontos,
+        status_aprovacao: 'Pendente' // ou manter o existente? Vamos manter Pendente para reavaliação
       }).eq('id', id);
 
       if (error) throw error;
-      
-      if (!isAutoSave) {
-        fetch(`/api/translate-camp`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).catch(() => {});
-        alert(isEn ? "Camp updated successfully!" : "Campo atualizado com sucesso!");
-        router.push(`/${lang}/admin/campos`);
-      } else { 
-        setAutoSaveStatus('saved'); 
-      }
-    } catch (error: any) { 
-      if (!isAutoSave) alert("Erro: " + error.message); 
-      else setAutoSaveStatus('error');
-    } finally { 
-      if (!isAutoSave) { setSaving(false); setStatusText(""); }
+
+      alert(isEn ? "Camp updated successfully! It's under review." : "Campo atualizado com sucesso! Foi enviado para revisão.");
+      router.push(`/${lang}/admin/campos`);
+
+    } catch (err: any) {
+      alert("Erro ao atualizar campo: " + err.message);
     }
+    setSaving(false);
   };
 
-  useEffect(() => {
-    if (loading) return; 
-    if (isFirstRender.current) { isFirstRender.current = false; return; }
-    setAutoSaveStatus('pending');
-    const timer = setTimeout(() => { handleUpdate(undefined, true); }, 5000);
-    return () => clearTimeout(timer);
-  }, [formData.nome, formData.categoria, formData.local, formData.Distrito, formData.descricao, formData.regras_termos, blocos, linguas, faixasSelecionadas, mapPreview, pais, idadeManual, perguntasCustomizadas, formData.tipo_pagamento]);
+  const nextStep = () => {
+    if (step === 1 && (!formData.nome || !formData.local || !formData.categoria)) return alert("Preencha os campos obrigatórios (*) antes de avançar.");
+    if (step === 2 && (!formData.calendario_funcionamento.data_inicio || !formData.calendario_funcionamento.data_fim)) return alert("Defina o calendário global do campo.");
+    setStep(step + 1); window.scrollTo(0, 0);
+  };
+  const prevStep = () => { setStep(step - 1); window.scrollTo(0, 0); };
 
-  if (loading) return <div style={{ padding: '4rem', textAlign: 'center' }}>{isEn ? 'Loading...' : 'A carregar dados do campo...'}</div>;
+  const getCatName = (id: string) => {
+    const cat = CATEGORIAS.find(c => c.id === id);
+    return cat ? (isEn ? `${cat.icon} ${cat.en}` : `${cat.icon} ${cat.pt}`) : (isEn ? 'Select Category' : 'Escolha a Categoria');
+  };
 
+  if (loading) {
+    return <div className="text-center p-8 text-slate-500">A carregar...</div>;
+  }
+
+  // ==========================================
+  // 6. RENDER (MESMA ESTRUTURA DO NOVO CAMPO)
+  // ==========================================
   return (
-    <main style={{ maxWidth: '850px', margin: '0 auto', padding: '2rem 1rem', fontFamily: 'sans-serif' }}>
+    <div className="max-w-[1000px] mx-auto p-4 md:p-8 font-sans pb-24">
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <Link href={`/${lang}/admin/campos`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: '#64748b', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', backgroundColor: 'white', padding: '0.5rem 1rem', borderRadius: '999px', border: '1px solid #e2e8f0' }}>
-          &larr; Voltar
-        </Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {autoSaveStatus === 'pending' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#f59e0b' }}>✎ Alterações por guardar...</span>}
-          {autoSaveStatus === 'saving' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#3b82f6' }}>⏳ A gravar automaticamente...</span>}
-          {autoSaveStatus === 'saved' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>✓ Guardado</span>}
-          {autoSaveStatus === 'error' && <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ef4444' }}>⚠ Erro ao gravar</span>}
-          <a href={`/${lang}/campo/${id}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#0f172a', color: 'white', padding: '0.5rem 1.25rem', borderRadius: '999px', fontWeight: 'bold', textDecoration: 'none', fontSize: '13px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-            Ver Online
-          </a>
+      {/* HEADER & PROGRESS BAR */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Edit Camp' : 'Editar Campo'}</h1>
+        <div className="flex items-center gap-2 mt-6">
+          {[1, 2, 3].map((num) => (
+            <div key={num} className="flex-1 flex flex-col gap-2">
+              <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-indigo-700' : 'text-slate-400'}`}>
+                {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual'}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
-      <h1 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem', color: '#0f172a' }}>Editar Campo</h1>
-
-      <form onSubmit={(e) => handleUpdate(e, false)} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 md:p-10 mb-8 relative overflow-hidden transition-all duration-300">
         
-        {/* 1. INFO BÁSICA */}
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>1. Conceito e Apresentação</h2>
-          <div style={gridStyle}>
-            <div>
-              <label style={labelStyle}>Nome do Campo</label>
-              <input type="text" required value={formData.nome || ''} onChange={e => setFormData({...formData, nome: e.target.value})} style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Categoria Principal</label>
-              <select required value={formData.categoria || ''} onChange={e => setFormData({...formData, categoria: e.target.value})} style={selectStyle}>
-                <option value="">Selecione...</option><option value="Desporto">Desporto</option><option value="Aventura & Natureza">Aventura & Natureza</option><option value="Tecnologia & Ciência">Tecnologia & Ciência</option><option value="Artes & Criatividade">Artes & Criatividade</option><option value="Línguas">Línguas</option>
-              </select>
-            </div>
+        {/* ========================================== */}
+        {/* PASSO 1: DADOS BÁSICOS, LOCAL E MAPA */}
+        {/* ========================================== */}
+        {step === 1 && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+            <h2 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-2"><span>🎯</span> {isEn ? 'Basic Details' : 'Informações do Programa'}</h2>
             
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Público Alvo (Faixas Etárias)</label>
-              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', marginTop: '0.5rem', marginBottom: '1rem' }}>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca6_9} onChange={() => handleFaixasChange('ca6_9')} /> 6-9 anos</label>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca10_13} onChange={() => handleFaixasChange('ca10_13')} /> 10-13 anos</label>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.ca14_17} onChange={() => handleFaixasChange('ca14_17')} /> 14-17 anos</label>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={faixasSelecionadas.outra} onChange={() => handleFaixasChange('outra')} /> Outra</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Nome do Campo *</label>
+                <input type="text" required placeholder="Ex: Surf Camp de Verão Caparica" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors" />
               </div>
-              {faixasSelecionadas.outra && (
-                <input type="text" required={faixasSelecionadas.outra} value={idadeManual} onChange={e => setIdadeManual(e.target.value)} placeholder="Ex: 8-15 anos" style={{...inputStyle, maxWidth: '300px'}} />
-              )}
-            </div>
-
-            <div style={{ gridColumn: '1 / -1', height: '1px', backgroundColor: '#e2e8f0', margin: '1rem 0' }}></div>
-
-            <div>
-              <label style={labelStyle}>País</label>
-              <select required value={pais} onChange={e => { setPais(e.target.value); setMapPreview(null); if(e.target.value !== "Portugal") setFormData({...formData, Distrito: ""}); }} style={selectStyle}>
-                {paises.map(p => <option key={p.pt} value={p.pt}>{p.pt}</option>)}
-              </select>
-            </div>
-            {pais === "Portugal" && (
-              <div>
-                <label style={labelStyle}>Distrito</label>
-                <select required value={formData.Distrito || ''} onChange={e => { setFormData({...formData, Distrito: e.target.value}); setMapPreview(null); }} style={selectStyle}>
-                  <option value="">Selecione...</option>
-                  {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-            )}
-            <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
-              <label style={labelStyle}>Morada Específica (Prima Enter para Validar)</label>
-              <input type="text" required value={formData.local || ''} onChange={e => { setFormData({...formData, local: e.target.value}); setMapPreview(null); }} onBlur={buscarNoMapaManual} onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); buscarNoMapaManual(); } }} style={inputStyle} />
               
-              {addressSuggestions.length > 0 && !mapPreview && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '0.25rem', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxHeight: '200px', overflowY: 'auto' }}>
-                  {addressSuggestions.map((sugestao, index) => (
-                    <div key={index} onClick={() => { setFormData({ ...formData, local: sugestao.display_name }); setMapPreview({ lat: parseFloat(sugestao.lat), lon: parseFloat(sugestao.lon) }); setAddressSuggestions([]); }} style={{ padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: index !== addressSuggestions.length -1 ? '1px solid #f1f5f9' : 'none', fontSize: '13px', color: '#334155' }}>
-                      {sugestao.display_name}
-                    </div>
-                  ))}
+              {/* DROPDOWN CUSTOMIZADO: CATEGORIA */}
+              <div className="relative">
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Categoria Temática *</label>
+                <div onClick={() => setIsCatDropdownOpen(!isCatDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                  <span>{getCatName(formData.categoria)}</span>
+                  <span className="text-[10px] text-slate-400">▼</span>
                 </div>
-              )}
-            </div>
-          </div>
-          {mapPreview && (
-            <div style={{ marginTop: '1.5rem', borderRadius: '0.75rem', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-              <iframe width="100%" height="250" frameBorder="0" scrolling="no" src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapPreview.lon-0.005},${mapPreview.lat-0.005},${mapPreview.lon+0.005},${mapPreview.lat+0.005}&layer=mapnik&marker=${mapPreview.lat},${mapPreview.lon}`}></iframe>
-            </div>
-          )}
-        </div>
-
-        {/* 2. MOTOR DE BLOCOS E OPÇÕES */}
-        <div style={sectionStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-            <div>
-              <h2 style={sectionTitleStyle}>2. Calendário e Bilhetes</h2>
-              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '-1.5rem' }}>Edite os blocos de datas e as modalidades de venda.</p>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Duração Base Global (Dias)</label>
-              <input type="number" required value={formData.duracao_dias || 0} onChange={e => setFormData({...formData, duracao_dias: Number(e.target.value)})} style={inputStyle} />
-            </div>
-          </div>
-
-          {blocos.map((bloco) => (
-            <div key={bloco.id} style={{ backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '1rem', padding: '1.5rem', marginBottom: '2rem' }}>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', margin: 0 }}>📅 Configuração de Datas</h3>
-                {blocos.length > 1 && (
-                  <button type="button" onClick={() => handleRemoveBloco(bloco.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>Excluir Bloco</button>
+                {isCatDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsCatDropdownOpen(false)}></div>
+                    <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      {CATEGORIAS.map(cat => (
+                        <div key={cat.id} onClick={() => handleSelectCategoria(cat.id)} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors flex items-center gap-2">
+                          <span className="text-lg">{cat.icon}</span> {isEn ? cat.en : cat.pt}
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div style={{ flex: '1 1 200px' }}><label style={labelStyle}>Nome do Bloco</label><input type="text" required value={bloco.nome} onChange={e => handleBlocoChange(bloco.id, 'nome', e.target.value)} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 120px' }}><label style={labelStyle}>Data Início</label><input type="date" required value={bloco.data_inicio} onChange={e => handleBlocoChange(bloco.id, 'data_inicio', e.target.value)} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 120px' }}><label style={labelStyle}>Data Fim</label><input type="date" required value={bloco.data_fim} onChange={e => handleBlocoChange(bloco.id, 'data_fim', e.target.value)} style={inputStyle} /></div>
-                <div style={{ width: '90px' }}><label style={labelStyle}>Vagas</label><input type="number" required value={bloco.vagas} onChange={e => handleBlocoChange(bloco.id, 'vagas', Number(e.target.value))} style={inputStyle} /></div>
-              </div>
-
-              <div style={{ marginBottom: '2rem' }}>
-                <label style={checkboxLabelStyle}>
-                  <input type="checkbox" checked={bloco.excluir_fins_semana} onChange={e => handleBlocoChange(bloco.id, 'excluir_fins_semana', e.target.checked)} />
-                  Ocultar Sábados e Domingos neste bloco
-                </label>
-              </div>
-
-              <div style={{ backgroundColor: 'white', borderRadius: '0.75rem', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                <div style={{ backgroundColor: '#f1f5f9', padding: '1rem', borderBottom: '1px solid #e2e8f0' }}>
-                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🎟️ Vagas à Venda nestas Datas</span>
+              {/* DROPDOWN CUSTOMIZADO: POLÍTICA */}
+              <div className="relative">
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Política de Cancelamento</label>
+                <div onClick={() => setIsPolDropdownOpen(!isPolDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                  <span className="truncate">{formData.politica_cancelamento}</span>
+                  <span className="text-[10px] text-slate-400">▼</span>
                 </div>
+                {isPolDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsPolDropdownOpen(false)}></div>
+                    <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      {["Flexível (100% até 7 dias)", "Moderada (50% até 15 dias)", "Estrita (Sem reembolso)"].map((pol, i) => (
+                        <div key={i} onClick={() => { setFormData({...formData, politica_cancelamento: pol}); setIsPolDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                          {pol}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Idade Min.</label>
+                  <input type="number" min="3" value={formData.idade_min} onChange={e => setFormData({...formData, idade_min: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-center text-indigo-700 outline-none focus:border-indigo-500 focus:bg-white" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Idade Max.</label>
+                  <input type="number" min="3" value={formData.idade_max} onChange={e => setFormData({...formData, idade_max: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-center text-indigo-700 outline-none focus:border-indigo-500 focus:bg-white" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Lotação Máxima Geral</label>
+                <input type="number" placeholder="Ex: 50" value={formData.vagas_totais} onChange={e => setFormData({...formData, vagas_totais: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white" />
+              </div>
+
+              {/* LOCATION & MAP PREVIEW */}
+              <div className="md:col-span-2 border-t border-slate-100 pt-8 mt-2">
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Localização (Morada Completa) *</label>
+                <input type="text" required placeholder="Ex: Praia da Caparica, Rua X, Setúbal" value={formData.local} onChange={e => setFormData({...formData, local: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors mb-4" />
                 
-                <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {bloco.opcoes.map((opcao) => (
-                    <div key={opcao.id} style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'flex-end', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
-                      <div style={{ flex: '1 1 200px' }}>
-                        <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '6px' }}>O QUE VAI VENDER?</label>
-                        <select value={opcao.tipo_venda} onChange={e => handleOpcaoChange(bloco.id, opcao.id, 'tipo_venda', e.target.value)} style={{ ...selectStyle, padding: '0.75rem 1rem' }}>
-                          <option value="pacote">O período todo completo (Pacote)</option>
-                          <option value="dias_soltos">Dias isolados / Avulso</option>
-                        </select>
+                <div className="w-full h-48 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative flex items-center justify-center">
+                  {!formData.local ? (
+                    <span className="text-sm font-bold text-slate-400">O mapa atualizará quando escrever a morada...</span>
+                  ) : (
+                    <iframe 
+                      width="100%" 
+                      height="100%" 
+                      style={{ border: 0 }} 
+                      loading="lazy" 
+                      allowFullScreen 
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(formData.local)}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
+                    ></iframe>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* ========================================== */}
+        {/* PASSO 2: O MOTOR DE PREÇOS INTELIGENTE */}
+        {/* ========================================== */}
+        {step === 2 && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+            
+            <div className="mb-10">
+              <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>📅</span> {isEn ? 'Operation Calendar' : '1. Calendário de Portas Abertas'} *</h2>
+              <p className="text-xs text-slate-500 mb-6">{isEn ? 'When does the camp run?' : 'Defina os limites globais do campo. O pai só poderá escolher datas dentro deste período.'}</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Data de Abertura</label>
+                  <input type="date" value={formData.calendario_funcionamento.data_inicio} onChange={e => setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, data_inicio: e.target.value}})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-indigo-500 focus:bg-white" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Data de Encerramento</label>
+                  <input type="date" value={formData.calendario_funcionamento.data_fim} onChange={e => setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, data_fim: e.target.value}})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-indigo-500 focus:bg-white" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Dias da Semana Ativos</label>
+                <div className="flex flex-wrap gap-2">
+                  {DIAS_SEMANA.map(dia => {
+                    const isActive = formData.calendario_funcionamento.dias_semana.includes(dia.id);
+                    return (
+                      <button type="button" key={dia.id} onClick={() => toggleDiaSemana(dia.id)} className={`w-12 h-12 rounded-xl text-xs font-black transition-all ${isActive ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-slate-50 text-slate-400 border border-slate-200 hover:border-indigo-300'}`}>
+                        {isEn ? dia.en : dia.pt}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-10 pt-8 border-t border-slate-100">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>🎟️</span> {isEn ? 'Packages / Passes' : '2. Pacotes e Preços'} *</h2>
+                  <p className="text-xs text-slate-500 max-w-sm">{isEn ? 'Create the packages parents will buy.' : 'Crie os Passes que o pai pode comprar no checkout.'}</p>
+                </div>
+                <button type="button" onClick={() => setIsPacoteModalOpen(true)} className="bg-slate-900 text-white font-bold text-xs px-5 py-3 rounded-xl shadow-sm hover:bg-indigo-600 transition-colors whitespace-nowrap">
+                  + {isEn ? 'Add Package' : 'Novo Pacote'}
+                </button>
+              </div>
+
+              {formData.pacotes.length === 0 ? (
+                <div className="text-center p-8 bg-blue-50/50 border border-blue-100 rounded-2xl">
+                  <span className="text-3xl block mb-2 opacity-50">🏷️</span>
+                  <p className="text-xs font-bold text-blue-800 m-0">A sua montra está vazia. Adicione o seu primeiro passe de venda.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {formData.pacotes.map((pacote, idx) => (
+                    <div key={idx} className="bg-white border-2 border-slate-100 rounded-2xl p-5 relative group hover:border-indigo-200 transition-colors shadow-sm">
+                      <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button type="button" onClick={() => { setNovoPacote(pacote); setIsPacoteModalOpen(true); }} className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs hover:bg-blue-100">✏️</button>
+                        <button type="button" onClick={() => eliminarPacote(pacote.id)} className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center font-bold text-xs hover:bg-red-100">🗑️</button>
                       </div>
-                      <div style={{ flex: '1 1 150px' }}>
-                        <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '6px' }}>HORÁRIO DO BILHETE</label>
-                        <select value={opcao.horario} onChange={e => handleOpcaoChange(bloco.id, opcao.id, 'horario', e.target.value)} style={{ ...selectStyle, padding: '0.75rem 1rem' }}>
-                          <option value="Dia Completo">Dia Completo</option>
-                          <option value="Só Manhã">Só Manhã</option>
-                          <option value="Só Tarde">Só Tarde</option>
-                        </select>
+                      <div className="inline-block px-2 py-1 bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded mb-2">
+                        {pacote.tipo === 'semana' ? `${pacote.quantidade} Semana(s)` : `${pacote.quantidade} Dia(s)`}
                       </div>
-                      <div style={{ width: '130px' }}>
-                        <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '6px' }}>{opcao.tipo_venda === 'pacote' ? 'PREÇO TOTAL (€)' : 'PREÇO/DIA (€)'}</label>
-                        <input type="number" required value={opcao.preco} onChange={e => handleOpcaoChange(bloco.id, opcao.id, 'preco', Number(e.target.value))} style={{ ...inputStyle, padding: '0.75rem 1rem' }} />
+                      <h3 className="text-base font-black text-slate-900 leading-tight mb-3">{pacote.titulo}</h3>
+                      <div className="space-y-1.5">
+                        {pacote.variantes.map((v: any, i: number) => (
+                          <div key={i} className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                            <span className="text-[11px] font-bold text-slate-600">{v.nome}</span>
+                            <span className="text-sm font-black text-indigo-700">{v.preco}€</span>
+                          </div>
+                        ))}
                       </div>
-                      {bloco.opcoes.length > 1 && (
-                        <button type="button" onClick={() => handleRemoveOpcao(bloco.id, opcao.id)} style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* DESCONTOS MÚLTIPLOS E ACUMULÁVEIS */}
+            <div className="pt-8 border-t border-slate-100">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>✨</span> {isEn ? 'Discounts' : '3. Regras de Desconto'}</h2>
+                  <p className="text-xs text-slate-500">{isEn ? 'Create automated cart discounts.' : 'Crie as regras de negócio para quem compra em volume ou traz irmãos.'}</p>
+                </div>
+                <button type="button" onClick={() => setIsDescontoModalOpen(true)} className="bg-indigo-50 text-indigo-700 font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-indigo-100 transition-colors">
+                  + Novo Desconto
+                </button>
+              </div>
+
+              {formData.descontos.length === 0 ? (
+                <p className="text-xs font-bold text-slate-400 bg-slate-50 p-4 rounded-xl text-center border border-dashed border-slate-200">Não configurou nenhum desconto.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {formData.descontos.map((desc) => (
+                    <div key={desc.id} className="flex items-center justify-between bg-white border-2 border-slate-100 p-4 rounded-2xl group">
+                       <div>
+                         <p className="text-sm font-black text-slate-800 m-0">{desc.nome}</p>
+                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                           {desc.percentagem}% • {desc.acumulavel ? 'Acumulável ✅' : 'Não Acumulável 🚫'}
+                         </p>
+                       </div>
+                       <button type="button" onClick={() => setFormData({...formData, descontos: formData.descontos.filter(d => d.id !== desc.id)})} className="w-8 h-8 rounded-full bg-red-50 text-red-500 font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100">&times;</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* ========================================== */}
+        {/* PASSO 3: DESCRIÇÃO, GALERIA E PERGUNTAS */}
+        {/* ========================================== */}
+        {step === 3 && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+            
+            <div className="mb-10">
+              <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><span>📸</span> {isEn ? 'Media & Forms' : '1. Apresentação e Galeria'}</h2>
+              
+              <div className="mb-6">
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição Longa *</label>
+                <textarea rows={5} placeholder="Descreva as atividades, os horários, e o que as crianças vão aprender..." value={formData.descricao} onChange={e => setFormData({...formData, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:bg-white resize-none leading-relaxed transition-colors" />
+              </div>
+
+              {/* UPLOAD DE IMAGENS DO DISPOSITIVO */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-800 uppercase tracking-widest m-0">Galeria de Fotografias *</label>
+                    <p className="text-[10px] text-slate-500 m-0 mt-1">Adicione fotos fantásticas. A imagem assinalada com ⭐ será a Capa do Campo.</p>
+                  </div>
+                  {/* Botão Falso de Upload (esconde o input real) */}
+                  <label className="bg-indigo-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer hover:bg-indigo-700 transition-colors shadow-sm">
+                    + Escolher Ficheiros
+                    <input type="file" multiple accept="image/*" onChange={handleFileUpload} className="hidden" />
+                  </label>
+                </div>
+
+                {galeria.length === 0 ? (
+                  <div className="text-center p-8 border-2 border-dashed border-slate-300 rounded-xl">
+                    <span className="text-slate-400 text-2xl mb-2 block">📷</span>
+                    <span className="text-xs font-bold text-slate-500">Nenhuma fotografia adicionada.</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {galeria.map((img) => (
+                      <div key={img.id} className={`relative rounded-xl overflow-hidden aspect-square border-4 transition-all group ${img.isCapa ? 'border-indigo-500 shadow-lg' : 'border-transparent'}`}>
+                        <img src={img.previewUrl} className="w-full h-full object-cover" />
+                        
+                        {/* Overlay Dark Hover */}
+                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                          {!img.isCapa && (
+                            <button type="button" onClick={() => setComoCapa(img.id)} className="bg-white text-slate-900 text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm">
+                              Definir Capa ⭐
+                            </button>
+                          )}
+                          <button type="button" onClick={() => removerImagem(img.id)} className="bg-red-500 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm">
+                            Apagar 🗑️
+                          </button>
+                        </div>
+
+                        {/* Badge de Capa */}
+                        {img.isCapa && (
+                          <div className="absolute top-2 left-2 bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">
+                            Capa ⭐
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Formulário Automático do Organizador (Perguntas) */}
+            <div className="pt-8 border-t border-slate-100">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>📋</span> {isEn ? 'Custom Forms' : '2. Perguntas aos Pais'}</h2>
+                  <p className="text-[10px] text-slate-500 m-0 mt-1 max-w-sm">NIF, Alergias e Doenças já são recolhidos. Pode adicionar perguntas específicas para o seu campo.</p>
+                </div>
+                <button type="button" onClick={addPergunta} className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-4 py-2.5 rounded-xl hover:bg-emerald-100 transition-colors">
+                  + Pergunta
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                {formData.perguntas.map((pergunta, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input type="text" placeholder="Ex: Qual o tamanho da T-Shirt do Participante?" value={pergunta} onChange={e => updatePergunta(i, e.target.value)} className="flex-1 p-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 shadow-sm" />
+                    <button type="button" onClick={() => removePergunta(i)} className="w-12 h-12 flex items-center justify-center bg-red-50 text-red-500 rounded-xl hover:bg-red-100 font-bold transition-colors">&times;</button>
+                  </div>
+                ))}
+                {formData.perguntas.length === 0 && (
+                   <div className="p-6 bg-slate-50 rounded-xl text-xs font-bold text-slate-400 text-center border border-dashed border-slate-200">Não exige informações adicionais aos pais no checkout.</div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
+
+      </div>
+
+      {/* BOTÕES DE NAVEGAÇÃO BASE */}
+      <div className="flex justify-between items-center px-2 relative z-10">
+        {step > 1 ? (
+          <button onClick={prevStep} className="px-6 py-3 font-bold text-slate-500 hover:text-slate-800 transition-colors bg-white rounded-xl shadow-sm border border-slate-200">&larr; Voltar atrás</button>
+        ) : <div></div>}
+
+        {step < 3 ? (
+          <button onClick={nextStep} className="bg-slate-900 text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-indigo-600 hover:shadow-indigo-500/30 transition-all">Próximo Passo &rarr;</button>
+        ) : (
+          <button onClick={handleGravarCampo} disabled={saving} className="bg-emerald-600 text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all disabled:opacity-50">
+            {saving ? 'A Atualizar...' : '✓ Atualizar Campo'}
+          </button>
+        )}
+      </div>
+
+      {/* ========================================== */}
+      {/* MODAIS SOBREPOSTOS (IGUAIS AO NOVO CAMPO) */}
+      {/* ========================================== */}
+
+      {/* MODAL PACOTES */}
+      {isPacoteModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-900 text-lg m-0">{novoPacote.id ? 'Editar Pacote' : 'Construir Pacote de Venda'}</h3>
+              <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold flex items-center justify-center">&times;</button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex flex-col gap-6">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">A. Formato Logístico (O que o pai escolhe no calendário?)</label>
+                <div className="flex bg-slate-100 p-1.5 rounded-xl">
+                  <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'semana'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'semana' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semanas Completas</button>
+                  <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'dia'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'dia' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Dias Individuais Avulso</button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">B. Título (Nome do Passe)</label>
+                  <input type="text" placeholder='Ex: "Pack de 2 Semanas"' value={novoPacote.titulo} onChange={e => setNovoPacote({...novoPacote, titulo: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 bg-slate-50" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Qtd de {novoPacote.tipo === 'semana' ? 'Semanas' : 'Dias'}</label>
+                  <input type="number" min="1" value={novoPacote.quantidade} onChange={e => setNovoPacote({...novoPacote, quantidade: Number(e.target.value)})} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-black text-indigo-700 outline-none focus:border-indigo-500 bg-slate-50 text-center" />
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-6">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest m-0">C. Variantes e Preços</label>
+                  <button type="button" onClick={adicionarVariante} className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors">+ Variante</button>
+                </div>
+                <p className="text-[11px] text-slate-500 mb-4 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  Tem preços diferentes para este passe (ex: <i>Com Almoço vs Sem Almoço</i>)? Crie variantes. Se tiver apenas 1 preço fixo, deixe apenas o <b>Bilhete Base</b>.
+                </p>
+                <div className="flex flex-col gap-2.5">
+                  {novoPacote.variantes.map((v, i) => (
+                    <div key={i} className="flex gap-2 items-center bg-white border border-slate-200 p-2 rounded-xl group hover:border-indigo-300 transition-colors">
+                      <input type="text" placeholder="Nome (Ex: Pack c/ Almoço)" value={v.nome} onChange={e => atualizarVariante(i, 'nome', e.target.value)} className="flex-1 p-2 text-sm font-bold outline-none bg-transparent placeholder-slate-300" />
+                      <div className="w-32 flex items-center bg-slate-50 rounded-lg border border-slate-100 px-2 focus-within:border-indigo-500 focus-within:bg-white transition-colors">
+                        <input type="number" min="0" placeholder="0" value={v.preco} onChange={e => atualizarVariante(i, 'preco', Number(e.target.value))} className="w-full py-2.5 text-sm font-black text-indigo-700 outline-none bg-transparent text-right" />
+                        <span className="text-xs font-black text-slate-400 ml-1">€</span>
+                      </div>
+                      {novoPacote.variantes.length > 1 && (
+                        <button type="button" onClick={() => removerVariante(i)} className="w-10 h-10 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors">&times;</button>
                       )}
                     </div>
                   ))}
-                  
-                  <button type="button" onClick={() => handleAddOpcao(bloco.id)} style={{ alignSelf: 'flex-start', padding: '0.75rem 1.25rem', backgroundColor: '#ecfdf5', color: '#059669', border: '1px dashed #a7f3d0', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>
-                    + Adicionar nova Modalidade
-                  </button>
                 </div>
               </div>
             </div>
-          ))}
-
-          <button type="button" onClick={handleAddBloco} style={{ width: '100%', padding: '1.25rem', backgroundColor: '#f1f5f9', color: '#0f172a', border: '2px dashed #cbd5e1', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px', transition: 'all 0.2s' }}>
-            + Adicionar Novo Bloco de Datas
-          </button>
-        </div>
-
-        {/* 3. LOGÍSTICA & DESCRIÇÃO */}
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>3. Logística e Programa</h2>
-          
-          <div style={{ gridColumn: '1 / -1', backgroundColor: '#eff6ff', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #bfdbfe', marginBottom: '2rem' }}>
-            <label style={{...labelStyle, color: '#1e3a8a'}}>Condição de Pagamento Exigida</label>
-            <select required value={formData.tipo_pagamento || ''} onChange={e => setFormData({...formData, tipo_pagamento: e.target.value})} style={{...selectStyle, width: '100%', borderColor: '#93c5fd'}}>
-              <option value="100_total">100% Pago no Ato da Reserva (Tradicional)</option>
-              <option value="50_sinal">Sinal de 50% Agora + 50% 1 Semana Antes</option>
-            </select>
-          </div>
-
-          <div style={gridStyle}>
-            <div>
-              <label style={labelStyle}>Política de Cancelamento</label>
-              <select required value={formData.politica_cancelamento || ''} onChange={e => setFormData({...formData, politica_cancelamento: e.target.value})} style={selectStyle}>
-                <option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (Reembolso a 100% até 7 dias antes)</option>
-                <option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (Reembolso a 50% até 15 dias antes)</option>
-                <option value="Estrita (Sem reembolso após reserva)">Estrita (Sem reembolso após reserva)</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Línguas Faladas</label>
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={linguas.pt} onChange={() => handleLinguasChange('pt')} /> PT</label>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={linguas.en} onChange={() => handleLinguasChange('en')} /> EN</label>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={linguas.es} onChange={() => handleLinguasChange('es')} /> ES</label>
-              </div>
-            </div>
-            
-            <div><label style={labelStyle}>Alimentação</label><select value={formData.alimentacao || ''} onChange={e => setFormData({...formData, alimentacao: e.target.value})} style={selectStyle}><option value="Incluído no Preço">Incluído</option><option value="Opcional (Pago à parte)">Opcional</option><option value="Não tem">Não tem</option></select></div>
-            <div><label style={labelStyle}>Alojamento</label><select value={formData.alojamento || ''} onChange={e => setFormData({...formData, alojamento: e.target.value})} style={selectStyle}><option value="Incluído no Preço">Incluído</option><option value="Opcional (Pago à parte)">Opcional</option><option value="Não tem">Não tem</option></select></div>
-            <div><label style={labelStyle}>Seguro</label><select value={formData.seguro || ''} onChange={e => setFormData({...formData, seguro: e.target.value})} style={selectStyle}><option value="Incluído no Preço">Incluído</option><option value="Pago à parte no local">Pago no local</option></select></div>
-            <div><label style={labelStyle}>Rácio Monitores</label><input type="text" value={formData.racio_monitores || ''} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} style={inputStyle} /></div>
-            
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Descrição Completa do Programa</label>
-              <textarea rows={6} required value={formData.descricao || ''} onChange={e => setFormData({...formData, descricao: e.target.value})} style={{...inputStyle, resize: 'vertical'}} />
-            </div>
-
-            <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem' }}>
-              <label style={labelStyle}>Regras e Termos Específicos</label>
-              <textarea rows={3} value={formData.regras_termos || ''} onChange={e => setFormData({...formData, regras_termos: e.target.value})} style={{...inputStyle, resize: 'vertical'}} />
-            </div>
-
-            <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
-              <label style={labelStyle}>Documentos Anexados</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'flex-start' }}>
-                {documentosExistentes.map((doc, idx) => (
-                  <div key={`exist-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', fontSize: '13px' }}>
-                    <span style={{ fontWeight: 'bold', color: '#0f172a' }}>📄 {doc.nome}</span>
-                    <button type="button" onClick={() => removeDocExistente(idx)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
-                  </div>
-                ))}
-                {documentos.map((doc, idx) => (
-                  <div key={`novo-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ecfdf5', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #a7f3d0', width: '100%', fontSize: '13px' }}>
-                    <span style={{ fontWeight: 'bold', color: '#059669' }}>📄 {doc.name} (Novo)</span>
-                    <button type="button" onClick={() => removeNovoDoc(idx)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
-                  </div>
-                ))}
-                <label style={{ padding: '0.75rem 1.5rem', backgroundColor: '#e2e8f0', color: '#334155', fontWeight: 'bold', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '14px' }}>
-                  + Adicionar Documento
-                  <input type="file" accept=".pdf,.doc,.docx" multiple onChange={handleDocSelect} style={{ display: 'none' }} />
-                </label>
-              </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
+              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-slate-900 rounded-xl hover:bg-indigo-600 shadow-md text-sm transition-colors">✓ Adicionar à Montra</button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* 4. UPSELLS E FORMULÁRIO */}
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>4. Upsells e Checkout</h2>
-          
-          <div style={gridStyle}>
-            {['alimentacao', 'alojamento', 'prolongamento', 'transporte'].map(extra => (
-              <div key={extra} style={{ backgroundColor: '#f8fafc', padding: '1.25rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-                <label style={labelStyle}>{extra.charAt(0).toUpperCase() + extra.slice(1)} (Custo Extra)</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input type="number" value={(formData as any)[`extra_${extra}`] || 0} onChange={e => setFormData({...formData, [`extra_${extra}`]: Number(e.target.value)})} style={{...inputStyle, flex: 1}} />
-                  <select value={(formData as any)[`tipo_cobranca_${extra}`] || ''} onChange={e => setFormData({...formData, [`tipo_cobranca_${extra}`]: e.target.value})} style={{...selectStyle, flex: 1}}>
-                    <option value="Por Turno">Por Pacote</option><option value="Por Dia">Por Dia</option>
-                  </select>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '2px solid #f1f5f9' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+      {/* MODAL DESCONTOS */}
+      {isDescontoModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-900 text-lg m-0">Nova Regra de Desconto</h3>
+              <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold flex items-center justify-center">&times;</button>
+            </div>
+            <div className="p-6 flex flex-col gap-5">
               <div>
-                <label style={{...labelStyle, color: '#0f172a', fontSize: '15px'}}>Perguntas no Checkout</label>
-                <p style={{ fontSize: '13px', color: '#64748b', margin: '0.25rem 0 0 0' }}>Adicione as perguntas que deseja fazer aos pais durante a reserva.</p>
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Nome do Desconto (Visível no Checkout)</label>
+                <input type="text" placeholder='Ex: "Desconto Sócio Clube"' value={novoDesconto.nome} onChange={e => setNovoDesconto({...novoDesconto, nome: e.target.value})} className="w-full p-3.5 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 bg-slate-50" />
               </div>
-              <button type="button" onClick={handleAddPergunta} style={{ backgroundColor: '#0f172a', color: 'white', border: 'none', padding: '0.75rem 1.25rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>+ Pergunta Livre</button>
-            </div>
-            
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.5rem' }}>
-              {sugestoesAtuais.map((pergunta, idx) => (
-                <button key={`cat-${idx}`} type="button" onClick={() => adicionarPerguntaSugerida(pergunta)} style={{ padding: '0.5rem 0.875rem', backgroundColor: perguntasCustomizadas.includes(pergunta) ? '#f1f5f9' : '#f0fdf4', color: perguntasCustomizadas.includes(pergunta) ? '#94a3b8' : '#059669', border: `1px solid ${perguntasCustomizadas.includes(pergunta) ? '#e2e8f0' : '#a7f3d0'}`, borderRadius: '999px', fontSize: '12px', fontWeight: 'bold', cursor: perguntasCustomizadas.includes(pergunta) ? 'default' : 'pointer' }}>+ {pergunta}</button>
-              ))}
-              {PERGUNTAS_GERAIS.map((pergunta, idx) => (
-                <button key={`geral-${idx}`} type="button" onClick={() => adicionarPerguntaSugerida(pergunta)} style={{ padding: '0.5rem 0.875rem', backgroundColor: perguntasCustomizadas.includes(pergunta) ? '#f1f5f9' : '#f8fafc', color: perguntasCustomizadas.includes(pergunta) ? '#94a3b8' : '#475569', border: `1px solid ${perguntasCustomizadas.includes(pergunta) ? '#e2e8f0' : '#cbd5e1'}`, borderRadius: '999px', fontSize: '12px', fontWeight: 'bold', cursor: perguntasCustomizadas.includes(pergunta) ? 'default' : 'pointer' }}>+ {pergunta}</button>
-              ))}
-            </div>
-            
-            {perguntasCustomizadas.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
-                {perguntasCustomizadas.map((pergunta, index) => (
-                  <div key={index} style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <div style={{ width: '28px', height: '28px', backgroundColor: '#0f172a', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '12px', flexShrink: 0 }}>{index + 1}</div>
-                    <input type="text" value={pergunta} onChange={e => handlePerguntaChange(index, e.target.value)} style={inputStyle} required />
-                    <button type="button" onClick={() => handleRemovePergunta(index)} style={{ padding: '0.875rem', color: '#dc2626', background: '#fee2e2', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', flexShrink: 0 }}>X</button>
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Percentagem a Retirar</label>
+                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:border-indigo-500 transition-colors">
+                    <input type="number" min="1" max="100" value={novoDesconto.percentagem} onChange={e => setNovoDesconto({...novoDesconto, percentagem: Number(e.target.value)})} className="w-full p-3.5 text-base font-black outline-none bg-transparent" />
+                    <span className="bg-slate-100 text-slate-400 px-4 py-3.5 text-sm font-black border-l border-slate-200">%</span>
                   </div>
-                ))}
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* 5. GALERIA */}
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>5. Imagem e Galeria</h2>
-          
-          <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '0.75rem', textTransform: 'uppercase' }}>Opção A: Escolher Imagem Sem Direitos</p>
-            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-              {FOTOS_PADRAO.map((foto, idx) => (
-                <div key={idx} onClick={() => selecionarFotoPadrao(foto.url)} style={{ minWidth: '130px', height: '90px', borderRadius: '0.5rem', overflow: 'hidden', border: images[0]?.url === foto.url ? '3px solid #059669' : '1px solid #cbd5e1', cursor: 'pointer', position: 'relative' }}>
-                  <img src={foto.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  {images[0]?.url === foto.url && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(5, 150, 105, 0.2)' }} />}
+              <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex items-center justify-between cursor-pointer" onClick={() => setNovoDesconto({...novoDesconto, acumulavel: !novoDesconto.acumulavel})}>
+                <div>
+                  <p className="text-xs font-black text-indigo-900 mb-0.5">É Acumulável?</p>
+                  <p className="text-[10px] text-indigo-700 font-bold m-0 leading-tight max-w-[200px]">Se ativo, este desconto soma-se a outros descontos no carrinho.</p>
                 </div>
-              ))}
+                <div className={`w-10 h-5 rounded-full relative transition-colors ${novoDesconto.acumulavel ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${novoDesconto.acumulavel ? 'translate-x-5' : ''}`}></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
+              <button type="button" onClick={guardarDesconto} className="px-6 py-2.5 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md text-sm transition-colors">Gravar Regra</button>
             </div>
           </div>
-
-          <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', margin: '2rem 0', fontSize: '12px' }}>OU</div>
-
-          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '120px', cursor: 'pointer', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.75rem', transition: 'background-color 0.2s' }}>
-            <span style={{ fontWeight: 'bold', color: '#64748b', fontSize: '15px' }}>📸 Clique para enviar fotos da sua galeria...</span>
-            <input type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
-          </label>
-
-          {images.length > 0 && !usarFotoPadrao && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
-              {images.map((img, idx) => (
-                <div key={idx} style={{ position: 'relative', borderRadius: '0.75rem', overflow: 'hidden', border: img.isMain ? '3px solid #059669' : '1px solid #e2e8f0', height: '120px' }}>
-                  <img src={img.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <button type="button" onClick={() => removeImage(idx)} style={{ position: 'absolute', top: '5px', right: '5px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
-                  {!img.isMain && (
-                    <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Tornar Principal</button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
+      )}
 
-        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#059669', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '1.125rem', transition: 'transform 0.1s', boxShadow: '0 10px 15px -3px rgba(5, 150, 105, 0.3)' }}>
-          {saving ? statusText : '✓ Guardar Alterações e Fechar'}
-        </button>
-      </form>
-    </main>
+    </div>
   );
 }
-
-// Estilos Otimizados
-const sectionStyle = { backgroundColor: 'white', padding: '3rem', borderRadius: '1.5rem', border: '1px solid #f1f5f9', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.02)' };
-const sectionTitleStyle = { fontSize: '1.35rem', fontWeight: '900', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '1.25rem', marginBottom: '2rem' };
-const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.75rem' };
-const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
-const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '15px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const, transition: 'border-color 0.2s' };
-const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
-const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '14px', color: '#334155', cursor: 'pointer', fontWeight: '700' };
