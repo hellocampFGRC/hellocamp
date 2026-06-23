@@ -78,6 +78,9 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const [modalidadeExterna, setModalidadeExterna] = useState<'pacote' | 'dia_solto'>('pacote');
   const [diaExterno, setDiaExterno] = useState<string>('');
 
+  // ==========================================
+  // FETCH DE DADOS (BASE DE DADOS)
+  // ==========================================
   const fetchDashboardData = async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -85,11 +88,19 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setSessionUser(session.user);
 
     // 1. Busca Campos
-    const { data: camposData } = await supabase.from('campos').select('id, nome, nome_en, vagas_totais, turnos').eq('organizador_id', session.user.id);
+    const { data: camposData } = await supabase
+      .from('campos')
+      .select('id, nome, nome_en, vagas_totais, calendario_funcionamento, pacotes')
+      .eq('organizador_id', session.user.id);
+    
     setCamposParceiro(camposData || []);
 
     // 2. Busca Reservas e cruza com Crianças/Pais
-    const { data: reservasData } = await supabase.from('reservas').select('*, criancas(*), perfis(*)').eq('organizador_id', session.user.id).order('created_at', { ascending: false });
+    const { data: reservasData } = await supabase
+      .from('reservas')
+      .select('*, criancas(*), perfis(*)')
+      .eq('organizador_id', session.user.id)
+      .order('created_at', { ascending: false });
     
     if (reservasData) {
       const reservasFormatadas = reservasData.map((res: any) => {
@@ -111,7 +122,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
           data: res.created_at,
           status: statusFinal,
           isExterna: isExterna,
-          pedido_pendente: res.respostas_customizadas?.pedido_pai_pendente || null, // O pai enviou pedido?
+          pedido_pendente: res.respostas_customizadas?.pedido_pai_pendente || null,
           crianca: res.criancas || { nome: res.respostas_customizadas?.nome_crianca_externo || 'N/D' },
           pai: {
             nome: res.nome_encarregado || res.perfis?.nome_completo || 'N/D',
@@ -130,37 +141,80 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
   useEffect(() => { fetchDashboardData(); }, [isEn]);
 
-  // Resetar o filtro de turno sempre que o parceiro muda de campo
   useEffect(() => {
     setFiltroTurno('todos');
     setFiltroDiaSelecionado('');
     setIsFilterPanelOpen(false);
   }, [filtroCampoId]);
 
+  // ==========================================
+  // FILTRAGEM INTELIGENTE E KPIs
+  // ==========================================
+  let reservasFiltradas = [...todasReservas];
+  
+  if (filtroCampoId !== 'todos') reservasFiltradas = reservasFiltradas.filter((r: any) => r.campo_id === filtroCampoId);
+  if (filtroTurno !== 'todos') {
+    reservasFiltradas = reservasFiltradas.filter((r: any) => 
+      r.turno && r.turno.toLowerCase().includes(filtroTurno.toLowerCase())
+    );
+  }
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    reservasFiltradas = reservasFiltradas.filter((r: any) => 
+      (r.crianca?.nome || '').toLowerCase().includes(q) || 
+      (r.pai?.nome || '').toLowerCase().includes(q)
+    );
+  }
+
+  const campoSelecionadoFiltro = camposParceiro.find((c: any) => c.id === filtroCampoId);
+  const pacotesDoCampo = campoSelecionadoFiltro?.pacotes || [];
+  const pacotesFiltro = pacotesDoCampo.filter((p: any) => p.tipo === 'semana');
+  const diasSoltosFiltro = pacotesDoCampo.filter((p: any) => p.tipo === 'dia');
+
+  const [datasCalendarioGlobal, setDatasCalendarioGlobal] = useState<string[]>([]);
+  useEffect(() => {
+    if (campoSelecionadoFiltro?.calendario_funcionamento?.data_inicio && campoSelecionadoFiltro?.calendario_funcionamento?.data_fim) {
+      const inicio = new Date(campoSelecionadoFiltro.calendario_funcionamento.data_inicio);
+      const fim = new Date(campoSelecionadoFiltro.calendario_funcionamento.data_fim);
+      const diasPermitidos = campoSelecionadoFiltro.calendario_funcionamento.dias_semana || [1,2,3,4,5];
+      const listaDias: string[] = [];
+
+      let dataAtual = new Date(inicio);
+      while (dataAtual <= fim) {
+        if (diasPermitidos.includes(dataAtual.getDay())) {
+          listaDias.push(dataAtual.toISOString().split('T')[0]);
+        }
+        dataAtual.setDate(dataAtual.getDate() + 1);
+      }
+      setDatasCalendarioGlobal(listaDias);
+    } else {
+      setDatasCalendarioGlobal([]);
+    }
+  }, [filtroCampoId, campoSelecionadoFiltro]);
+
+  const validas = reservasFiltradas.filter((r: any) => r.status !== 'Cancelada' && r.status !== 'Abandonada');
+  const countHelloCamp = validas.filter((r: any) => !r.isExterna).length;
+  const countExternas = validas.filter((r: any) => r.isExterna).length;
+  const faturaçãoHelloCamp = validas.filter((r: any) => !r.isExterna).reduce((acc: number, curr: any) => acc + curr.valor, 0);
+  const faturaçãoExterna = validas.filter((r: any) => r.isExterna).reduce((acc: number, curr: any) => acc + curr.valor, 0);
+
+  // ==========================================
+  // LÓGICA DO MODAL E FATURAÇÃO
+  // ==========================================
   const fecharModalReserva = () => {
     setReservaSelecionada(null);
     setIsAjusteModalOpen(false);
     setAjusteForm({ valor: 0, motivo: "" });
   };
 
-  // ==========================================
-  // LÓGICA DE COBRANÇA EXTRA (UPSELL)
-  // ==========================================
   const handleSubmeterAjuste = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ajusteForm.motivo || ajusteForm.valor <= 0) return alert("Preencha um motivo e um valor superior a 0.");
+    if (!ajusteForm.motivo || ajusteForm.valor <= 0) return alert("Preencha o motivo e um valor superior a 0.");
     
     setSavingAjuste(true);
     try {
-      const novoAjuste = {
-        data: new Date().toISOString(),
-        motivo: ajusteForm.motivo,
-        valor_pedido: ajusteForm.valor
-      };
-
+      const novoAjuste = { data: new Date().toISOString(), motivo: ajusteForm.motivo, valor_pedido: ajusteForm.valor };
       const historicoAtualizado = [...(reservaSelecionada.historico_ajustes || []), novoAjuste];
-      
-      // Limpar o aviso de pedido pendente do pai (pois o parceiro já respondeu cobrando)
       const novasRespostas = { ...reservaSelecionada.respostasCustomizadas, historico_ajustes: historicoAtualizado };
       delete novasRespostas.pedido_pai_pendente;
 
@@ -172,52 +226,63 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
       if (error) throw error;
 
-      alert(isEn ? "Payment request sent to the parent!" : "Pedido de pagamento enviado ao encarregado de educação com sucesso!");
-      
+      alert(isEn ? "Payment request sent to the parent!" : "Pedido de pagamento enviado com sucesso!");
       fecharModalReserva();
       fetchDashboardData();
-
-    } catch (err: any) { alert("Erro ao processar ajuste: " + err.message); }
+    } catch (err: any) { alert("Erro ao processar: " + err.message); }
     setSavingAjuste(false);
   };
 
   // ==========================================
-  // FILTRAGEM INTELIGENTE DA TABELA
+  // INSERÇÃO MANUAL DE RESERVA (1 A 1)
   // ==========================================
-  let reservasFiltradas = [...todasReservas];
-  
-  if (filtroCampoId !== 'todos') reservasFiltradas = reservasFiltradas.filter((r: any) => r.campo_id === filtroCampoId);
-  if (filtroTurno !== 'todos') reservasFiltradas = reservasFiltradas.filter((r: any) => r.turno === filtroTurno);
-  if (searchQuery) {
-    const q = searchQuery.toLowerCase();
-    reservasFiltradas = reservasFiltradas.filter((r: any) => 
-      (r.crianca?.nome || '').toLowerCase().includes(q) || 
-      (r.pai?.nome || '').toLowerCase().includes(q)
-    );
-  }
+  const campoSelecionadoModal = camposParceiro.find((c: any) => c.id === formExterno.campo_id);
+  const pacotesModal = campoSelecionadoModal?.pacotes?.filter((p: any) => p.tipo === 'semana') || [];
+  const diasSoltosModal = campoSelecionadoModal?.pacotes?.filter((p: any) => p.tipo === 'dia') || [];
 
-  // Prepara os dados para o NOVO POPOVER DE FILTRO
-  const turnosDoCampoFiltro = filtroCampoId === 'todos' ? [] : camposParceiro.find((c: any) => c.id === filtroCampoId)?.turnos || [];
-  const pacotesFiltro = turnosDoCampoFiltro.filter((t: any) => !t.nome.includes("- Dia ") && !t.nome.includes("- Day "));
-  const diasSoltosFiltro = turnosDoCampoFiltro.filter((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
-  const datasUnicasFiltro = Array.from(new Set(diasSoltosFiltro.map((t: any) => t.data_inicio))).sort() as string[];
+  const setTurnoEscolhido = (pacoteTitulo: string, variante: any) => {
+    const nomeCompletoTurno = `${pacoteTitulo} (${variante.nome})`;
+    setFormExterno(prev => ({ ...prev, turno_nome: nomeCompletoTurno, valor_pago: Number(variante.preco) }));
+  };
 
-  useEffect(() => {
-    if (pacotesFiltro.length === 0 && diasSoltosFiltro.length > 0) setFiltroModo("dia_solto");
-    if (pacotesFiltro.length > 0 && diasSoltosFiltro.length === 0) setFiltroModo("pacote");
-  }, [turnosDoCampoFiltro]);
+  const handleAddExterno = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formExterno.turno_nome) return alert("Por favor, selecione uma opção válida de pacote.");
+    setSavingExterno(true);
+
+    try {
+      const anoNasc = new Date().getFullYear() - (Number(formExterno.idade) || 10);
+      const dataNascAprox = `${anoNasc}-01-01`;
+
+      const { data: crianca, error: errC } = await supabase.from('criancas').insert({
+        cliente_id: sessionUser.id, nome: formExterno.nome_crianca, data_nascimento: dataNascAprox,
+        restricoes_alimentares: formExterno.alergias || 'Nenhuma', doencas_cronicas: formExterno.doencas || 'Nenhuma'
+      }).select('id').single();
+
+      if (errC) throw errC;
+
+      const { error: errR } = await supabase.from('reservas').insert({
+        organizador_id: sessionUser.id, cliente_id: sessionUser.id, crianca_id: crianca.id,
+        campo_id: formExterno.campo_id, turno_nome: formExterno.turno_nome, valor_total: formExterno.valor_pago,
+        valor_pago: formExterno.valor_pago, status_pagamento: 'Externo', nome_encarregado: formExterno.nome_pai, 
+        email_encarregado: formExterno.email_pai, telefone_encarregado: formExterno.telefone_pai, 
+        respostas_customizadas: { origem: "Inserção Manual 1 a 1" }
+      });
+
+      if (errR) throw errR;
+
+      setIsAddModalOpen(false);
+      setImportMode('selecao');
+      setFormExterno({ campo_id: "", turno_nome: "", valor_pago: 0, nome_crianca: "", idade: "", alergias: "", doencas: "", nome_pai: "", email_pai: "", telefone_pai: "" });
+      fetchDashboardData();
+      alert("Inscrição externa adicionada com sucesso!");
+
+    } catch (err: any) { alert("Erro ao inserir: " + err.message); }
+    setSavingExterno(false);
+  };
 
   // ==========================================
-  // MÉTRICAS DO DASHBOARD
-  // ==========================================
-  const validas = reservasFiltradas.filter((r: any) => r.status !== 'Cancelada' && r.status !== 'Abandonada');
-  const countHelloCamp = validas.filter((r: any) => !r.isExterna).length;
-  const countExternas = validas.filter((r: any) => r.isExterna).length;
-  const faturaçãoHelloCamp = validas.filter((r: any) => !r.isExterna).reduce((acc: number, curr: any) => acc + curr.valor, 0);
-  const faturaçãoExterna = validas.filter((r: any) => r.isExterna).reduce((acc: number, curr: any) => acc + curr.valor, 0);
-
-  // ==========================================
-  // EXPORTAR EXCEL GLOBAL
+  // FUNÇÕES DE EXCEL E CSV (AGORA DENTRO DO ESCOPO)
   // ==========================================
   const exportarCSV = () => {
     if (validas.length === 0) { 
@@ -242,66 +307,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  // ==========================================
-  // LÓGICA DO MINI-CALENDÁRIO INTERATIVO (MODAL ADICIONAR)
-  // ==========================================
-  const campoSelecionadoModal = camposParceiro.find((c: any) => c.id === formExterno.campo_id);
-  const turnosModal = campoSelecionadoModal?.turnos || [];
-  const pacotesModal = turnosModal.filter((t: any) => !t.nome.includes("- Dia ") && !t.nome.includes("- Day "));
-  const diasSoltosModal = turnosModal.filter((t: any) => t.nome.includes("- Dia ") || t.nome.includes("- Day "));
-  const datasUnicasModal = Array.from(new Set(diasSoltosModal.map((t: any) => t.data_inicio))).sort() as string[];
-
-  useEffect(() => {
-    if (pacotesModal.length === 0 && diasSoltosModal.length > 0) setModalidadeExterna("dia_solto");
-    if (pacotesModal.length > 0 && diasSoltosModal.length === 0) setModalidadeExterna("pacote");
-    if (datasUnicasModal.length > 0) setDiaExterno(datasUnicasModal[0]);
-  }, [formExterno.campo_id]);
-
-  const setTurnoEscolhido = (turno: any) => {
-    setFormExterno(prev => ({ ...prev, turno_nome: turno.nome, valor_pago: Number(turno.preco) }));
-  };
-
-  // ==========================================
-  // INSERIR RESERVA EXTERNA (MANUAL)
-  // ==========================================
-  const handleAddExterno = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formExterno.turno_nome) return alert("Por favor, selecione um turno ou dia específico no calendário.");
-    setSavingExterno(true);
-
-    try {
-      const anoNasc = new Date().getFullYear() - (Number(formExterno.idade) || 10);
-      const dataNascAprox = `${anoNasc}-01-01`;
-
-      const { data: crianca, error: errC } = await supabase.from('criancas').insert({
-        cliente_id: sessionUser.id, nome: formExterno.nome_crianca, data_nascimento: dataNascAprox,
-        restricoes_alimentares: formExterno.alergias || 'Nenhuma', doencas_cronicas: formExterno.doencas || 'Nenhuma'
-      }).select('id').single();
-
-      if (errC) throw errC;
-
-      const { error: errR } = await supabase.from('reservas').insert({
-        organizador_id: sessionUser.id, cliente_id: sessionUser.id, crianca_id: crianca.id,
-        campo_id: formExterno.campo_id, turno_nome: formExterno.turno_nome, valor_total: formExterno.valor_pago,
-        status_pagamento: 'Externo', nome_encarregado: formExterno.nome_pai, email_encarregado: formExterno.email_pai,
-        telefone_encarregado: formExterno.telefone_pai, respostas_customizadas: { origem: "Inserção Manual 1 a 1" }
-      });
-
-      if (errR) throw errR;
-
-      setIsAddModalOpen(false);
-      setImportMode('selecao');
-      setFormExterno({ campo_id: "", turno_nome: "", valor_pago: 0, nome_crianca: "", idade: "", alergias: "", doencas: "", nome_pai: "", email_pai: "", telefone_pai: "" });
-      fetchDashboardData();
-      alert("Inscrição externa adicionada com sucesso!");
-
-    } catch (err: any) { alert("Erro ao inserir: " + err.message); }
-    setSavingExterno(false);
-  };
-
-  // ==========================================
-  // IMPORTAR EXCEL
-  // ==========================================
   const downloadTemplateCSV = () => {
     const csv = "\ufeffNome_do_Campo_Exato;Nome_do_Turno_Exato;Valor_Pago;Nome_Crianca;Idade;Alergias;Doencas;Nome_Responsavel;Telefone;Email\n" +
                 "Surf Camp Caparica;1a Semana Julho;150;Joao Silva;12;Nenhuma;Asma;Maria Silva;912345678;maria@email.com\n";
@@ -370,7 +375,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Booking Operations' : 'Central de Reservas'}</h1>
-          <p className="text-slate-500 mt-1 font-medium text-sm">{isEn ? 'Manage Hellocamp and manual bookings in one place.' : 'Gira inscrições da HelloCamp e centralize os seus clientes externos.'}</p>
+          <p className="text-slate-500 mt-1 font-medium text-sm">{isEn ? 'Manage Hellocamp and manual bookings in one place.' : 'Gira inscrições da HelloCamp e veja os pacotes contratados pelos pais.'}</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
           <button onClick={exportarCSV} className="flex-1 md:flex-none px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-colors text-sm">
@@ -418,20 +423,21 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         
         <div className="flex-1">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Campo</label>
-          <select value={filtroCampoId} onChange={e => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
+          <select value={filtroCampoId} onChange={e => setFiltroCampoId(e.target.value)} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
             <option value="todos">Todos os Campos</option>
             {camposParceiro.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         </div>
 
+        {/* BOTÃO DO FILTRO FIXO (FIXED) DE CALENDÁRIO */}
         {filtroCampoId !== 'todos' && (
           <div className="flex-1 relative animate-in fade-in">
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Data/Turno</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar por Passe/Data</label>
             <div 
               onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
               className={`w-full border rounded-xl px-4 py-2.5 text-sm font-bold cursor-pointer flex justify-between items-center transition-colors ${filtroTurno === 'todos' ? 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300' : 'bg-emerald-50 border-emerald-500 text-emerald-900'}`}
             >
-              <span className="truncate">{filtroTurno === 'todos' ? 'Todas as Datas' : limparNomeParaExibicao(filtroTurno)}</span>
+              <span className="truncate">{filtroTurno === 'todos' ? 'Todas as Opções' : limparNomeParaExibicao(filtroTurno)}</span>
               <span className="text-slate-400 text-[10px]">▼</span>
             </div>
 
@@ -441,7 +447,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-[420px] bg-white rounded-3xl shadow-2xl z-[200] p-6 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
                   
                   <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
-                    <span className="text-sm font-black text-slate-900 uppercase tracking-widest">Filtrar Reservas</span>
+                    <span className="text-sm font-black text-slate-900 uppercase tracking-widest">Filtrar por Passe</span>
                     <div className="flex gap-2">
                       {filtroTurno !== 'todos' && (
                         <button onClick={() => { setFiltroTurno('todos'); setIsFilterPanelOpen(false); }} className="text-[10px] font-black text-red-600 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-xl transition-colors">Limpar &times;</button>
@@ -450,63 +456,45 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     </div>
                   </div>
 
+                  {/* Alternador de Modo de Filtro */}
                   {(pacotesFiltro.length > 0 && diasSoltosFiltro.length > 0) && (
                     <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-5">
-                      <button onClick={() => setFiltroModo('pacote')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${filtroModo === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Programa Inteiro</button>
-                      <button onClick={() => setFiltroModo('dia_solto')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${filtroModo === 'dia_solto' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-100' : 'text-slate-500 hover:text-slate-700'}`}>Dias Soltos</button>
+                      <button onClick={() => setFiltroModo('pacote')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${filtroModo === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Semanas Completas</button>
+                      <button onClick={() => setFiltroModo('dia_solto')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${filtroModo === 'dia_solto' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}`}>Dias Soltos</button>
                     </div>
                   )}
 
+                  {/* Lista de Passes Semanais */}
                   {filtroModo === 'pacote' && (
                     <div className="flex flex-col gap-2">
-                      {pacotesFiltro.map((pac: any) => {
-                        const tagInfo = getHorarioInfo(pac.nome, isEn);
-                        return (
-                          <div key={pac.id} onClick={() => { setFiltroTurno(pac.nome); setIsFilterPanelOpen(false); }} className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-colors flex justify-between items-center ${filtroTurno === pac.nome ? 'bg-emerald-50 border-emerald-500' : 'bg-slate-50 border-slate-200 hover:border-emerald-300'}`}>
-                            <div>
-                              <p className="text-sm font-black text-slate-800 m-0">{limparNomeParaExibicao(pac.nome)}</p>
-                              <p className="text-xs font-bold text-slate-400 m-0 mt-1">🗓️ {formatarDataExibicao(pac.data_inicio)} - {formatarDataExibicao(pac.data_fim)}</p>
-                            </div>
-                            <span className="text-xl bg-slate-100 p-2 rounded-xl leading-none">{tagInfo.icon}</span>
+                      {pacotesFiltro.map((pac: any) => (
+                        <div key={pac.id} onClick={() => { setFiltroTurno(pac.titulo); setIsFilterPanelOpen(false); }} className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${filtroTurno === pac.titulo ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200 hover:border-emerald-300'}`}>
+                          <div>
+                            <p className="text-sm font-black text-slate-800 m-0">{pac.titulo}</p>
+                            <p className="text-[11px] text-slate-400 mt-1 font-bold">Variantes: {pac.variantes?.length || 0}</p>
                           </div>
-                        )
-                      })}
+                          <span className="text-xl bg-slate-100 p-2 rounded-xl leading-none">🗓️</span>
+                        </div>
+                      ))}
                     </div>
                   )}
 
+                  {/* Lista de Passes Diários / Calendário Global */}
                   {filtroModo === 'dia_solto' && (
-                    <div className="animate-in fade-in duration-200">
-                      <span className="block text-[11px] font-black text-emerald-800 uppercase tracking-widest mb-3">1. Escolha o Dia no Mapa</span>
-                      <div className="grid grid-cols-5 gap-1.5 mb-5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                        {datasUnicasFiltro.map((data: string) => {
+                    <div>
+                      <span className="block text-[11px] font-black text-emerald-800 uppercase tracking-widest mb-3">Escolha um dia específico de Funcionamento:</span>
+                      <div className="grid grid-cols-5 gap-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                        {datasCalendarioGlobal.map((data: string) => {
                           const isActive = filtroDiaSelecionado === data;
                           const dateObj = new Date(data);
                           return (
-                            <div key={data} onClick={() => setFiltroDiaSelecionado(data)} className={`flex flex-col items-center justify-center py-2.5 rounded-xl border-2 cursor-pointer transition-all ${isActive ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-400'}`}>
-                              <span className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{dateObj.toLocaleDateString('pt-PT', {weekday: 'short'}).replace('.','')}</span>
+                            <div key={data} onClick={() => { setFiltroTurno(data); setFiltroDiaSelecionado(data); setIsFilterPanelOpen(false); }} className={`flex flex-col items-center justify-center py-2.5 rounded-xl border-2 cursor-pointer transition-all ${isActive ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-400'}`}>
+                              <span className="text-[8px] font-black uppercase mb-0.5">{dateObj.toLocaleDateString('pt-PT', {weekday: 'short'}).replace('.','')}</span>
                               <span className="text-base font-black leading-none">{dateObj.toLocaleDateString('pt-PT', {day: '2-digit'})}</span>
                             </div>
                           )
                         })}
                       </div>
-
-                      {filtroDiaSelecionado && (
-                        <div className="border-t border-slate-100 pt-4 mt-2 animate-in fade-in">
-                          <span className="block text-[11px] font-black text-emerald-800 uppercase tracking-widest mb-3">2. Qual o Horário Pretendido?</span>
-                          <div className="grid grid-cols-3 gap-2">
-                            {diasSoltosFiltro.filter((t: any) => t.data_inicio === filtroDiaSelecionado).map((horario: any) => {
-                              const info = getHorarioInfo(horario.nome, isEn);
-                              const isActive = filtroTurno === horario.nome;
-                              return (
-                                <div key={horario.id} onClick={() => { setFiltroTurno(horario.nome); setIsFilterPanelOpen(false); }} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-all ${isActive ? 'bg-emerald-700 border-emerald-700 text-white shadow-sm' : 'bg-white border-slate-200 hover:border-emerald-400 text-slate-700'}`}>
-                                  <span className="text-2xl mb-1 leading-none">{info.icon}</span>
-                                  <span className="text-[10px] font-black text-center leading-tight">{info.tag}</span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -516,14 +504,14 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         )}
       </div>
 
-      {/* TABELA UNIFICADA COM ALERTAS */}
+      {/* TABELA UNIFICADA */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative z-10">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Participante</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Programa e Data</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Passe / Variante Contratada</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Estado Clínico</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Origem / Pagamento</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ação</th>
@@ -556,8 +544,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-bold text-slate-800 m-0 text-xs">{item.campo_nome}</p>
-                        <p className="text-[11px] font-bold text-slate-400 uppercase mt-0.5">{item.turno}</p>
+                        <p className="font-bold text-slate-800 m-0 text-xs">{item.turno || 'Passe Global'}</p>
                       </td>
                       <td className="px-6 py-4">
                         {temRisco ? (
@@ -605,7 +592,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         </div>
       </div>
 
-      {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES */}
+      {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES MANUAIS COM MODELO DE PASSES */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -624,12 +611,12 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                   <button onClick={() => setImportMode('manual')} className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-slate-200 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all group">
                     <span className="text-4xl">✍️</span>
                     <span className="font-black text-slate-800 group-hover:text-orange-700">Adicionar Manualmente</span>
-                    <span className="text-xs font-medium text-slate-500 text-center">Preencher um formulário rápido c/ calendário (ideal para 1 a 1).</span>
+                    <span className="text-xs font-medium text-slate-500 text-center">Selecionar Passes e Variantes de Preço configuradas.</span>
                   </button>
                   <button onClick={() => setImportMode('excel')} className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-slate-200 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
                     <span className="text-4xl">📊</span>
                     <span className="font-black text-slate-800 group-hover:text-emerald-700">Importar Excel/CSV</span>
-                    <span className="text-xs font-medium text-slate-500 text-center">Fazer upload de um ficheiro (ideal para muitas reservas).</span>
+                    <span className="text-xs font-medium text-slate-500 text-center">Fazer upload de um ficheiro em lote.</span>
                   </button>
                 </div>
               )}
@@ -638,96 +625,71 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 <form id="form-manual" onSubmit={handleAddExterno} className="flex flex-col gap-6">
                   
                   <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">1. Destino, Calendário e Horário</h3>
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">1. Escolha do Programa e Variante de Preço</h3>
                     <div className="flex flex-col gap-4">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Escolha o Programa/Campo de Férias</label>
-                        <select required value={formExterno.campo_id} onChange={e => { setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: "", valor_pago: 0}); setDiaExterno(""); }} style={customSelectStyle} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-orange-500 cursor-pointer">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Programa/Campo de Férias</label>
+                        <select required value={formExterno.campo_id} onChange={e => setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: "", valor_pago: 0})} style={customSelectStyle} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-orange-500 cursor-pointer">
                           <option value="">Selecione o Campo...</option>
                           {camposParceiro.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </div>
 
                       {formExterno.campo_id && (
-                        <div className="bg-white p-4 border border-slate-200 rounded-2xl animate-in fade-in">
-                          {(pacotesModal.length > 0 && diasSoltosModal.length > 0) && (
-                            <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
-                              <button type="button" onClick={() => { setModalidadeExterna('pacote'); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
-                                Programa Inteiro (Pacote)
-                              </button>
-                              <button type="button" onClick={() => { setModalidadeExterna('dia_solto'); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'dia_solto' ? 'bg-white text-orange-700 shadow-sm border border-orange-100' : 'text-slate-500'}`}>
-                                Dias Soltos Avulso
-                              </button>
-                            </div>
-                          )}
-
-                          {modalidadeExterna === 'pacote' && pacotesModal.length > 0 && (
-                            <div className="flex flex-col gap-2">
-                              {pacotesModal.map((pac: any) => {
-                                const isActive = formExterno.turno_nome === pac.nome;
-                                const tagInfo = getHorarioInfo(pac.nome, isEn);
-                                return (
-                                  <div key={pac.id} onClick={() => setTurnoEscolhido(pac)} className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${isActive ? 'bg-orange-50 border-orange-500' : 'border-slate-100 hover:border-orange-200 bg-slate-50/50'}`}>
-                                    <div>
-                                      <p className={`text-sm font-black m-0 ${isActive ? 'text-orange-900' : 'text-slate-800'}`}>{limparNomeParaExibicao(pac.nome)}</p>
-                                      <p className="text-[10px] text-slate-500 m-0 mt-0.5">{tagInfo.icon} {tagInfo.tag} ({formatarDataExibicao(pac.data_inicio)} - {formatarDataExibicao(pac.data_fim)})</p>
-                                    </div>
-                                    <span className={`text-sm font-black ${isActive ? 'text-orange-700' : 'text-slate-500'}`}>{pac.preco}€</span>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-
-                          {modalidadeExterna === 'dia_solto' && diasSoltosModal.length > 0 && (
-                            <div className="flex flex-col gap-4">
-                              <div>
-                                <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">A. Clique no Dia Pretendido</label>
-                                <div className="grid grid-cols-5 sm:grid-cols-7 gap-1.5">
-                                  {datasUnicasModal.map((data: string) => {
-                                    const isActive = diaExterno === data;
-                                    const dateObj = new Date(data);
-                                    const diaSemana = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.', '');
-                                    const diaNumero = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' });
-
-                                    return (
-                                      <div key={data} onClick={() => { setDiaExterno(data); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex flex-col items-center justify-center py-1.5 rounded-lg cursor-pointer border ${isActive ? 'bg-orange-600 border-orange-600 text-white shadow-sm' : 'bg-white border-orange-200 text-slate-600 hover:border-orange-400'}`}>
-                                        <span className="text-[8px] font-black uppercase">{diaSemana}</span>
-                                        <span className="text-sm font-black">{diaNumero}</span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-
-                              {diaExterno && (
-                                <div className="border-t border-orange-200/50 pt-3">
-                                  <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">B. Escolher o Horário</label>
-                                  <div className="flex flex-col gap-2">
-                                    {diasSoltosModal.filter((t:any) => t.data_inicio === diaExterno).map((horario: any) => {
-                                      const isActive = formExterno.turno_nome === horario.nome;
-                                      const tagInfo = getHorarioInfo(horario.nome, isEn);
-                                      return (
-                                        <div key={horario.id} onClick={() => setTurnoEscolhido(horario)} className={`flex items-center justify-between p-2.5 rounded-lg border-2 cursor-pointer transition-all ${isActive ? 'bg-orange-700 border-orange-700 text-white' : 'bg-white border-orange-200 hover:border-orange-400'}`}>
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-sm">{tagInfo.icon}</span>
-                                            <span className={`text-xs font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>{tagInfo.tag}</span>
+                        <div className="bg-white p-4 border border-slate-200 rounded-2xl animate-in fade-in space-y-4">
+                          {/* Listagem Dinâmica Baseada nos Novos Passes */}
+                          {pacotesModal.length > 0 && (
+                            <div>
+                              <span className="block text-[10px] font-black text-indigo-800 uppercase tracking-widest mb-2">Opções Semanais Disponíveis:</span>
+                              <div className="flex flex-col gap-2">
+                                {pacotesModal.map((pac: any) => (
+                                  <div key={pac.id} className="border border-slate-200 p-3 rounded-xl bg-slate-50/50">
+                                    <p className="text-xs font-black text-slate-800 mb-2">{pac.titulo}</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      {pac.variantes?.map((v: any, i: number) => {
+                                        const isSelected = formExterno.turno_nome === `${pac.titulo} (${v.nome})`;
+                                        return (
+                                          <div key={i} onClick={() => setTurnoEscolhido(pac.titulo, v)} className={`p-2 rounded-lg border-2 cursor-pointer text-center transition-all ${isSelected ? 'bg-orange-50 border-orange-500 font-bold text-orange-900' : 'bg-white border-slate-200 hover:border-orange-200 text-slate-700'}`}>
+                                            <p className="text-[11px] m-0 font-bold">{v.nome}</p>
+                                            <p className="text-xs font-black text-indigo-700 mt-0.5">{v.preco}€</p>
                                           </div>
-                                          <span className={`text-xs font-black ${isActive ? 'text-orange-200' : 'text-orange-700'}`}>{horario.preco}€</span>
-                                        </div>
-                                      )
-                                    })}
+                                        )
+                                      })}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                ))}
+                              </div>
                             </div>
                           )}
 
+                          {diasSoltosModal.length > 0 && (
+                            <div className="pt-2 border-t border-slate-100">
+                              <span className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">Opções de Packs Diários / Avulso:</span>
+                              <div className="flex flex-col gap-2">
+                                {diasSoltosModal.map((pac: any) => (
+                                  <div key={pac.id} className="border border-slate-200 p-3 rounded-xl bg-slate-50/50">
+                                    <p className="text-xs font-black text-slate-800 mb-2">{pac.titulo}</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      {pac.variantes?.map((v: any, i: number) => {
+                                        const isSelected = formExterno.turno_nome === `${pac.titulo} (${v.nome})`;
+                                        return (
+                                          <div key={i} onClick={() => setTurnoEscolhido(pac.titulo, v)} className={`p-2 rounded-lg border-2 cursor-pointer text-center transition-all ${isSelected ? 'bg-orange-50 border-orange-500 font-bold text-orange-900' : 'bg-white border-slate-200 hover:border-orange-200 text-slate-700'}`}>
+                                            <p className="text-[11px] m-0 font-bold">{v.nome}</p>
+                                            <p className="text-xs font-black text-indigo-700 mt-0.5">{v.preco}€</p>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       
                       <div className="sm:col-span-2 mt-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Confirmação: Valor Cobrado ao Cliente (€)</label>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Valor Cobrado ao Cliente Final (€)</label>
                         <input type="number" required value={formExterno.valor_pago} onChange={e => setFormExterno({...formExterno, valor_pago: Number(e.target.value)})} className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-orange-500" />
                       </div>
                     </div>
@@ -783,7 +745,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 <div className="flex flex-col gap-6">
                   <div className="bg-blue-50 border border-blue-200 p-5 rounded-2xl">
                     <h3 className="text-sm font-black text-blue-900 mb-2">1. Descarregue o Template</h3>
-                    <p className="text-xs text-blue-700 mb-4">Para o sistema conseguir ler os seus dados, tem de usar o nosso formato exato. O nome do Campo e Turno têm de ser escritos exatamente como estão na HelloCamp.</p>
+                    <p className="text-xs text-blue-700 mb-4">Mantenha os cabeçalhos intactos para a importação em lote.</p>
                     <button onClick={downloadTemplateCSV} className="px-4 py-2 bg-white border border-blue-300 text-blue-800 font-bold rounded-lg shadow-sm hover:bg-blue-100 text-xs">
                       ⬇️ Download Template CSV
                     </button>
@@ -791,8 +753,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
                   <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl">
                     <h3 className="text-sm font-black text-slate-800 mb-2">2. Faça Upload do Ficheiro</h3>
-                    <p className="text-xs text-slate-500 mb-4">Aceitamos ficheiros .CSV guardados a partir do Excel.</p>
-                    <input type="file" accept=".csv" onChange={(e: any) => setCsvFile(e.target.files ? e.target.files[0] : null)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer" />
+                    <input type="file" accept=".csv" onChange={(e: any) => setCsvFile(e.target.files ? e.target.files[0] : null)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0" />
                   </div>
                 </div>
               )}
@@ -839,6 +800,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
             <div className="p-8 overflow-y-auto bg-slate-50 flex flex-col gap-6">
               
+              {/* Top Banner Origin */}
               {reservaSelecionada.isExterna ? (
                 <div className="bg-orange-100 text-orange-800 p-3 rounded-xl border border-orange-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
                   <b>🟠 Inscrição Externa (Manual)</b>
@@ -849,77 +811,57 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 </div>
               )}
 
-              {/* CARTÃO: GESTÃO FINANCEIRA (ONDE O PARCEIRO RESPONDE E COBRA) */}
+              {/* CARTÃO GESTÃO FINANCEIRA */}
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
                 <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
-                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest m-0">💳 Gestão Financeira</h3>
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest m-0">💳 Controlo Financeiro do Passe</h3>
                   {(!reservaSelecionada.isExterna && reservaSelecionada.status !== 'Cancelada') && (
                     <button onClick={() => setIsAjusteModalOpen(!isAjusteModalOpen)} className="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-200">
-                      + Solicitar Pagamento Extra
+                      + Cobrar Valor Adicional
                     </button>
                   )}
                 </div>
 
-                <div className="flex justify-between items-center">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-slate-500 font-bold mb-1">Valor Atual da Reserva</p>
+                    <p className="text-xs text-slate-500 font-bold mb-1">Total Faturado</p>
                     <p className="text-2xl font-black text-slate-900 m-0">{reservaSelecionada.valor}€</p>
                   </div>
-                  <div>
-                    <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${reservaSelecionada.status === 'Pago' || reservaSelecionada.status === 'Sinal Pago' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : (reservaSelecionada.status === 'Aguardando Pagamento Extra' ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-amber-50 text-amber-800 border-amber-200')}`}>
+                  <div className="text-right">
+                    <span className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${reservaSelecionada.status === 'Pago' || reservaSelecionada.status === 'Sinal Pago' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
                       Estado: {reservaSelecionada.status}
                     </span>
                   </div>
                 </div>
 
-                {/* ALERTA: PEDIDO DO PAI PENDENTE */}
                 {reservaSelecionada.pedido_pendente && (
                   <div className="mt-5 bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-start gap-3">
                     <span className="text-2xl">📬</span>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 m-0 mb-1">Pedido de Alteração do Encarregado</p>
+                    <div className="flex-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 m-0 mb-1">Pedido de Upgrade do Pai:</p>
                       <p className="text-sm font-bold text-blue-900 m-0 italic">"{reservaSelecionada.pedido_pendente}"</p>
                       <button onClick={() => setIsAjusteModalOpen(true)} className="mt-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors">
-                        Cobrar Valor Extra
+                        Aprovar e Lançar Fatura Extra
                       </button>
                     </div>
                   </div>
                 )}
 
-                {reservaSelecionada.historico_ajustes?.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-dashed border-slate-200">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Histórico de Pedidos de Pagamento:</p>
-                    {reservaSelecionada.historico_ajustes.map((aj: any, i: number) => (
-                      <div key={i} className="flex justify-between items-center text-xs font-bold text-slate-600 mb-1">
-                        <span>• {aj.motivo}</span>
-                        <span>+{aj.valor_pedido}€</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* FORMULÁRIO DE COBRANÇA */}
                 {isAjusteModalOpen && (
                   <form onSubmit={handleSubmeterAjuste} className="mt-6 pt-5 border-t border-slate-100 animate-in fade-in">
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-4">
-                      <h4 className="text-xs font-black text-blue-900 uppercase tracking-widest mb-1">Enviar Pedido de Pagamento Adicional</h4>
-                      <p className="text-xs text-blue-700 m-0 leading-relaxed">O encarregado de educação receberá um email com uma referência de pagamento da Stripe para liquidar este valor extra.</p>
-                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Motivo (Ex: Adição de Transporte)</label>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Motivo do Ajuste (Ex: Upgrade para Variante Alimentação)</label>
                         <input type="text" required value={ajusteForm.motivo} onChange={e => setAjusteForm({...ajusteForm, motivo: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400" />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Valor Extra (€)</label>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Preço a Cobrar Extra (€)</label>
                         <input type="number" required min="1" value={ajusteForm.valor} onChange={e => setAjusteForm({...ajusteForm, valor: Number(e.target.value)})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400" />
                       </div>
                     </div>
-                    <div className="flex justify-end gap-2 mt-2">
-                      <button type="button" onClick={() => setIsAjusteModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">Cancelar</button>
-                      <button type="submit" disabled={savingAjuste} className="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm disabled:opacity-50">
-                        {savingAjuste ? 'A Enviar...' : 'Enviar Pedido de Pagamento'}
-                      </button>
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={() => setIsAjusteModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg">Cancelar</button>
+                      <button type="submit" disabled={savingAjuste} className="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Enviar Pedido</button>
                     </div>
                   </form>
                 )}
@@ -932,35 +874,23 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                     <div className="flex justify-between"><span className="font-bold text-slate-500">Nome:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.nome}</span></div>
                     <div className="flex justify-between"><span className="font-bold text-slate-500">Nascimento:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.data_nascimento || 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="font-bold text-slate-500">Género:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.sexo || 'N/A'}</span></div>
-                    <div className="flex justify-between"><span className="font-bold text-slate-500">T-Shirt:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.tamanho_tshirt || 'N/A'}</span></div>
                   </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border-2 border-red-100 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-red-50 rounded-bl-full flex items-start justify-end p-2 text-xl">🏥</div>
-                  <h3 className="text-sm font-black text-red-400 uppercase tracking-widest mb-4 pb-2 border-b border-red-50">Perfil Clínico e Alertas</h3>
-                  
-                  <div className="mb-4 bg-red-50 p-3 rounded-xl border border-red-100">
-                    <span className="block text-[10px] font-black text-red-500 uppercase mb-1">Alergias Alimentares</span>
-                    <span className="text-sm font-black text-red-900">{reservaSelecionada.crianca?.restricoes_alimentares || 'Não preenchido'}</span>
+                  <h3 className="text-sm font-black text-red-400 uppercase tracking-widest mb-4 pb-2 border-b border-red-50">Perfil Clínico</h3>
+                  <div className="mb-2 bg-red-50 p-2.5 rounded-lg text-xs font-bold text-red-900">
+                    Alergias: {reservaSelecionada.crianca?.restricoes_alimentares || 'Nenhuma'}
                   </div>
-                  
-                  <div className="space-y-3">
-                    <div>
-                      <span className="block text-[10px] font-black text-slate-400 uppercase mb-0.5">Doenças Crónicas</span>
-                      <p className="m-0 text-sm font-bold text-slate-700">{reservaSelecionada.crianca?.doencas_cronicas || 'Nenhuma declarada'}</p>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-black text-slate-400 uppercase mb-0.5">Medicação Regular</span>
-                      <p className="m-0 text-sm font-bold text-slate-700">{reservaSelecionada.crianca?.medicacao_regular || 'Nenhuma'}</p>
-                    </div>
+                  <div className="bg-red-50 p-2.5 rounded-lg text-xs font-bold text-red-900">
+                    Doenças: {reservaSelecionada.crianca?.doencas_cronicas || 'Nenhuma'}
                   </div>
                 </div>
               </div>
 
               {reservaSelecionada.respostasCustomizadas && Object.keys(reservaSelecionada.respostasCustomizadas).length > 0 && (
                 <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl shadow-sm">
-                   <h3 className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4 pb-2 border-b border-blue-200/50">📋 Respostas Específicas do Campo</h3>
+                   <h3 className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4 pb-2 border-b border-blue-200/50">📋 Respostas Específicas das Perguntas Customizadas</h3>
                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                      {Object.entries(reservaSelecionada.respostasCustomizadas)
                         .filter(([p]) => p !== 'origem' && p !== 'historico_ajustes' && p !== 'pedido_pai_pendente')
@@ -973,23 +903,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                    </div>
                 </div>
               )}
-
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">🛡️ Contactos e Recolha</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between"><span className="font-bold text-slate-500">Responsável:</span> <span className="font-black text-slate-900">{reservaSelecionada.pai?.nome}</span></div>
-                    <div className="flex justify-between"><span className="font-bold text-slate-500">Telefone:</span> <span className="font-black text-slate-900">{reservaSelecionada.pai?.telefone}</span></div>
-                    <div className="flex justify-between"><span className="font-bold text-slate-500">Email:</span> <span className="font-black text-slate-900">{reservaSelecionada.pai?.email}</span></div>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl">
-                      <span className="block text-[10px] font-black text-amber-600 uppercase mb-1">Telefone de Emergência</span>
-                      <span className="text-sm font-black text-amber-900">{reservaSelecionada.pai?.emergencia}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
             </div>
           </div>
