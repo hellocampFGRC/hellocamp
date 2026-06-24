@@ -73,7 +73,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     }
   }, [calendario.data_inicio, calendario.data_fim, calendario.dias_semana]);
 
-  // Selecionar o primeiro pacote automaticamente
+  // Selecionar o primeiro pacote automaticamente no carregamento da página
   useEffect(() => {
     if (pacotes.length > 0) {
       const primeiro = pacotes[0];
@@ -149,7 +149,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   if (extraProlongamento) totalExtras += (valProlongamento * totalDias);
   if (extraTransporte) totalExtras += (valTransporte * totalDias);
 
-  // Multiplicador Base para o Preço do Programa (Semana cobra 1x o valor. Dia Solto cobra Nx o valor).
+  // Multiplicador Base para o Preço do Programa (Semana cobra 1x o valor por quantidade escolhida. Dia Solto cobra Nx o valor).
   const multiplicadorPrecoBase = pacoteSelecionado?.tipo === 'dia' ? diasSelecionados.length : 1;
   const precoTotal = ((precoBase * multiplicadorPrecoBase) + totalExtras) * quantidade;
 
@@ -206,7 +206,9 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{isEn ? 'Price per child' : 'Preço por criança'}</p>
         <div className="flex items-baseline gap-2">
           <span className="text-4xl font-black text-slate-900 leading-none">{precoBase}€</span>
-          <span className="text-sm font-bold text-slate-500">/ {isEn ? 'child' : 'criança'}</span>
+          <span className="text-sm font-bold text-slate-500">
+            / {pacoteSelecionado?.tipo === 'dia' ? (isEn ? 'day' : 'dia') : (isEn ? 'child' : 'criança')}
+          </span>
         </div>
       </div>
 
@@ -227,7 +229,13 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
                 return (
                   <div
                     key={pac.id}
-                    onClick={() => { setPacoteSelecionado(pac); setDiasSelecionados([]); }}
+                    onClick={() => { 
+                      setPacoteSelecionado(pac); 
+                      setDiasSelecionados([]); // Limpa as datas ao mudar de pacote
+                      if (pac.variantes && pac.variantes.length > 0) {
+                        setVarianteSelecionada(pac.variantes[0]); // ATUALIZA O PREÇO IMEDIATAMENTE
+                      }
+                    }}
                     className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
                       isActive ? 'bg-slate-900 border-slate-900 shadow-md' : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
@@ -248,7 +256,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
             </div>
           </div>
 
-          {/* CALENDÁRIO VISUAL (ATUALIZADO PARA VERDE) */}
+          {/* CALENDÁRIO VISUAL */}
           {pacoteSelecionado && datasDisponiveis.length > 0 && (
             <div className="mb-6 animate-in fade-in">
               <label className="block text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-3">
