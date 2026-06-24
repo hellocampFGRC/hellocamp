@@ -16,7 +16,7 @@ const PAISES_DESTAQUE = [
   { nome: "Suíça", nome_en: "Switzerland", imagem: "https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&q=80&w=1000", desc: "Montanhas e Lagos", desc_en: "Mountains and Lakes" }
 ];
 
-// ARRAY DE DISTRITOS (Imagem de Aveiro corrigida)
+// ARRAY DE DISTRITOS
 const DISTRITOS_DESTAQUE = [
   { nome: "Lisboa", nome_en: "Lisbon", imagem: "https://images.unsplash.com/photo-1585208798174-6cedd86e019a?auto=format&fit=crop&q=80&w=1000", desc: "Capital Vibrante", desc_en: "Vibrant Capital" },
   { nome: "Porto", nome_en: "Porto", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=1000", desc: "A Magia do Norte", desc_en: "Northern Magic" },
@@ -259,7 +259,17 @@ export default async function Home({
                 const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
                 const localCampo = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
                 const idadeCampo = isEn && campo.idade_en ? campo.idade_en : campo.idade;
-                const precoVisivel = campo.preco || (campo.turnos && campo.turnos.length > 0 ? campo.turnos[0].preco : 0);
+                
+                // Lógica Inteligente para encontrar o preço mais baixo da nova estrutura (pacotes)
+                let precoVisivel = campo.preco || 0;
+                if (!precoVisivel && campo.pacotes && campo.pacotes.length > 0) {
+                  const todosPrecos = campo.pacotes.flatMap((p: any) => 
+                    p.variantes ? p.variantes.map((v: any) => v.preco) : []
+                  );
+                  if (todosPrecos.length > 0) {
+                    precoVisivel = Math.min(...todosPrecos);
+                  }
+                }
 
                 return (
                   <div key={campoId} className="group relative flex flex-col bg-white overflow-hidden border border-slate-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
@@ -285,7 +295,10 @@ export default async function Home({
                       <p className="text-sm text-slate-500 font-medium mb-6">{dict.home.faixa_etaria_label} {idadeCampo}</p>
                       
                       <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
-                        <p className="text-2xl font-black text-emerald-600 m-0">{precoVisivel}€</p>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
+                          <p className="text-2xl font-black text-emerald-600 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                        </div>
                         <span className="text-sm font-black uppercase tracking-wider text-[#EBA914] transition-transform group-hover:translate-x-1">
                           {dict.home.explorar} &rarr;
                         </span>
