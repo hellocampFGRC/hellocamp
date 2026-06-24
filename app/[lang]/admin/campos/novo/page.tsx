@@ -37,7 +37,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
 
-  // Dropdowns Customizados States
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
   const [isPolDropdownOpen, setIsPolDropdownOpen] = useState(false);
 
@@ -53,32 +52,30 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     descricao: "", 
     perguntas: [] as string[],
     
-    // NOVOS CAMPOS: TEXTOS DESCRITIVOS LOGÍSTICOS
+    // TEXTOS DESCRITIVOS LOGÍSTICOS
     racio_monitores: "",
     alimentacao: "",
     alojamento: "",
     seguro: "",
 
-    // NOVOS CAMPOS: VALORES FINANCEIROS EXTRAS
-    extra_alimentacao: 0,
-    extra_alojamento: 0,
-    extra_prolongamento: 0,
-    extra_transporte: 0
+    // VALORES FINANCEIROS EXTRAS (Apenas Seguro e Transporte)
+    extra_seguro: 0,
+    tipo_extra_seguro: "fixo",
+    extra_transporte: 0,
+    tipo_extra_transporte: "diario"
   });
 
   const [galeria, setGaleria] = useState<GaleriaUpload[]>([]);
   const mapIframeUrl = formData.local ? `https://maps.google.com/maps?q=${encodeURIComponent(formData.local)}&t=&z=13&ie=UTF8&iwloc=&output=embed` : "";
 
-  // Estados Modal Pacotes
+  // Estados Modal Pacotes & Descontos
   const [isPacoteModalOpen, setIsPacoteModalOpen] = useState(false);
   const [novoPacote, setNovoPacote] = useState<Pacote>({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
-
-  // Estados Modal Descontos
   const [isDescontoModalOpen, setIsDescontoModalOpen] = useState(false);
   const [novoDesconto, setNovoDesconto] = useState<Desconto>({ id: "", nome: "", percentagem: 10, acumulavel: false });
 
   // ==========================================
-  // HANDLERS: CATEGORIAS & PERGUNTAS DINÂMICAS
+  // HANDLERS E FUNÇÕES
   // ==========================================
   const handleSelectCategoria = (catId: string) => {
     setFormData(prev => {
@@ -94,9 +91,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     setIsCatDropdownOpen(false);
   };
 
-  // ==========================================
-  // HANDLERS: GALERIA E UPLOADS LOCAIS
-  // ==========================================
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
@@ -123,9 +117,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     setGaleria(novaGaleria);
   };
 
-  // ==========================================
-  // HANDLERS: MOTOR DE PREÇOS
-  // ==========================================
   const toggleDiaSemana = (diaId: number) => {
     const dias = formData.calendario_funcionamento.dias_semana.includes(diaId)
       ? formData.calendario_funcionamento.dias_semana.filter((d: number) => d !== diaId)
@@ -148,9 +139,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     setNovoPacote({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
   };
 
-  // ==========================================
-  // HANDLERS: DESCONTOS MÚLTIPLOS
-  // ==========================================
   const guardarDesconto = () => {
     if (!novoDesconto.nome || novoDesconto.percentagem <= 0) return alert("Preencha o nome e um valor superior a 0.");
     const descontoFinal = { ...novoDesconto, id: novoDesconto.id || Math.random().toString(36).substring(2, 9) };
@@ -160,29 +148,13 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     setNovoDesconto({ id: "", nome: "", percentagem: 10, acumulavel: false });
   };
 
-  const adicionarVariante = () => {
-    setNovoPacote(prev => ({ ...prev, variantes: [...prev.variantes, { nome: "", preco: 0 }] }));
-  };
-
-  const removerVariante = (index: number) => {
-    setNovoPacote(prev => ({ ...prev, variantes: prev.variantes.filter((_, i) => i !== index) }));
-  };
-
-  const eliminarPacote = (id: string) => {
-    setFormData(prev => ({ ...prev, pacotes: prev.pacotes.filter(p => p.id !== id) }));
-  };
-
-  const addPergunta = () => {
-    setFormData(prev => ({ ...prev, perguntas: [...prev.perguntas, ""] }));
-  };
-
-  const removePergunta = (index: number) => {
-    setFormData(prev => ({ ...prev, perguntas: prev.perguntas.filter((_, i) => i !== index) }));
-  };
-
-  const updatePergunta = (index: number, value: string) => {
-    setFormData(prev => ({ ...prev, perguntas: prev.perguntas.map((p, i) => i === index ? value : p) }));
-  };
+  const adicionarVariante = () => setNovoPacote(prev => ({ ...prev, variantes: [...prev.variantes, { nome: "", preco: 0 }] }));
+  const removerVariante = (index: number) => setNovoPacote(prev => ({ ...prev, variantes: prev.variantes.filter((_, i) => i !== index) }));
+  const eliminarPacote = (id: string) => setFormData(prev => ({ ...prev, pacotes: prev.pacotes.filter(p => p.id !== id) }));
+  
+  const addPergunta = () => setFormData(prev => ({ ...prev, perguntas: [...prev.perguntas, ""] }));
+  const removePergunta = (index: number) => setFormData(prev => ({ ...prev, perguntas: prev.perguntas.filter((_, i) => i !== index) }));
+  const updatePergunta = (index: number, value: string) => setFormData(prev => ({ ...prev, perguntas: prev.perguntas.map((p, i) => i === index ? value : p) }));
 
   // ==========================================
   // GUARDA FINAL NA BASE DE DADOS
@@ -221,7 +193,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
 
       const perguntasLimpas = formData.perguntas.filter(p => p.trim() !== "");
 
-      // Gravação unificada com todas as chaves operacionais e financeiras
       const { error } = await supabase.from('campos').insert({
         organizador_id: session.user.id,
         nome: formData.nome,
@@ -242,7 +213,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         descontos: formData.descontos,
         status_aprovacao: 'Pendente',
         
-        // ENVIO DOS NOVOS CAMPOS DESCRITIVOS LOGÍSTICOS
+        // Logística
         racio_monitores: formData.racio_monitores,
         racio_monitores_en: formData.racio_monitores,
         alimentacao: formData.alimentacao,
@@ -252,11 +223,11 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         seguro: formData.seguro,
         seguro_en: formData.seguro,
 
-        // ENVIO DOS NOVOS CAMPOS FINANCEIROS EXTRAS
-        extra_alimentacao: formData.extra_alimentacao,
-        extra_alojamento: formData.extra_alojamento,
-        extra_prolongamento: formData.extra_prolongamento,
-        extra_transporte: formData.extra_transporte
+        // Extras Financeiros
+        extra_seguro: formData.extra_seguro,
+        tipo_extra_seguro: formData.tipo_extra_seguro,
+        extra_transporte: formData.extra_transporte,
+        tipo_extra_transporte: formData.tipo_extra_transporte
       });
 
       if (error) throw error;
@@ -472,27 +443,35 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               )}
             </div>
 
-            {/* INTEGRADO: NOVO APURAMENTO DE EXTRAS FINANCEIROS NUMÉRICOS */}
+            {/* EXTRAS FINANCEIROS: APENAS SEGURO E TRANSPORTE */}
             <div className="pt-8 border-t border-slate-100">
-              <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>💰</span> {isEn ? 'Optional Financial Extras' : '3. Valores Extras Opcionais'}</h2>
-              <p className="text-xs text-slate-500 mb-6">{isEn ? 'Set prices for optional services charged per child.' : 'Defina os preços numéricos para serviços opcionais faturados por criança. Se um serviço já estiver incluído ou não existir, deixe a 0.'}</p>
+              <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>💰</span> {isEn ? 'Optional Extras' : '3. Configurar Extras (Seguro e Transporte)'}</h2>
+              <p className="text-xs text-slate-500 mb-6">A alimentação e a dormida são decididas no Pacote acima (ex: Variante C/Almoço). Aqui apenas define os opcionais isolados.</p>
+              
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Suplemento de Alimentação Extra (€ / por dia)</label>
-                  <input type="number" min="0" value={formData.extra_alimentacao} onChange={e => setFormData({...formData, extra_alimentacao: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors" />
+                
+                {/* EXTRA: SEGURO */}
+                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Seguro (€)</label>
+                  <input type="number" min="0" value={formData.extra_seguro} onChange={e => setFormData({...formData, extra_seguro: Number(e.target.value)})} className="w-full p-3 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-500 mb-3" />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Método de Cobrança</label>
+                  <select value={formData.tipo_extra_seguro} onChange={e => setFormData({...formData, tipo_extra_seguro: e.target.value})} className="w-full p-3 text-xs font-bold bg-white border border-slate-200 rounded-lg outline-none focus:border-indigo-500 cursor-pointer">
+                    <option value="fixo">Taxa Fixa (Cobra 1x no final)</option>
+                    <option value="diario">Por Dia (Multiplica pelos dias da reserva)</option>
+                  </select>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Suplemento de Dormida / Alojamento Extra (€ / por noite)</label>
-                  <input type="number" min="0" value={formData.extra_alojamento} onChange={e => setFormData({...formData, extra_alojamento: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors" />
+
+                {/* EXTRA: TRANSPORTE */}
+                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Transporte (€)</label>
+                  <input type="number" min="0" value={formData.extra_transporte} onChange={e => setFormData({...formData, extra_transporte: Number(e.target.value)})} className="w-full p-3 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-500 mb-3" />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Método de Cobrança</label>
+                  <select value={formData.tipo_extra_transporte} onChange={e => setFormData({...formData, tipo_extra_transporte: e.target.value})} className="w-full p-3 text-xs font-bold bg-white border border-slate-200 rounded-lg outline-none focus:border-indigo-500 cursor-pointer">
+                    <option value="diario">Por Dia (Multiplica pelos dias da reserva)</option>
+                    <option value="fixo">Taxa Fixa (Cobra 1x no final)</option>
+                  </select>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Suplemento de Prolongamento Horário Extra (€ / por dia)</label>
-                  <input type="number" min="0" value={formData.extra_prolongamento} onChange={e => setFormData({...formData, extra_prolongamento: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Suplemento de Transporte / Autocarro Extra (€ / por dia)</label>
-                  <input type="number" min="0" value={formData.extra_transporte} onChange={e => setFormData({...formData, extra_transporte: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors" />
-                </div>
+
               </div>
             </div>
 
@@ -543,7 +522,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 <textarea rows={5} placeholder="Descreva as atividades, os horários, e o que as crianças vão aprender..." value={formData.descricao} onChange={e => setFormData({...formData, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:bg-white resize-none leading-relaxed transition-colors" />
               </div>
 
-              {/* INTEGRADO: NOVOS INPUTS DE TEXTOS DESCRITIVOS LOGÍSTICOS */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-200">
                 <div className="sm:col-span-2 mb-2">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400 m-0">Textos Informativos Importantes (Logística)</p>
