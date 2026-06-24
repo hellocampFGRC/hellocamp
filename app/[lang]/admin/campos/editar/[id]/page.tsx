@@ -41,6 +41,8 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   // Dropdowns Customizados States
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
   const [isPolDropdownOpen, setIsPolDropdownOpen] = useState(false);
+  const [isSegDropdownOpen, setIsSegDropdownOpen] = useState(false);
+  const [isTraDropdownOpen, setIsTraDropdownOpen] = useState(false);
 
   // ==========================================
   // 2. ESTADO DO FORMULÁRIO COMPLETO
@@ -52,7 +54,19 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     pacotes: [] as Pacote[],
     descontos: [] as Desconto[],
     descricao: "", 
-    perguntas: [] as string[]
+    perguntas: [] as string[],
+
+    // TEXTOS DESCRITIVOS LOGÍSTICOS
+    racio_monitores: "",
+    alimentacao: "",
+    alojamento: "",
+    seguro: "",
+
+    // VALORES FINANCEIROS EXTRAS OTIMIZADOS
+    extra_seguro: 0,
+    tipo_extra_seguro: "fixo",
+    extra_transporte: 0,
+    tipo_extra_transporte: "diario"
   });
 
   const [galeria, setGaleria] = useState<GaleriaUpload[]>([]);
@@ -78,7 +92,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         return;
       }
       if (data) {
-        // Preencher formData
+        // Preencher formData com os novos campos integrados
         setFormData({
           nome: data.nome || "",
           local: data.local || "",
@@ -91,7 +105,19 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           pacotes: data.pacotes || [],
           descontos: data.descontos || [],
           descricao: data.descricao || "",
-          perguntas: data.perguntas_customizadas || []
+          perguntas: data.perguntas_customizadas || [],
+
+          // Textos Logísticos
+          racio_monitores: data.racio_monitores || "",
+          alimentacao: data.alimentacao || "",
+          alojamento: data.alojamento || "",
+          seguro: data.seguro || "",
+
+          // Valores Financeiros
+          extra_seguro: data.extra_seguro || 0,
+          tipo_extra_seguro: data.tipo_extra_seguro || "fixo",
+          extra_transporte: data.extra_transporte || 0,
+          tipo_extra_transporte: data.tipo_extra_transporte || "diario"
         });
 
         // Galeria (imagem principal + galeria)
@@ -129,7 +155,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   }, [id, lang, router]);
 
   // ==========================================
-  // 4. HANDLERS (IGUAIS AO NOVO CAMPO)
+  // 4. HANDLERS E FUNÇÕES DE MANIPULAÇÃO
   // ==========================================
   const handleSelectCategoria = (catId: string) => {
     setFormData(prev => {
@@ -224,24 +250,15 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   };
 
   const addPergunta = () => {
-    setFormData(prev => ({
-      ...prev,
-      perguntas: [...prev.perguntas, ""]
-    }));
+    setFormData(prev => ({ ...prev, perguntas: [...prev.perguntas, ""] }));
   };
 
   const removePergunta = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      perguntas: prev.perguntas.filter((_, i) => i !== index)
-    }));
+    setFormData(prev => ({ ...prev, perguntas: prev.perguntas.filter((_, i) => i !== index) }));
   };
 
   const updatePergunta = (index: number, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      perguntas: prev.perguntas.map((p, i) => i === index ? value : p)
-    }));
+    setFormData(prev => ({ ...prev, perguntas: prev.perguntas.map((p, i) => i === index ? value : p) }));
   };
 
   // ==========================================
@@ -263,7 +280,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
       for (const img of galeria) {
         if (img.file) {
-          // É uma imagem nova (upload)
           const fileExt = img.file.name.split('.').pop();
           const fileName = `${session.user.id}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
           
@@ -277,7 +293,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           uploadedUrls.push(publicUrl);
           if (img.isCapa) capaUrl = publicUrl;
         } else {
-          // Já é uma URL existente (não foi alterada)
           uploadedUrls.push(img.previewUrl);
           if (img.isCapa) capaUrl = img.previewUrl;
         }
@@ -287,7 +302,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
       const perguntasLimpas = formData.perguntas.filter(p => p.trim() !== "");
 
-      // 2. Atualizar registo
+      // 2. Atualizar registo com todos os campos unificados
       const { error } = await supabase.from('campos').update({
         nome: formData.nome,
         nome_en: formData.nome,
@@ -305,7 +320,23 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         calendario_funcionamento: formData.calendario_funcionamento,
         pacotes: formData.pacotes,
         descontos: formData.descontos,
-        status_aprovacao: 'Pendente' // ou manter o existente? Vamos manter Pendente para reavaliação
+        status_aprovacao: 'Pendente',
+        
+        // Logística
+        racio_monitores: formData.racio_monitores,
+        racio_monitores_en: formData.racio_monitores,
+        alimentacao: formData.alimentacao,
+        alimentacao_en: formData.alimentacao,
+        alojamento: formData.alojamento,
+        alojamento_en: formData.alojamento,
+        seguro: formData.seguro,
+        seguro_en: formData.seguro,
+
+        // Extras Financeiros
+        extra_seguro: formData.extra_seguro,
+        tipo_extra_seguro: formData.tipo_extra_seguro,
+        extra_transporte: formData.extra_transporte,
+        tipo_extra_transporte: formData.tipo_extra_transporte
       }).eq('id', id);
 
       if (error) throw error;
@@ -336,7 +367,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   }
 
   // ==========================================
-  // 6. RENDER (MESMA ESTRUTURA DO NOVO CAMPO)
+  // 6. RENDER DA PÁGINA
   // ==========================================
   return (
     <div className="max-w-[1000px] mx-auto p-4 md:p-8 font-sans pb-24">
@@ -392,7 +423,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 )}
               </div>
 
-              {/* DROPDOWN CUSTOMIZADO: POLÍTICA */}
+              {/* DROPDOWN CUSTOMIZADO: POLÍTICA CANCELAMENTO */}
               <div className="relative">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Política de Cancelamento</label>
                 <div onClick={() => setIsPolDropdownOpen(!isPolDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
@@ -429,10 +460,12 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 <input type="number" placeholder="Ex: 50" value={formData.vagas_totais} onChange={e => setFormData({...formData, vagas_totais: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white" />
               </div>
 
-              {/* LOCATION & MAP PREVIEW */}
               <div className="md:col-span-2 border-t border-slate-100 pt-8 mt-2">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Localização (Morada Completa) *</label>
-                <input type="text" required placeholder="Ex: Praia da Caparica, Rua X, Setúbal" value={formData.local} onChange={e => setFormData({...formData, local: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors mb-4" />
+                <input type="text" required placeholder="Ex: Praia da Caparica, Rua X, Setúbal" value={formData.local} onChange={e => {
+                  setFormData({...formData, local: e.target.value});
+                  setMapIframeUrl(`https://maps.google.com/maps?q=${encodeURIComponent(e.target.value)}&t=&z=13&ie=UTF8&iwloc=&output=embed`);
+                }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors mb-4" />
                 
                 <div className="w-full h-48 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative flex items-center justify-center">
                   {!formData.local ? (
@@ -444,7 +477,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                       style={{ border: 0 }} 
                       loading="lazy" 
                       allowFullScreen 
-                      src={`https://maps.google.com/maps?q=${encodeURIComponent(formData.local)}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
+                      src={mapIframeUrl}
                     ></iframe>
                   )}
                 </div>
@@ -458,9 +491,9 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         {/* PASSO 2: O MOTOR DE PREÇOS INTELIGENTE */}
         {/* ========================================== */}
         {step === 2 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-10">
             
-            <div className="mb-10">
+            <div>
               <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>📅</span> {isEn ? 'Operation Calendar' : '1. Calendário de Portas Abertas'} *</h2>
               <p className="text-xs text-slate-500 mb-6">{isEn ? 'When does the camp run?' : 'Defina os limites globais do campo. O pai só poderá escolher datas dentro deste período.'}</p>
 
@@ -489,7 +522,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               </div>
             </div>
 
-            <div className="mb-10 pt-8 border-t border-slate-100">
+            <div className="pt-8 border-t border-slate-100">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>🎟️</span> {isEn ? 'Packages / Passes' : '2. Pacotes e Preços'} *</h2>
@@ -531,11 +564,71 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               )}
             </div>
 
-            {/* DESCONTOS MÚLTIPLOS E ACUMULÁVEIS */}
+            {/* EXTRAS FINANCEIROS: APENAS SEGURO E TRANSPORTE (Custom Dropdowns) */}
+            <div className="pt-8 border-t border-slate-100">
+              <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>💰</span> {isEn ? 'Optional Extras' : '3. Configurar Extras Opcionais'}</h2>
+              <p className="text-xs text-slate-500 mb-6">A alimentação e o alojamento já são mapeados em variantes. Aqui configura apenas os suplementos isolados.</p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                
+                {/* EXTRA CUSTOMIZADO: SEGURO */}
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor do Seguro (€)</label>
+                  <input type="number" min="0" value={formData.extra_seguro} onChange={e => setFormData({...formData, extra_seguro: Number(e.target.value)})} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 mb-4" />
+                  
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Modelo de Cobrança</label>
+                  <div onClick={() => setIsSegDropdownOpen(!isSegDropdownOpen)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                    <span>{formData.tipo_extra_seguro === 'fixo' ? 'Taxa Fixa (Cobra 1x no total)' : 'Por Dia (Multiplica pelos dias)'}</span>
+                    <span className="text-[10px] text-slate-400">▼</span>
+                  </div>
+                  {isSegDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsSegDropdownOpen(false)}></div>
+                      <div className="absolute top-[calc(100%-12px)] left-5 right-5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <div onClick={() => { setFormData({...formData, tipo_extra_seguro: 'fixo'}); setIsSegDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                          Taxa Fixa (Cobra 1x no total)
+                        </div>
+                        <div onClick={() => { setFormData({...formData, tipo_extra_seguro: 'diario'}); setIsSegDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                          Por Dia (Multiplica pelos dias)
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* EXTRA CUSTOMIZADO: TRANSPORTE */}
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor do Transporte (€)</label>
+                  <input type="number" min="0" value={formData.extra_transporte} onChange={e => setFormData({...formData, extra_transporte: Number(e.target.value)})} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 mb-4" />
+                  
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Modelo de Cobrança</label>
+                  <div onClick={() => setIsTraDropdownOpen(!isTraDropdownOpen)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                    <span>{formData.tipo_extra_transporte === 'diario' ? 'Por Dia (Multiplica pelos dias)' : 'Taxa Fixa (Cobra 1x no total)'}</span>
+                    <span className="text-[10px] text-slate-400">▼</span>
+                  </div>
+                  {isTraDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsTraDropdownOpen(false)}></div>
+                      <div className="absolute top-[calc(100%-12px)] left-5 right-5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <div onClick={() => { setFormData({...formData, tipo_extra_transporte: 'diario'}); setIsTraDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                          Por Dia (Multiplica pelos dias)
+                        </div>
+                        <div onClick={() => { setFormData({...formData, tipo_extra_transporte: 'fixo'}); setIsTraDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                          Taxa Fixa (Cobra 1x no total)
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
+            {/* REGRAS DE DESCONTO */}
             <div className="pt-8 border-t border-slate-100">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>✨</span> {isEn ? 'Discounts' : '3. Regras de Desconto'}</h2>
+                  <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>✨</span> {isEn ? 'Discounts' : '4. Regras de Desconto'}</h2>
                   <p className="text-xs text-slate-500">{isEn ? 'Create automated cart discounts.' : 'Crie as regras de negócio para quem compra em volume ou traz irmãos.'}</p>
                 </div>
                 <button type="button" onClick={() => setIsDescontoModalOpen(true)} className="bg-indigo-50 text-indigo-700 font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-indigo-100 transition-colors">
@@ -555,7 +648,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                            {desc.percentagem}% • {desc.acumulavel ? 'Acumulável ✅' : 'Não Acumulável 🚫'}
                          </p>
                        </div>
-                       <button type="button" onClick={() => setFormData({...formData, descontos: formData.descontos.filter(d => d.id !== desc.id)})} className="w-8 h-8 rounded-full bg-red-50 text-red-500 font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100">&times;</button>
+                       <button type="button" onClick={() => setFormData({...formData, descontos: formData.descontos.filter(d => d.id !== desc.id)})} className="w-8 h-8 rounded-full bg-red-50 text-red-500 font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100">×</button>
                     </div>
                   ))}
                 </div>
@@ -566,27 +659,48 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         )}
 
         {/* ========================================== */}
-        {/* PASSO 3: DESCRIÇÃO, GALERIA E PERGUNTAS */}
+        {/* PASSO 3: DESCRIÇÃO, LOGÍSTICA E GALERIA */}
         {/* ========================================== */}
         {step === 3 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500">
             
-            <div className="mb-10">
-              <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><span>📸</span> {isEn ? 'Media & Forms' : '1. Apresentação e Galeria'}</h2>
+            <div className="mb-10 space-y-6">
+              <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><span>📸</span> {isEn ? 'Media & Forms' : '1. Apresentação Editorial e Logística'}</h2>
               
-              <div className="mb-6">
-                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição Longa *</label>
+              <div>
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição Longa do Programa *</label>
                 <textarea rows={5} placeholder="Descreva as atividades, os horários, e o que as crianças vão aprender..." value={formData.descricao} onChange={e => setFormData({...formData, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:bg-white resize-none leading-relaxed transition-colors" />
               </div>
 
-              {/* UPLOAD DE IMAGENS DO DISPOSITIVO */}
+              {/* INPUTS DE TEXTOS DESCRITIVOS LOGÍSTICOS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-200">
+                <div className="sm:col-span-2 mb-2">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400 m-0">Textos Informativos Importantes (Logística)</p>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Rácio de Monitores (Texto)</label>
+                  <input type="text" placeholder='Ex: "1 monitor para 6 crianças"' value={formData.racio_monitores} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alimentação (Texto)</label>
+                  <input type="text" placeholder='Ex: "Almoço e lanches incluídos"' value={formData.alimentacao} onChange={e => setFormData({...formData, alimentacao: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alojamento / Dormida (Texto)</label>
+                  <input type="text" placeholder='Ex: "Regime Diurno (sem dormida)"' value={formData.alojamento} onChange={e => setFormData({...formData, alojamento: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Cobertura de Seguros (Texto)</label>
+                  <input type="text" placeholder='Ex: "Seguro Acidentes Pessoais incluído"' value={formData.seguro} onChange={e => setFormData({...formData, seguro: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 transition-colors" />
+                </div>
+              </div>
+
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
                 <div className="flex justify-between items-center mb-4">
                   <div>
                     <label className="block text-[11px] font-black text-slate-800 uppercase tracking-widest m-0">Galeria de Fotografias *</label>
-                    <p className="text-[10px] text-slate-500 m-0 mt-1">Adicione fotos fantásticas. A imagem assinalada com ⭐ será a Capa do Campo.</p>
+                    <p className="text-[10px] text-slate-500 m-0 mt-1">Adicione fotos do campo. A imagem com ⭐ será a Capa.</p>
                   </div>
-                  {/* Botão Falso de Upload (esconde o input real) */}
                   <label className="bg-indigo-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer hover:bg-indigo-700 transition-colors shadow-sm">
                     + Escolher Ficheiros
                     <input type="file" multiple accept="image/*" onChange={handleFileUpload} className="hidden" />
@@ -604,7 +718,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                       <div key={img.id} className={`relative rounded-xl overflow-hidden aspect-square border-4 transition-all group ${img.isCapa ? 'border-indigo-500 shadow-lg' : 'border-transparent'}`}>
                         <img src={img.previewUrl} className="w-full h-full object-cover" />
                         
-                        {/* Overlay Dark Hover */}
                         <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
                           {!img.isCapa && (
                             <button type="button" onClick={() => setComoCapa(img.id)} className="bg-white text-slate-900 text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm">
@@ -616,7 +729,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                           </button>
                         </div>
 
-                        {/* Badge de Capa */}
                         {img.isCapa && (
                           <div className="absolute top-2 left-2 bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">
                             Capa ⭐
@@ -629,12 +741,12 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               </div>
             </div>
 
-            {/* Formulário Automático do Organizador (Perguntas) */}
+            {/* FORMULÁRIO DE PERGUNTAS */}
             <div className="pt-8 border-t border-slate-100">
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>📋</span> {isEn ? 'Custom Forms' : '2. Perguntas aos Pais'}</h2>
-                  <p className="text-[10px] text-slate-500 m-0 mt-1 max-w-sm">NIF, Alergias e Doenças já são recolhidos. Pode adicionar perguntas específicas para o seu campo.</p>
+                  <p className="text-[10px] text-slate-500 m-0 mt-1 max-w-sm">NIF, Alergias e Doenças já são recolhidos. Adicione perguntas específicas se necessário.</p>
                 </div>
                 <button type="button" onClick={addPergunta} className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-4 py-2.5 rounded-xl hover:bg-emerald-100 transition-colors">
                   + Pergunta
@@ -645,7 +757,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 {formData.perguntas.map((pergunta, i) => (
                   <div key={i} className="flex gap-2">
                     <input type="text" placeholder="Ex: Qual o tamanho da T-Shirt do Participante?" value={pergunta} onChange={e => updatePergunta(i, e.target.value)} className="flex-1 p-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 shadow-sm" />
-                    <button type="button" onClick={() => removePergunta(i)} className="w-12 h-12 flex items-center justify-center bg-red-50 text-red-500 rounded-xl hover:bg-red-100 font-bold transition-colors">&times;</button>
+                    <button type="button" onClick={() => removePergunta(i)} className="w-12 h-12 flex items-center justify-center bg-red-50 text-red-500 rounded-xl hover:bg-red-100 font-bold transition-colors">×</button>
                   </div>
                 ))}
                 {formData.perguntas.length === 0 && (
@@ -662,11 +774,11 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
       {/* BOTÕES DE NAVEGAÇÃO BASE */}
       <div className="flex justify-between items-center px-2 relative z-10">
         {step > 1 ? (
-          <button onClick={prevStep} className="px-6 py-3 font-bold text-slate-500 hover:text-slate-800 transition-colors bg-white rounded-xl shadow-sm border border-slate-200">&larr; Voltar atrás</button>
+          <button onClick={prevStep} className="px-6 py-3 font-bold text-slate-500 hover:text-slate-800 transition-colors bg-white rounded-xl shadow-sm border border-slate-200">← Voltar atrás</button>
         ) : <div></div>}
 
         {step < 3 ? (
-          <button onClick={nextStep} className="bg-slate-900 text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-indigo-600 hover:shadow-indigo-500/30 transition-all">Próximo Passo &rarr;</button>
+          <button onClick={nextStep} className="bg-slate-900 text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-indigo-600 hover:shadow-indigo-500/30 transition-all">Próximo Passo →</button>
         ) : (
           <button onClick={handleGravarCampo} disabled={saving} className="bg-emerald-600 text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all disabled:opacity-50">
             {saving ? 'A Atualizar...' : '✓ Atualizar Campo'}
@@ -675,7 +787,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
       </div>
 
       {/* ========================================== */}
-      {/* MODAIS SOBREPOSTOS (IGUAIS AO NOVO CAMPO) */}
+      {/* MODAIS DE SUPORTE */}
       {/* ========================================== */}
 
       {/* MODAL PACOTES */}
@@ -684,12 +796,12 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-black text-slate-900 text-lg m-0">{novoPacote.id ? 'Editar Pacote' : 'Construir Pacote de Venda'}</h3>
-              <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold flex items-center justify-center">&times;</button>
+              <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold flex items-center justify-center">×</button>
             </div>
 
             <div className="p-6 overflow-y-auto flex flex-col gap-6">
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">A. Formato Logístico (O que o pai escolhe no calendário?)</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">A. Formato Logístico</label>
                 <div className="flex bg-slate-100 p-1.5 rounded-xl">
                   <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'semana'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'semana' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semanas Completas</button>
                   <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'dia'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'dia' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Dias Individuais Avulso</button>
@@ -724,7 +836,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                         <span className="text-xs font-black text-slate-400 ml-1">€</span>
                       </div>
                       {novoPacote.variantes.length > 1 && (
-                        <button type="button" onClick={() => removerVariante(i)} className="w-10 h-10 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors">&times;</button>
+                        <button type="button" onClick={() => removerVariante(i)} className="w-10 h-10 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors">×</button>
                       )}
                     </div>
                   ))}
@@ -733,7 +845,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
             </div>
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
               <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
-              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-slate-900 rounded-xl hover:bg-indigo-600 shadow-md text-sm transition-colors">✓ Adicionar à Montra</button>
+              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-slate-900 rounded-xl hover:bg-indigo-600 shadow-md text-sm transition-colors">✓ Guardar Pacote</button>
             </div>
           </div>
         </div>
@@ -745,7 +857,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-black text-slate-900 text-lg m-0">Nova Regra de Desconto</h3>
-              <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold flex items-center justify-center">&times;</button>
+              <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold flex items-center justify-center">×</button>
             </div>
             <div className="p-6 flex flex-col gap-5">
               <div>
