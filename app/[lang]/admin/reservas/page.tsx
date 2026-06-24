@@ -98,58 +98,52 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     // 1. Busca Campos
     const { data: camposData } = await supabase
       .from('campos')
-      .select('id, nome, nome_en, vagas_totais, calendario_funcionamento, pacotes')
+      .select('id, nome, nome_en, vagas_totais')
       .eq('organizador_id', session.user.id);
     
     setCamposParceiro(camposData || []);
 
-    // 2. Busca Reservas com JOINS EXPLÍCITOS (garantindo que os dados relacionados sejam carregados)
-    const { data: reservasData, error } = await supabase
+    // 2. Busca Reservas de forma mais segura (usando ! para Left Join)
+    const { data: reservasData, error: resError } = await supabase
       .from('reservas')
-      .select(`
-        *,
-        criancas!crianca_id (*),
-        perfis!cliente_id (*)
-      `)
+      .select('*, criancas!left(*), perfis!left(*)') 
       .eq('organizador_id', session.user.id)
       .order('created_at', { ascending: false });
     
-    if (error) {
-      console.error("Erro ao buscar reservas:", error);
+    if (resError) {
+      console.error("Erro ao buscar reservas:", resError);
       setLoading(false);
       return;
     }
 
+    console.log("Reservas brutas recebidas:", reservasData?.length); // DEBUG: Vê se aqui aparecem as 20
+
     if (reservasData) {
       const reservasFormatadas = reservasData.map((res: any) => {
+        // Tolerância a dados nulos/ausentes
         const isExterna = res.cliente_id === session.user.id || res.status_pagamento === 'Externo';
-        let statusFinal = res.status_pagamento || 'Pendente';
-        if (isExterna) statusFinal = 'Externo';
-        if (statusFinal === 'Reembolsado') statusFinal = 'Cancelada';
-
+        
+        // Proteção contra 'undefined' no campo relacionado
         const campoRelacionado = camposData?.find((c: any) => c.id === res.campo_id);
 
         return {
           id: res.id,
           campo_id: res.campo_id,
-          campo_nome: campoRelacionado ? (isEn && campoRelacionado.nome_en ? campoRelacionado.nome_en : campoRelacionado.nome) : 'Desconhecido',
-          turno: res.turno_nome,
+          campo_nome: campoRelacionado ? (isEn && campoRelacionado.nome_en ? campoRelacionado.nome_en : campoRelacionado.nome) : 'Campo Indefinido',
+          turno: res.turno_nome || 'Turno Base',
           valor: Number(res.valor_total) || 0,
           valor_pago: Number(res.valor_pago) || 0,
-          valor_pendente_extra: Number(res.valor_pendente_extra) || 0,
-          data: res.created_at,
-          status: statusFinal,
+          status: res.status_pagamento || 'Pendente',
           isExterna: isExterna,
-          pedido_pendente: res.respostas_customizadas?.pedido_pai_pendente || null,
-          crianca: res.criancas || { nome: res.respostas_customizadas?.nome_crianca_externo || 'N/D' },
+          // Proteção contra crianca/perfil nulo
+          crianca: res.criancas ? res.criancas : { nome: res.respostas_customizadas?.nome_crianca_externo || 'Participante Manual' },
           pai: {
             nome: res.nome_encarregado || res.perfis?.nome_completo || 'N/D',
             email: res.email_encarregado || res.perfis?.email || 'N/D',
-            telefone: res.telefone_encarregado || res.perfis?.telefone || 'N/D',
-            emergencia: res.perfis?.contacto_emergencia || res.telefone_encarregado || 'N/D'
+            telefone: res.telefone_encarregado || res.perfis?.telefone || 'N/D'
           },
           respostasCustomizadas: res.respostas_customizadas || {},
-          historico_ajustes: res.respostas_customizadas?.historico_ajustes || []
+          pedido_pendente: res.respostas_customizadas?.pedido_pai_pendente || null
         };
       });
       setTodasReservas(reservasFormatadas);
