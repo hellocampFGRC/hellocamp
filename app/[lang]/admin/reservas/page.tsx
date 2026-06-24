@@ -87,7 +87,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const [modalMesAtual, setModalMesAtual] = useState<Date>(new Date());
 
   // ==========================================
-  // FETCH DE DADOS (BASE DE DADOS)
+  // FETCH DE DADOS (BASE DE DADOS) - CORRIGIDO
   // ==========================================
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -103,13 +103,23 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     
     setCamposParceiro(camposData || []);
 
-    // 2. Busca Reservas e cruza com Crianças/Pais
-    const { data: reservasData } = await supabase
+    // 2. Busca Reservas com JOINS EXPLÍCITOS (garantindo que os dados relacionados sejam carregados)
+    const { data: reservasData, error } = await supabase
       .from('reservas')
-      .select('*, criancas(*), perfis(*)')
+      .select(`
+        *,
+        criancas!crianca_id (*),
+        perfis!cliente_id (*)
+      `)
       .eq('organizador_id', session.user.id)
       .order('created_at', { ascending: false });
     
+    if (error) {
+      console.error("Erro ao buscar reservas:", error);
+      setLoading(false);
+      return;
+    }
+
     if (reservasData) {
       const reservasFormatadas = reservasData.map((res: any) => {
         const isExterna = res.cliente_id === session.user.id || res.status_pagamento === 'Externo';
