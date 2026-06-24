@@ -21,7 +21,7 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
       const { data: perfilData } = await supabase.from('perfis').select('taxa_comissao, base_comissao').eq('id', session.user.id).single();
       setPerfilBase(perfilData || { taxa_comissao: 12 });
 
-      // Selecionamos também o contrato_dados
+      // Selecionamos também o contrato_dados e os pacotes para calcular o preço
       const { data } = await supabase.from('campos').select('*').eq('organizador_id', session.user.id).order('id', { ascending: false }); 
       setCampos(data || []);
       setLoading(false);
@@ -252,7 +252,18 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
             const localVisivel = isEn && campo.local_en ? campo.local_en : campo.local;
             const vagasVisivel = campo.vagas_totais || 0;
             const textoVagas = isEn ? 'spots' : 'vagas';
-            let precoVisivel = campo.preco || (campo.turnos && campo.turnos.length > 0 ? campo.turnos[0].preco : 0);
+            
+            // Lógica Inteligente para encontrar o preço mais baixo da nova estrutura (pacotes)
+            let precoVisivel = campo.preco || 0;
+            if (!precoVisivel && campo.pacotes && campo.pacotes.length > 0) {
+              const todosPrecos = campo.pacotes.flatMap((p: any) => 
+                p.variantes ? p.variantes.map((v: any) => v.preco) : []
+              );
+              if (todosPrecos.length > 0) {
+                precoVisivel = Math.min(...todosPrecos);
+              }
+            }
+
             const isComissaoEspecifica = campo.taxa_comissao !== null && campo.taxa_comissao !== undefined;
             const taxaVisual = isComissaoEspecifica ? campo.taxa_comissao : (perfilBase?.taxa_comissao || 12);
 
@@ -264,7 +275,9 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
                   <div className="flex flex-wrap items-center gap-2 md:gap-3">
                     <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">📍 {localVisivel}</span>
                     <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">👥 {vagasVisivel} {textoVagas}</span>
-                    <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">💰 {precoVisivel}€</span>
+                    <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                      💰 {isEn ? 'From ' : 'A partir de '}{precoVisivel > 0 ? `${precoVisivel}€` : '--'}
+                    </span>
                     
                     <span className={`text-xs font-bold px-3 py-1 rounded-full border ${isComissaoEspecifica ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
                       {taxaVisual}% {isEn ? 'Fee' : 'Comissão'}
