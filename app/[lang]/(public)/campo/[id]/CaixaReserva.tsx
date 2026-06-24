@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import React from "react";
 
 // ==========================================
-// TIPAGEM
+// TIPAGEM DE DADOS
 // ==========================================
 interface Variante {
   nome: string;
@@ -21,12 +21,13 @@ interface Pacote {
 }
 
 // ==========================================
-// COMPONENTE PRINCIPAL
+// COMPONENTE CAIXA DE RESERVA
 // ==========================================
 export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: string, dict: any }) {
   const router = useRouter();
   const isEn = lang === 'en';
 
+  // Configuração da Modalidade
   const modalidadeReserva = campo?.contrato_dados?.modalidadeReserva || 'direta';
   const isEmailMode = modalidadeReserva === 'email';
 
@@ -44,13 +45,13 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   const [mesAtual, setMesAtual] = useState<Date>(new Date());
   const [datasDisponiveis, setDatasDisponiveis] = useState<string[]>([]);
 
-  // Extras
+  // Estados de Extras
   const [extraAlimentacao, setExtraAlimentacao] = useState(false);
   const [extraAlojamento, setExtraAlojamento] = useState(false);
   const [extraProlongamento, setExtraProlongamento] = useState(false);
   const [extraTransporte, setExtraTransporte] = useState(false);
 
-  // Inicialização: Gerar calendário de dias permitidos
+  // Inicialização: Gerar calendário de dias permitidos com base no contrato
   useEffect(() => {
     if (calendario.data_inicio && calendario.data_fim) {
       const start = new Date(calendario.data_inicio);
@@ -70,7 +71,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     }
   }, [calendario.data_inicio, calendario.data_fim, calendario.dias_semana]);
 
-  // Selecionar pacote inicial
+  // Inicialização: selecionar o primeiro pacote automaticamente
   useEffect(() => {
     if (pacotes.length > 0) {
       const primeiro = pacotes[0];
@@ -81,15 +82,19 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     }
   }, [pacotes]);
 
-  // Toggle de dias (Seleção múltipla)
+  // Lógica de seleção múltipla de dias
   const toggleDia = (data: string) => {
     setDiasSelecionados(prev => 
-      prev.includes(data) ? prev.filter(d => d !== data) : [...prev, data]
+      prev.includes(data) 
+        ? prev.filter(d => d !== data) 
+        : [...prev, data]
     );
   };
 
-  // Cálculo de Preços
+  // Cálculo de Preços e Cálculos Financeiros
   const precoBase = varianteSelecionada?.preco || 0;
+  
+  // O número total de dias é baseado na quantidade do pacote ou nos dias selecionados pelo utilizador
   const totalDias = pacoteSelecionado?.tipo === 'dia' ? diasSelecionados.length : (pacoteSelecionado?.quantidade || 1);
   const noitesDormida = Math.max(1, totalDias - 1);
 
@@ -104,14 +109,15 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   if (extraProlongamento) totalExtras += (valProlongamento * totalDias);
   if (extraTransporte) totalExtras += (valTransporte * totalDias);
 
+  // Total do preço final
   const precoTotal = ((precoBase * (pacoteSelecionado?.tipo === 'dia' ? diasSelecionados.length : 1)) + totalExtras) * quantidade;
 
-  // Lotação
+  // Verificação de Lotação
   const vagasTotais = campo.vagas_totais || 0;
   const isEsgotado = vagasTotais <= 0;
   const mostrarEscassez = vagasTotais > 0 && vagasTotais <= 3;
 
-  // Checkout Handler
+  // Lógica de Submissão para Checkout
   const handleReservar = () => {
     if (!pacoteSelecionado || !varianteSelecionada) return;
 
@@ -120,7 +126,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     params.set("turno", JSON.stringify({
       id: pacoteSelecionado.id,
       nome: `${pacoteSelecionado.titulo} (${varianteSelecionada.nome})`,
-      dias_soltos: diasSelecionados, // Array de datas
+      dias_soltos: diasSelecionados, // Enviamos os dias escolhidos para o Checkout
       preco: varianteSelecionada.preco,
       tipo: pacoteSelecionado.tipo,
       quantidade: totalDias
@@ -135,10 +141,11 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     router.push(`/${lang}/checkout/${campo.id}?${params.toString()}`);
   };
 
+  // Bloqueios de interface
   const bloqueioDiaSolto = pacoteSelecionado?.tipo === 'dia' && diasSelecionados.length === 0;
   const disabledReserva = !pacoteSelecionado || !varianteSelecionada || precoBase === 0 || isEsgotado || bloqueioDiaSolto;
 
-  // Calendário UI Helpers
+  // Helpers de Calendário e UI
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
   const nextMonth = () => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1, 1));
   const prevMonth = () => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() - 1, 1));
@@ -148,13 +155,14 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   });
 
   return (
-    <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 w-full relative">
+    <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl w-full relative">
       
-      {/* PREÇO */}
-      <div className="mb-8">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{isEn ? 'Price per unit' : 'Preço por unidade'}</p>
+      {/* Cabeçalho do Preço */}
+      <div className="mb-6">
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{isEn ? 'Price per child' : 'Preço por criança'}</p>
         <div className="flex items-baseline gap-2">
           <span className="text-4xl font-black text-slate-900 leading-none">{precoBase}€</span>
+          <span className="text-sm font-bold text-slate-500">/ {isEn ? 'child' : 'criança'}</span>
         </div>
       </div>
 
@@ -173,10 +181,20 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
               {pacotes.map((pac) => {
                 const isActive = pacoteSelecionado?.id === pac.id;
                 return (
-                  <div key={pac.id} onClick={() => { setPacoteSelecionado(pac); setDiasSelecionados([]); }} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${isActive ? 'bg-slate-900 border-slate-900 shadow-md' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                  <div
+                    key={pac.id}
+                    onClick={() => { setPacoteSelecionado(pac); setDiasSelecionados([]); }}
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                      isActive ? 'bg-slate-900 border-slate-900 shadow-md' : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
                     <div className="flex justify-between items-start">
-                      <span className={`text-sm font-black ${isActive ? 'text-white' : 'text-slate-900'}`}>{pac.titulo}</span>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                      <span className={`text-sm font-black ${isActive ? 'text-white' : 'text-slate-900'}`}>
+                        {pac.titulo}
+                      </span>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
                         {pac.tipo === 'semana' ? `${pac.quantidade} Semanas` : `${pac.quantidade} Dias`}
                       </span>
                     </div>
@@ -188,12 +206,12 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
 
           {/* CALENDÁRIO DIAS SOLTOS */}
           {pacoteSelecionado?.tipo === 'dia' && datasDisponiveis.length > 0 && (
-            <div className="mb-6 animate-in fade-in slide-in-from-top-2">
+            <div className="mb-6 animate-in fade-in">
               <label className="block text-[11px] font-black text-indigo-600 uppercase tracking-widest mb-3">
-                {isEn ? 'Choose dates' : 'Escolha os dias'}
+                {isEn ? 'Select Dates' : 'Selecione os Dias'}
               </label>
               
-              <div className="flex items-center justify-between mb-4 bg-slate-50 p-2 rounded-xl border border-slate-100">
+              <div className="flex items-center justify-between mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <button type="button" onClick={prevMonth} className="p-2 text-slate-400 hover:text-indigo-600 font-bold">&larr;</button>
                 <span className="text-xs font-black uppercase tracking-widest text-slate-700">
                   {capitalize(mesAtual.toLocaleDateString(isEn ? 'en-US' : 'pt-PT', { month: 'long', year: 'numeric' }))}
@@ -201,14 +219,23 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
                 <button type="button" onClick={nextMonth} className="p-2 text-slate-400 hover:text-indigo-600 font-bold">&rarr;</button>
               </div>
 
-              <div className="grid grid-cols-5 gap-1.5">
+              <div className="grid grid-cols-5 gap-2">
                 {datasVisiveis.map(data => {
                   const isActive = diasSelecionados.includes(data);
                   const dateObj = new Date(data);
                   return (
-                    <button key={data} type="button" onClick={() => toggleDia(data)} className={`flex flex-col items-center justify-center py-2 rounded-lg border-2 transition-all ${isActive ? 'bg-indigo-600 border-indigo-600 text-white shadow-md scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400'}`}>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.','')}</span>
-                      <span className="text-sm font-black leading-none mt-1">{dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' })}</span>
+                    <button 
+                      key={data} 
+                      type="button" 
+                      onClick={() => toggleDia(data)} 
+                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border-2 transition-all ${
+                        isActive 
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-md scale-105' 
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400'
+                      }`}
+                    >
+                      <span className="text-[9px] font-black uppercase tracking-widest">{dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.','')}</span>
+                      <span className="text-lg font-black leading-none mt-1">{dateObj.getDate()}</span>
                     </button>
                   )
                 })}
@@ -219,10 +246,20 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
           {/* VARIANTE */}
           {pacoteSelecionado && pacoteSelecionado.variantes.length > 1 && (
             <div className="mb-6">
-              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">{isEn ? 'Choose Option' : 'Escolha a Variante'}</label>
+              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
+                {isEn ? 'Choose Option' : 'Escolha a Variante'}
+              </label>
               <div className="flex flex-wrap gap-2">
                 {pacoteSelecionado.variantes.map((varia) => (
-                  <button key={varia.nome} onClick={() => setVarianteSelecionada(varia)} className={`px-4 py-2.5 rounded-xl text-xs font-black border ${varianteSelecionada?.nome === varia.nome ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'}`}>
+                  <button 
+                    key={varia.nome} 
+                    onClick={() => setVarianteSelecionada(varia)} 
+                    className={`px-4 py-2.5 rounded-xl text-xs font-black border transition-all ${
+                      varianteSelecionada?.nome === varia.nome 
+                        ? 'bg-emerald-600 text-white border-emerald-600' 
+                        : 'bg-white text-slate-600 border-slate-200'
+                    }`}
+                  >
                     {varia.nome} ({varia.preco}€)
                   </button>
                 ))}
@@ -235,7 +272,9 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
       {/* EXTRAS */}
       {!isEsgotado && (
         <div className="mb-6 border-t border-slate-100 pt-6">
-          <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">{isEn ? 'Extras' : 'Extras'}</p>
+          <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
+            {isEn ? 'Optional Extras' : 'Extras Opcionais'}
+          </p>
           <div className="flex flex-col gap-2">
             {valAlimentacao > 0 && <ExtraCheckbox icon="🍎" label={isEn ? 'Meals' : 'Alimentação'} price={valAlimentacao * totalDias} active={extraAlimentacao} onChange={() => setExtraAlimentacao(!extraAlimentacao)} />}
             {valAlojamento > 0 && <ExtraCheckbox icon="🏕️" label={isEn ? 'Sleepover' : 'Dormida'} price={valAlojamento * noitesDormida} active={extraAlojamento} onChange={() => setExtraAlojamento(!extraAlojamento)} />}
@@ -245,20 +284,49 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
         </div>
       )}
 
-      {/* TOTAL */}
+      {/* QUANTIDADE E TOTAL */}
       {!isEsgotado && (
-        <div className="bg-slate-50 p-5 rounded-2xl mb-6 flex justify-between items-center border border-slate-200">
-          <span className="text-sm font-black text-slate-900 uppercase">Total</span>
-          <span className="text-2xl font-black text-emerald-600">{precoTotal}€</span>
-        </div>
+        <>
+          <div className="mb-6 border-t border-slate-100 pt-6 flex items-center justify-between">
+            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest">
+              {isEn ? 'Children' : 'Crianças'}
+            </label>
+            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-1">
+              <button type="button" onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm">-</button>
+              <span className="text-lg font-black text-slate-900 w-6 text-center">{quantidade}</span>
+              <button type="button" onClick={() => setQuantidade(q => Math.min(vagasTotais || 99, q + 1))} className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm">+</button>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 p-5 rounded-2xl mb-6 flex justify-between items-center border border-slate-200 border-dashed">
+            <span className="text-sm font-black text-slate-900 uppercase tracking-wider">Total</span>
+            <span className="text-2xl font-black text-emerald-600">{precoTotal}€</span>
+          </div>
+        </>
       )}
 
-      {/* BOTÃO */}
+      {mostrarEscassez && (
+        <p className="text-center text-xs font-black text-red-500 mb-3 animate-pulse bg-red-50 py-2 rounded-lg">
+          🔥 {isEn ? `Only ${vagasTotais} spots left!` : `Apenas ${vagasTotais} vagas restantes!`}
+        </p>
+      )}
+
+      {/* BOTÃO RESERVAR */}
       {isEsgotado ? (
         <button disabled className="w-full py-4 rounded-xl bg-slate-200 text-slate-500 font-black uppercase">Esgotado</button>
       ) : (
-        <button onClick={handleReservar} disabled={disabledReserva} className={`w-full py-4 rounded-xl text-sm font-black uppercase transition-all ${disabledReserva ? 'bg-slate-200 text-slate-400' : 'bg-amber-500 text-white hover:bg-amber-600'}`}>
-          {isEmailMode ? (isEn ? 'Request Booking' : 'Reservar c/ Entidade') : (isEn ? 'Book Now' : 'Reservar Vaga')}
+        <button
+          onClick={handleReservar}
+          disabled={disabledReserva}
+          className={`w-full py-4 rounded-xl text-sm font-black uppercase tracking-widest transition-all ${
+            disabledReserva
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              : 'bg-[#EBA914] hover:bg-amber-500 text-white shadow-lg shadow-amber-500/30 hover:-translate-y-1'
+          }`}
+        >
+          {isEmailMode
+            ? (isEn ? 'Request Booking' : 'Reservar c/ Entidade')
+            : (isEn ? 'Book & Pay Now' : 'Reservar Vaga Agora')}
         </button>
       )}
 
@@ -272,14 +340,15 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   );
 }
 
+// Sub-componente extra
 function ExtraCheckbox({ icon, label, price, active, onChange }: any) {
   return (
-    <label className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border ${active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
+    <label className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border transition-all ${active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
       <div className="flex items-center gap-3">
-        <input type="checkbox" checked={active} onChange={onChange} className="accent-emerald-600" />
-        <span className="text-xs font-bold text-slate-700">{icon} {label}</span>
+        <input type="checkbox" checked={active} onChange={onChange} className="w-4 h-4 accent-emerald-600 cursor-pointer" />
+        <span className={`text-xs ${active ? 'font-black text-emerald-900' : 'font-bold text-slate-600'}`}>{icon} {label}</span>
       </div>
-      <span className="text-xs font-black text-emerald-600">+{price}€</span>
+      <span className={`text-xs font-black ${active ? 'text-emerald-600' : 'text-slate-400'}`}>+{price}€</span>
     </label>
   );
 }
