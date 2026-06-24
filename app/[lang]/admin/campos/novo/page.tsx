@@ -37,8 +37,11 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
 
+  // Estados de Controlo dos Dropdowns Customizados
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
   const [isPolDropdownOpen, setIsPolDropdownOpen] = useState(false);
+  const [isSegDropdownOpen, setIsSegDropdownOpen] = useState(false);
+  const [isTraDropdownOpen, setIsTraDropdownOpen] = useState(false);
 
   // ==========================================
   // 2. ESTADO DO FORMULÁRIO COMPLETO
@@ -58,7 +61,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     alojamento: "",
     seguro: "",
 
-    // VALORES FINANCEIROS EXTRAS (Apenas Seguro e Transporte)
+    // VALORES FINANCEIROS EXTRAS OTIMIZADOS
     extra_seguro: 0,
     tipo_extra_seguro: "fixo",
     extra_transporte: 0,
@@ -68,14 +71,14 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
   const [galeria, setGaleria] = useState<GaleriaUpload[]>([]);
   const mapIframeUrl = formData.local ? `https://maps.google.com/maps?q=${encodeURIComponent(formData.local)}&t=&z=13&ie=UTF8&iwloc=&output=embed` : "";
 
-  // Estados Modal Pacotes & Descontos
+  // Estados Modais
   const [isPacoteModalOpen, setIsPacoteModalOpen] = useState(false);
   const [novoPacote, setNovoPacote] = useState<Pacote>({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
   const [isDescontoModalOpen, setIsDescontoModalOpen] = useState(false);
   const [novoDesconto, setNovoDesconto] = useState<Desconto>({ id: "", nome: "", percentagem: 10, acumulavel: false });
 
   // ==========================================
-  // HANDLERS E FUNÇÕES
+  // HANDLERS E FUNÇÕES DE MANIPULAÇÃO
   // ==========================================
   const handleSelectCategoria = (catId: string) => {
     setFormData(prev => {
@@ -223,7 +226,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         seguro: formData.seguro,
         seguro_en: formData.seguro,
 
-        // Extras Financeiros
+        // Extras Estruturados
         extra_seguro: formData.extra_seguro,
         tipo_extra_seguro: formData.tipo_extra_seguro,
         extra_transporte: formData.extra_transporte,
@@ -286,6 +289,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 <input type="text" required placeholder="Ex: Surf Camp de Verão Caparica" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors" />
               </div>
               
+              {/* DROPDOWN CUSTOMIZADO: CATEGORIA */}
               <div className="relative">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Categoria Temática *</label>
                 <div onClick={() => setIsCatDropdownOpen(!isCatDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
@@ -306,6 +310,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 )}
               </div>
 
+              {/* DROPDOWN CUSTOMIZADO: POLÍTICA CANCELAMENTO */}
               <div className="relative">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Política de Cancelamento</label>
                 <div onClick={() => setIsPolDropdownOpen(!isPolDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
@@ -443,38 +448,67 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               )}
             </div>
 
-            {/* EXTRAS FINANCEIROS: APENAS SEGURO E TRANSPORTE */}
+            {/* EXTRAS FINANCEIROS SEM DROPDOWNS NATIVOS */}
             <div className="pt-8 border-t border-slate-100">
-              <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>💰</span> {isEn ? 'Optional Extras' : '3. Configurar Extras (Seguro e Transporte)'}</h2>
-              <p className="text-xs text-slate-500 mb-6">A alimentação e a dormida são decididas no Pacote acima (ex: Variante C/Almoço). Aqui apenas define os opcionais isolados.</p>
+              <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>💰</span> {isEn ? 'Optional Extras' : '3. Configurar Extras Opcionais'}</h2>
+              <p className="text-xs text-slate-500 mb-6">A alimentação e o alojamento já são mapeados em variantes. Aqui configura apenas os suplementos isolados.</p>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 
-                {/* EXTRA: SEGURO */}
-                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Seguro (€)</label>
-                  <input type="number" min="0" value={formData.extra_seguro} onChange={e => setFormData({...formData, extra_seguro: Number(e.target.value)})} className="w-full p-3 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-500 mb-3" />
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Método de Cobrança</label>
-                  <select value={formData.tipo_extra_seguro} onChange={e => setFormData({...formData, tipo_extra_seguro: e.target.value})} className="w-full p-3 text-xs font-bold bg-white border border-slate-200 rounded-lg outline-none focus:border-indigo-500 cursor-pointer">
-                    <option value="fixo">Taxa Fixa (Cobra 1x no final)</option>
-                    <option value="diario">Por Dia (Multiplica pelos dias da reserva)</option>
-                  </select>
+                {/* EXTRA CUSTOMIZADO: SEGURO */}
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor do Seguro (€)</label>
+                  <input type="number" min="0" value={formData.extra_seguro} onChange={e => setFormData({...formData, extra_seguro: Number(e.target.value)})} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 mb-4" />
+                  
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Modelo de Cobrança</label>
+                  <div onClick={() => setIsSegDropdownOpen(!isSegDropdownOpen)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                    <span>{formData.tipo_extra_seguro === 'fixo' ? 'Taxa Fixa (Cobra 1x no total)' : 'Por Dia (Multiplica pelos dias)'}</span>
+                    <span className="text-[10px] text-slate-400">▼</span>
+                  </div>
+                  {isSegDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsSegDropdownOpen(false)}></div>
+                      <div className="absolute top-[calc(100%-12px)] left-5 right-5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <div onClick={() => { setFormData({...formData, tipo_extra_seguro: 'fixo'}); setIsSegDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                          Taxa Fixa (Cobra 1x no total)
+                        </div>
+                        <div onClick={() => { setFormData({...formData, tipo_extra_seguro: 'diario'}); setIsSegDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                          Por Dia (Multiplica pelos dias)
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {/* EXTRA: TRANSPORTE */}
-                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Transporte (€)</label>
-                  <input type="number" min="0" value={formData.extra_transporte} onChange={e => setFormData({...formData, extra_transporte: Number(e.target.value)})} className="w-full p-3 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-500 mb-3" />
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Método de Cobrança</label>
-                  <select value={formData.tipo_extra_transporte} onChange={e => setFormData({...formData, tipo_extra_transporte: e.target.value})} className="w-full p-3 text-xs font-bold bg-white border border-slate-200 rounded-lg outline-none focus:border-indigo-500 cursor-pointer">
-                    <option value="diario">Por Dia (Multiplica pelos dias da reserva)</option>
-                    <option value="fixo">Taxa Fixa (Cobra 1x no final)</option>
-                  </select>
+                {/* EXTRA CUSTOMIZADO: TRANSPORTE */}
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor do Transporte (€)</label>
+                  <input type="number" min="0" value={formData.extra_transporte} onChange={e => setFormData({...formData, extra_transporte: Number(e.target.value)})} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 mb-4" />
+                  
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Modelo de Cobrança</label>
+                  <div onClick={() => setIsTraDropdownOpen(!isTraDropdownOpen)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                    <span>{formData.tipo_extra_transporte === 'diario' ? 'Por Dia (Multiplica pelos dias)' : 'Taxa Fixa (Cobra 1x no total)'}</span>
+                    <span className="text-[10px] text-slate-400">▼</span>
+                  </div>
+                  {isTraDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsTraDropdownOpen(false)}></div>
+                      <div className="absolute top-[calc(100%-12px)] left-5 right-5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <div onClick={() => { setFormData({...formData, tipo_extra_transporte: 'diario'}); setIsTraDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                          Por Dia (Multiplica pelos dias)
+                        </div>
+                        <div onClick={() => { setFormData({...formData, tipo_extra_transporte: 'fixo'}); setIsTraDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                          Taxa Fixa (Cobra 1x no total)
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
               </div>
             </div>
 
+            {/* REGRAS DE DESCONTO */}
             <div className="pt-8 border-t border-slate-100">
               <div className="flex justify-between items-start mb-6">
                 <div>
@@ -518,10 +552,11 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><span>📸</span> {isEn ? 'Media & Forms' : '1. Apresentação Editorial e Logística'}</h2>
               
               <div>
-                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição Longa do Programa *</label>
+                <label className="block append-style text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição Longa do Programa *</label>
                 <textarea rows={5} placeholder="Descreva as atividades, os horários, e o que as crianças vão aprender..." value={formData.descricao} onChange={e => setFormData({...formData, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:bg-white resize-none leading-relaxed transition-colors" />
               </div>
 
+              {/* INPUTS DE TEXTOS DESCRITIVOS LOGÍSTICOS */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-200">
                 <div className="sm:col-span-2 mb-2">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400 m-0">Textos Informativos Importantes (Logística)</p>
@@ -590,6 +625,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               </div>
             </div>
 
+            {/* FORMULÁRIO DE PERGUNTAS */}
             <div className="pt-8 border-t border-slate-100">
               <div className="flex justify-between items-center mb-6">
                 <div>
@@ -634,6 +670,10 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         )}
       </div>
 
+      {/* ========================================== */}
+      {/* MODAIS DE SUPORTE */}
+      {/* ========================================== */}
+
       {/* MODAL PACOTES */}
       {isPacoteModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -645,7 +685,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
 
             <div className="p-6 overflow-y-auto flex flex-col gap-6">
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">A. Formato Logístico (O que o pai escolhe no calendário?)</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">A. Formato Logístico</label>
                 <div className="flex bg-slate-100 p-1.5 rounded-xl">
                   <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'semana'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'semana' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semanas Completas</button>
                   <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'dia'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'dia' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Dias Individuais Avulso</button>
