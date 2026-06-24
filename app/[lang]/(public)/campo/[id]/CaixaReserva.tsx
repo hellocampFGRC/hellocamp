@@ -40,7 +40,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   const [varianteSelecionada, setVarianteSelecionada] = useState<Variante | null>(null);
   const [quantidade, setQuantidade] = useState(1);
   
-  // Estado para múltiplos dias selecionados (apenas para tipo 'dia')
+  // Estado para múltiplos dias selecionados
   const [diasSelecionados, setDiasSelecionados] = useState<string[]>([]);
   const [mesAtual, setMesAtual] = useState<Date>(new Date());
   const [datasDisponiveis, setDatasDisponiveis] = useState<string[]>([]);
@@ -51,7 +51,9 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   const [extraProlongamento, setExtraProlongamento] = useState(false);
   const [extraTransporte, setExtraTransporte] = useState(false);
 
-  // Inicialização: Gerar calendário de dias permitidos com base no contrato
+  // ==========================================
+  // INICIALIZAÇÃO
+  // ==========================================
   useEffect(() => {
     if (calendario.data_inicio && calendario.data_fim) {
       const start = new Date(calendario.data_inicio);
@@ -71,7 +73,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     }
   }, [calendario.data_inicio, calendario.data_fim, calendario.dias_semana]);
 
-  // Inicialização: selecionar o primeiro pacote automaticamente
+  // Selecionar o primeiro pacote automaticamente
   useEffect(() => {
     if (pacotes.length > 0) {
       const primeiro = pacotes[0];
@@ -82,19 +84,57 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     }
   }, [pacotes]);
 
-  // Lógica de seleção múltipla de dias
-  const toggleDia = (data: string) => {
-    setDiasSelecionados(prev => 
-      prev.includes(data) 
-        ? prev.filter(d => d !== data) 
-        : [...prev, data]
-    );
+  // ==========================================
+  // LÓGICA DO CALENDÁRIO (DIAS OU SEMANAS)
+  // ==========================================
+  const handleDiaClick = (data: string) => {
+    if (!pacoteSelecionado) return;
+
+    if (pacoteSelecionado.tipo === 'dia') {
+      // Modalidade "Dias Soltos": Adiciona ou remove o dia clicado
+      setDiasSelecionados(prev => 
+        prev.includes(data) 
+          ? prev.filter(d => d !== data) 
+          : [...prev, data]
+      );
+    } else if (pacoteSelecionado.tipo === 'semana') {
+      // Modalidade "Semana": Seleciona a semana inteira (ou N semanas)
+      if (diasSelecionados.includes(data)) {
+        // Se clicar num dia já selecionado, limpa a seleção toda
+        setDiasSelecionados([]);
+        return;
+      }
+
+      const dateObj = new Date(data);
+      const dayOfWeek = dateObj.getDay();
+      
+      // Descobrir a Segunda-feira da semana do dia clicado
+      const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const startMonday = new Date(dateObj);
+      startMonday.setDate(dateObj.getDate() - diffToMonday);
+
+      // Descobrir o Domingo de fecho (multiplicado pelo número de semanas do pacote)
+      const semanas = pacoteSelecionado.quantidade || 1;
+      const endDay = new Date(startMonday);
+      endDay.setDate(startMonday.getDate() + (7 * semanas) - 1);
+
+      // Filtrar todas as datas disponíveis que caem neste intervalo
+      const diasDaSemana = datasDisponiveis.filter(d => {
+         const dDate = new Date(d);
+         return dDate >= startMonday && dDate <= endDay;
+      });
+
+      setDiasSelecionados(diasDaSemana);
+    }
   };
 
-  // Cálculo de Preços e Cálculos Financeiros
+  // ==========================================
+  // CÁLCULO DE PREÇOS
+  // ==========================================
   const precoBase = varianteSelecionada?.preco || 0;
   
-  // O número total de dias é baseado na quantidade do pacote ou nos dias selecionados pelo utilizador
+  // Dias para efeitos de cálculo de Extras:
+  // Se for Dia Solto, usa os dias selecionados. Se for Semana, usa a QTD do Pacote (Ex: 1) para multiplicar o Extra Global.
   const totalDias = pacoteSelecionado?.tipo === 'dia' ? diasSelecionados.length : (pacoteSelecionado?.quantidade || 1);
   const noitesDormida = Math.max(1, totalDias - 1);
 
@@ -109,15 +149,18 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   if (extraProlongamento) totalExtras += (valProlongamento * totalDias);
   if (extraTransporte) totalExtras += (valTransporte * totalDias);
 
-  // Total do preço final
-  const precoTotal = ((precoBase * (pacoteSelecionado?.tipo === 'dia' ? diasSelecionados.length : 1)) + totalExtras) * quantidade;
+  // Multiplicador Base para o Preço do Programa (Semana cobra 1x o valor. Dia Solto cobra Nx o valor).
+  const multiplicadorPrecoBase = pacoteSelecionado?.tipo === 'dia' ? diasSelecionados.length : 1;
+  const precoTotal = ((precoBase * multiplicadorPrecoBase) + totalExtras) * quantidade;
 
   // Verificação de Lotação
   const vagasTotais = campo.vagas_totais || 0;
   const isEsgotado = vagasTotais <= 0;
   const mostrarEscassez = vagasTotais > 0 && vagasTotais <= 3;
 
-  // Lógica de Submissão para Checkout
+  // ==========================================
+  // SUBMISSÃO PARA CHECKOUT
+  // ==========================================
   const handleReservar = () => {
     if (!pacoteSelecionado || !varianteSelecionada) return;
 
@@ -126,7 +169,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     params.set("turno", JSON.stringify({
       id: pacoteSelecionado.id,
       nome: `${pacoteSelecionado.titulo} (${varianteSelecionada.nome})`,
-      dias_soltos: diasSelecionados, // Enviamos os dias escolhidos para o Checkout
+      dias_soltos: diasSelecionados, // As datas exatas seguem para a BD e Email do Parceiro
       preco: varianteSelecionada.preco,
       tipo: pacoteSelecionado.tipo,
       quantidade: totalDias
@@ -141,14 +184,15 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     router.push(`/${lang}/checkout/${campo.id}?${params.toString()}`);
   };
 
-  // Bloqueios de interface
-  const bloqueioDiaSolto = pacoteSelecionado?.tipo === 'dia' && diasSelecionados.length === 0;
-  const disabledReserva = !pacoteSelecionado || !varianteSelecionada || precoBase === 0 || isEsgotado || bloqueioDiaSolto;
+  // Bloqueios
+  const bloqueioData = diasSelecionados.length === 0;
+  const disabledReserva = !pacoteSelecionado || !varianteSelecionada || precoBase === 0 || isEsgotado || bloqueioData;
 
-  // Helpers de Calendário e UI
+  // Helpers UI
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
   const nextMonth = () => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1, 1));
   const prevMonth = () => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() - 1, 1));
+  
   const datasVisiveis = datasDisponiveis.filter(d => {
     const date = new Date(d);
     return date.getMonth() === mesAtual.getMonth() && date.getFullYear() === mesAtual.getFullYear();
@@ -157,7 +201,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   return (
     <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl w-full relative">
       
-      {/* Cabeçalho do Preço */}
+      {/* CABEÇALHO DE PREÇO */}
       <div className="mb-6">
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{isEn ? 'Price per child' : 'Preço por criança'}</p>
         <div className="flex items-baseline gap-2">
@@ -172,7 +216,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
         </div>
       ) : (
         <>
-          {/* SELEÇÃO DE PACOTE */}
+          {/* SELEÇÃO DO PACOTE */}
           <div className="mb-6">
             <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
               {isEn ? 'Select Package' : 'Escolha o Programa'}
@@ -204,19 +248,19 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
             </div>
           </div>
 
-          {/* CALENDÁRIO DIAS SOLTOS */}
-          {pacoteSelecionado?.tipo === 'dia' && datasDisponiveis.length > 0 && (
+          {/* CALENDÁRIO VISUAL (ATUALIZADO PARA VERDE) */}
+          {pacoteSelecionado && datasDisponiveis.length > 0 && (
             <div className="mb-6 animate-in fade-in">
-              <label className="block text-[11px] font-black text-indigo-600 uppercase tracking-widest mb-3">
-                {isEn ? 'Select Dates' : 'Selecione os Dias'}
+              <label className="block text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-3">
+                {pacoteSelecionado.tipo === 'dia' ? (isEn ? 'Select your Days' : 'Selecione os Dias') : (isEn ? 'Select your Week' : 'Selecione a Semana')}
               </label>
               
               <div className="flex items-center justify-between mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <button type="button" onClick={prevMonth} className="p-2 text-slate-400 hover:text-indigo-600 font-bold">&larr;</button>
+                <button type="button" onClick={prevMonth} className="p-2 text-slate-400 hover:text-emerald-600 font-bold">&larr;</button>
                 <span className="text-xs font-black uppercase tracking-widest text-slate-700">
                   {capitalize(mesAtual.toLocaleDateString(isEn ? 'en-US' : 'pt-PT', { month: 'long', year: 'numeric' }))}
                 </span>
-                <button type="button" onClick={nextMonth} className="p-2 text-slate-400 hover:text-indigo-600 font-bold">&rarr;</button>
+                <button type="button" onClick={nextMonth} className="p-2 text-slate-400 hover:text-emerald-600 font-bold">&rarr;</button>
               </div>
 
               <div className="grid grid-cols-5 gap-2">
@@ -227,14 +271,14 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
                     <button 
                       key={data} 
                       type="button" 
-                      onClick={() => toggleDia(data)} 
+                      onClick={() => handleDiaClick(data)} 
                       className={`flex flex-col items-center justify-center py-2.5 rounded-xl border-2 transition-all ${
                         isActive 
-                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-md scale-105' 
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400'
+                          ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105 z-10' 
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-400'
                       }`}
                     >
-                      <span className="text-[9px] font-black uppercase tracking-widest">{dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.','')}</span>
+                      <span className={`text-[9px] font-black uppercase tracking-widest ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short' }).replace('.','')}</span>
                       <span className="text-lg font-black leading-none mt-1">{dateObj.getDate()}</span>
                     </button>
                   )
@@ -243,7 +287,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
             </div>
           )}
 
-          {/* VARIANTE */}
+          {/* VARIANTE DE PREÇO */}
           {pacoteSelecionado && pacoteSelecionado.variantes.length > 1 && (
             <div className="mb-6">
               <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
@@ -256,8 +300,8 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
                     onClick={() => setVarianteSelecionada(varia)} 
                     className={`px-4 py-2.5 rounded-xl text-xs font-black border transition-all ${
                       varianteSelecionada?.nome === varia.nome 
-                        ? 'bg-emerald-600 text-white border-emerald-600' 
-                        : 'bg-white text-slate-600 border-slate-200'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'
                     }`}
                   >
                     {varia.nome} ({varia.preco}€)
@@ -292,28 +336,28 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
               {isEn ? 'Children' : 'Crianças'}
             </label>
             <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-1">
-              <button type="button" onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm">-</button>
+              <button type="button" onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm hover:bg-slate-100 transition-colors">-</button>
               <span className="text-lg font-black text-slate-900 w-6 text-center">{quantidade}</span>
-              <button type="button" onClick={() => setQuantidade(q => Math.min(vagasTotais || 99, q + 1))} className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm">+</button>
+              <button type="button" onClick={() => setQuantidade(q => Math.min(vagasTotais || 99, q + 1))} className="w-8 h-8 rounded-lg bg-white text-slate-600 font-black shadow-sm hover:bg-slate-100 transition-colors">+</button>
             </div>
           </div>
 
           <div className="bg-slate-50 p-5 rounded-2xl mb-6 flex justify-between items-center border border-slate-200 border-dashed">
             <span className="text-sm font-black text-slate-900 uppercase tracking-wider">Total</span>
-            <span className="text-2xl font-black text-emerald-600">{precoTotal}€</span>
+            <span className="text-2xl font-black text-emerald-600">{precoTotal > 0 ? `${precoTotal}€` : '--'}</span>
           </div>
         </>
       )}
 
       {mostrarEscassez && (
-        <p className="text-center text-xs font-black text-red-500 mb-3 animate-pulse bg-red-50 py-2 rounded-lg">
+        <p className="text-center text-xs font-black text-red-500 mb-3 animate-pulse bg-red-50 py-2 rounded-lg border border-red-100">
           🔥 {isEn ? `Only ${vagasTotais} spots left!` : `Apenas ${vagasTotais} vagas restantes!`}
         </p>
       )}
 
       {/* BOTÃO RESERVAR */}
       {isEsgotado ? (
-        <button disabled className="w-full py-4 rounded-xl bg-slate-200 text-slate-500 font-black uppercase">Esgotado</button>
+        <button disabled className="w-full py-4 rounded-xl bg-slate-200 text-slate-500 font-black uppercase tracking-widest">Esgotado</button>
       ) : (
         <button
           onClick={handleReservar}
@@ -340,10 +384,12 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   );
 }
 
-// Sub-componente extra
+// ==========================================
+// SUB-COMPONENTE: CHECKBOX EXTRAS
+// ==========================================
 function ExtraCheckbox({ icon, label, price, active, onChange }: any) {
   return (
-    <label className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border transition-all ${active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
+    <label className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border transition-all ${active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
       <div className="flex items-center gap-3">
         <input type="checkbox" checked={active} onChange={onChange} className="w-4 h-4 accent-emerald-600 cursor-pointer" />
         <span className={`text-xs ${active ? 'font-black text-emerald-900' : 'font-bold text-slate-600'}`}>{icon} {label}</span>

@@ -33,12 +33,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
   // Parâmetros do URL
   const quantidade = parseInt(searchParams.get("quantidade_criancas") || "1");
-  const diasInscritosParam = searchParams.get("dias_inscritos");
   const extAlimentacao = searchParams.get("ext_alimentacao") === "true";
   const extAlojamento = searchParams.get("ext_alojamento") === "true";
   const extProlongamento = searchParams.get("ext_prolongamento") === "true";
   const extTransporte = searchParams.get("ext_transporte") === "true";
   
+  // Extrair informações dinâmicas enviadas pela CaixaReserva
   let turnoSelecionado: any = null;
   try {
     const turnoParam = searchParams.get("turno");
@@ -47,13 +47,41 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     console.error(e); 
   }
 
-  const diasBaseShift = Number(turnoSelecionado?.dias) || Number(campo?.duracao_dias) || 5;
-  const diasEfetivos = (diasInscritosParam && diasInscritosParam !== 'full') ? Number(diasInscritosParam) : diasBaseShift;
+  // ==========================================
+  // CÁLCULOS DINÂMICOS (SINCRONIZADOS COM A CAIXA RESERVA)
+  // ==========================================
+  const isDiaSolto = turnoSelecionado?.tipo === 'dia';
+  const numDiasSoltos = turnoSelecionado?.dias_soltos?.length || 1;
+  const multiplicadorBase = isDiaSolto ? numDiasSoltos : 1;
   
+  // Preço Base 
+  const precoBaseTurno = Number(turnoSelecionado?.preco) || Number(campo?.preco) || 0;
+  const precoBaseUnitario = precoBaseTurno * multiplicadorBase;
+
+  // Dias para efeitos de extras
+  const totalDiasExtras = Number(turnoSelecionado?.quantidade) || 1;
+  const noites = Math.max(1, totalDiasExtras - 1);
+
+  const valAlimentacao = extAlimentacao ? (Number(campo?.extra_alimentacao) || 0) * totalDiasExtras : 0;
+  const valAlojamento = extAlojamento ? (Number(campo?.extra_alojamento) || 0) * noites : 0;
+  const valProlongamento = extProlongamento ? (Number(campo?.extra_prolongamento) || 0) * totalDiasExtras : 0;
+  const valTransporte = extTransporte ? (Number(campo?.extra_transporte) || 0) * totalDiasExtras : 0;
+
+  const totalExtrasPorCrianca = valAlimentacao + valAlojamento + valProlongamento + valTransporte;
+  
+  const precoFinalTotal = (precoBaseUnitario + totalExtrasPorCrianca) * quantidade;
+
+  // Lógica de Fracionamento de Pagamento (50% ou 100%)
+  const isPagamentoFracionado = campo?.tipo_pagamento === '50_sinal';
+  const valorACobrarAgora = isPagamentoFracionado ? (precoFinalTotal / 2) : precoFinalTotal;
+  const valorPendente = isPagamentoFracionado ? (precoFinalTotal / 2) : 0;
+
+  // ==========================================
+  // ESTADOS DO FORMULÁRIO DE PARTICIPANTES
+  // ==========================================
   const [selecoesCriancas, setSelecoesCriancas] = useState<string[]>(Array(quantidade).fill(""));
   const [respostasCustomizadas, setRespostasCustomizadas] = useState<Record<number, Record<string, string>>>({});
 
-  // Modais e Estado
   const [showModal, setShowModal] = useState(false);
   const [indexToAssign, setIndexToAssign] = useState<number | null>(null);
   const [savingChild, setSavingChild] = useState(false);
@@ -97,28 +125,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     fetchDados();
   }, [id, lang, router]);
 
-  // Cálculos Financeiros Base
-  const noites = Math.max(1, diasEfetivos - 1);
-  const valAlimentacao = extAlimentacao ? (Number(campo?.extra_alimentacao) || 0) * diasEfetivos : 0;
-  const valAlojamento = extAlojamento ? (Number(campo?.extra_alojamento) || 0) * noites : 0;
-  const valProlongamento = extProlongamento ? (Number(campo?.extra_prolongamento) || 0) * diasEfetivos : 0;
-  const valTransporte = extTransporte ? (Number(campo?.extra_transporte) || 0) * diasEfetivos : 0;
-
-  const totalExtrasPorCrianca = valAlimentacao + valAlojamento + valProlongamento + valTransporte;
-  
-  let precoBaseUnitario = Number(turnoSelecionado?.preco || campo?.preco || 0);
-  if (turnoSelecionado?.permite_dias && diasInscritosParam && diasInscritosParam !== 'full') {
-    precoBaseUnitario = Number(turnoSelecionado.preco_dia) * diasEfetivos;
-  }
-
-  const precoFinalTotal = (precoBaseUnitario + totalExtrasPorCrianca) * quantidade;
-
-  // Lógica de Fracionamento de Pagamento (50% ou 100%)
-  const isPagamentoFracionado = campo?.tipo_pagamento === '50_sinal';
-  const valorACobrarAgora = isPagamentoFracionado ? (precoFinalTotal / 2) : precoFinalTotal;
-  const valorPendente = isPagamentoFracionado ? (precoFinalTotal / 2) : 0;
-
-  // Lógica de Participantes
   const openNewChildModal = (index: number) => {
     setNewChild({ 
       nome: '', nif: '', data_nascimento: '', sexo: '', 
@@ -190,7 +196,14 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         valor_total: precoFinalTotal / quantidade,
         turno_nome: turnoSelecionado?.nome || 'Programa Base',
         status_pagamento: 'Pendente',
-        extras_escolhidos: { extAlimentacao, extAlojamento, extProlongamento, extTransporte, dias_inscritos: diasEfetivos },
+        extras_escolhidos: { 
+          extAlimentacao, 
+          extAlojamento, 
+          extProlongamento, 
+          extTransporte, 
+          dias_inscritos: totalDiasExtras,
+          dias_soltos: turnoSelecionado?.dias_soltos || [] // INJEÇÃO CRUCIAL PARA O PARCEIRO VER OS DIAS ESCOLHIDOS
+        },
         respostas_customizadas: respostasCustomizadas[index] || {} 
       }));
 
@@ -222,7 +235,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
           campoNome: campo.nome,
           stripeAccountId: organizador?.stripe_account_id,
           tipoPagamento: campo?.tipo_pagamento,
-          campoId: campo.id // AQUI ESTÁ A NOVA LINHA ADICIONADA
+          campoId: campo.id
         })
       });
 
@@ -546,9 +559,26 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                 <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Programa</span>
                 <p style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', margin: 0 }}>{turnoSelecionado?.nome || campo?.nome}</p>
               </div>
+
+              {/* BLOCO VISUAL DE DIAS SOLTOS EXATOS */}
+              {isDiaSolto && turnoSelecionado?.dias_soltos?.length > 0 && (
+                <div>
+                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>{isEn ? 'Selected Dates' : 'Dias Selecionados'}</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                    {turnoSelecionado.dias_soltos.map((d: string) => (
+                      <span key={d} style={{ backgroundColor: '#e2e8f0', color: '#334155', fontSize: '11px', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>
+                        {new Date(d).toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit', month: 'short' })}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Duração</span>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>{diasEfetivos} {diasEfetivos === 1 ? 'Dia' : 'Dias'}</p>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>
+                  {totalDiasExtras} {totalDiasExtras === 1 ? (turnoSelecionado?.tipo === 'semana' ? 'Semana' : 'Dia') : (turnoSelecionado?.tipo === 'semana' ? 'Semanas' : 'Dias')}
+                </p>
               </div>
               <div>
                 <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Preço Base (x{quantidade})</span>
