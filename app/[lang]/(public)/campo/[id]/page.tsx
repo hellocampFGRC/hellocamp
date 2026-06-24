@@ -6,6 +6,7 @@ import BotaoFavorito from "../../components/BotaoFavorito";
 import BotaoPartilha from "../../components/BotaoPartilha";
 import { getDictionary } from "@/lib/getDictionary";
 import FormContactoCampo from "../../components/FormContactoCampo";
+import DescricaoExpansivel from "../../components/DescricaoExpansivel"; // Ajuste o caminho se guardou noutra pasta
 
 // ==========================================
 // TIPAGEM PARA PACOTES E VARIANTES
@@ -24,7 +25,7 @@ interface Pacote {
 }
 
 // ==========================================
-// METADATA
+// METADATA (SEO & OpenGraph)
 // ==========================================
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; id: string }> }): Promise<Metadata> {
   const { lang, id } = await params;
@@ -44,6 +45,9 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
   };
 }
 
+// ==========================================
+// COMPONENTE PRINCIPAL (SERVER COMPONENT)
+// ==========================================
 export default async function DetalhesDoCampo({ params }: { params: Promise<{ lang: string; id: string }>; }) {
   const { lang, id } = await params;
 
@@ -102,7 +106,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
   const DIAS_SEMANA = [
     { id: 1, pt: 'Seg', en: 'Mon' }, { id: 2, pt: 'Ter', en: 'Tue' },
     { id: 3, pt: 'Qua', en: 'Wed' }, { id: 4, pt: 'Qui', en: 'Thu' },
-    { id: 5, pt: 'Sex', en: 'Fri' }, { id: 6, pt: 'Sáb', Sat: 'Sat' },
+    { id: 5, pt: 'Sex', en: 'Fri' }, { id: 6, pt: 'Sáb', en: 'Sat' }, // Corrigido erro de digitação
     { id: 0, pt: 'Dom', en: 'Sun' }
   ];
   const diasAtivos: number[] = calendario.dias_semana || [];
@@ -220,14 +224,15 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                     ({totalAvaliacoes} {isEn ? 'reviews' : 'avaliações'})
                   </span>
                 </div>
-                {/* O bloco "pais a ver agora" foi removido temporariamente daqui de forma limpa para manter o layout intocado */}
               </div>
             </div>
 
             {/* DESCRIÇÃO E PERFIL DO ORGANIZADOR */}
             <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{dict.detalhe.sobre_programa}</h2>
-              <p className="leading-relaxed text-slate-600 text-base whitespace-pre-wrap font-medium mb-0">{descCampo}</p>
+              
+              {/* Utilização do Novo Componente de Descrição Expansível */}
+              <DescricaoExpansivel texto={descCampo} isEn={isEn} />
 
               {campo.organizador_id && parceiroInfo && (
                 <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="mt-8 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors no-underline group">
