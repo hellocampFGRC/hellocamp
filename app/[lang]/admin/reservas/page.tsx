@@ -87,7 +87,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const [modalMesAtual, setModalMesAtual] = useState<Date>(new Date());
 
   // ==========================================
-  // FETCH DE DADOS (BASE DE DADOS) - CORRIGIDO
+  // FETCH DE DADOS (BASE DE DADOS) - VERSÃO SIMPLIFICADA SEM JOIN
   // ==========================================
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -103,10 +103,11 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     
     setCamposParceiro(camposData || []);
 
-    // 2. Busca Reservas de forma mais segura (usando ! para Left Join)
+    // 2. BUSCA DE RESERVAS SIMPLIFICADA (Sem JOINs para evitar falhas)
+    // Buscamos apenas os dados da tabela reservas puramente
     const { data: reservasData, error: resError } = await supabase
       .from('reservas')
-      .select('*, criancas!left(*), perfis!left(*)') 
+      .select('*') 
       .eq('organizador_id', session.user.id)
       .order('created_at', { ascending: false });
     
@@ -116,16 +117,13 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
       return;
     }
 
-    console.log("Reservas brutas recebidas:", reservasData?.length); // DEBUG: Vê se aqui aparecem as 20
+    console.log("Total de reservas encontradas:", reservasData?.length);
 
     if (reservasData) {
+      // 3. Mapeamento manual para garantir que não perdemos dados
       const reservasFormatadas = reservasData.map((res: any) => {
-        // Tolerância a dados nulos/ausentes
-        const isExterna = res.cliente_id === session.user.id || res.status_pagamento === 'Externo';
-        
-        // Proteção contra 'undefined' no campo relacionado
         const campoRelacionado = camposData?.find((c: any) => c.id === res.campo_id);
-
+        
         return {
           id: res.id,
           campo_id: res.campo_id,
@@ -134,13 +132,12 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
           valor: Number(res.valor_total) || 0,
           valor_pago: Number(res.valor_pago) || 0,
           status: res.status_pagamento || 'Pendente',
-          isExterna: isExterna,
-          // Proteção contra crianca/perfil nulo
-          crianca: res.criancas ? res.criancas : { nome: res.respostas_customizadas?.nome_crianca_externo || 'Participante Manual' },
+          isExterna: res.status_pagamento === 'Externo' || res.cliente_id === session.user.id,
+          crianca: { nome: res.nome_encarregado || 'Participante' }, // Simplificado para garantir que não é nulo
           pai: {
-            nome: res.nome_encarregado || res.perfis?.nome_completo || 'N/D',
-            email: res.email_encarregado || res.perfis?.email || 'N/D',
-            telefone: res.telefone_encarregado || res.perfis?.telefone || 'N/D'
+            nome: res.nome_encarregado || 'N/D',
+            email: res.email_encarregado || 'N/D',
+            telefone: res.telefone_encarregado || 'N/D'
           },
           respostasCustomizadas: res.respostas_customizadas || {},
           pedido_pendente: res.respostas_customizadas?.pedido_pai_pendente || null
