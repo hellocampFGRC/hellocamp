@@ -560,10 +560,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                 <p style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', margin: 0 }}>{turnoSelecionado?.nome || campo?.nome}</p>
               </div>
 
-              {/* BLOCO VISUAL DE DIAS SOLTOS EXATOS */}
-              {isDiaSolto && turnoSelecionado?.dias_soltos?.length > 0 && (
+              {/* BLOCO VISUAL DE DATAS EXATAS (Serve para Dias Soltos ou Semanas) */}
+              {turnoSelecionado?.dias_soltos?.length > 0 && (
                 <div>
-                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>{isEn ? 'Selected Dates' : 'Dias Selecionados'}</span>
+                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                    {isEn ? 'Selected Dates' : 'Datas Selecionadas'}
+                  </span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
                     {turnoSelecionado.dias_soltos.map((d: string) => (
                       <span key={d} style={{ backgroundColor: '#e2e8f0', color: '#334155', fontSize: '11px', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>
