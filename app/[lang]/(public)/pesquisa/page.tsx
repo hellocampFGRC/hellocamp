@@ -172,7 +172,6 @@ export default function PaginaPesquisa({
             <p className="text-base text-slate-500 font-medium max-w-md mx-auto">
               {isEn ? 'Try adjusting your filters or searching for something else.' : 'Tente pesquisar por uma palavra mais genérica ou limpar alguns filtros.'}
             </p>
-            {/* CORREÇÃO DO BOTÃO AQUI */}
             <Link href={`/${lang}/pesquisa`} className="mt-2 text-emerald-600 font-bold hover:text-emerald-700 transition-colors">
               {isEn ? 'Clear filters and try again;' : 'Limpar filtros e tentar de novo'}
             </Link>
@@ -184,6 +183,17 @@ export default function PaginaPesquisa({
               const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
               const localCampo = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
               const idadeCampo = isEn && campo.idade_en ? campo.idade_en : campo.idade;
+
+              // Lógica Inteligente para encontrar o preço mais baixo da nova estrutura (pacotes)
+              let precoVisivel = campo.preco || 0;
+              if (!precoVisivel && campo.pacotes && campo.pacotes.length > 0) {
+                const todosPrecos = campo.pacotes.flatMap((p: any) => 
+                  p.variantes ? p.variantes.map((v: any) => v.preco) : []
+                );
+                if (todosPrecos.length > 0) {
+                  precoVisivel = Math.min(...todosPrecos);
+                }
+              }
 
               return (
                 <div key={campo.id} className="group flex flex-col bg-white rounded-2xl overflow-hidden border border-slate-200 relative shadow-sm hover:shadow-xl transition-all duration-300">
@@ -203,7 +213,10 @@ export default function PaginaPesquisa({
                     <p className="text-sm text-slate-500 font-medium mb-6">{isEn ? 'Age Group:' : 'Faixa Etária:'} <span className="text-slate-900">{idadeCampo}</span></p>
                     
                     <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
-                      <p className="text-xl font-black text-emerald-600 m-0">{campo.preco}€</p>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
+                        <p className="text-xl font-black text-emerald-600 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                      </div>
                       <span className="text-sm font-bold text-[#EBA914] transition-transform group-hover:translate-x-1">{isEn ? 'Explore' : 'Explorar'} &rarr;</span>
                     </div>
                   </div>

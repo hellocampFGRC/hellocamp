@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import BotaoFavorito from "../../../components/BotaoFavorito"; // Importe ajustado de acordo com as suas pastas
+import BotaoFavorito from "../../../components/BotaoFavorito";
 
 // 1. O CHEF DO SEO
 export async function generateMetadata({ 
@@ -194,7 +194,17 @@ export default async function PesquisaPorPais({
               {campos.map((campo) => {
                 const nomeVisivel = isEn && campo.nome_en ? campo.nome_en : campo.nome;
                 const localVisivel = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
-                const precoVisivel = campo.preco || (campo.turnos && campo.turnos.length > 0 ? campo.turnos[0].preco : 0);
+                
+                // Lógica Inteligente para encontrar o preço mais baixo da nova estrutura (pacotes)
+                let precoVisivel = campo.preco || 0;
+                if (!precoVisivel && campo.pacotes && campo.pacotes.length > 0) {
+                  const todosPrecos = campo.pacotes.flatMap((p: any) => 
+                    p.variantes ? p.variantes.map((v: any) => v.preco) : []
+                  );
+                  if (todosPrecos.length > 0) {
+                    precoVisivel = Math.min(...todosPrecos);
+                  }
+                }
 
                 return (
                   <div key={campo.id} className="group flex flex-col bg-white rounded-2xl overflow-hidden border border-slate-200 relative shadow-sm hover:shadow-xl transition-all duration-300">
@@ -216,7 +226,10 @@ export default async function PesquisaPorPais({
                       </p>
 
                       <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
-                        <p className="text-xl font-black text-emerald-600 m-0">{precoVisivel}€</p>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
+                          <p className="text-xl font-black text-emerald-600 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                        </div>
                         <span className="text-sm font-bold text-[#EBA914] transition-transform group-hover:translate-x-1">{isEn ? 'Explore' : 'Explorar'} &rarr;</span>
                       </div>
                     </div>
