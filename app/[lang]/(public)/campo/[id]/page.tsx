@@ -1,28 +1,13 @@
 import { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import CaixaReserva from "./CaixaReserva";
+// Importamos o Provedor, o Seletor e a Caixa de Resumo!
+import { ReservaProvider, SeletorOpcoes, CaixaResumo } from "./CaixaReserva";
 import BotaoFavorito from "../../components/BotaoFavorito";
 import BotaoPartilha from "../../components/BotaoPartilha";
 import { getDictionary } from "@/lib/getDictionary";
 import FormContactoCampo from "../../components/FormContactoCampo";
 import DescricaoExpansivel from "../../components/DescricaoExpansivel";
-
-// ==========================================
-// TIPAGEM PARA PACOTES E VARIANTES
-// ==========================================
-interface Variante {
-  nome: string;
-  preco: number;
-}
-
-interface Pacote {
-  id: string;
-  titulo: string;
-  tipo: 'semana' | 'dia';
-  quantidade: number;
-  variantes: Variante[];
-}
 
 // ==========================================
 // METADATA (SEO & OpenGraph)
@@ -88,36 +73,16 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
   const scoreAvaliacoes = campo.rating_score || 0;
   const totalAvaliacoes = campo.total_reviews || 0;
 
-  const formatarDataExtenso = (dStr: string) => {
-    if (!dStr) return '';
-    return new Date(dStr).toLocaleDateString(isEn ? 'en-US' : 'pt-PT', { day: 'numeric', month: 'long' });
-  };
-
   const baseUrl = "https://www.hellocamp.pt";
   const campoUrlCompleto = `${baseUrl}/${lang}/campo/${campo.id}`;
 
-  // ==========================================
-  // DADOS DA NOVA ESTRUTURA
-  // ==========================================
   const calendario = campo.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [] };
-  const pacotes: Pacote[] = campo.pacotes || [];
   const dataMaisCedo = calendario.data_inicio || "2026-07-01";
 
-  const DIAS_SEMANA = [
-    { id: 1, pt: 'Seg', en: 'Mon' }, { id: 2, pt: 'Ter', en: 'Tue' },
-    { id: 3, pt: 'Qua', en: 'Wed' }, { id: 4, pt: 'Qui', en: 'Thu' },
-    { id: 5, pt: 'Sex', en: 'Fri' }, { id: 6, pt: 'Sáb', en: 'Sat' },
-    { id: 0, pt: 'Dom', en: 'Sun' }
-  ];
-  const diasAtivos: number[] = calendario.dias_semana || [];
-  const diasAtivosTexto = diasAtivos.map((diaId: number) => {
-    const dia = DIAS_SEMANA.find((d: any) => d.id === diaId);
-    return dia ? (isEn ? dia.en : dia.pt) : '';
-  }).filter(Boolean).join(', ');
-
+  // Lógica inteligente para JSON-LD SEO Price
   let precoMinimo = campo.preco || 0;
-  if (pacotes.length > 0 && !precoMinimo) {
-    const todosPrecos = pacotes.flatMap((p: Pacote) => p.variantes.map((v: Variante) => v.preco));
+  if (campo.pacotes && campo.pacotes.length > 0 && !precoMinimo) {
+    const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes.map((v: any) => v.preco));
     if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
   }
 
@@ -199,210 +164,167 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
       </div>
 
       <div className="max-w-[1100px] mx-auto pt-10 pb-10 px-4 md:px-6">
-        <div className="flex flex-col lg:flex-row gap-10 items-start w-full">
+        
+        {/* ========================================== */}
+        {/* O ENVOLTÓRIO DA LÓGICA DE RESERVA */}
+        {/* ========================================== */}
+        <ReservaProvider campo={campo} lang={lang}>
+          <div className="flex flex-col lg:flex-row gap-10 items-start w-full">
 
-          <div className="flex-1 w-full flex flex-col gap-6">
+            {/* COLUNA ESQUERDA: INFORMAÇÃO E ZONA INTERATIVA */}
+            <div className="flex-1 w-full flex flex-col gap-6">
 
-            {/* CABEÇALHO DO CAMPO */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-40">
-              <div className="absolute top-8 right-8 z-50 flex items-center gap-3">
-                <BotaoPartilha url={campoUrlCompleto} titulo={nomeCampo} isEn={isEn} />
-                <BotaoFavorito campoId={campo.id} />
-              </div>
+              {/* CABEÇALHO DO CAMPO */}
+              <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-40">
+                <div className="absolute top-8 right-8 z-50 flex items-center gap-3">
+                  <BotaoPartilha url={campoUrlCompleto} titulo={nomeCampo} isEn={isEn} />
+                  <BotaoFavorito campoId={campo.id} />
+                </div>
 
-              <div className="flex flex-wrap items-center gap-3 mb-5 pr-24">
-                <span className="rounded-full bg-emerald-50 border border-emerald-100 px-4 py-1.5 text-xs font-bold text-emerald-700 uppercase tracking-widest">{catCampo}</span>
-                <span className="text-sm font-bold text-slate-500">📍 {localCampo}</span>
-              </div>
+                <div className="flex flex-wrap items-center gap-3 mb-5 pr-24">
+                  <span className="rounded-full bg-emerald-50 border border-emerald-100 px-4 py-1.5 text-xs font-bold text-emerald-700 uppercase tracking-widest">{catCampo}</span>
+                  <span className="text-sm font-bold text-slate-500">📍 {localCampo}</span>
+                </div>
 
-              <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight mb-4">{nomeCampo}</h1>
+                <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight mb-4">{nomeCampo}</h1>
 
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="text-[#EBA914] text-lg font-black">★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : 'Novo'}</span>
-                  <span className="text-slate-400 text-sm font-bold underline decoration-slate-300 underline-offset-4">
-                    ({totalAvaliacoes} {isEn ? 'reviews' : 'avaliações'})
-                  </span>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#EBA914] text-lg font-black">★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : 'Novo'}</span>
+                    <span className="text-slate-400 text-sm font-bold underline decoration-slate-300 underline-offset-4">
+                      ({totalAvaliacoes} {isEn ? 'reviews' : 'avaliações'})
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* DESCRIÇÃO E PERFIL DO ORGANIZADOR */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
-              <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{dict.detalhe.sobre_programa}</h2>
-              
-              <DescricaoExpansivel texto={descCampo} isEn={isEn} />
+              {/* DESCRIÇÃO E PERFIL DO ORGANIZADOR */}
+              <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
+                <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{dict.detalhe.sobre_programa}</h2>
+                <DescricaoExpansivel texto={descCampo} isEn={isEn} />
 
-              {campo.organizador_id && parceiroInfo && (
-                <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="mt-8 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors no-underline group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm flex-shrink-0">
-                      {parceiroInfo.logotipo_url ? (
-                        <img src={parceiroInfo.logotipo_url} alt="Logo" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-slate-400 text-lg">🏢</span>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">{isEn ? 'Organized by' : 'Organizado por'}</p>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-black text-slate-900 m-0 group-hover:text-emerald-600 transition-colors">
-                          {parceiroInfo.nome_empresa || 'Parceiro HelloCamp'}
-                        </p>
-                        {parceiroInfo.parceiro_verificado && (
-                          <span className="text-emerald-500 text-xs" title="Parceiro Verificado">✓</span>
+                {campo.organizador_id && parceiroInfo && (
+                  <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="mt-8 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors no-underline group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm flex-shrink-0">
+                        {parceiroInfo.logotipo_url ? (
+                          <img src={parceiroInfo.logotipo_url} alt="Logo" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-slate-400 text-lg">🏢</span>
                         )}
                       </div>
-                    </div>
-                  </div>
-                  <span className="text-slate-400 font-bold">&rarr;</span>
-                </Link>
-              )}
-            </div>
-
-            {/* CALENDÁRIO E RESUMO DE PACOTES (LIMPO) */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
-              <h2 className="text-xl font-bold text-slate-900 mb-5">{dict.detalhe.datas_disponibilidade}</h2>
-              <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100 space-y-4">
-
-                {/* Período Global */}
-                {calendario.data_inicio && calendario.data_fim && (
-                  <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-700">
-                    <span className="text-emerald-500 text-xl leading-none">📅</span>
-                    <span>
-                      {formatarDataExtenso(calendario.data_inicio)} {isEn ? 'to' : 'a'} {formatarDataExtenso(calendario.data_fim)}
-                    </span>
-                    {diasAtivosTexto && (
-                      <span className="ml-2 rounded-full bg-white border border-emerald-200 px-3 py-1 text-[10px] font-black text-emerald-700 uppercase tracking-wider">
-                        {diasAtivosTexto}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Pacotes (Resumo Limpo sem Variantes) */}
-                {pacotes.length > 0 ? (
-                  <div className="space-y-3 mt-4">
-                    <p className="text-xs font-black text-slate-500 uppercase tracking-widest border-b border-emerald-200 pb-2">
-                      {isEn ? 'Available Formats' : 'Formatos de Inscrição Disponíveis'}
-                    </p>
-                    <div className="flex flex-wrap gap-3">
-                      {pacotes.map((pacote: Pacote, idx: number) => (
-                        <div key={idx} className="bg-white rounded-xl border border-emerald-200 px-4 py-3 shadow-sm flex items-center gap-3">
-                          <span className="text-xl">{pacote.tipo === 'semana' ? '📆' : '🎫'}</span>
-                          <div>
-                            <h3 className="font-black text-slate-900 text-sm m-0">{pacote.titulo}</h3>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest m-0 mt-0.5">
-                              {pacote.tipo === 'semana' ? `${pacote.quantidade} Semana(s)` : `${pacote.quantidade} Dia(s)`}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[10px] font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 inline-block">
-                      {isEn ? '👉 Check specific price variants and options in the booking box.' : '👉 Consulte as variantes de preço específicas na caixa de reserva ao lado.'}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-slate-500 text-sm font-medium m-0">{isEn ? 'No packages defined yet.' : 'Ainda não há pacotes definidos.'}</p>
-                )}
-
-                {campo.vagas_totais !== null && campo.vagas_totais !== undefined && (
-                  <div className="mt-2 pt-2 border-t border-emerald-200 flex items-center gap-3">
-                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">👥 {isEn ? 'Total slots' : 'Vagas totais'}:</span>
-                    <span className="font-black text-emerald-700">{campo.vagas_totais}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* REGRAS E TERMOS ESPECÍFICOS */}
-            {regrasCampo && (
-              <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
-                <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{isEn ? 'Specific Rules & Terms' : 'Regras e Termos'}</h2>
-                <p className="leading-relaxed text-slate-500 text-sm whitespace-pre-wrap font-medium mb-0">{regrasCampo}</p>
-              </div>
-            )}
-
-            {/* INFORMAÇÕES LOGÍSTICAS IMPORTANTES */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
-              <h2 className="text-xl font-bold text-slate-900 mb-6">{dict.detalhe.informacoes_importantes}</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                  <span className="text-2xl">👥</span>
-                  <div><h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-widest mb-1">{dict.detalhe.racio_monitores}</h4><p className="text-sm font-bold text-slate-700 m-0">{racioCampo || dict.detalhe.sob_consulta}</p></div>
-                </div>
-                <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                  <span className="text-2xl">🍎</span>
-                  <div><h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-widest mb-1">{dict.detalhe.alimentacao}</h4><p className="text-sm font-bold text-slate-700 m-0">{alimentacaoCampo || dict.detalhe.sob_consulta}</p></div>
-                </div>
-                <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                  <span className="text-2xl">🏕️</span>
-                  <div><h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-widest mb-1">{dict.detalhe.alojamento}</h4><p className="text-sm font-bold text-slate-700 m-0">{alojamentoCampo || dict.detalhe.nao_inclui_dormida}</p></div>
-                </div>
-                <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                  <span className="text-2xl">🛡️</span>
-                  <div><h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-widest mb-1">{dict.detalhe.seguros}</h4><p className="text-sm font-bold text-slate-700 m-0">{seguroCampo || dict.detalhe.sob_consulta}</p></div>
-                </div>
-              </div>
-            </div>
-
-            {/* SECÇÃO DE AVALIAÇÕES */}
-            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
-              <div className="flex items-center justify-between mb-8 border-b border-slate-50 pb-4">
-                <h2 className="text-xl font-bold text-slate-900 m-0">{isEn ? 'Reviews' : 'Avaliações'}</h2>
-                <div className="flex items-center gap-2">
-                  <span className="text-[#EBA914] text-xl font-black">★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : 'Novo'}</span>
-                </div>
-              </div>
-
-              {!reviews || reviews.length === 0 ? (
-                <div className="text-center py-6 text-slate-400 font-bold text-sm">
-                  {isEn ? 'No reviews for this camp yet. Be the first!' : 'Ainda não há avaliações. Seja o primeiro a deixar opinião após o campo!'}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-6">
-                  {reviews.map((rev: any) => (
-                    <div key={rev.id} className="flex flex-col gap-2 pb-6 border-b border-slate-50 last:border-0 last:pb-0">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-600 text-sm flex-shrink-0">
-                          {rev.nome_pai ? rev.nome_pai.charAt(0).toUpperCase() : 'A'}
-                        </div>
-                        <div>
-                          <p className="font-bold text-sm text-slate-900 m-0">{rev.nome_pai || 'Anónimo'}</p>
-                          <p className="text-xs font-bold text-slate-400 m-0">{new Date(rev.created_at).toLocaleDateString(isEn ? 'en-US' : 'pt-PT')}</p>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">{isEn ? 'Organized by' : 'Organizado por'}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-black text-slate-900 m-0 group-hover:text-emerald-600 transition-colors">
+                            {parceiroInfo.nome_empresa || 'Parceiro HelloCamp'}
+                          </p>
+                          {parceiroInfo.parceiro_verificado && (
+                            <span className="text-emerald-500 text-xs" title="Parceiro Verificado">✓</span>
+                          )}
                         </div>
                       </div>
-                      <div className="text-[#EBA914] text-xs">{'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}</div>
-                      <p className="text-sm text-slate-600 m-0 font-medium">{rev.comentario}</p>
                     </div>
-                  ))}
+                    <span className="text-slate-400 font-bold">&rarr;</span>
+                  </Link>
+                )}
+              </div>
+
+              {/* INFORMAÇÕES LOGÍSTICAS IMPORTANTES */}
+              <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
+                <h2 className="text-xl font-bold text-slate-900 mb-6">{dict.detalhe.informacoes_importantes}</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span className="text-2xl">👥</span>
+                    <div><h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-widest mb-1">{dict.detalhe.racio_monitores}</h4><p className="text-sm font-bold text-slate-700 m-0">{racioCampo || dict.detalhe.sob_consulta}</p></div>
+                  </div>
+                  <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span className="text-2xl">🍎</span>
+                    <div><h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-widest mb-1">{dict.detalhe.alimentacao}</h4><p className="text-sm font-bold text-slate-700 m-0">{alimentacaoCampo || dict.detalhe.sob_consulta}</p></div>
+                  </div>
+                  <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span className="text-2xl">🏕️</span>
+                    <div><h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-widest mb-1">{dict.detalhe.alojamento}</h4><p className="text-sm font-bold text-slate-700 m-0">{alojamentoCampo || dict.detalhe.nao_inclui_dormida}</p></div>
+                  </div>
+                  <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span className="text-2xl">🛡️</span>
+                    <div><h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-widest mb-1">{dict.detalhe.seguros}</h4><p className="text-sm font-bold text-slate-700 m-0">{seguroCampo || dict.detalhe.sob_consulta}</p></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ========================================== */}
+              {/* O NOVO MOTOR DE RESERVA INTERATIVO AQUI */}
+              {/* ========================================== */}
+              <SeletorOpcoes />
+
+              {/* REGRAS E TERMOS ESPECÍFICOS */}
+              {regrasCampo && (
+                <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
+                  <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{isEn ? 'Specific Rules & Terms' : 'Regras e Termos'}</h2>
+                  <p className="leading-relaxed text-slate-500 text-sm whitespace-pre-wrap font-medium mb-0">{regrasCampo}</p>
                 </div>
               )}
+
+              {/* SECÇÃO DE AVALIAÇÕES */}
+              <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
+                <div className="flex items-center justify-between mb-8 border-b border-slate-50 pb-4">
+                  <h2 className="text-xl font-bold text-slate-900 m-0">{isEn ? 'Reviews' : 'Avaliações'}</h2>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#EBA914] text-xl font-black">★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : 'Novo'}</span>
+                  </div>
+                </div>
+
+                {!reviews || reviews.length === 0 ? (
+                  <div className="text-center py-6 text-slate-400 font-bold text-sm">
+                    {isEn ? 'No reviews for this camp yet. Be the first!' : 'Ainda não há avaliações. Seja o primeiro a deixar opinião após o campo!'}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-6">
+                    {reviews.map((rev: any) => (
+                      <div key={rev.id} className="flex flex-col gap-2 pb-6 border-b border-slate-50 last:border-0 last:pb-0">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-600 text-sm flex-shrink-0">
+                            {rev.nome_pai ? rev.nome_pai.charAt(0).toUpperCase() : 'A'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-slate-900 m-0">{rev.nome_pai || 'Anónimo'}</p>
+                            <p className="text-xs font-bold text-slate-400 m-0">{new Date(rev.created_at).toLocaleDateString(isEn ? 'en-US' : 'pt-PT')}</p>
+                          </div>
+                        </div>
+                        <div className="text-[#EBA914] text-xs">{'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}</div>
+                        <p className="text-sm text-slate-600 m-0 font-medium">{rev.comentario}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* FORMULÁRIO DE CONTACTO */}
+              <div id="duvidas" className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10 scroll-mt-24">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
+                <p className="text-sm text-slate-500 font-medium mb-8">{dict.detalhe.duvidas_sub}</p>
+
+                <FormContactoCampo
+                  campoId={campo.id}
+                  organizadorId={campo.organizador_id}
+                  nomeCampo={nomeCampo}
+                  dict={dict}
+                  isEn={isEn}
+                  lang={lang}
+                />
+              </div>
+
             </div>
 
-            {/* FORMULÁRIO DE CONTACTO */}
-            <div id="duvidas" className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10 scroll-mt-24">
-              <h3 className="text-xl font-bold text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
-              <p className="text-sm text-slate-500 font-medium mb-8">{dict.detalhe.duvidas_sub}</p>
-
-              <FormContactoCampo
-                campoId={campo.id}
-                organizadorId={campo.organizador_id}
-                nomeCampo={nomeCampo}
-                dict={dict}
-                isEn={isEn}
-                lang={lang}
-              />
+            {/* ========================================== */}
+            {/* BARRA LATERAL COM O RESUMO FIXO */}
+            {/* ========================================== */}
+            <div className="w-full lg:w-[420px] flex-shrink-0 lg:sticky lg:top-8 relative z-30">
+              <CaixaResumo />
             </div>
-
           </div>
-
-          {/* SIDEBAR COM CAIXA DE RESERVA DINÂMICA */}
-          <div className="w-full lg:w-[420px] flex-shrink-0 lg:sticky lg:top-8 relative z-30">
-            <CaixaReserva campo={campo} lang={lang} dict={dict} />
-          </div>
-        </div>
+        </ReservaProvider>
       </div>
     </main>
   );
