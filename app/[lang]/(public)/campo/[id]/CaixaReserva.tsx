@@ -45,10 +45,8 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   const [mesAtual, setMesAtual] = useState<Date>(new Date());
   const [datasDisponiveis, setDatasDisponiveis] = useState<string[]>([]);
 
-  // Estados de Extras
-  const [extraAlimentacao, setExtraAlimentacao] = useState(false);
-  const [extraAlojamento, setExtraAlojamento] = useState(false);
-  const [extraProlongamento, setExtraProlongamento] = useState(false);
+  // Estados de Extras Opcionais Isolados
+  const [extraSeguro, setExtraSeguro] = useState(false);
   const [extraTransporte, setExtraTransporte] = useState(false);
 
   // ==========================================
@@ -98,9 +96,8 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
           : [...prev, data]
       );
     } else if (pacoteSelecionado.tipo === 'semana') {
-      // Modalidade "Semana": Seleciona a semana inteira (ou N semanas)
+      // Modalidade "Semana": Seleciona a semana inteira
       if (diasSelecionados.includes(data)) {
-        // Se clicar num dia já selecionado, limpa a seleção toda
         setDiasSelecionados([]);
         return;
       }
@@ -108,17 +105,16 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
       const dateObj = new Date(data);
       const dayOfWeek = dateObj.getDay();
       
-      // Descobrir a Segunda-feira da semana do dia clicado
+      // Descobrir a Segunda-feira da semana
       const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       const startMonday = new Date(dateObj);
       startMonday.setDate(dateObj.getDate() - diffToMonday);
 
-      // Descobrir o Domingo de fecho (multiplicado pelo número de semanas do pacote)
+      // Descobrir o Domingo de fecho
       const semanas = pacoteSelecionado.quantidade || 1;
       const endDay = new Date(startMonday);
       endDay.setDate(startMonday.getDate() + (7 * semanas) - 1);
 
-      // Filtrar todas as datas disponíveis que caem neste intervalo
       const diasDaSemana = datasDisponiveis.filter(d => {
          const dDate = new Date(d);
          return dDate >= startMonday && dDate <= endDay;
@@ -133,30 +129,40 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
   // ==========================================
   const precoBase = varianteSelecionada?.preco || 0;
   
-  // Dias para efeitos de cálculo de Extras:
-  // Se for Dia Solto, usa os dias selecionados. Se for Semana, usa a QTD do Pacote (Ex: 1) para multiplicar o Extra Global.
+  // Total de Dias de utilidade para multiplicar extras
   const totalDias = pacoteSelecionado?.tipo === 'dia' ? diasSelecionados.length : (pacoteSelecionado?.quantidade || 1);
-  const noitesDormida = Math.max(1, totalDias - 1);
 
-  const valAlimentacao = campo.extra_alimentacao || 0;
-  const valAlojamento = campo.extra_alojamento || 0;
-  const valProlongamento = campo.extra_prolongamento || 0;
+  // Valores da BD
+  const valSeguro = campo.extra_seguro || 0;
+  const tipoSeguro = campo.tipo_extra_seguro || 'fixo'; // 'fixo' ou 'diario'
+  
   const valTransporte = campo.extra_transporte || 0;
+  const tipoTransporte = campo.tipo_extra_transporte || 'diario'; // 'fixo' ou 'diario'
 
   let totalExtras = 0;
-  if (extraAlimentacao) totalExtras += (valAlimentacao * totalDias);
-  if (extraAlojamento) totalExtras += (valAlojamento * noitesDormida);
-  if (extraProlongamento) totalExtras += (valProlongamento * totalDias);
-  if (extraTransporte) totalExtras += (valTransporte * totalDias);
+  
+  // Cálculo Seguro
+  let custoSeguro = 0;
+  if (valSeguro > 0) {
+    custoSeguro = tipoSeguro === 'diario' ? (valSeguro * totalDias) : valSeguro;
+    if (extraSeguro) totalExtras += custoSeguro;
+  }
 
-  // Multiplicador Base para o Preço do Programa (Semana cobra 1x o valor por quantidade escolhida. Dia Solto cobra Nx o valor).
+  // Cálculo Transporte
+  let custoTransporte = 0;
+  if (valTransporte > 0) {
+    custoTransporte = tipoTransporte === 'diario' ? (valTransporte * totalDias) : valTransporte;
+    if (extraTransporte) totalExtras += custoTransporte;
+  }
+
+  // Multiplicador Base para o Preço do Programa
   const multiplicadorPrecoBase = pacoteSelecionado?.tipo === 'dia' ? diasSelecionados.length : 1;
   const precoTotal = ((precoBase * multiplicadorPrecoBase) + totalExtras) * quantidade;
 
   // Verificação de Lotação
-  const vagasTotais = campo.vagas_totais || 0;
-  const isEsgotado = vagasTotais <= 0;
-  const mostrarEscassez = vagasTotais > 0 && vagasTotais <= 3;
+  const vagasTotais = campo.vagas_totais;
+  const isEsgotado = vagasTotais !== null && vagasTotais <= 0;
+  const mostrarEscassez = vagasTotais !== null && vagasTotais > 0 && vagasTotais <= 3;
 
   // ==========================================
   // SUBMISSÃO PARA CHECKOUT
@@ -169,15 +175,13 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
     params.set("turno", JSON.stringify({
       id: pacoteSelecionado.id,
       nome: `${pacoteSelecionado.titulo} (${varianteSelecionada.nome})`,
-      dias_soltos: diasSelecionados, // As datas exatas seguem para a BD e Email do Parceiro
+      dias_soltos: diasSelecionados,
       preco: varianteSelecionada.preco,
       tipo: pacoteSelecionado.tipo,
       quantidade: totalDias
     }));
     
-    if (extraAlimentacao) params.set("ext_alimentacao", "true");
-    if (extraAlojamento) params.set("ext_alojamento", "true");
-    if (extraProlongamento) params.set("ext_prolongamento", "true");
+    if (extraSeguro) params.set("ext_seguro", "true");
     if (extraTransporte) params.set("ext_transporte", "true");
     if (isEmailMode) params.set("modo", "email");
 
@@ -203,11 +207,11 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
       
       {/* CABEÇALHO DE PREÇO */}
       <div className="mb-6">
-        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{isEn ? 'Price per child' : 'Preço por criança'}</p>
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{isEn ? 'Price per child' : 'Preço base por criança'}</p>
         <div className="flex items-baseline gap-2">
           <span className="text-4xl font-black text-slate-900 leading-none">{precoBase}€</span>
           <span className="text-sm font-bold text-slate-500">
-            / {pacoteSelecionado?.tipo === 'dia' ? (isEn ? 'day' : 'dia') : (isEn ? 'child' : 'criança')}
+            / {pacoteSelecionado?.tipo === 'dia' ? (isEn ? 'day' : 'dia') : (isEn ? 'package' : 'passe')}
           </span>
         </div>
       </div>
@@ -221,7 +225,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
           {/* SELEÇÃO DO PACOTE */}
           <div className="mb-6">
             <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
-              {isEn ? 'Select Package' : 'Escolha o Programa'}
+              1. {isEn ? 'Select Package' : 'Escolha o Programa'}
             </label>
             <div className="flex flex-col gap-3">
               {pacotes.map((pac) => {
@@ -231,9 +235,9 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
                     key={pac.id}
                     onClick={() => { 
                       setPacoteSelecionado(pac); 
-                      setDiasSelecionados([]); // Limpa as datas ao mudar de pacote
+                      setDiasSelecionados([]);
                       if (pac.variantes && pac.variantes.length > 0) {
-                        setVarianteSelecionada(pac.variantes[0]); // ATUALIZA O PREÇO IMEDIATAMENTE
+                        setVarianteSelecionada(pac.variantes[0]);
                       }
                     }}
                     className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
@@ -260,7 +264,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
           {pacoteSelecionado && datasDisponiveis.length > 0 && (
             <div className="mb-6 animate-in fade-in">
               <label className="block text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-3">
-                {pacoteSelecionado.tipo === 'dia' ? (isEn ? 'Select your Days' : 'Selecione os Dias') : (isEn ? 'Select your Week' : 'Selecione a Semana')}
+                2. {pacoteSelecionado.tipo === 'dia' ? (isEn ? 'Select your Days' : 'Selecione os Dias') : (isEn ? 'Select your Week' : 'Selecione a Semana')}
               </label>
               
               <div className="flex items-center justify-between mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -299,7 +303,7 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
           {pacoteSelecionado && pacoteSelecionado.variantes.length > 1 && (
             <div className="mb-6">
               <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
-                {isEn ? 'Choose Option' : 'Escolha a Variante'}
+                3. {isEn ? 'Choose Option (Food/Sleep)' : 'Escolha a Variante (Alimentação/Dormida)'}
               </label>
               <div className="flex flex-wrap gap-2">
                 {pacoteSelecionado.variantes.map((varia) => (
@@ -321,17 +325,15 @@ export default function CaixaReserva({ campo, lang, dict }: { campo: any, lang: 
         </>
       )}
 
-      {/* EXTRAS */}
-      {!isEsgotado && (
+      {/* EXTRAS FINANCEIROS */}
+      {!isEsgotado && (valSeguro > 0 || valTransporte > 0) && (
         <div className="mb-6 border-t border-slate-100 pt-6">
           <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">
-            {isEn ? 'Optional Extras' : 'Extras Opcionais'}
+            4. {isEn ? 'Optional Extras' : 'Extras Opcionais (Isolados)'}
           </p>
           <div className="flex flex-col gap-2">
-            {valAlimentacao > 0 && <ExtraCheckbox icon="🍎" label={isEn ? 'Meals' : 'Alimentação'} price={valAlimentacao * totalDias} active={extraAlimentacao} onChange={() => setExtraAlimentacao(!extraAlimentacao)} />}
-            {valAlojamento > 0 && <ExtraCheckbox icon="🏕️" label={isEn ? 'Sleepover' : 'Dormida'} price={valAlojamento * noitesDormida} active={extraAlojamento} onChange={() => setExtraAlojamento(!extraAlojamento)} />}
-            {valProlongamento > 0 && <ExtraCheckbox icon="⏰" label={isEn ? 'Extended Hours' : 'Horário Extra'} price={valProlongamento * totalDias} active={extraProlongamento} onChange={() => setExtraProlongamento(!extraProlongamento)} />}
-            {valTransporte > 0 && <ExtraCheckbox icon="🚌" label={isEn ? 'Transport' : 'Transporte'} price={valTransporte * totalDias} active={extraTransporte} onChange={() => setExtraTransporte(!extraTransporte)} />}
+            {valSeguro > 0 && <ExtraCheckbox icon="🛡️" label={isEn ? 'Insurance' : 'Seguro Extra'} price={custoSeguro} active={extraSeguro} onChange={() => setExtraSeguro(!extraSeguro)} />}
+            {valTransporte > 0 && <ExtraCheckbox icon="🚌" label={isEn ? 'Transport' : 'Transporte'} price={custoTransporte} active={extraTransporte} onChange={() => setExtraTransporte(!extraTransporte)} />}
           </div>
         </div>
       )}

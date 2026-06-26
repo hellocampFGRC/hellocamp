@@ -6,7 +6,7 @@ import BotaoFavorito from "../../components/BotaoFavorito";
 import BotaoPartilha from "../../components/BotaoPartilha";
 import { getDictionary } from "@/lib/getDictionary";
 import FormContactoCampo from "../../components/FormContactoCampo";
-import DescricaoExpansivel from "../../components/DescricaoExpansivel"; // Ajuste o caminho se guardou noutra pasta
+import DescricaoExpansivel from "../../components/DescricaoExpansivel";
 
 // ==========================================
 // TIPAGEM PARA PACOTES E VARIANTES
@@ -106,7 +106,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
   const DIAS_SEMANA = [
     { id: 1, pt: 'Seg', en: 'Mon' }, { id: 2, pt: 'Ter', en: 'Tue' },
     { id: 3, pt: 'Qua', en: 'Wed' }, { id: 4, pt: 'Qui', en: 'Thu' },
-    { id: 5, pt: 'Sex', en: 'Fri' }, { id: 6, pt: 'Sáb', en: 'Sat' }, // Corrigido erro de digitação
+    { id: 5, pt: 'Sex', en: 'Fri' }, { id: 6, pt: 'Sáb', en: 'Sat' },
     { id: 0, pt: 'Dom', en: 'Sun' }
   ];
   const diasAtivos: number[] = calendario.dias_semana || [];
@@ -118,7 +118,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
   let precoMinimo = campo.preco || 0;
   if (pacotes.length > 0 && !precoMinimo) {
     const todosPrecos = pacotes.flatMap((p: Pacote) => p.variantes.map((v: Variante) => v.preco));
-    precoMinimo = Math.min(...todosPrecos);
+    if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
   }
 
   // ==========================================
@@ -231,7 +231,6 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
             <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-4 border-b border-slate-50 pb-3">{dict.detalhe.sobre_programa}</h2>
               
-              {/* Utilização do Novo Componente de Descrição Expansível */}
               <DescricaoExpansivel texto={descCampo} isEn={isEn} />
 
               {campo.organizador_id && parceiroInfo && (
@@ -261,7 +260,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
               )}
             </div>
 
-            {/* CALENDÁRIO E PACOTES */}
+            {/* CALENDÁRIO E RESUMO DE PACOTES (LIMPO) */}
             <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-100 relative z-10">
               <h2 className="text-xl font-bold text-slate-900 mb-5">{dict.detalhe.datas_disponibilidade}</h2>
               <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100 space-y-4">
@@ -281,37 +280,34 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                   </div>
                 )}
 
-                {/* Pacotes */}
+                {/* Pacotes (Resumo Limpo sem Variantes) */}
                 {pacotes.length > 0 ? (
-                  <div className="space-y-4 mt-4">
+                  <div className="space-y-3 mt-4">
                     <p className="text-xs font-black text-slate-500 uppercase tracking-widest border-b border-emerald-200 pb-2">
-                      {isEn ? 'Available packages' : 'Pacotes disponíveis'}
+                      {isEn ? 'Available Formats' : 'Formatos de Inscrição Disponíveis'}
                     </p>
-                    {pacotes.map((pacote: Pacote, idx: number) => (
-                      <div key={idx} className="bg-white rounded-xl border border-emerald-200 p-4 shadow-sm">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex flex-wrap gap-3">
+                      {pacotes.map((pacote: Pacote, idx: number) => (
+                        <div key={idx} className="bg-white rounded-xl border border-emerald-200 px-4 py-3 shadow-sm flex items-center gap-3">
+                          <span className="text-xl">{pacote.tipo === 'semana' ? '📆' : '🎫'}</span>
                           <div>
-                            <h3 className="font-black text-slate-900 text-base">{pacote.titulo}</h3>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            <h3 className="font-black text-slate-900 text-sm m-0">{pacote.titulo}</h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest m-0 mt-0.5">
                               {pacote.tipo === 'semana' ? `${pacote.quantidade} Semana(s)` : `${pacote.quantidade} Dia(s)`}
                             </p>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {pacote.variantes.map((variante: Variante, vi: number) => (
-                              <span key={vi} className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">
-                                {variante.nome}: {variante.preco}€
-                              </span>
-                            ))}
-                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                    <p className="text-[10px] font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 inline-block">
+                      {isEn ? '👉 Check specific price variants and options in the booking box.' : '👉 Consulte as variantes de preço específicas na caixa de reserva ao lado.'}
+                    </p>
                   </div>
                 ) : (
                   <p className="text-slate-500 text-sm font-medium m-0">{isEn ? 'No packages defined yet.' : 'Ainda não há pacotes definidos.'}</p>
                 )}
 
-                {campo.vagas_totais && (
+                {campo.vagas_totais !== null && campo.vagas_totais !== undefined && (
                   <div className="mt-2 pt-2 border-t border-emerald-200 flex items-center gap-3">
                     <span className="text-xs font-black text-slate-500 uppercase tracking-widest">👥 {isEn ? 'Total slots' : 'Vagas totais'}:</span>
                     <span className="font-black text-emerald-700">{campo.vagas_totais}</span>
