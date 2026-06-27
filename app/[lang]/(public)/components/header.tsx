@@ -33,7 +33,6 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-100 font-sans box-border shadow-sm">
-      {/* Reduzi o padding vertical no mobile de py-3 para py-2 */}
       <div className="max-w-[1280px] mx-auto px-4 py-2 md:py-4 md:px-8">
         <div className="flex items-center justify-between">
 
@@ -161,7 +160,8 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             <Link href={`/${lang}/guia-pais`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Pais</Link>
             <Link href={`/${lang}/parceiro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Parceiro</Link>
             
-            <div className="px-3 pt-2">
+            {/* O onClickCapture interceta QUALQUER clique dentro da div, fechando o menu automaticamente */}
+            <div className="px-3 pt-2" onClickCapture={() => setIsMobileMenuOpen(false)}>
               <AuthButton lang={lang} dict={dict} />
             </div>
           </div>
