@@ -156,7 +156,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             
             <div className="h-px bg-slate-100 my-2"></div>
             
-            <Link href={`/${lang}/como_reservar`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Pais</Link>
+            <Link href={`/${lang}/guia-pais`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Pais</Link>
             <Link href={`/${lang}/parceiro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Ser Parceiro</Link>
             
             <div className="px-4 pt-2">
