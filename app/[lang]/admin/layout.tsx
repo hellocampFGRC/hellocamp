@@ -63,12 +63,17 @@ export default function AdminLayout({
         </div>
         
         {/* Navegação: Scroll horizontal no mobile, vertical no PC */}
-        <nav className="flex md:flex-col overflow-x-auto md:overflow-visible gap-2 p-3 md:p-6 no-scrollbar scroll-smooth">
+        <nav className="flex md:flex-col overflow-x-auto md:overflow-visible gap-2 p-3 md:p-6 no-scrollbar scroll-smooth items-center md:items-stretch">
           <NavLink href={`/${lang}/admin/dashboard`} active={pathname.includes('/dashboard')} text={isEn ? 'Dashboard' : 'Resumo'} />
           <NavLink href={`/${lang}/admin/inbox`} active={pathname.includes('/inbox')} text={isEn ? 'Inbox' : 'Mensagens'} />
           <NavLink href={`/${lang}/admin/campos`} active={pathname.includes('/campos')} text={isEn ? 'My Camps' : 'Os Meus Campos'} />
           <NavLink href={`/${lang}/admin/reservas`} active={pathname.includes('/reservas')} text={isEn ? 'Bookings' : 'Reservas'} />
           <NavLink href={`/${lang}/admin/faturacao`} active={pathname.includes('/faturacao')} text={isEn ? 'Billing' : 'Faturação'} />
+          
+          {/* Botão de Sair de volta ao scroll no mobile! */}
+          <button onClick={handleLogout} className="md:hidden flex-shrink-0 flex items-center justify-center px-5 py-2.5 rounded-full text-sm font-bold text-red-400 bg-slate-800 border border-slate-700 hover:bg-slate-700 ml-2 transition-colors">
+            {isEn ? 'Logout' : 'Sair'}
+          </button>
         </nav>
 
         {/* Rodapé da Sidebar: Email e Logout exclusivo para PC */}
@@ -85,7 +90,7 @@ export default function AdminLayout({
       {/* ÁREA PRINCIPAL DO PARCEIRO */}
       <main className="flex-1 flex flex-col w-full overflow-hidden">
         
-        {/* Header Superior (Língua e Atalho para Site) */}
+        {/* Header Superior (Apenas Língua e Atalho para Site, limpo e direto) */}
         <header className="bg-white px-4 md:px-8 py-3 md:py-4 border-b border-slate-200 flex justify-end items-center gap-4 flex-shrink-0">
           <div className="flex items-center gap-6">
             <div className="flex gap-2 text-sm font-bold">

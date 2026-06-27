@@ -33,11 +33,12 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-100 font-sans box-border shadow-sm">
-      <div className="max-w-[1280px] mx-auto px-4 py-3 md:py-4 md:px-8">
+      {/* Reduzi o padding vertical no mobile de py-3 para py-2 */}
+      <div className="max-w-[1280px] mx-auto px-4 py-2 md:py-4 md:px-8">
         <div className="flex items-center justify-between">
 
           {/* 1. LOGOTIPO */}
-          <Link href={`/${lang}`} className="text-2xl font-extrabold tracking-tight no-underline flex-shrink-0">
+          <Link href={`/${lang}`} className="text-xl md:text-2xl font-extrabold tracking-tight no-underline flex-shrink-0">
             <span className="text-gray-900">Hello</span>
             <span className="text-[#EBA914]">Camp</span>
           </Link>
@@ -124,13 +125,13 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
           <div className="flex items-center gap-2 md:hidden">
             <LanguageSwitcher lang={lang} />
             {session && (
-              <button onClick={handleLogout} className="text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-1.5 rounded-lg border border-red-100 uppercase transition-colors">
+              <button onClick={handleLogout} className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1.5 rounded-lg border border-red-100 uppercase transition-colors">
                 {isEn ? 'Logout' : 'Sair'}
               </button>
             )}
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="w-10 h-10 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xl font-bold ml-1 cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-lg font-bold ml-1 cursor-pointer"
             >
               {isMobileMenuOpen ? '✕' : '≡'}
             </button>
@@ -138,29 +139,29 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
 
         </div>
 
-        {/* MENU LATERAL EXPANSÍVEL (MOBILE) */}
+        {/* MENU LATERAL EXPANSÍVEL COMPACTO (MOBILE) */}
         {isMobileMenuOpen && (
-          <div className="w-full flex flex-col bg-white border-t border-slate-100 mt-3 pt-3 pb-2 gap-2 md:hidden">
-            <div className="px-2 py-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">{isEn ? 'Categories' : 'Categorias'}</div>
-            <Link href={`/${lang}/pesquisa?categoria=Aventura %26 Natureza`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🌲 Aventura & Natureza</Link>
-            <Link href={`/${lang}/pesquisa?categoria=Desporto`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">⚽ Desporto</Link>
-            <Link href={`/${lang}/pesquisa?categoria=Desportos Náuticos`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🏄‍♂️ Desportos Náuticos</Link>
-            <Link href={`/${lang}/pesquisa?categoria=Artes %26 Criatividade`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🎨 Artes & Criatividade</Link>
-            <Link href={`/${lang}/pesquisa?categoria=Tecnologia %26 Robótica`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">💻 Tecnologia & Robótica</Link>
-            <Link href={`/${lang}/pesquisa?categoria=Línguas`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🗣️ Línguas</Link>
-            <Link href={`/${lang}/pesquisa?categoria=Multiatividades`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🤹 Multiatividades</Link>
+          <div className="w-full flex flex-col bg-white border-t border-slate-100 mt-2 pt-1 pb-2 gap-0.5 md:hidden">
+            <div className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">{isEn ? 'Categories' : 'Categorias'}</div>
+            <Link href={`/${lang}/pesquisa?categoria=Aventura %26 Natureza`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🌲 Aventura & Natureza</Link>
+            <Link href={`/${lang}/pesquisa?categoria=Desporto`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">⚽ Desporto</Link>
+            <Link href={`/${lang}/pesquisa?categoria=Desportos Náuticos`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🏄‍♂️ Desportos Náuticos</Link>
+            <Link href={`/${lang}/pesquisa?categoria=Artes %26 Criatividade`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🎨 Artes & Criatividade</Link>
+            <Link href={`/${lang}/pesquisa?categoria=Tecnologia %26 Robótica`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">💻 Tecnologia & Robótica</Link>
+            <Link href={`/${lang}/pesquisa?categoria=Línguas`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🗣️ Línguas</Link>
+            <Link href={`/${lang}/pesquisa?categoria=Multiatividades`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🤹 Multiatividades</Link>
             
-            <div className="px-2 py-1 text-[10px] font-black text-slate-400 uppercase tracking-wider mt-2">{isEn ? 'Locations' : 'Destinos'}</div>
-            <Link href={`/${lang}/distrito/Lisboa`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Lisboa</Link>
-            <Link href={`/${lang}/distrito/Porto`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Porto</Link>
-            <Link href={`/${lang}/distrito/Faro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Faro</Link>
+            <div className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-wider mt-2">{isEn ? 'Locations' : 'Destinos'}</div>
+            <Link href={`/${lang}/distrito/Lisboa`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Lisboa</Link>
+            <Link href={`/${lang}/distrito/Porto`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Porto</Link>
+            <Link href={`/${lang}/distrito/Faro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Faro</Link>
             
-            <div className="h-px bg-slate-100 my-2"></div>
+            <div className="h-px bg-slate-100 my-1 mx-3"></div>
             
-            <Link href={`/${lang}/guia-pais`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Pais</Link>
-            <Link href={`/${lang}/parceiro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Parceiro</Link>
+            <Link href={`/${lang}/guia-pais`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Pais</Link>
+            <Link href={`/${lang}/parceiro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Parceiro</Link>
             
-            <div className="px-4 pt-2">
+            <div className="px-3 pt-2">
               <AuthButton lang={lang} dict={dict} />
             </div>
           </div>
