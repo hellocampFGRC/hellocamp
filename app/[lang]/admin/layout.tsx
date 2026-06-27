@@ -69,14 +69,9 @@ export default function AdminLayout({
           <NavLink href={`/${lang}/admin/campos`} active={pathname.includes('/campos')} text={isEn ? 'My Camps' : 'Os Meus Campos'} />
           <NavLink href={`/${lang}/admin/reservas`} active={pathname.includes('/reservas')} text={isEn ? 'Bookings' : 'Reservas'} />
           <NavLink href={`/${lang}/admin/faturacao`} active={pathname.includes('/faturacao')} text={isEn ? 'Billing' : 'Faturação'} />
-          
-          {/* Botão de Sair no Mobile */}
-          <button onClick={handleLogout} className="md:hidden flex-shrink-0 flex items-center justify-center px-5 py-2.5 rounded-full text-sm font-bold text-white border border-slate-700 bg-slate-800 ml-2">
-            {isEn ? 'Logout' : 'Sair'}
-          </button>
         </nav>
 
-        {/* Rodapé da Sidebar: Email e Logout no PC */}
+        {/* Rodapé da Sidebar: Email e Logout exclusivo para PC */}
         <div className="p-6 border-t border-slate-800 hidden md:block mt-auto">
           <p className="text-xs text-slate-400 mb-4 break-all">
             {user?.email}
@@ -90,16 +85,24 @@ export default function AdminLayout({
       {/* ÁREA PRINCIPAL DO PARCEIRO */}
       <main className="flex-1 flex flex-col w-full overflow-hidden">
         
-        {/* Header Superior (Língua e Atalho para Site) */}
-        <header className="bg-white px-4 md:px-8 py-3 md:py-4 border-b border-slate-200 flex justify-end items-center gap-6 flex-shrink-0">
-          <div className="flex gap-2 text-sm font-bold">
-            <Link href={getLangUrl('pt')} className={`${lang === 'pt' ? 'text-slate-900' : 'text-slate-400'} no-underline`}>PT</Link>
-            <span className="text-slate-200">|</span>
-            <Link href={getLangUrl('en')} className={`${lang === 'en' ? 'text-slate-900' : 'text-slate-400'} no-underline`}>EN</Link>
+        {/* Header Superior (Logout Mobile, Língua e Atalho para Site) */}
+        <header className="bg-white px-4 md:px-8 py-3 md:py-4 border-b border-slate-200 flex justify-between md:justify-end items-center gap-4 flex-shrink-0">
+          
+          {/* Botão de Sair apenas visível no Mobile */}
+          <button onClick={handleLogout} className="md:hidden text-sm font-bold text-slate-500 hover:text-red-600 transition-colors">
+            {isEn ? 'Logout' : 'Sair'}
+          </button>
+
+          <div className="flex items-center gap-6">
+            <div className="flex gap-2 text-sm font-bold">
+              <Link href={getLangUrl('pt')} className={`${lang === 'pt' ? 'text-slate-900' : 'text-slate-400'} no-underline`}>PT</Link>
+              <span className="text-slate-200">|</span>
+              <Link href={getLangUrl('en')} className={`${lang === 'en' ? 'text-slate-900' : 'text-slate-400'} no-underline`}>EN</Link>
+            </div>
+            <Link href={`/${lang}`} target="_blank" className="text-sm font-bold text-emerald-600 no-underline hover:text-emerald-700">
+              {isEn ? 'View Live Site ↗' : 'Ver Site ↗'}
+            </Link>
           </div>
-          <Link href={`/${lang}`} target="_blank" className="text-sm font-bold text-emerald-600 no-underline hover:text-emerald-700">
-            {isEn ? 'View Live Site ↗' : 'Ver Site ↗'}
-          </Link>
         </header>
         
         {/* Conteúdo da Página */}
