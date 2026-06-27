@@ -11,6 +11,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const isEn = lang === 'en';
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -47,31 +48,31 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             {/* HOVER DROPDOWN: CAMPOS POR TEMA */}
             <div className="relative group py-2">
               <button className="flex items-center gap-1 text-[15px] font-bold text-gray-700 hover:text-emerald-600 bg-transparent border-none cursor-pointer">
-                {lang === 'en' ? 'Camps' : 'Campos'}
+                {isEn ? 'Camps' : 'Campos'}
                 <span className="text-[9px] text-gray-400 transition-transform duration-200 group-hover:rotate-180">▼</span>
               </button>
               
               <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-64 bg-white border border-gray-100 rounded-xl shadow-xl p-2 hidden flex-col z-50 group-hover:flex animate-in fade-in duration-150">
                 <Link href={`/${lang}/pesquisa?categoria=Aventura %26 Natureza`} className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-slate-50 hover:text-emerald-600 rounded-lg no-underline flex items-center gap-2">
-                  <span>🌲</span> {lang === 'en' ? 'Adventure & Nature' : 'Aventura & Natureza'}
+                  <span>🌲</span> {isEn ? 'Adventure & Nature' : 'Aventura & Natureza'}
                 </Link>
                 <Link href={`/${lang}/pesquisa?categoria=Desporto`} className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-slate-50 hover:text-emerald-600 rounded-lg no-underline flex items-center gap-2">
-                  <span>⚽</span> {lang === 'en' ? 'Sports' : 'Desporto'}
+                  <span>⚽</span> {isEn ? 'Sports' : 'Desporto'}
                 </Link>
                 <Link href={`/${lang}/pesquisa?categoria=Desportos Náuticos`} className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-slate-50 hover:text-emerald-600 rounded-lg no-underline flex items-center gap-2">
-                  <span>🏄‍♂️</span> {lang === 'en' ? 'Water Sports' : 'Desportos Náuticos'}
+                  <span>🏄‍♂️</span> {isEn ? 'Water Sports' : 'Desportos Náuticos'}
                 </Link>
                 <Link href={`/${lang}/pesquisa?categoria=Artes %26 Criatividade`} className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-slate-50 hover:text-emerald-600 rounded-lg no-underline flex items-center gap-2">
-                  <span>🎨</span> {lang === 'en' ? 'Arts & Creativity' : 'Artes & Criatividade'}
+                  <span>🎨</span> {isEn ? 'Arts & Creativity' : 'Artes & Criatividade'}
                 </Link>
                 <Link href={`/${lang}/pesquisa?categoria=Tecnologia %26 Robótica`} className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-slate-50 hover:text-emerald-600 rounded-lg no-underline flex items-center gap-2">
-                  <span>💻</span> {lang === 'en' ? 'Tech & Robotics' : 'Tecnologia & Robótica'}
+                  <span>💻</span> {isEn ? 'Tech & Robotics' : 'Tecnologia & Robótica'}
                 </Link>
                 <Link href={`/${lang}/pesquisa?categoria=Línguas`} className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-slate-50 hover:text-emerald-600 rounded-lg no-underline flex items-center gap-2">
-                  <span>🗣️</span> {lang === 'en' ? 'Languages' : 'Línguas'}
+                  <span>🗣️</span> {isEn ? 'Languages' : 'Línguas'}
                 </Link>
                 <Link href={`/${lang}/pesquisa?categoria=Multiatividades`} className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-slate-50 hover:text-emerald-600 rounded-lg no-underline flex items-center gap-2">
-                  <span>🤹</span> {lang === 'en' ? 'Multi-activities' : 'Multiatividades'}
+                  <span>🤹</span> {isEn ? 'Multi-activities' : 'Multiatividades'}
                 </Link>
               </div>
             </div>
@@ -79,7 +80,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             {/* HOVER DROPDOWN: LOCAIS / DISTRITOS */}
             <div className="relative group py-2">
               <button className="flex items-center gap-1 text-[15px] font-bold text-gray-700 hover:text-emerald-600 bg-transparent border-none cursor-pointer">
-                {lang === 'en' ? 'Locations' : 'Locais'}
+                {isEn ? 'Locations' : 'Locais'}
                 <span className="text-[9px] text-gray-400 transition-transform duration-200 group-hover:rotate-180">▼</span>
               </button>
               
@@ -93,11 +94,11 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
 
             {/* LINKS DIRETOS */}
             <Link href={`/${lang}/guia-pais`} className="text-[15px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
-              {lang === 'en' ? 'Parents Guide' : 'Guia Pais'}
+              {isEn ? 'Parents Guide' : 'Guia Pais'}
             </Link>
 
             <Link href={`/${lang}/parceiro`} className="text-[15px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
-              {lang === 'en' ? 'Partners Guide' : 'Guia Parceiro'}
+              {isEn ? 'Partners Guide' : 'Guia Parceiro'}
             </Link>
 
           </nav>
@@ -113,7 +114,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
                   onClick={handleLogout} 
                   className="text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-xl transition-colors border border-red-100 cursor-pointer"
                 >
-                  Sair
+                  {isEn ? 'Logout' : 'Sair'}
                 </button>
               )}
             </div>
@@ -123,8 +124,8 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
           <div className="flex items-center gap-2 md:hidden">
             <LanguageSwitcher lang={lang} />
             {session && (
-              <button onClick={handleLogout} className="text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-1.5 rounded-lg border border-red-100 uppercase">
-                Sair
+              <button onClick={handleLogout} className="text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-1.5 rounded-lg border border-red-100 uppercase transition-colors">
+                {isEn ? 'Logout' : 'Sair'}
               </button>
             )}
             <button 
@@ -140,7 +141,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
         {/* MENU LATERAL EXPANSÍVEL (MOBILE) */}
         {isMobileMenuOpen && (
           <div className="w-full flex flex-col bg-white border-t border-slate-100 mt-3 pt-3 pb-2 gap-2 md:hidden">
-            <div className="px-2 py-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'en' ? 'Categories' : 'Categorias'}</div>
+            <div className="px-2 py-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">{isEn ? 'Categories' : 'Categorias'}</div>
             <Link href={`/${lang}/pesquisa?categoria=Aventura %26 Natureza`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🌲 Aventura & Natureza</Link>
             <Link href={`/${lang}/pesquisa?categoria=Desporto`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">⚽ Desporto</Link>
             <Link href={`/${lang}/pesquisa?categoria=Desportos Náuticos`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🏄‍♂️ Desportos Náuticos</Link>
@@ -149,7 +150,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             <Link href={`/${lang}/pesquisa?categoria=Línguas`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🗣️ Línguas</Link>
             <Link href={`/${lang}/pesquisa?categoria=Multiatividades`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🤹 Multiatividades</Link>
             
-            <div className="px-2 py-1 text-[10px] font-black text-slate-400 uppercase tracking-wider mt-2">{lang === 'en' ? 'Locations' : 'Destinos'}</div>
+            <div className="px-2 py-1 text-[10px] font-black text-slate-400 uppercase tracking-wider mt-2">{isEn ? 'Locations' : 'Destinos'}</div>
             <Link href={`/${lang}/distrito/Lisboa`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Lisboa</Link>
             <Link href={`/${lang}/distrito/Porto`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Porto</Link>
             <Link href={`/${lang}/distrito/Faro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Faro</Link>

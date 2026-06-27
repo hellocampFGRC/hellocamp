@@ -85,14 +85,8 @@ export default function AdminLayout({
       {/* ÁREA PRINCIPAL DO PARCEIRO */}
       <main className="flex-1 flex flex-col w-full overflow-hidden">
         
-        {/* Header Superior (Logout Mobile, Língua e Atalho para Site) */}
-        <header className="bg-white px-4 md:px-8 py-3 md:py-4 border-b border-slate-200 flex justify-between md:justify-end items-center gap-4 flex-shrink-0">
-          
-          {/* Botão de Sair apenas visível no Mobile */}
-          <button onClick={handleLogout} className="md:hidden text-sm font-bold text-slate-500 hover:text-red-600 transition-colors">
-            {isEn ? 'Logout' : 'Sair'}
-          </button>
-
+        {/* Header Superior (Língua e Atalho para Site) */}
+        <header className="bg-white px-4 md:px-8 py-3 md:py-4 border-b border-slate-200 flex justify-end items-center gap-4 flex-shrink-0">
           <div className="flex items-center gap-6">
             <div className="flex gap-2 text-sm font-bold">
               <Link href={getLangUrl('pt')} className={`${lang === 'pt' ? 'text-slate-900' : 'text-slate-400'} no-underline`}>PT</Link>

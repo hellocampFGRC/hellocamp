@@ -68,15 +68,10 @@ export default function ClienteLayout({
           <div className="hidden md:block border-t border-slate-100 my-2 pt-4" />
           
           <NavLink href={`/${lang}/pesquisa`} active={false} icon="🔍" text={isEn ? 'Explore Camps' : 'Explorar Campos'} className="md:mt-auto" />
-          
-          {/* Botão de Logout versão Mobile (escondido no PC) */}
-          <button onClick={handleLogout} className="md:hidden flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 whitespace-nowrap ml-2">
-            {isEn ? 'Logout' : 'Sair'}
-          </button>
         </nav>
 
         {/* Info Utilizador & Logout versão Desktop (escondido no Mobile) */}
-        <div className="p-6 border-t border-slate-200 hidden md:block">
+        <div className="p-6 border-t border-slate-200 hidden md:block mt-auto">
           <p className="text-xs text-slate-500 mb-4 break-all">
             {user?.email}
           </p>
