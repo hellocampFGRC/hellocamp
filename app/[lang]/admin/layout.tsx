@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { supabase } from "../../../lib/supabase";
+import { supabase } from "@/lib/supabase";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import React from "react";
@@ -69,6 +69,9 @@ export default function AdminLayout({
           <NavLink href={`/${lang}/admin/campos`} active={pathname.includes('/campos')} text={isEn ? 'My Camps' : 'Os Meus Campos'} />
           <NavLink href={`/${lang}/admin/reservas`} active={pathname.includes('/reservas')} text={isEn ? 'Bookings' : 'Reservas'} />
           <NavLink href={`/${lang}/admin/faturacao`} active={pathname.includes('/faturacao')} text={isEn ? 'Billing' : 'Faturação'} />
+          
+          {/* NOVA PÁGINA: Bolsa de Monitores / Recrutamento */}
+          <NavLink href={`/${lang}/admin/recrutamento`} active={pathname.includes('/recrutamento')} text={isEn ? 'Staff Recruitment' : 'Recrutamento'} />
           
           {/* Botão de Sair de volta ao scroll no mobile! */}
           <button onClick={handleLogout} className="md:hidden flex-shrink-0 flex items-center justify-center px-5 py-2.5 rounded-full text-sm font-bold text-red-400 bg-slate-800 border border-slate-700 hover:bg-slate-700 ml-2 transition-colors">
