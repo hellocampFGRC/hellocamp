@@ -92,7 +92,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             </div>
 
             {/* LINKS DIRETOS */}
-            <Link href={`/${lang}/como_reservar`} className="text-[15px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
+            <Link href={`/${lang}/guia-pais`} className="text-[15px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
               {lang === 'en' ? 'Parents Guide' : 'Guia Pais'}
             </Link>
 
