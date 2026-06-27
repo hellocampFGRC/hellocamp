@@ -72,7 +72,7 @@ export default function FaturacaoGlobalHQ({ params }: { params: Promise<{ lang: 
     }
   };
 
-  if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>A carregar relatórios e tesouraria...</div>;
+  if (loading) return <div className="p-8 text-center text-gray-500 font-bold animate-pulse">A analisar tesouraria...</div>;
 
   let volumeTotal = 0;
   let comissoesTotais = 0;
@@ -108,178 +108,157 @@ export default function FaturacaoGlobalHQ({ params }: { params: Promise<{ lang: 
   });
 
   return (
-    <div style={{ fontFamily: 'sans-serif', paddingBottom: '3rem', position: 'relative' }}>
+    <div className="max-w-7xl mx-auto font-sans">
       
-      <div style={{ marginBottom: '2.5rem' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>Faturação Global</h1>
-        <p style={{ color: '#64748b', marginTop: '0.25rem' }}>Monitorização de transações e gestão de reembolsos.</p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
-        <div style={cardStyle}>
-          <span style={labelStyle}>Volume Bruto Processado</span>
-          <span style={{ fontSize: '2.25rem', fontWeight: '900', color: '#059669' }}>{volumeTotal.toFixed(2)}€</span>
-        </div>
-        <div style={cardStyle}>
-          <span style={labelStyle}>Comissões Previstas</span>
-          <span style={{ fontSize: '2.25rem', fontWeight: '900', color: '#0f172a' }}>{comissoesTotais.toFixed(2)}€</span>
-        </div>
-        <div style={{ ...cardStyle, borderLeft: '4px solid #ef4444', backgroundColor: '#fef2f2', borderColor: '#fecaca' }}>
-          <span style={{...labelStyle, color: '#b91c1c'}}>Dinheiro Reembolsado</span>
-          <span style={{ fontSize: '2.25rem', fontWeight: '900', color: '#ef4444' }}>{totalReembolsado.toFixed(2)}€</span>
+      <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight m-0">Tesouraria Global</h1>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Transações & Reembolsos</p>
         </div>
       </div>
 
-      <div style={{ backgroundColor: 'white', borderRadius: '1.5rem', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-        <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: '#1e293b' }}>Registo de Transações</h3>
+      {/* CARDS COMPACTOS */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center">
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Volume Bruto</span>
+          <span className="text-2xl font-black text-gray-900">{volumeTotal.toFixed(2)}€</span>
         </div>
-        
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#fdfdfd', borderBottom: '2px solid #e2e8f0' }}>
-                <th style={thStyle}>ID / REFERÊNCIA</th>
-                <th style={thStyle}>PARCEIRO / PROGRAMA</th>
-                <th style={thStyle}>CLIENTE</th>
-                <th style={thStyle}>VALOR (COMISSÃO)</th>
-                <th style={thStyle}>ESTADO</th>
-                <th style={thStyle}>AÇÕES</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historicoProcessado.length === 0 ? (
-                <tr><td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Sem transações registadas.</td></tr>
-              ) : (
-                historicoProcessado.map((res: any) => {
-                  const eReembolsado = res.status_pagamento === 'Reembolsado';
-                  const nomePaiVisivel = res.nome_encarregado || res.pai?.nome_completo || 'N/D';
-                  
-                  return (
-                    <tr key={res.id} style={{ borderBottom: '1px solid #f1f5f9', opacity: eReembolsado ? 0.6 : 1 }}>
-                      <td style={tdStyle}>
-                        <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '12px', fontFamily: 'monospace' }}>{res.id.split('-')[0]}</div>
-                        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>{res.metodo_pagamento || 'N/A'}</div>
-                      </td>
-                      <td style={tdStyle}>
-                        <div style={{ fontWeight: 'bold', color: '#0f172a', textDecoration: eReembolsado ? 'line-through' : 'none' }}>{res.organizador?.empresa_nome || 'Desconhecido'}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>{res.campos?.nome || 'N/D'}</div>
-                      </td>
-                      <td style={tdStyle}>
-                        <div style={{ fontWeight: 'bold', color: '#334155' }}>{nomePaiVisivel}</div>
-                        <div style={{ fontSize: '11px', color: '#64748b' }}>{res.crianca?.nome || 'N/D'}</div>
-                      </td>
-                      <td style={{ ...tdStyle, fontWeight: 'bold' }}>
-                        {res.valor_total}€
-                        <div style={{ fontSize: '11px', color: eReembolsado ? '#94a3b8' : '#dc2626', fontWeight: 'bold' }}>
-                          Comissão: {eReembolsado ? '0.00€' : `${res.comissaoCalculada.toFixed(2)}€`}
-                        </div>
-                      </td>
-                      <td style={tdStyle}>
-                        <span style={{
-                          padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase',
-                          backgroundColor: eReembolsado ? '#fef2f2' : (res.status_pagamento === 'Pago' || res.status_pagamento === 'Sinal Pago' ? '#ecfdf5' : '#f1f5f9'),
-                          color: eReembolsado ? '#ef4444' : (res.status_pagamento === 'Pago' || res.status_pagamento === 'Sinal Pago' ? '#059669' : '#64748b')
-                        }}>
-                          {res.status_pagamento || 'Pendente'}
-                        </span>
-                      </td>
-                      <td style={tdStyle}>
-                        <button
-                          onClick={() => setReservaSelecionada(res)}
-                          style={{ backgroundColor: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', padding: '0.4rem 0.8rem', borderRadius: '0.5rem', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                        >
-                          Ver Detalhes
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center">
+          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Comissões (Lucro)</span>
+          <span className="text-2xl font-black text-emerald-600">{comissoesTotais.toFixed(2)}€</span>
+        </div>
+        <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm flex flex-col justify-center">
+          <span className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-1">Reembolsado</span>
+          <span className="text-2xl font-black text-red-600">{totalReembolsado.toFixed(2)}€</span>
         </div>
       </div>
 
+      {/* TABELA DE FATURAÇÃO COMPACTA */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+        <table className="w-full text-left min-w-[700px]">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">Transação</th>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">Parceiro</th>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Volume</th>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Comissão</th>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Status</th>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {historicoProcessado.length === 0 ? (
+              <tr><td colSpan={6} className="p-8 text-center text-gray-400 font-bold text-sm">Sem transações registadas.</td></tr>
+            ) : historicoProcessado.map((res: any) => {
+              const eReembolsado = res.status_pagamento === 'Reembolsado';
+              return (
+                <tr key={res.id} className={`hover:bg-gray-50 transition-colors ${eReembolsado ? 'opacity-60 bg-red-50/30' : ''}`}>
+                  <td className="px-4 py-3">
+                    <div className="font-mono text-xs font-bold text-gray-800">{res.id.split('-')[0]}</div>
+                    <div className="text-[10px] text-gray-400 font-bold mt-0.5">{new Date(res.created_at).toLocaleDateString('pt-PT')}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className={`text-sm font-bold text-gray-900 truncate max-w-[200px] ${eReembolsado ? 'line-through' : ''}`}>{res.organizador?.empresa_nome || 'Desconhecido'}</div>
+                    <div className="text-[10px] text-gray-500 truncate max-w-[200px] mt-0.5">{res.campos?.nome}</div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="text-sm font-black text-gray-900">{res.valor_total}€</div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="text-sm font-black text-emerald-600">{eReembolsado ? '0.00€' : `${res.comissaoCalculada.toFixed(2)}€`}</div>
+                    {!eReembolsado && <div className="text-[9px] text-gray-400 font-bold mt-0.5">Taxa: {res.taxaAplicada}%</div>}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border ${
+                      eReembolsado ? 'bg-red-100 text-red-700 border-red-200' :
+                      (res.status_pagamento === 'Pago' || res.status_pagamento === 'Sinal Pago') ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 
+                      'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}>
+                      {res.status_pagamento || 'Pendente'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => setReservaSelecionada(res)} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors shadow-sm">
+                      Detalhes
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* MODAL FINANCEIRO COMPACTO */}
       {reservaSelecionada && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
-          <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '850px', borderRadius: '1.5rem', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+        <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl">
             
-            <div style={{ padding: '1.5rem 2rem', backgroundColor: reservaSelecionada.status_pagamento === 'Reembolsado' ? '#ef4444' : '#0f172a', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className={`px-5 py-4 border-b flex justify-between items-center flex-shrink-0 ${reservaSelecionada.status_pagamento === 'Reembolsado' ? 'bg-red-600 text-white border-red-700' : 'bg-gray-900 text-white border-gray-800'}`}>
               <div>
-                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900' }}>Detalhes da Reserva {reservaSelecionada.status_pagamento === 'Reembolsado' && '(Cancelada)'}</h2>
-                <p style={{ margin: '0.25rem 0 0 0', color: '#cbd5e1', fontSize: '12px', fontFamily: 'monospace' }}>Ref: {reservaSelecionada.id}</p>
+                <h2 className="text-lg font-black flex items-center gap-2 m-0">Auditoria Financeira {reservaSelecionada.status_pagamento === 'Reembolsado' && '(Estorno)'}</h2>
+                <p className="text-[10px] opacity-80 font-mono mt-0.5 m-0">Ref: {reservaSelecionada.id}</p>
               </div>
-              <button onClick={() => setReservaSelecionada(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '2rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+              <button onClick={() => setReservaSelecionada(null)} className="text-white hover:text-gray-300 w-8 h-8 flex items-center justify-center font-bold text-xl border-none bg-transparent cursor-pointer">&times;</button>
             </div>
 
-            <div style={{ padding: '2rem', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
-                
-                <div style={modalCardStyle}>
-                  <h3 style={modalTitleStyle}>Entidade & Programa</h3>
-                  <DetailRow label="Organizador" value={reservaSelecionada.organizador?.empresa_nome} />
-                  <DetailRow label="Campo de Férias" value={reservaSelecionada.campos?.nome} />
-                  <DetailRow label="Semana / Turno" value={reservaSelecionada.turno_nome} />
-                  
-                  <h3 style={{...modalTitleStyle, marginTop: '2rem'}}>Dados Financeiros</h3>
-                  <DetailRow label="Valor Total" value={`${reservaSelecionada.valor_total}€`} />
-                  <DetailRow label="Comissão" value={`${reservaSelecionada.comissaoCalculada.toFixed(2)}€ (${reservaSelecionada.taxaAplicada}%)`} />
-                  
-                  <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px dashed #e2e8f0' }}>
-                    <DetailRow label="Estado" value={reservaSelecionada.status_pagamento} />
-                    <DetailRow label="Valor Pago" value={`${reservaSelecionada.valor_pago || 0}€`} />
-                    <DetailRow label="Valor em Falta" value={`${reservaSelecionada.valor_em_falta || 0}€`} />
-                    <DetailRow label="Método" value={reservaSelecionada.metodo_pagamento || 'N/D'} />
+            <div className="p-5 overflow-y-auto flex-1 bg-white space-y-4">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <span className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-200 pb-1">Parceiro & Programa</span>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between"><strong className="text-gray-600">Entidade:</strong><span className="font-medium text-right ml-4">{reservaSelecionada.organizador?.empresa_nome}</span></div>
+                    <div className="flex justify-between"><strong className="text-gray-600">Campo:</strong><span className="font-medium text-right ml-4">{reservaSelecionada.campos?.nome}</span></div>
+                    <div className="flex justify-between"><strong className="text-gray-600">Turno:</strong><span className="font-medium text-right ml-4">{reservaSelecionada.turno_nome}</span></div>
                   </div>
                 </div>
 
-                <div style={modalCardStyle}>
-                  <h3 style={modalTitleStyle}>Cliente & Participante</h3>
-                  <DetailRow label="Encarregado Educação" value={reservaSelecionada.nome_encarregado || reservaSelecionada.pai?.nome_completo} />
-                  <DetailRow label="Telefone" value={reservaSelecionada.telefone_encarregado || reservaSelecionada.pai?.telefone} />
-                  <DetailRow label="Email" value={reservaSelecionada.email_encarregado || reservaSelecionada.pai?.email} />
-                  
-                  <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f1f5f9', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-                    <span style={{ display: 'block', fontSize: '13px', fontWeight: '900', color: '#0f172a', marginBottom: '0.5rem' }}>Participante: {reservaSelecionada.crianca?.nome || 'N/D'}</span>
-                    <DetailRow label="Alergias" value={reservaSelecionada.crianca?.restricoes_alimentares || 'Nenhuma'} />
-                    <DetailRow label="Doenças Crónicas" value={reservaSelecionada.crianca?.doencas_cronicas || 'Nenhuma'} />
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <span className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-200 pb-1">Cliente Origem</span>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between"><strong className="text-gray-600">Nome (Pai):</strong><span className="font-medium text-right ml-4">{reservaSelecionada.nome_encarregado || reservaSelecionada.pai?.nome_completo}</span></div>
+                    <div className="flex justify-between"><strong className="text-gray-600">Email:</strong><span className="font-medium text-right ml-4 break-all">{reservaSelecionada.email_encarregado || reservaSelecionada.pai?.email}</span></div>
+                    <div className="flex justify-between"><strong className="text-gray-600">Participante:</strong><span className="font-bold text-gray-900 text-right ml-4 break-all">{reservaSelecionada.crianca?.nome || 'N/D'}</span></div>
                   </div>
                 </div>
-
               </div>
 
-              <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', paddingTop: '1.5rem', borderTop: '2px solid #e2e8f0' }}>
-                {reservaSelecionada.status_pagamento !== 'Reembolsado' && reservaSelecionada.status_pagamento !== 'Pendente' && (
-                  <button
-                    onClick={() => handleProcessarReembolsoStripe(reservaSelecionada.id, Number(reservaSelecionada.valor_total))}
-                    disabled={loadingRefundId === reservaSelecionada.id}
-                    style={{ backgroundColor: '#ef4444', color: 'white', border: 'none', padding: '0.875rem 1.5rem', borderRadius: '0.5rem', fontSize: '14px', fontWeight: 'bold', cursor: loadingRefundId === reservaSelecionada.id ? 'not-allowed' : 'pointer' }}
-                  >
-                    {loadingRefundId === reservaSelecionada.id ? 'A processar...' : `Reembolsar Cliente (${reservaSelecionada.valor_total}€)`}
-                  </button>
-                )}
+              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+                <span className="block text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-3 border-b border-emerald-200/50 pb-1">Lançamentos</span>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><strong className="text-emerald-900">Volume Transacionado:</strong><span className="font-black text-gray-900">{reservaSelecionada.valor_total}€</span></div>
+                  <div className="flex justify-between"><strong className="text-emerald-900">Comissão HelloCamp:</strong><span className="font-black text-emerald-700">{reservaSelecionada.comissaoCalculada.toFixed(2)}€ <span className="text-[10px] font-medium text-emerald-600 ml-1">({reservaSelecionada.taxaAplicada}%)</span></span></div>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-gray-200">
+                 <span className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-200 pb-1">Status Stripe</span>
+                 <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div><strong className="block text-gray-600 mb-1">Estado Lógico</strong><span className="font-bold text-gray-900">{reservaSelecionada.status_pagamento}</span></div>
+                    <div><strong className="block text-gray-600 mb-1">Valor Capturado</strong><span className="font-bold text-gray-900">{reservaSelecionada.valor_pago || 0}€</span></div>
+                    <div><strong className="block text-gray-600 mb-1">Em Falta</strong><span className="font-bold text-gray-900">{reservaSelecionada.valor_em_falta || 0}€</span></div>
+                    <div><strong className="block text-gray-600 mb-1">Método</strong><span className="font-bold text-gray-900">{reservaSelecionada.metodo_pagamento || 'N/D'}</span></div>
+                 </div>
               </div>
 
             </div>
+
+            <div className="px-5 py-4 border-t border-gray-200 bg-gray-50 flex justify-end flex-shrink-0">
+              {reservaSelecionada.status_pagamento !== 'Reembolsado' && reservaSelecionada.status_pagamento !== 'Pendente' && (
+                <button
+                  onClick={() => handleProcessarReembolsoStripe(reservaSelecionada.id, Number(reservaSelecionada.valor_total))}
+                  disabled={loadingRefundId === reservaSelecionada.id}
+                  className="bg-red-600 text-white px-6 py-2.5 rounded-lg text-xs font-bold hover:bg-red-700 shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {loadingRefundId === reservaSelecionada.id ? 'A processar estorno...' : `Forçar Reembolso (${reservaSelecionada.valor_total}€)`}
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       )}
-
     </div>
   );
 }
-
-const cardStyle = { backgroundColor: 'white', padding: '1.75rem', borderRadius: '1.25rem', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' as const, gap: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' };
-const labelStyle = { fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
-const thStyle = { padding: '1rem 1.5rem', fontSize: '11px', fontWeight: '800', color: '#475569', letterSpacing: '0.05em' };
-const tdStyle = { padding: '1.25rem 1.5rem', color: '#334155', verticalAlign: 'middle' };
-const modalCardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' };
-const modalTitleStyle = { margin: '0 0 1.25rem 0', fontSize: '1.125rem', fontWeight: '900', color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' };
-
-const DetailRow = ({ label, value }: { label: string, value: any }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', paddingBottom: '0.25rem' }}>
-    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>{label}:</span>
-    <span style={{ fontSize: '13px', color: '#0f172a', fontWeight: '800', textAlign: 'right', marginLeft: '1rem', wordBreak: 'break-word' }}>{value || 'N/D'}</span>
-  </div>
-);

@@ -18,10 +18,10 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const [editComissao, setEditComissao] = useState<number>(12);
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const labelClass = "text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block";
-  const inputClass = "w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all shadow-sm";
-  const selectClass = "w-full p-2.5 pr-8 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all shadow-sm appearance-none cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.7rem_auto] bg-[position:right_1rem_center] bg-no-repeat";
-  const textareaClass = "w-full p-3 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all shadow-sm resize-y";
+  const labelClass = "text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1 block";
+  const inputClass = "w-full py-1.5 px-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 outline-none focus:border-gray-800 transition-all shadow-sm";
+  const selectClass = "w-full py-1.5 px-3 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 outline-none focus:border-gray-800 transition-all shadow-sm appearance-none cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.7rem_auto] bg-[position:right_1rem_center] bg-no-repeat";
+  const textareaClass = "w-full p-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 outline-none focus:border-gray-800 focus:ring-1 focus:ring-gray-800 transition-all shadow-sm resize-y";
 
   const fetchContratos = async () => {
     const { data } = await supabase
@@ -56,14 +56,12 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       updatePayload.contrato_parceiro_url = null;
     }
 
-    // 1. Atualiza o Campo na Base de Dados
     const { error } = await supabase.from('campos').update(updatePayload).eq('id', id);
 
     if (error) {
       alert("Erro ao atualizar base de dados: " + error.message);
     } else {
       
-      // 2. Atualiza o perfil do parceiro para Verificado (se aplicável)
       if (modalContrato?.organizador_id) {
         await supabase
           .from('perfis')
@@ -71,14 +69,13 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
           .eq('id', modalContrato.organizador_id);
       }
 
-      // 3. Dispara a notificação por Email com a chave corrigida (parceiroEmail)
       try {
         const dados = modalContrato?.contrato_dados || {};
         await fetch('/api/notificacoes/status-contrato', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            parceiroEmail: dados.emailContacto, // Chave exata exigida pela API
+            parceiroEmail: dados.emailContacto, 
             nomeCampo: modalContrato?.nome,
             status: novoStatus,
             lang: lang
@@ -322,304 +319,210 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const tabs = ['Pendente de Revisão', 'Aprovado', 'Rejeitado', 'Todos'];
   const contratosFiltrados = contratos.filter(c => filtroStatus === 'Todos' || c.status_aprovacao === filtroStatus);
 
-  if (loading) return <div className="p-12 text-center text-slate-500 font-bold animate-pulse">A carregar registos da base de dados...</div>;
+  if (loading) return <div className="p-8 text-center text-gray-500 font-bold animate-pulse">A carregar contratos...</div>;
 
   return (
-    <div className="p-8 font-sans">
-      <h1 className="text-3xl font-black mb-2 text-slate-900">Gestão Global de Contratos</h1>
-      <p className="text-slate-500 mb-8">Administre todo o histórico de acordos de intermediação B2B da plataforma.</p>
+    <div className="max-w-7xl mx-auto font-sans">
+      <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight m-0">Gestão de Contratos</h1>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Plataforma B2B HelloCamp</p>
+        </div>
+      </div>
 
-      {/* TABS DE FILTRAGEM */}
-      <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
+      {/* TABS COMPACTAS */}
+      <div className="flex flex-wrap gap-2 mb-6">
         {tabs.map(tab => {
           const count = contratos.filter(c => tab === 'Todos' ? true : c.status_aprovacao === tab).length;
           return (
             <button 
-              key={tab}
-              onClick={() => setFiltroStatus(tab)}
-              className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${
-                filtroStatus === tab 
-                  ? 'bg-slate-900 text-white shadow-md' 
-                  : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
-              }`}
+              key={tab} onClick={() => setFiltroStatus(tab)}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border ${filtroStatus === tab ? 'bg-gray-900 text-white border-gray-900 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
             >
-              {tab} <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${filtroStatus === tab ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
+              {tab} <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] ${filtroStatus === tab ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-500'}`}>{count}</span>
             </button>
           )
         })}
       </div>
 
-      {contratosFiltrados.length === 0 ? (
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center text-slate-500 font-bold">
-          Não existem contratos para o filtro selecionado.
-        </div>
-      ) : (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Campo</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Entidade</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Visibilidade</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Estado</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contratosFiltrados.map(c => {
-                const dados = c.contrato_dados || {};
-                
-                let statusColor = "bg-slate-100 text-slate-600";
-                if (c.status_aprovacao === 'Aprovado') statusColor = "bg-emerald-100 text-emerald-800 border border-emerald-200";
-                if (c.status_aprovacao === 'Rejeitado') statusColor = "bg-red-100 text-red-800 border border-red-200";
-                if (c.status_aprovacao === 'Pendente de Revisão') statusColor = "bg-amber-100 text-amber-800 border border-amber-200";
+      {/* TABELA COMPACTA */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+        <table className="w-full text-left min-w-[700px]">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">Campo</th>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">Entidade</th>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">Estado</th>
+              <th className="px-4 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Ação</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {contratosFiltrados.length === 0 ? (
+              <tr><td colSpan={4} className="p-8 text-center text-gray-400 font-bold text-sm">Sem contratos nesta categoria.</td></tr>
+            ) : contratosFiltrados.map(c => {
+              const dados = c.contrato_dados || {};
+              let statusColor = "bg-gray-100 text-gray-600";
+              if (c.status_aprovacao === 'Aprovado') statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
+              if (c.status_aprovacao === 'Rejeitado') statusColor = "bg-red-100 text-red-800 border-red-200";
+              if (c.status_aprovacao === 'Pendente de Revisão') statusColor = "bg-amber-100 text-amber-800 border-amber-200";
 
-                return (
-                  <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                    <td className="p-4 font-bold text-slate-900">{c.nome}</td>
-                    <td className="p-4 text-sm text-slate-600">
-                      {dados.empresaNome || 'N/D'}
-                      <div className="text-[10px] text-slate-400 mt-1">{dados.dataSubmissao ? new Date(dados.dataSubmissao).toLocaleDateString('pt-PT') : ''}</div>
-                    </td>
-                    <td className="p-4 text-sm font-bold text-slate-700">
-                      {c.ativo ? <span className="text-emerald-600 font-bold">● Público</span> : <span className="text-slate-400 font-medium">○ Oculto</span>}
-                    </td>
-                    <td className="p-4">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${statusColor}`}>
-                        {c.status_aprovacao}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <button onClick={() => abrirModal(c)} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm">
-                        Ver Detalhes
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+              return (
+                <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="font-bold text-sm text-gray-900 truncate max-w-[250px]">{c.nome}</div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">ID: {c.id.substring(0,8)}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-sm font-medium text-gray-700 truncate max-w-[200px]">{dados.empresaNome || 'N/D'}</div>
+                    <div className="text-[10px] text-gray-400 font-mono mt-0.5">{dados.nif || '---'}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border ${statusColor}`}>
+                      {c.status_aprovacao}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => abrirModal(c)} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors shadow-sm">
+                      Detalhes
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-      {/* MODAL DE REVISÃO DO CONTRATO COMPLETO */}
+      {/* MODAL COMPACTO E ELEGANTE */}
       {modalContrato && (
-        <div className="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl">
             
-            {/* CABEÇALHO DO MODAL */}
-            <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+            {/* CABEÇALHO */}
+            <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 flex-shrink-0">
               <div>
-                <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
                   {modalContrato.nome}
-                  {isEditing && <span className="bg-[#EBA914] text-white text-[10px] uppercase tracking-widest font-black px-2.5 py-1 rounded-full shadow-sm">Modo de Edição</span>}
-                  {!isEditing && (
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${
-                      modalContrato.status_aprovacao === 'Aprovado' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
-                      modalContrato.status_aprovacao === 'Rejeitado' ? 'bg-red-100 text-red-800 border-red-200' :
-                      'bg-amber-100 text-amber-800 border-amber-200'
-                    }`}>
-                      {modalContrato.status_aprovacao}
-                    </span>
-                  )}
+                  {isEditing && <span className="bg-amber-400 text-amber-950 text-[9px] uppercase tracking-widest font-black px-2 py-0.5 rounded-md">Edição</span>}
                 </h2>
-                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">ID do Campo: {modalContrato.id}</p>
               </div>
-              
-              <div className="flex items-center gap-3 sm:gap-4">
-                <button onClick={handleImprimirPDF} className="text-sm font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 transition-colors shadow-sm">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  <span className="hidden sm:inline">PDF Formal</span>
+              <div className="flex items-center gap-2">
+                <button onClick={handleImprimirPDF} className="text-xs font-bold text-gray-600 hover:text-gray-900 bg-white px-3 py-1.5 rounded-lg border border-gray-200 transition-colors shadow-sm mr-2 hidden sm:block">
+                  PDF Formal
                 </button>
-
                 {!isEditing && (
-                  <button onClick={() => setIsEditing(true)} className="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 transition-colors">
-                    ✏️ <span className="hidden sm:inline">Editar</span>
+                  <button onClick={() => setIsEditing(true)} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 transition-colors">
+                    Editar
                   </button>
                 )}
-                
-                <button onClick={() => setModalContrato(null)} className="text-3xl font-bold text-slate-400 hover:text-slate-900 leading-none ml-2">&times;</button>
+                <button onClick={() => setModalContrato(null)} className="text-gray-400 hover:text-gray-900 bg-white border border-gray-200 w-8 h-8 rounded-lg flex items-center justify-center font-bold transition-colors">&times;</button>
               </div>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-6">
-              
-              {/* BLOCO 1: INFORMAÇÃO CORPORATIVA E CONTACTOS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* CORPO DO MODAL (Grelha mais apertada) */}
+            <div className="p-5 overflow-y-auto flex-1 bg-white">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 
-                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-inner">
-                  <span className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-200 pb-2">Dados Fiscais da Entidade</span>
-                  {isEditing ? (
-                    <div className="space-y-4">
-                      <div><label className={labelClass}>Empresa</label><input className={inputClass} value={editForm.empresaNome || ''} onChange={e => setEditForm({...editForm, empresaNome: e.target.value})} /></div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div><label className={labelClass}>Forma Jurídica</label><input className={inputClass} value={editForm.formaJuridica || ''} onChange={e => setEditForm({...editForm, formaJuridica: e.target.value})} /></div>
-                        <div><label className={labelClass}>NIF</label><input className={inputClass} value={editForm.nif || ''} onChange={e => setEditForm({...editForm, nif: e.target.value})} /></div>
-                      </div>
-                      <div><label className={labelClass}>Morada</label><input className={inputClass} value={editForm.morada || ''} onChange={e => setEditForm({...editForm, morada: e.target.value})} /></div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div><label className={labelClass}>Cód. Postal</label><input className={inputClass} value={editForm.codigoPostal || ''} onChange={e => setEditForm({...editForm, codigoPostal: e.target.value})} /></div>
-                        <div><label className={labelClass}>Website</label><input className={inputClass} value={editForm.website || ''} onChange={e => setEditForm({...editForm, website: e.target.value})} /></div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 text-sm">
-                      <p><strong className="text-slate-800">Empresa:</strong> {modalContrato.contrato_dados?.empresaNome}</p>
-                      <p><strong className="text-slate-800">Forma Jurídica:</strong> {modalContrato.contrato_dados?.formaJuridica}</p>
-                      <p><strong className="text-slate-800">NIF:</strong> <span className="font-mono bg-slate-200 px-1.5 py-0.5 rounded">{modalContrato.contrato_dados?.nif}</span></p>
-                      <p><strong className="text-slate-800">Morada:</strong> {modalContrato.contrato_dados?.morada}, {modalContrato.contrato_dados?.codigoPostal}</p>
-                      <p><strong className="text-slate-800">Website:</strong> {modalContrato.contrato_dados?.website ? <a href={modalContrato.contrato_dados.website} target="_blank" className="text-blue-600 underline">{modalContrato.contrato_dados.website}</a> : 'N/A'}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-inner">
-                  <span className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-200 pb-2">Pontos de Contacto</span>
-                  {isEditing ? (
-                    <div className="space-y-4">
-                      <div><label className={labelClass}>Responsável</label><input className={inputClass} value={editForm.pessoaContacto || ''} onChange={e => setEditForm({...editForm, pessoaContacto: e.target.value})} /></div>
-                      <div><label className={labelClass}>Telefone</label><input className={inputClass} value={editForm.telefone || ''} onChange={e => setEditForm({...editForm, telefone: e.target.value})} /></div>
-                      <div><label className={labelClass}>E-mail Comercial</label><input className={inputClass} value={editForm.emailContacto || ''} onChange={e => setEditForm({...editForm, emailContacto: e.target.value})} /></div>
-                      <div><label className={labelClass}>E-mail de Reservas</label><input className={inputClass} value={editForm.emailReservas || ''} onChange={e => setEditForm({...editForm, emailReservas: e.target.value})} /></div>
-                      <div><label className={labelClass}>DPO (RGPD)</label><input className={inputClass} value={editForm.responsavelRGPD || ''} onChange={e => setEditForm({...editForm, responsavelRGPD: e.target.value})} /></div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 text-sm">
-                      <p><strong className="text-slate-800">Responsável:</strong> {modalContrato.contrato_dados?.pessoaContacto}</p>
-                      <p><strong className="text-slate-800">Telefone:</strong> {modalContrato.contrato_dados?.telefone}</p>
-                      <p><strong className="text-slate-800">E-mail Comercial:</strong> {modalContrato.contrato_dados?.emailContacto}</p>
-                      <p><strong className="text-slate-800">E-mail de Reservas:</strong> <span className="font-bold text-amber-600">{modalContrato.contrato_dados?.emailReservas}</span></p>
-                      <p><strong className="text-slate-800">DPO (RGPD):</strong> {modalContrato.contrato_dados?.responsavelRGPD}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* BLOCO 2: CONDIÇÕES DO SERVIÇO (ANEXOS) & COMISSÃO */}
-              <div className="bg-blue-50 p-5 rounded-xl border border-blue-100 relative">
-                <span className="block text-xs font-black text-blue-800 uppercase tracking-widest mb-4 border-b border-blue-200 pb-2">Condições Operacionais & Comissão</span>
-                
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                  <div className={`${isEditing ? 'bg-amber-100 p-3 rounded-lg border border-amber-300 shadow-sm' : ''}`}>
+                {/* COLUNA ESQUERDA: Dados Entidade */}
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <span className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Dados Fiscais & Contactos</span>
                     {isEditing ? (
-                      <>
-                        <label className={`${labelClass} text-amber-900`}>Comissão Base (%)</label>
-                        <div className="relative">
-                          <input type="number" step="0.1" className={inputClass} value={editComissao} onChange={e => setEditComissao(Number(e.target.value))} />
-                          <span className="absolute right-8 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</span>
+                      <div className="space-y-3">
+                        <div><label className={labelClass}>Empresa</label><input className={inputClass} value={editForm.empresaNome || ''} onChange={e => setEditForm({...editForm, empresaNome: e.target.value})} /></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className={labelClass}>NIF</label><input className={inputClass} value={editForm.nif || ''} onChange={e => setEditForm({...editForm, nif: e.target.value})} /></div>
+                          <div><label className={labelClass}>Telefone</label><input className={inputClass} value={editForm.telefone || ''} onChange={e => setEditForm({...editForm, telefone: e.target.value})} /></div>
                         </div>
-                      </>
+                        <div><label className={labelClass}>E-mail Reservas</label><input className={inputClass} value={editForm.emailReservas || ''} onChange={e => setEditForm({...editForm, emailReservas: e.target.value})} /></div>
+                      </div>
                     ) : (
-                      <>
-                        <strong className="block text-blue-900 mb-1">Comissão Base</strong>
-                        <p className="text-emerald-700 font-black text-lg bg-white border border-emerald-200 p-1.5 px-3 rounded shadow-sm inline-block">{modalContrato.taxa_comissao || 12}%</p>
-                      </>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between border-b border-gray-100 pb-1"><strong className="text-gray-600">Empresa</strong><span className="font-medium text-right ml-4">{modalContrato.contrato_dados?.empresaNome}</span></div>
+                        <div className="flex justify-between border-b border-gray-100 pb-1"><strong className="text-gray-600">NIF</strong><span className="font-mono text-gray-500 text-right ml-4">{modalContrato.contrato_dados?.nif}</span></div>
+                        <div className="flex justify-between border-b border-gray-100 pb-1"><strong className="text-gray-600">Contacto</strong><span className="font-medium text-right ml-4">{modalContrato.contrato_dados?.pessoaContacto} ({modalContrato.contrato_dados?.telefone})</span></div>
+                        <div className="flex justify-between border-b border-gray-100 pb-1"><strong className="text-gray-600">E-mail Reservas</strong><span className="font-bold text-emerald-600 text-right ml-4 break-all">{modalContrato.contrato_dados?.emailReservas}</span></div>
+                      </div>
                     )}
                   </div>
+                  
+                  {/* Assinatura */}
+                  <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
+                    <span className="block text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">Assinatura Digital</span>
+                    <p className="font-serif text-xl font-black italic text-emerald-950 mb-1">{modalContrato.contrato_dados?.assinaturaNome}</p>
+                    <p className="text-[10px] text-emerald-800 font-mono m-0">Timestamp: {modalContrato.contrato_dados?.dataSubmissao ? new Date(modalContrato.contrato_dados?.dataSubmissao).toLocaleString('pt-PT') : 'N/D'}</p>
+                  </div>
+                </div>
 
-                  {isEditing ? (
-                    <>
-                      <div>
-                        <label className={labelClass}>Modelo de Reserva</label>
-                        <select className={selectClass} value={editForm.modalidadeReserva || ''} onChange={e => setEditForm({...editForm, modalidadeReserva: e.target.value})}>
-                          <option value="direta">Reserva Direta (Automático)</option>
-                          <option value="email">Sob Consulta (E-mail)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelClass}>Modelo de Pagamento</label>
-                        <select className={selectClass} value={editForm.tipoPagamento || ''} onChange={e => setEditForm({...editForm, tipoPagamento: e.target.value})}>
-                          <option value="100_total">100% no Ato da Reserva</option>
-                          <option value="50_sinal">Sinal de 50% + Restante</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelClass}>Pol. Cancelamento</label>
-                        <select className={selectClass} value={editForm.politicaCancelamento || ''} onChange={e => setEditForm({...editForm, politicaCancelamento: e.target.value})}>
-                          <option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (100% até 7 dias)</option>
-                          <option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (50% até 15 dias)</option>
-                          <option value="Estrita (Sem reembolso após reserva)">Estrita (Sem reembolso)</option>
-                        </select>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <strong className="block text-blue-900 mb-1">Modelo de Reserva</strong>
-                        <p className="text-blue-700 bg-white border border-blue-100 p-2 rounded">{modalContrato.contrato_dados?.modalidadeReserva === 'direta' ? 'Reserva Direta' : 'Sob Consulta (E-mail)'}</p>
-                      </div>
-                      <div>
-                        <strong className="block text-blue-900 mb-1">Modelo Pagamento</strong>
-                        <p className="text-blue-700 bg-white border border-blue-100 p-2 rounded">{modalContrato.contrato_dados?.tipoPagamento === '100_total' ? '100% Ato da Reserva' : 'Sinal de 50%'}</p>
-                      </div>
-                      <div>
-                        <strong className="block text-blue-900 mb-1">Pol. Cancelamento</strong>
-                        <p className="text-blue-700 bg-white border border-blue-100 p-2 rounded leading-tight text-[11px] font-medium">{modalContrato.contrato_dados?.politicaCancelamento}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-                
-                <div className="mt-5 bg-white p-4 rounded-lg border border-blue-100">
-                  <strong className="block text-blue-900 text-[10px] font-bold uppercase tracking-widest mb-2">Acordos Complementares / Exceções:</strong>
-                  {isEditing ? (
-                    <textarea 
-                      className={textareaClass} 
-                      rows={3} 
-                      value={editForm.acordosComplementares || ''} 
-                      onChange={e => setEditForm({...editForm, acordosComplementares: e.target.value})}
-                      placeholder="Nenhuma cláusula de exceção definida."
-                    />
-                  ) : (
-                    <p className="text-blue-800 text-sm italic">{modalContrato.contrato_dados?.acordosComplementares || 'Nenhuma cláusula de exceção preenchida pelo parceiro.'}</p>
-                  )}
-                </div>
-              </div>
+                {/* COLUNA DIREITA: Condições Financeiras */}
+                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                  <span className="block text-[10px] font-black text-blue-800 uppercase tracking-widest mb-3">Condições Operacionais</span>
+                  
+                  <div className="space-y-3">
+                    <div className={`${isEditing ? 'bg-white p-3 rounded-lg border border-blue-200' : 'flex justify-between items-center border-b border-blue-200/50 pb-2'}`}>
+                      <strong className={`${isEditing ? labelClass : 'text-xs text-blue-900'}`}>Comissão Base (%)</strong>
+                      {isEditing ? (
+                        <input type="number" step="0.1" className={inputClass} value={editComissao} onChange={e => setEditComissao(Number(e.target.value))} />
+                      ) : (
+                        <span className="text-lg font-black text-blue-700">{modalContrato.taxa_comissao || 12}%</span>
+                      )}
+                    </div>
 
-              {/* BLOCO 3: ASSINATURA */}
-              <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <span className="block text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">Assinatura Digital de Vinculação</span>
-                  <p className="font-serif text-2xl font-black italic text-emerald-950 mb-1">{modalContrato.contrato_dados?.assinaturaNome}</p>
-                  <p className="text-sm text-emerald-800"><strong>Cargo Declarado:</strong> {modalContrato.contrato_dados?.assinaturaCargo}</p>
+                    <div className={`${isEditing ? 'bg-white p-3 rounded-lg border border-blue-200 mt-2 space-y-3' : 'space-y-2 text-xs'}`}>
+                      {isEditing ? (
+                        <>
+                          <div><label className={labelClass}>Reserva</label><select className={selectClass} value={editForm.modalidadeReserva || ''} onChange={e => setEditForm({...editForm, modalidadeReserva: e.target.value})}><option value="direta">Direta</option><option value="email">Sob Consulta</option></select></div>
+                          <div><label className={labelClass}>Pagamento</label><select className={selectClass} value={editForm.tipoPagamento || ''} onChange={e => setEditForm({...editForm, tipoPagamento: e.target.value})}><option value="100_total">100% no Ato</option><option value="50_sinal">Sinal 50%</option></select></div>
+                          <div><label className={labelClass}>Cancelamento</label><select className={selectClass} value={editForm.politicaCancelamento || ''} onChange={e => setEditForm({...editForm, politicaCancelamento: e.target.value})}><option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (7 dias)</option><option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (15 dias)</option><option value="Estrita (Sem reembolso após reserva)">Estrita</option></select></div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex justify-between pb-1"><strong className="text-blue-900">Modelo</strong><span className="font-bold text-blue-800 text-right">{modalContrato.contrato_dados?.modalidadeReserva === 'direta' ? 'Reserva Direta' : 'Sob Consulta'}</span></div>
+                          <div className="flex justify-between pb-1"><strong className="text-blue-900">Pagamento</strong><span className="font-bold text-blue-800 text-right">{modalContrato.contrato_dados?.tipoPagamento === '100_total' ? '100% Imediato' : 'Sinal 50%'}</span></div>
+                          <div className="pt-1"><strong className="block text-blue-900 mb-1">Pol. Cancelamento:</strong><p className="text-[10px] text-blue-800 leading-tight bg-white p-2 rounded border border-blue-100 m-0">{modalContrato.contrato_dados?.politicaCancelamento}</p></div>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-left md:text-right bg-white p-3 rounded-lg border border-emerald-100 shadow-sm">
-                  <p className="text-xs text-slate-500 mb-1"><strong>Submetido a:</strong> {new Date(modalContrato.contrato_dados?.dataSubmissao).toLocaleString('pt-PT')}</p>
-                  <p className="text-[10px] text-slate-400 font-mono">Via: {modalContrato.contrato_dados?.ipAssinatura}</p>
-                </div>
+
+                {/* Bloco de Acordos Complementares (Se aplicável) - Só visível à direita */}
+                {isEditing && (
+                   <div className="bg-white p-4 rounded-lg border border-blue-100 col-span-1 lg:col-span-2">
+                     <label className={labelClass}>Acordos Complementares / Exceções:</label>
+                     <textarea 
+                       className={textareaClass} 
+                       rows={3} 
+                       value={editForm.acordosComplementares || ''} 
+                       onChange={e => setEditForm({...editForm, acordosComplementares: e.target.value})}
+                       placeholder="Nenhuma cláusula de exceção definida."
+                     />
+                   </div>
+                )}
               </div>
             </div>
 
-            <div className="p-6 border-t border-slate-200 bg-slate-50 flex flex-wrap gap-4 justify-between items-center">
+            {/* RODAPÉ E ACÕES */}
+            <div className="px-5 py-4 border-t border-gray-200 bg-gray-50 flex flex-wrap gap-3 justify-between items-center flex-shrink-0">
               <div>
                 {!isEditing && modalContrato.status_aprovacao !== 'Pendente de Revisão' && (
-                  <button onClick={() => handleAcaoContrato(modalContrato.id, 'Pendente de Revisão')} className="text-sm font-bold text-slate-500 hover:text-slate-800 underline">
-                    Reverter para Pendente
-                  </button>
+                  <button onClick={() => handleAcaoContrato(modalContrato.id, 'Pendente de Revisão')} className="text-xs font-bold text-gray-500 hover:text-gray-800 underline">Reverter p/ Pendente</button>
                 )}
               </div>
               
-              <div className="flex gap-4">
+              <div className="flex gap-2">
                 {isEditing ? (
                   <>
-                    <button onClick={() => setIsEditing(false)} className="bg-white border border-slate-300 text-slate-600 font-bold px-6 py-3 rounded-xl hover:bg-slate-100 transition-colors">
-                      Cancelar
-                    </button>
-                    <button onClick={handleGuardarEdicao} disabled={savingEdit} className="bg-blue-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-blue-500 transition-transform hover:-translate-y-0.5 shadow-lg disabled:bg-slate-400 disabled:transform-none">
-                      {savingEdit ? 'A Guardar...' : 'Guardar Alterações'}
-                    </button>
+                    <button onClick={() => setIsEditing(false)} className="bg-white border border-gray-300 text-gray-700 font-bold px-4 py-2 rounded-lg text-xs hover:bg-gray-100 transition-colors">Cancelar</button>
+                    <button onClick={handleGuardarEdicao} disabled={savingEdit} className="bg-blue-600 text-white font-bold px-4 py-2 rounded-lg text-xs shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">Guardar</button>
                   </>
                 ) : (
                   <>
                     {modalContrato.status_aprovacao !== 'Rejeitado' && (
-                      <button onClick={() => handleAcaoContrato(modalContrato.id, 'Rejeitado')} className="bg-white border border-red-200 text-red-600 font-bold px-6 py-3 rounded-xl hover:bg-red-50 transition-colors">
-                        Rejeitar Parceiro
-                      </button>
+                      <button onClick={() => handleAcaoContrato(modalContrato.id, 'Rejeitado')} className="bg-white border border-red-200 text-red-600 font-bold px-4 py-2 rounded-lg text-xs hover:bg-red-50 transition-colors">Rejeitar</button>
                     )}
                     {modalContrato.status_aprovacao !== 'Aprovado' && (
-                      <button onClick={() => handleAcaoContrato(modalContrato.id, 'Aprovado')} className="bg-emerald-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-emerald-500 transition-transform hover:-translate-y-0.5 shadow-lg">
-                        Validar e Aprovar Contrato
-                      </button>
+                      <button onClick={() => handleAcaoContrato(modalContrato.id, 'Aprovado')} className="bg-emerald-600 text-white font-bold px-4 py-2 rounded-lg text-xs shadow-sm hover:bg-emerald-700 transition-colors">Aprovar Parceiro</button>
                     )}
                   </>
                 )}
@@ -628,7 +531,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
           </div>
         </div>
       )}
-
     </div>
   );
 }
