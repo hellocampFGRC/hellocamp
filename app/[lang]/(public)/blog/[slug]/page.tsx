@@ -101,16 +101,16 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         </div>
       )}
 
-      {/* CORPO DO ARTIGO - ESTILIZAÇÃO FORÇADA (Resolve o problema da sua imagem) */}
+      {/* CORPO DO ARTIGO - ESTILIZAÇÃO FORÇADA E TEXTO JUSTIFICADO */}
       <article className="
         max-w-3xl mx-auto px-4 md:px-8 
-        text-slate-600 font-medium text-[1.05rem] md:text-lg leading-relaxed
+        text-slate-600 font-medium text-[1.05rem] md:text-lg leading-relaxed text-justify
         
         /* Títulos H2 (Ex: 1. Avaliar a Idade...) */
-        [&_h2]:text-2xl [&_h2]:md:text-3xl [&_h2]:font-black [&_h2]:text-slate-900 [&_h2]:mt-16 [&_h2]:mb-6 [&_h2]:leading-tight
+        [&_h2]:text-2xl [&_h2]:md:text-3xl [&_h2]:font-black [&_h2]:text-slate-900 [&_h2]:mt-16 [&_h2]:mb-6 [&_h2]:leading-tight [&_h2]:text-left
         
         /* Títulos H3 (Ex: Perguntas Frequentes) */
-        [&_h3]:text-xl [&_h3]:md:text-2xl [&_h3]:font-black [&_h3]:text-slate-900 [&_h3]:mt-14 [&_h3]:mb-6 [&_h3]:pb-4 [&_h3]:border-b [&_h3]:border-slate-100
+        [&_h3]:text-xl [&_h3]:md:text-2xl [&_h3]:font-black [&_h3]:text-slate-900 [&_h3]:mt-14 [&_h3]:mb-6 [&_h3]:pb-4 [&_h3]:border-b [&_h3]:border-slate-100 [&_h3]:text-left
         
         /* Parágrafos Base */
         [&_p]:mb-6 [&_p]:leading-loose
@@ -119,7 +119,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         [&_strong]:font-black [&_strong]:text-slate-900
         
         /* Listas (Ex: Checklists e Bullet points) */
-        [&_ul]:list-none [&_ul]:pl-0 [&_ul]:mb-8 [&_ul]:space-y-6
+        [&_ul]:list-none [&_ul]:pl-0 [&_ul]:mb-8 [&_ul]:space-y-6 [&_ul]:text-left
         [&_li]:relative [&_li]:pl-8
         [&_li::before]:content-[''] [&_li::before]:absolute [&_li::before]:left-0 [&_li::before]:top-3 [&_li::before]:w-2 [&_li::before]:h-2 [&_li::before]:bg-emerald-500 [&_li::before]:rounded-full
         
@@ -131,6 +131,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         [&_p>strong:first-child]:mb-3 
         [&_p>strong:first-child]:text-slate-900
         [&_p>strong:first-child]:leading-snug
+        [&_p>strong:first-child]:text-left
       ">
         <div dangerouslySetInnerHTML={{ __html: conteudo }} />
       </article>
