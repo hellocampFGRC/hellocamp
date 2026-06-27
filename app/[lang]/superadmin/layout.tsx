@@ -44,47 +44,83 @@ export default function SuperAdminLayout({
     checkSuperAdmin();
   }, [router, lang]);
 
-  if (loading) return <div style={{ minHeight: '100vh', backgroundColor: '#111827' }} />;
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push(`/${lang}`);
+  };
+
+  if (loading) return <div className="min-h-screen bg-gray-900" />;
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'sans-serif' }}>
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 font-sans">
       
-      <aside style={{ width: '280px', backgroundColor: '#111827', color: 'white', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '2rem 1.5rem', borderBottom: '1px solid #1f2937' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '900', margin: 0 }}>
-            HelloCamp <span style={{ color: '#fbbf24' }}>HQ</span>
+      {/* SIDEBAR SUPERADMIN (Tema Escuro HQ) */}
+      <aside className="w-full md:w-[280px] bg-gray-900 text-white flex flex-col flex-shrink-0 shadow-md md:shadow-none z-10">
+        
+        {/* Título: Oculto no mobile para poupar espaço */}
+        <div className="p-5 md:p-6 border-b border-gray-800 hidden md:block">
+          <h2 className="text-xl font-black m-0">
+            HelloCamp <span className="text-amber-400">HQ</span>
           </h2>
-          <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '0.5rem', fontWeight: 'bold' }}>Direção & Gestão Geral</p>
+          <p className="text-xs text-gray-400 mt-2 font-bold">Direção & Gestão Geral</p>
         </div>
         
-        <nav style={{ flex: 1, padding: '1.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <Link href={`/${lang}/superadmin/parceiros`} style={navStyle(pathname.includes('/parceiros'))}>
-            🤝 Gestão de Parceiros
-          </Link>
-          <Link href={`/${lang}/superadmin/contratos`} style={navStyle(pathname.includes('/contratos'))}>
-            📋 Contratos Recebidos
-          </Link>
-          <Link href={`/${lang}/superadmin/campos`} style={navStyle(pathname.includes('/campos'))}>
-            🏕️ Todos os Campos (Global)
-          </Link>
-          <Link href={`/${lang}/superadmin/faturacao`} style={navStyle(pathname.includes('/faturacao'))}>
-            💰 Faturação Global
-          </Link>
-          <Link href={`/${lang}/superadmin/emails`} style={navStyle(pathname.includes('/emails'))}>
-            📧 Email Marketing
-          </Link>
+        {/* Navegação: Scroll horizontal no mobile, vertical no PC */}
+        <nav className="flex md:flex-col overflow-x-auto md:overflow-visible gap-2 p-3 md:p-6 no-scrollbar scroll-smooth items-center md:items-stretch">
+          <NavLink href={`/${lang}/superadmin/parceiros`} active={pathname.includes('/parceiros')} text="🤝 Gestão de Parceiros" />
+          <NavLink href={`/${lang}/superadmin/contratos`} active={pathname.includes('/contratos')} text="📋 Contratos Recebidos" />
+          <NavLink href={`/${lang}/superadmin/campos`} active={pathname.includes('/campos')} text="🏕️ Todos os Campos" />
+          <NavLink href={`/${lang}/superadmin/faturacao`} active={pathname.includes('/faturacao')} text="💰 Faturação Global" />
+          <NavLink href={`/${lang}/superadmin/emails`} active={pathname.includes('/emails')} text="📧 Email Marketing" />
+          
+          {/* Botão de Sair no mobile */}
+          <button onClick={handleLogout} className="md:hidden flex-shrink-0 flex items-center justify-center px-5 py-2.5 rounded-full text-sm font-bold text-red-400 bg-gray-800 border border-gray-700 hover:bg-gray-700 ml-2 transition-colors">
+            Sair
+          </button>
         </nav>
+
+        {/* Rodapé da Sidebar exclusivo para PC */}
+        <div className="p-6 border-t border-gray-800 hidden md:block mt-auto">
+          <button onClick={handleLogout} className="w-full p-3 bg-transparent border border-gray-700 text-white rounded-lg cursor-pointer font-bold text-sm hover:bg-gray-800 transition-colors">
+            Sair da Administração
+          </button>
+        </div>
       </aside>
 
-      <main style={{ flex: 1, padding: '3rem', overflowY: 'auto' }}>
-        {children}
+      {/* ÁREA PRINCIPAL DO SUPERADMIN */}
+      <main className="flex-1 flex flex-col w-full overflow-hidden">
+        
+        {/* Header Superior Mobile (Opcional, para manter a consistência) */}
+        <header className="md:hidden bg-white px-4 py-3 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
+          <h2 className="text-sm font-black text-slate-900 m-0">
+            HelloCamp <span className="text-amber-500">HQ</span>
+          </h2>
+          <Link href={`/${lang}`} className="text-xs font-bold text-emerald-600 no-underline">
+            Ver Site ↗
+          </Link>
+        </header>
+
+        {/* Conteúdo da Página */}
+        <div className="p-4 md:p-8 overflow-y-auto w-full box-border">
+          {children}
+        </div>
       </main>
+
     </div>
   );
 }
 
-const navStyle = (isActive: boolean): React.CSSProperties => ({
-  display: 'block', padding: '1rem', borderRadius: '0.75rem',
-  backgroundColor: isActive ? '#1f2937' : 'transparent', color: isActive ? 'white' : '#9ca3af',
-  fontWeight: isActive ? 'bold' : '600', textDecoration: 'none', fontSize: '14px', transition: 'all 0.2s'
-});
+// Subcomponente de navegação do SuperAdmin
+function NavLink({ href, active, text }: { href: string, active: boolean, text: string }) {
+  return (
+    <Link 
+      href={href} 
+      className={`
+        px-5 py-2.5 md:py-3 rounded-full md:rounded-xl text-sm whitespace-nowrap transition-all flex-shrink-0
+        ${active ? 'bg-gray-800 text-white font-bold' : 'text-gray-400 font-semibold hover:bg-gray-800 hover:text-white'}
+      `}
+    >
+      {text}
+    </Link>
+  );
+}
