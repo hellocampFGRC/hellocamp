@@ -101,40 +101,34 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         </div>
       )}
 
-      {/* CORPO DO ARTIGO - ESTILIZAÇÃO ESTRATÉGICA (TYPOGRAPHY) */}
+      {/* CORPO DO ARTIGO - ESTILIZAÇÃO FORÇADA (Resolve o problema da sua imagem) */}
       <article className="
         max-w-3xl mx-auto px-4 md:px-8 
-        prose prose-lg md:prose-xl prose-slate 
-        prose-headings:font-black prose-headings:tracking-tight
+        text-slate-600 font-medium text-[1.05rem] md:text-lg leading-relaxed
         
         /* Títulos H2 (Ex: 1. Avaliar a Idade...) */
-        prose-h2:text-3xl prose-h2:mt-16 prose-h2:mb-8 prose-h2:text-slate-900 prose-h2:leading-tight
+        [&_h2]:text-2xl [&_h2]:md:text-3xl [&_h2]:font-black [&_h2]:text-slate-900 [&_h2]:mt-16 [&_h2]:mb-6 [&_h2]:leading-tight
         
         /* Títulos H3 (Ex: Perguntas Frequentes) */
-        prose-h3:text-2xl prose-h3:mt-16 prose-h3:mb-8 prose-h3:border-b prose-h3:border-slate-100 prose-h3:pb-4 prose-h3:text-slate-900
+        [&_h3]:text-xl [&_h3]:md:text-2xl [&_h3]:font-black [&_h3]:text-slate-900 [&_h3]:mt-14 [&_h3]:mb-6 [&_h3]:pb-4 [&_h3]:border-b [&_h3]:border-slate-100
         
-        /* Parágrafos Base (Texto corrido) */
-        prose-p:leading-loose prose-p:mb-8 prose-p:text-slate-600 prose-p:font-medium
+        /* Parágrafos Base */
+        [&_p]:mb-6 [&_p]:leading-loose
         
         /* Bolds Normais */
-        prose-strong:font-black prose-strong:text-slate-900
+        [&_strong]:font-black [&_strong]:text-slate-900
         
         /* Listas (Ex: Checklists e Bullet points) */
-        prose-ul:my-8 prose-ul:space-y-4 prose-li:leading-relaxed prose-li:text-slate-600 prose-li:font-medium
-        marker:text-emerald-500
+        [&_ul]:list-none [&_ul]:pl-0 [&_ul]:mb-8 [&_ul]:space-y-6
+        [&_li]:relative [&_li]:pl-8
+        [&_li::before]:content-[''] [&_li::before]:absolute [&_li::before]:left-0 [&_li::before]:top-3 [&_li::before]:w-2 [&_li::before]:h-2 [&_li::before]:bg-emerald-500 [&_li::before]:rounded-full
         
-        /* Links */
-        prose-a:text-emerald-600 hover:prose-a:text-emerald-700 prose-a:font-bold
-        
-        /* ========================================== */
-        /* MAGIA CSS: BLOCO DE PERGUNTAS E RESPOSTAS  */
-        /* Transformamos qualquer <strong> que inicie  */
-        /* um parágrafo num título de Pergunta!       */
-        /* ========================================== */
+        /* Magia para FAQs (Perguntas) */
         [&_p>strong:first-child]:block 
-        [&_p>strong:first-child]:text-xl 
+        [&_p>strong:first-child]:text-lg 
+        [&_p>strong:first-child]:md:text-xl 
         [&_p>strong:first-child]:mt-10 
-        [&_p>strong:first-child]:mb-4 
+        [&_p>strong:first-child]:mb-3 
         [&_p>strong:first-child]:text-slate-900
         [&_p>strong:first-child]:leading-snug
       ">
