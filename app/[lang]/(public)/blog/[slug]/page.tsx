@@ -101,29 +101,27 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         </div>
       )}
 
-      {/* CORPO DO ARTIGO - ESTILIZAÇÃO FORÇADA E TEXTO JUSTIFICADO */}
+      {/* CORPO DO ARTIGO - ALINHAMENTO CORRIGIDO */}
       <article className="
         max-w-3xl mx-auto px-4 md:px-8 
-        text-slate-600 font-medium text-[1.05rem] md:text-lg leading-relaxed text-justify
+        text-slate-600 font-medium text-[1.05rem] md:text-lg leading-relaxed
         
-        /* Títulos H2 (Ex: 1. Avaliar a Idade...) */
+        /* Títulos H2 e H3 sempre alinhados à esquerda para não ficarem com espaçamentos estranhos */
         [&_h2]:text-2xl [&_h2]:md:text-3xl [&_h2]:font-black [&_h2]:text-slate-900 [&_h2]:mt-16 [&_h2]:mb-6 [&_h2]:leading-tight [&_h2]:text-left
-        
-        /* Títulos H3 (Ex: Perguntas Frequentes) */
         [&_h3]:text-xl [&_h3]:md:text-2xl [&_h3]:font-black [&_h3]:text-slate-900 [&_h3]:mt-14 [&_h3]:mb-6 [&_h3]:pb-4 [&_h3]:border-b [&_h3]:border-slate-100 [&_h3]:text-left
         
-        /* Parágrafos Base */
-        [&_p]:mb-6 [&_p]:leading-loose
+        /* Parágrafos apenas justificados */
+        [&_p]:mb-6 [&_p]:leading-loose [&_p]:text-justify
         
         /* Bolds Normais */
         [&_strong]:font-black [&_strong]:text-slate-900
         
-        /* Listas (Ex: Checklists e Bullet points) */
-        [&_ul]:list-none [&_ul]:pl-0 [&_ul]:mb-8 [&_ul]:space-y-6 [&_ul]:text-left
-        [&_li]:relative [&_li]:pl-8
-        [&_li::before]:content-[''] [&_li::before]:absolute [&_li::before]:left-0 [&_li::before]:top-3 [&_li::before]:w-2 [&_li::before]:h-2 [&_li::before]:bg-emerald-500 [&_li::before]:rounded-full
+        /* Listas justificados com os parágrafos */
+        [&_ul]:list-none [&_ul]:pl-0 [&_ul]:mb-8 [&_ul]:space-y-6
+        [&_li]:relative [&_li]:pl-8 [&_li]:text-justify
+        [&_li::before]:content-[''] [&_li::before]:absolute [&_li::before]:left-0 [&_li::before]:top-3.5 [&_li::before]:w-2 [&_li::before]:h-2 [&_li::before]:bg-emerald-500 [&_li::before]:rounded-full
         
-        /* Magia para FAQs (Perguntas) */
+        /* Magia para FAQs (Perguntas) - Mantém a pergunta à esquerda */
         [&_p>strong:first-child]:block 
         [&_p>strong:first-child]:text-lg 
         [&_p>strong:first-child]:md:text-xl 
