@@ -98,7 +98,13 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             </Link>
 
             <Link href={`/${lang}/parceiro`} className="text-[15px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
-              {isEn ? 'Partners Guide' : 'Guia Parceiro'}
+              {isEn ? 'Partners' : 'Parceiros'}
+            </Link>
+
+            {/* NOVO LINK PARA OS MONITORES */}
+            <Link href={`/${lang}/monitores`} className="text-[15px] font-bold text-blue-600 hover:text-blue-800 no-underline py-2 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+              {isEn ? 'Staff / Monitors' : 'Sou Monitor'}
             </Link>
 
           </nav>
@@ -158,7 +164,8 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             <div className="h-px bg-slate-100 my-1 mx-3"></div>
             
             <Link href={`/${lang}/guia-pais`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Pais</Link>
-            <Link href={`/${lang}/parceiro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Parceiro</Link>
+            <Link href={`/${lang}/parceiro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Parceiros</Link>
+            <Link href={`/${lang}/monitores`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-blue-600 no-underline hover:bg-blue-50 bg-blue-50/30">Sou Monitor</Link>
             
             {/* O onClickCapture interceta QUALQUER clique dentro da div, fechando o menu automaticamente */}
             <div className="px-3 pt-2" onClickCapture={() => setIsMobileMenuOpen(false)}>
