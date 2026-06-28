@@ -35,21 +35,17 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     const userId = session.user.id;
     setParceiroId(userId);
 
-    // Buscar perfil do parceiro para saber o nome da empresa nas notificações de email
     const { data: perfilData } = await supabase.from('perfis').select('empresa_nome').eq('id', userId).single();
     setParceiroPerfil(perfilData);
 
-    // 1. Buscar todos os monitores disponíveis
     const { data: monitoresData } = await supabase.from('monitores').select('*').order('criado_at', { ascending: false });
     setMonitores(monitoresData || []);
 
-    // 2. Buscar favoritos guardados por este parceiro específico
     const { data: favsData } = await supabase.from('monitores_favoritos').select('monitor_id').eq('parceiro_id', userId);
     if (favsData) {
       setGuardadosIds(favsData.map(f => f.monitor_id));
     }
 
-    // 3. Buscar histórico real de mensagens e agrupar em Threads por Monitor
     const { data: msgData } = await supabase
       .from('mensagens_recrutamento')
       .select('*, monitores(nome_completo, fotografia_url, email)')
@@ -83,11 +79,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
       });
 
       setConversas(Object.values(threadsMap));
-      
-      // Sincronizar conversa ativa aberta se aplicável
-      if (conversaAtiva) {
-        setConversaAtiva(threadsMap[conversaAtiva.monitor_id] || null);
-      }
+      if (conversaAtiva) setConversaAtiva(threadsMap[conversaAtiva.monitor_id] || null);
     }
     setLoading(false);
   };
@@ -96,7 +88,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     carregarDadosRecrutamento();
   }, [conversaAtiva?.monitor_id]);
 
-  // --- ADICIONAR / REMOVER DOS FAVORITOS (BASE DE DADOS) ---
+  // --- LÓGICA DE FAVORITOS E MENSAGENS ---
   const toggleGuardar = async (e: React.MouseEvent, idMonitor: string) => {
     e.stopPropagation();
     if (!parceiroId) return;
@@ -110,7 +102,6 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     }
   };
 
-  // --- ENVIAR MENSAGEM REAL + DISPARO DE EMAIL NOTIFICAÇÃO ---
   const handleEnviarMensagem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!novaMensagem.trim() || !parceiroId || !conversaAtiva) return;
@@ -131,7 +122,6 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
       return;
     }
 
-    // Disparar notificação por email em background para o monitor
     try {
       await fetch('/api/notificacoes/nova-mensagem-recrutamento', {
         method: 'POST',
@@ -153,15 +143,9 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     carregarDadosRecrutamento();
   };
 
-  // --- MARCAR MENSAGENS COMO LIDAS ---
   const marcarComoLidas = async (mId: string) => {
     if (!parceiroId) return;
-    await supabase
-      .from('mensagens_recrutamento')
-      .update({ lida: true })
-      .eq('parceiro_id', parceiroId)
-      .eq('monitor_id', mId)
-      .eq('remetente', 'monitor');
+    await supabase.from('mensagens_recrutamento').update({ lida: true }).eq('parceiro_id', parceiroId).eq('monitor_id', mId).eq('remetente', 'monitor');
   };
 
   const selecionarConversa = (conv: any) => {
@@ -173,13 +157,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     if (!parceiroId) return;
     setMonitorSelecionado(null);
     
-    // Criar uma mensagem inicial vazia ou apenas puxar a thread
-    const { data: existeThread } = await supabase
-      .from('mensagens_recrutamento')
-      .select('id')
-      .eq('parceiro_id', parceiroId)
-      .eq('monitor_id', monitor.id)
-      .limit(1);
+    const { data: existeThread } = await supabase.from('mensagens_recrutamento').select('id').eq('parceiro_id', parceiroId).eq('monitor_id', monitor.id).limit(1);
 
     if (!existeThread || existeThread.length === 0) {
       await supabase.from('mensagens_recrutamento').insert([{
@@ -193,7 +171,6 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     await carregarDadosRecrutamento();
     setActiveTab("mensagens");
     
-    // Abrir a thread correspondente de imediato
     setTimeout(() => {
       const threadCriada = conversas.find(c => c.monitor_id === monitor.id);
       if (threadCriada) setConversaAtiva(threadCriada);
@@ -220,6 +197,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
   const selectClass = "w-full py-2 px-3 pr-8 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.6rem_auto] bg-[position:right_0.75rem_center] bg-no-repeat";
 
+  // --- GRELHA DE MONITORES ---
   const renderGrelhaMonitores = (lista: any[], emptyMessage: string) => {
     if (loading) return <div className="text-center py-20 text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">{isEn ? "Loading talent pool..." : "A carregar talentos..."}</div>;
     if (lista.length === 0) return <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center shadow-sm w-full"><span className="text-4xl block mb-2">🔍</span><h3 className="text-sm font-black text-slate-900 mb-1">{isEn ? "No monitors found" : "Nenhum monitor encontrado"}</h3><p className="text-xs text-slate-500 font-medium">{emptyMessage}</p></div>;
@@ -251,7 +229,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
   };
 
   return (
-    <div className="max-w-6xl mx-auto flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-80px)] font-sans">
+    <div className="max-w-7xl mx-auto flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-80px)] font-sans">
       <div className="mb-4 flex-shrink-0">
         <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight m-0 mb-1">{isEn ? "Staff Recruitment" : "Recrutamento de Equipa"}</h1>
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">{isEn ? "Find, save, and contact monitors" : "Pesquisa, Shortlist e Contacto Direto"}</p>
@@ -263,6 +241,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0">
+        {/* TABS DE CONTEÚDO */}
         {activeTab === "descobrir" && (
           <div>
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-4 flex gap-3"><div className="flex-1"><select className={selectClass} value={filtroDistrito} onChange={e => setFiltroDistrito(e.target.value)}><option value="">📍 {isEn ? "All Districts" : "Todos os Distritos"}</option>{distritosPT.map(d => <option key={d} value={d}>{d}</option>)}</select></div><div className="flex-1"><select className={selectClass} value={filtroExperiencia} onChange={e => setFiltroExperiencia(e.target.value)}><option value="">⭐ {isEn ? "Any Experience" : "Qualquer Experiência"}</option><option value="0">{isEn ? "First Time" : "Nenhuma / Primeira vez"}</option><option value="1-2">1-2 {isEn ? "years" : "anos"}</option><option value="3-5">3-5 {isEn ? "years" : "anos"}</option><option value="+5">+5 {isEn ? "years" : "anos"}</option></select></div></div>
@@ -303,17 +282,111 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
         )}
       </div>
 
-      {/* MODAL DETALHE COMPLETO */}
+      {/* NOVO MODAL / LIGHTBOX DE PERFIL COMPLETO (Estilo Dossier Profissional) */}
       {monitorSelecionado && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-xl max-h-[85vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-white"><div className="text-sm font-black text-slate-900">{monitorSelecionado.nome_completo}</div><button onClick={() => setMonitorSelecionado(null)} className="text-slate-400 font-bold text-xl bg-transparent border-none">&times;</button></div>
-            <div className="p-5 overflow-y-auto flex-1 bg-slate-50/50 space-y-4">
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{isEn ? "Pitch" : "Apresentação"}</span><p className="text-xs text-slate-700 leading-relaxed font-medium m-0 whitespace-pre-wrap">{monitorSelecionado.bio}</p></div>
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{isEn ? "Certificates" : "Habilitações"}</span><div className="flex flex-wrap gap-1">{monitorSelecionado.certificacoes?.map((c:string)=>(<span key={c} className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded border border-emerald-100">{c}</span>)) || 'Nenhuma'}</div></div>
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{isEn ? "Availability" : "Disponibilidade"}</span><div className="flex flex-wrap gap-1">{monitorSelecionado.disponibilidade?.map((d:string)=>(<span key={d} className="px-2 py-0.5 bg-blue-50 text-blue-800 text-[10px] font-bold rounded border border-blue-100">📅 {d}</span>)) || 'Não especificada'}</div></div>
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl flex flex-col overflow-hidden shadow-2xl">
+            
+            {/* Header Modal */}
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white flex-shrink-0">
+               <div className="text-xs font-black text-slate-500 uppercase tracking-widest">{isEn ? "Candidate Dossier" : "Dossier do Candidato"}</div>
+               <button onClick={() => setMonitorSelecionado(null)} className="text-slate-400 hover:text-slate-900 font-bold text-2xl transition-colors leading-none bg-transparent border-none cursor-pointer">&times;</button>
             </div>
-            <div className="p-4 border-t border-slate-100 bg-white flex gap-2"><button onClick={() => iniciarConversaComMonitor(monitorSelecionado)} className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-colors">💬 {isEn ? "Chat" : "Abrir Chat"}</button><a href={`tel:${monitorSelecionado.telefone}`} className="flex-1 bg-white border border-slate-200 text-slate-800 py-2.5 rounded-xl text-xs font-black uppercase text-center no-underline hover:bg-slate-50">📞 {isEn ? "Call" : "Ligar"}</a></div>
+
+            {/* Corpo Modal em 2 Colunas */}
+            <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6 md:p-8">
+               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  
+                  {/* Coluna Esquerda: Foto, Resumo e Ações Rápidas */}
+                  <div className="lg:col-span-1 flex flex-col gap-6">
+                     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm text-center">
+                        <div className="w-32 h-32 mx-auto rounded-full bg-slate-100 border-4 border-white shadow-md overflow-hidden mb-4">
+                           {monitorSelecionado.fotografia_url ? <img src={monitorSelecionado.fotografia_url} alt="Foto" className="w-full h-full object-cover" /> : <span className="text-4xl mt-8 block">🧑‍🏫</span>}
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900 mb-1">{monitorSelecionado.nome_completo}</h2>
+                        <p className="text-sm font-bold text-slate-500 mb-0">{calcularIdade(monitorSelecionado.data_nascimento)} {isEn ? "years old" : "anos"}</p>
+                        
+                        <div className="mt-5 text-left bg-slate-50 p-4 rounded-xl border border-slate-100">
+                           <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{isEn ? "Residency" : "Residência Base"}</span>
+                           <span className="text-sm font-bold text-slate-800">📍 {monitorSelecionado.distrito_residencia}</span>
+                        </div>
+                     </div>
+
+                     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col gap-3">
+                        <span className="block text-[10px] text-center font-black uppercase tracking-widest text-slate-400 mb-2">{isEn ? "Direct Contact" : "Contacto Direto"}</span>
+                        <button onClick={() => iniciarConversaComMonitor(monitorSelecionado)} className="w-full bg-emerald-600 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer">
+                          💬 {isEn ? "Start Chat" : "Iniciar Chat"}
+                        </button>
+                        <a href={`tel:${monitorSelecionado.telefone}`} className="w-full bg-white border border-slate-200 text-slate-800 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest text-center hover:bg-slate-50 transition-all no-underline flex items-center justify-center gap-2">
+                          📞 {isEn ? "Call Monitor" : "Ligar (Telefone)"}
+                        </a>
+                     </div>
+                  </div>
+
+                  {/* Coluna Direita: CV, Certificados e Disponibilidade */}
+                  <div className="lg:col-span-2 flex flex-col gap-6">
+                     
+                     {/* Pitch */}
+                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Presentation / Bio" : "Carta de Apresentação"}</h4>
+                        <p className="text-sm text-slate-700 leading-relaxed font-medium m-0 whitespace-pre-wrap">{monitorSelecionado.bio || "Sem carta de apresentação."}</p>
+                     </div>
+
+                     {/* Experiência e Zonas de Atuação */}
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                           <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2">{isEn ? "Experience" : "Experiência"}</h4>
+                           <span className="text-xl font-black text-slate-900">{monitorSelecionado.experiencia_anos === "0" ? (isEn ? "Beginner" : "Iniciante") : `${monitorSelecionado.experiencia_anos} ${isEn ? "years" : "anos"}`}</span>
+                        </div>
+                        
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                           <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Willing to Work in" : "Disponível para Zonas"}</h4>
+                           <div className="flex flex-wrap gap-1.5">
+                              {monitorSelecionado.areas_atuacao?.length > 0 ? monitorSelecionado.areas_atuacao.map((z:string) => <span key={z} className="bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-[10px] font-bold">{z}</span>) : <span className="text-xs text-slate-400">Não definidas</span>}
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* Certificados e Outras Competências */}
+                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Core Certificates" : "Certificados Base"}</h4>
+                        <div className="flex flex-wrap gap-2 mb-5">
+                           {monitorSelecionado.certificacoes?.length > 0 ? monitorSelecionado.certificacoes.map((c:string) => <span key={c} className="bg-emerald-50 text-emerald-800 border border-emerald-100 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5"><span className="text-emerald-500">✓</span>{c}</span>) : <span className="text-xs text-slate-400">Nenhum</span>}
+                        </div>
+
+                        {monitorSelecionado.outras_competencias && (
+                           <>
+                              <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2 border-t border-slate-100 pt-4">{isEn ? "Other Skills" : "Outras Competências"}</h4>
+                              <p className="text-sm font-bold text-slate-800 m-0">{monitorSelecionado.outras_competencias}</p>
+                           </>
+                        )}
+                     </div>
+
+                     {/* Disponibilidade e Calendário Específico */}
+                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Seasonal Availability" : "Disponibilidade Sazonal"}</h4>
+                        <div className="flex flex-wrap gap-2 mb-5">
+                           {monitorSelecionado.disponibilidade?.length > 0 ? monitorSelecionado.disponibilidade.map((d:string) => <span key={d} className="bg-blue-50 text-blue-800 border border-blue-100 px-3 py-1.5 rounded-lg text-xs font-bold">📅 {d}</span>) : <span className="text-xs text-slate-400">Não especificada</span>}
+                        </div>
+                        
+                        {monitorSelecionado.calendario_disponibilidade && Object.keys(monitorSelecionado.calendario_disponibilidade).length > 0 && (
+                           <div className="border-t border-slate-100 pt-5">
+                              <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Marked Calendar Dates" : "Calendário Específico"}</h4>
+                              <div className="flex flex-wrap gap-2">
+                                 {/* CORREÇÃO AQUI: Converter 'status' para String para o React aceitar renderizar */}
+                                 {Object.entries(monitorSelecionado.calendario_disponibilidade).map(([date, status]) => (
+                                    <span key={date} className={`text-[11px] font-bold px-2 py-1 rounded border ${status === 'Livre' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                       {new Date(date).toLocaleDateString('pt-PT')} ({String(status)})
+                                    </span>
+                                 ))}
+                              </div>
+                           </div>
+                        )}
+                     </div>
+
+                  </div>
+               </div>
+            </div>
           </div>
         </div>
       )}
