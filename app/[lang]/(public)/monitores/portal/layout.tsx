@@ -26,8 +26,8 @@ export default function PortalMonitorLayout({
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
-        // Se não estiver logado, manda para o login principal
-        router.push(`/${lang}/login?redirectTo=monitores/portal/perfil`);
+        // CORREÇÃO: Redireciona para o login ESPECÍFICO dos monitores
+        router.push(`/${lang}/monitores/login?redirectTo=monitores/portal/perfil`);
         return;
       }
 
@@ -39,7 +39,6 @@ export default function PortalMonitorLayout({
         .single();
 
       if (!monitor) {
-        // Se está logado mas ainda não criou o perfil de monitor, manda para o registo
         router.push(`/${lang}/monitores/registo`);
         return;
       }
@@ -56,10 +55,11 @@ export default function PortalMonitorLayout({
     router.push(`/${lang}`);
   };
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div></div>;
+  if (loading) return <div className="flex-1 bg-slate-50 flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div></div>;
 
   return (
-    <div className="flex flex-col md:flex-row min-h-[calc(100vh-80px)] bg-slate-50 font-sans">
+    // CORREÇÃO: flex-1 permite que o layout preencha a main do PublicLayout
+    <div className="flex flex-1 flex-col md:flex-row w-full bg-slate-50 font-sans">
       
       {/* SIDEBAR DO MONITOR (Tema Azul/Branco) */}
       <aside className="w-full md:w-[260px] bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col flex-shrink-0 z-10">
@@ -76,7 +76,7 @@ export default function PortalMonitorLayout({
         <nav className="flex md:flex-col overflow-x-auto md:overflow-visible gap-2 p-3 md:p-6 no-scrollbar scroll-smooth items-center md:items-stretch">
           <NavLink href={`/${lang}/monitores/portal/perfil`} active={pathname.includes('/perfil')} icon="🧑‍🏫" text={isEn ? 'My Profile' : 'O Meu Perfil'} />
           
-          {/* NOVA ABA: Caixa de Mensagens */}
+          {/* Caixa de Mensagens */}
           <NavLink href={`/${lang}/monitores/portal/mensagens`} active={pathname.includes('/mensagens')} icon="💬" text={isEn ? 'Messages' : 'Mensagens'} />
           
           <NavLink href={`/${lang}/pesquisa`} active={false} icon="🏕️" text={isEn ? 'Explore Camps' : 'Explorar Campos'} />
@@ -98,8 +98,8 @@ export default function PortalMonitorLayout({
         </div>
       </aside>
 
-      {/* ÁREA PRINCIPAL */}
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto w-full box-border">
+      {/* ÁREA PRINCIPAL DA PÁGINA (Perfil, Mensagens, etc) */}
+      <main className="flex-1 p-4 md:p-8 w-full box-border">
         {children}
       </main>
 

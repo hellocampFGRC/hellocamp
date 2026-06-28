@@ -19,7 +19,7 @@ export default function TermosMonitorPage({ params }: { params: Promise<{ lang: 
           {isEn ? "Terms of Use: Staff Portal" : "Termos de Utilização da Bolsa de Monitores"}
         </h1>
         <p className="text-sm font-medium text-slate-500">
-          {isEn ? "Last updated: January 2026" : "Última atualização: Janeiro 2026"}
+          {isEn ? "Last updated: January 2026" : "Última atualização: Junho 2026"}
         </p>
       </header>
 

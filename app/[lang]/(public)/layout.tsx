@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
-import Header from "./components/header"; // Ajusta o caminho se necessário
-import Footer from "./components/Footer"; // Ajusta o caminho se necessário
+import Header from "./components/header"; // Ajuste o caminho conforme o seu projeto
+import Footer from "./components/Footer"; // Ajuste o caminho conforme o seu projeto
 import { getDictionary } from "../../../lib/getDictionary";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
 
   return {
     title: {
-      template: '%s | HelloCamp', // Nas páginas filhas, %s será substituído pelo título específico
+      template: '%s | HelloCamp', 
       default: isEn ? 'HelloCamp | Find the Best Summer Camps' : 'HelloCamp | Os Melhores Campos de Férias',
     },
     description: isEn 
@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
       siteName: 'HelloCamp',
       images: [
         {
-          url: '/og-image.jpg', // Adicione esta imagem na pasta /public
+          url: '/og-image.jpg',
           width: 1200,
           height: 630,
         }
@@ -56,8 +56,8 @@ export default async function PublicLayout({
       
       <Header dict={dict} lang={lang} />
 
-      {/* flex-grow faz com que esta main empurre o footer para o fundo */}
-      <main className="flex-grow">
+      {/* flex-grow flex flex-col garante que o conteúdo interior (como o portal) estica devidamente */}
+      <main className="flex-grow flex flex-col w-full">
         {children}
       </main>
       
