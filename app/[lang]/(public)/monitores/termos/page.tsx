@@ -52,7 +52,7 @@ export default function TermosMonitorPage({ params }: { params: Promise<{ lang: 
           <strong>
           {isEn 
             ? "There is absolutely NO employment contract, service agreement, or agency relationship between HelloCamp and the monitors." 
-            : "Não existe, sob nenhuma perspetiva ou circunstância, qualquer vínculo laboral, contrato de prestação de serviços, parceria formal ou relação de agenciamento entre a plataforma HelloCamp e os monitores inscritos."}
+            : "Não existe, sob nenhuma perspetiva ou circunstância, qualquer vínculo laboral, contrato de prestação de serviços, parceria formal ou relação de agenciamento entre a plataforma HelloCamp e os monitores inscritos, nem se encontra vinculada por qualquer coletivo de trabalho ou qualquer instrumento de negociação coletiva."}
           </strong>
         </p>
         <ul>

@@ -412,7 +412,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                 {isEn ? (
                   <>I declare that the information provided is completely true. I also acknowledge that I have read and agree to the <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-emerald-600 font-bold hover:underline">Terms & Conditions</Link> regarding the use of this portal.</>
                 ) : (
-                  <>Declaro sob compromisso de honra que todas as informações e documentos aqui fornecidos são verdadeiros. Tomei conhecimento e aceito expressamente os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-emerald-600 font-bold hover:underline">Termos e Condições</Link> da plataforma HelloCamp.</>
+                  <>Declaro que todas as informações e documentos aqui fornecidos são verdadeiros. Tomei conhecimento e aceito expressamente os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-emerald-600 font-bold hover:underline">Termos e Condições</Link> da plataforma HelloCamp.</>
                 )}
               </span>
             </label>
