@@ -16,10 +16,10 @@ export default function TermosMonitorPage({ params }: { params: Promise<{ lang: 
           {isEn ? "Legal & Privacy" : "Legal e Privacidade"}
         </span>
         <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight leading-tight mb-6">
-          {isEn ? "Terms of Use: Staff Portal" : "Termos de Utilização da Bolsa de Monitores"}
+          {isEn ? "Terms of Use: Monitor Portal" : "Termos de Utilização da Bolsa de Monitores"}
         </h1>
         <p className="text-sm font-medium text-slate-500">
-          {isEn ? "Last updated: January 2026" : "Última atualização: Junho 2026"}
+          {isEn ? "Last updated: June 2026" : "Última atualização: Junho 2026"}
         </p>
       </header>
 
@@ -38,56 +38,68 @@ export default function TermosMonitorPage({ params }: { params: Promise<{ lang: 
         
         <p>
           {isEn 
-            ? "By registering on the HelloCamp Staff Portal, you agree to the following terms, which govern the relationship between you (the Monitor), HelloCamp (the Intermediary), and the organizing entities (the Camps)." 
-            : "Ao registar-se na Bolsa de Monitores da HelloCamp, o utilizador concorda com os presentes termos, que regem a relação entre si (o Monitor), a HelloCamp (a Plataforma Intermediária) e as entidades organizadoras (os Campos de Férias)."}
+            ? "By registering on the HelloCamp Staff Portal, the Monitor agrees to the following terms, which govern the relationship between the Monitor, HelloCamp (the Intermediary Platform), and the organizing entities (Camps/Schools)." 
+            : "Ao registar-se na Bolsa de Monitores da HelloCamp, o Monitor concorda inequivocamente com os presentes termos, que regem a relação entre o Monitor, a HelloCamp (Plataforma Intermediária) e as entidades organizadoras (Campos de Férias, Escolas e Empresas de Animação)."}
         </p>
 
-        <h2>{isEn ? "1. The Role of HelloCamp (Intermediary Platform)" : "1. O Papel da HelloCamp (Plataforma Intermediária)"}</h2>
+        <h2>{isEn ? "1. Inexistence of an Employment Relationship" : "1. Inexistência de Vínculo Laboral"}</h2>
         <p>
           {isEn 
-            ? "HelloCamp operates strictly as a technological bridge. We provide a space where camps can find available staff. HelloCamp is NOT an employment agency, recruiter, or employer." 
-            : "A HelloCamp atua exclusivamente como uma plataforma tecnológica de facilitação (ponte). Disponibilizamos um diretório online onde os campos de férias podem pesquisar e contactar jovens disponíveis. A HelloCamp NÃO é uma agência de emprego, agência de recrutamento, nem atua como entidade patronal sob nenhuma circunstância."}
+            ? "HelloCamp operates strictly as a digital directory and advertising space. The platform simply allows monitors to publish their profiles so that external organizations can contact them." 
+            : "A HelloCamp atua exclusiva e estritamente como um diretório digital e espaço de publicitação. A plataforma serve unicamente para que os monitores se registem e publicitem o seu perfil, disponibilidade e competências, permitindo que entidades organizadoras externas os contactem para eventuais propostas."}
+        </p>
+        <p>
+          <strong>
+          {isEn 
+            ? "There is absolutely NO employment contract, service agreement, or agency relationship between HelloCamp and the monitors." 
+            : "Não existe, sob nenhuma perspetiva ou circunstância, qualquer vínculo laboral, contrato de prestação de serviços, parceria formal ou relação de agenciamento entre a plataforma HelloCamp e os monitores inscritos."}
+          </strong>
         </p>
         <ul>
-          <li>{isEn ? "We do not interview, vet, or background check the monitors." : "Não realizamos entrevistas nem validações presenciais dos utilizadores."}</li>
-          <li>{isEn ? "We do not define salaries, contracts, or working conditions." : "Não definimos horários, remunerações, contratos ou condições de trabalho."}</li>
-          <li>{isEn ? "We do not take a commission or fee from the monitor's salary." : "Não cobramos qualquer comissão ou taxa sobre a remuneração auferida pelo monitor."}</li>
+          <li>{isEn ? "HelloCamp is NOT an employer, HR agency, or recruiter." : "A HelloCamp NÃO é uma entidade patronal, agência de recursos humanos, nem empresa de recrutamento."}</li>
+          <li>{isEn ? "HelloCamp does not dictate salaries, work schedules, or conditions." : "A HelloCamp não define remunerações, não estabelece horários, e não interfere nos contratos de trabalho."}</li>
+          <li>{isEn ? "HelloCamp does not charge commissions on the monitor's earnings." : "A HelloCamp não cobra qualquer taxa ou comissão sobre os valores eventualmente auferidos pelo monitor junto das entidades organizadoras."}</li>
         </ul>
 
-        <h2>{isEn ? "2. Monitor's Responsibilities & Truthfulness" : "2. Responsabilidade e Veracidade do Monitor"}</h2>
+        <h2>{isEn ? "2. Truthfulness of Information (Monitor's Responsibility)" : "2. Veracidade dos Dados e Responsabilidade do Monitor"}</h2>
         <p>
           {isEn 
-            ? "As a user of this portal, you are strictly responsible for ensuring that all information provided (age, experience, certificates) is 100% accurate and truthful." 
-            : "O utilizador é inteira e estritamente responsável por garantir que toda a informação fornecida no seu perfil (idade, experiência, habilitações e certificados) é 100% verdadeira e exata."}
+            ? "The Monitor is strictly and exclusively responsible for ensuring that all data provided (including age, experience, and certificates) is entirely accurate." 
+            : "O Monitor é o único e exclusivo responsável por garantir e atestar que toda a informação submetida no seu perfil (idade, experiência, identificação e certificações) é absolutamente verdadeira e legalmente válida."}
         </p>
         <p>
           {isEn 
-            ? "Falsifying certificates (such as First Aid or Lifeguard) or misrepresenting your age may lead to immediate account termination and potential legal consequences if accidents occur during a camp." 
-            : "A falsificação de certificados (como Socorrismo, IPDJ ou Nadador Salvador) ou a adulteração da data de nascimento resultará no cancelamento imediato da conta e poderá acarretar severas consequências criminais caso ocorram incidentes durante a prestação do serviço."}
+            ? "Any falsification of documents, specifically First Aid, Lifeguard, or IPDJ certificates, will result in immediate account termination and potential legal prosecution." 
+            : "A inserção de dados falsos, bem como a falsificação ou adulteração de documentos e certificações (tais como certificados do IPDJ, Socorrismo ou Nadador Salvador), resultará na eliminação imediata da conta do monitor e no direito da HelloCamp em reportar o incidente às autoridades criminais competentes."}
         </p>
 
-        <h2>{isEn ? "3. Camp Organizer's Responsibilities (Validation)" : "3. Responsabilidade Exclusiva da Entidade Organizadora"}</h2>
+        <h2>{isEn ? "3. Validation and Recruitment (Camp's Responsibility)" : "3. Verificação de Dados e Recrutamento (Responsabilidade do Campo)"}</h2>
         <p>
           {isEn 
-            ? "HelloCamp does not guarantee the quality or legality of the monitors. It is the absolute responsibility of the Camp Organizer to:" 
-            : "A HelloCamp não afiança a qualidade, idoneidade ou legalidade dos monitores. É da exclusiva responsabilidade da Entidade Organizadora do Campo de Férias:"}
+            ? "HelloCamp does NOT verify, validate, or background check the documents or profiles submitted by monitors. The entire hiring and vetting process is external to HelloCamp." 
+            : "A HelloCamp NÃO verifica, NÃO valida, e NÃO garante a autenticidade dos documentos, identidades ou certificados inseridos pelos monitores. O processo de seleção e recrutamento é inteiramente alheio à HelloCamp."}
+        </p>
+        <p>
+          {isEn 
+            ? "It is the sole legal responsibility of the Camp Organizer to:" 
+            : "Cabe única e exclusivamente à entidade organizadora (quem tenciona contratar o monitor) a obrigação de:"}
         </p>
         <ul>
-          <li>{isEn ? "Conduct formal job interviews." : "Realizar as respetivas entrevistas de seleção e recrutamento."}</li>
-          <li>{isEn ? "Verify original certificates and documents." : "Validar a autenticidade de todos os certificados submetidos na plataforma."}</li>
-          <li><strong>{isEn ? "Require a Clean Criminal Record." : "Exigir o Registo Criminal obrigatório."}</strong> {isEn ? "By law, anyone working with minors must provide a clean criminal record before starting." : "Nos termos da Lei Portuguesa, a entidade organizadora tem a obrigação inegável de solicitar e verificar o Registo Criminal (com a menção para o contacto com menores) de todos os monitores antes do início de qualquer atividade."}</li>
+          <li>{isEn ? "Conduct all job interviews and capability assessments." : "Conduzir as respetivas entrevistas e avaliações de competências."}</li>
+          <li>{isEn ? "Examine and validate all original certificates and professional licenses." : "Exigir e validar presencialmente todos os certificados, diplomas e licenças profissionais do monitor."}</li>
+          <li><strong>{isEn ? "Require the Criminal Record check." : "Exigir o Registo Criminal."}</strong> {isEn ? "In compliance with the law, the hiring entity must verify the monitor's clean criminal record (for contact with minors) before any work begins." : "Em estrito cumprimento da lei, é a entidade organizadora que tem a obrigação legal inalienável de solicitar, recolher e analisar o Registo Criminal do monitor (com a menção obrigatória para o contacto com menores) antes do início de qualquer atividade em campo."}</li>
         </ul>
 
-        <h2>{isEn ? "4. Limitation of Liability" : "4. Isenção Absoluta de Responsabilidade"}</h2>
+        <h2>{isEn ? "4. Absolute Exemption of Liability" : "4. Isenção Absoluta de Responsabilidade da HelloCamp"}</h2>
         <p>
           {isEn 
-            ? "HelloCamp, its founders, and employees shall not be held liable for any disputes, unpaid wages, accidents, unfulfilled contracts, or legal infractions occurring between monitors and camps." 
-            : "A HelloCamp, os seus fundadores e colaboradores não se responsabilizam, sob nenhuma circunstância, por litígios, falhas de pagamento, acidentes de trabalho, incumprimento de contratos laborais, ou infrações legais (incluindo falhas na verificação do Registo Criminal) que ocorram entre os monitores e as entidades parceiras."}
+            ? "HelloCamp, its founders, and administrators shall not be held liable, under any legal theory, for conflicts arising between monitors and hiring camps." 
+            : "A plataforma HelloCamp, a sua empresa detentora, os seus fundadores e administradores isentam-se, de forma absoluta e incondicional, de qualquer responsabilidade civil, criminal ou laboral decorrente das interações e contratos firmados entre os monitores e as entidades organizadoras."}
         </p>
         <p>
           {isEn 
-            ? "Any legal or labor conflict must be resolved directly between the hired monitor and the hiring camp entity." 
-            : "Qualquer conflito de natureza laboral, cível ou criminal deverá ser resolvido direta e exclusivamente entre o monitor contratado e a entidade organizadora."}
+            ? "Any issue regarding unpaid wages, workplace accidents, contract breaches, or legal infractions must be resolved directly between the Monitor and the Camp Organizer." 
+            : "A HelloCamp não se responsabiliza por litígios, falhas no pagamento de honorários, acidentes de trabalho, incumprimento de funções, ou falhas na verificação legal de documentos por parte dos campos. Todo e qualquer conflito deverá ser resolvido direta e exclusivamente entre o Monitor e a Entidade Contratante."}
         </p>
 
       </article>

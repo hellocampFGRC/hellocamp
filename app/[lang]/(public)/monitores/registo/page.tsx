@@ -3,6 +3,7 @@
 import React, { useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function RegistoMonitorPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
@@ -13,6 +14,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   const [submitting, setSubmitting] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoUrl, setFotoUrl] = useState<string>("");
+  const [termosAceites, setTermosAceites] = useState(false);
 
   const [formData, setFormData] = useState({
     nome_completo: "",
@@ -105,10 +107,10 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   const toggleDiaCalendario = (dataISO: string) => {
     setCalendario(prev => {
       const atual = prev[dataISO];
-      if (!atual) return { ...prev, [dataISO]: 'Livre' }; // Click 1: Livre (Verde)
-      if (atual === 'Livre') return { ...prev, [dataISO]: 'Ocupado' }; // Click 2: Ocupado (Vermelho)
+      if (!atual) return { ...prev, [dataISO]: 'Livre' };
+      if (atual === 'Livre') return { ...prev, [dataISO]: 'Ocupado' };
       const novo = { ...prev };
-      delete novo[dataISO]; // Click 3: Limpa (Branco)
+      delete novo[dataISO];
       return novo;
     });
   };
@@ -119,16 +121,14 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     
     const diasNoMes = new Date(ano, mes + 1, 0).getDate();
     const primeiroDia = new Date(ano, mes, 1).getDay();
-    const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1; // Ajustar para Segunda-feira ser o dia 0
+    const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1;
 
     const dias = [];
     
-    // Espaços vazios antes do dia 1
     for (let i = 0; i < startDayIndex; i++) {
       dias.push(<div key={`empty-${i}`} className="p-2"></div>);
     }
 
-    // Dias do mês
     for (let i = 1; i <= diasNoMes; i++) {
       const dataStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       const estadoDia = calendario[dataStr];
@@ -160,6 +160,12 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   // --- SUBMISSÃO ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!termosAceites) {
+      alert(isEn ? "You must accept the Terms and Conditions." : "Tem de aceitar os Termos e Condições para continuar.");
+      return;
+    }
+
     setSubmitting(true);
 
     if (areasAtuacao.length === 0) {
@@ -201,7 +207,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   const selectClass = "w-full py-3 px-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-bold text-slate-700 outline-none focus:bg-white focus:border-emerald-500 appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1.25rem_center] bg-no-repeat";
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 py-12 px-4 md:px-8 font-sans">
+    <div className="w-full flex-1 bg-slate-50 text-slate-900 py-12 px-4 md:px-8 font-sans">
       <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-[2rem] shadow-xl overflow-hidden">
         
         {/* BANNER SUPERIOR */}
@@ -283,7 +289,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
             </h3>
             
             <div className="mb-6 relative">
-              <label className={labelClass}>{isEn ? "Where do you currently live?" : "Onde resides atualmente?"}</label>
+              <label className={labelClass}>{isEn ? "Where do you currently live?" : "Onde reside atualmente?"}</label>
               <select required className={selectClass} value={formData.distrito_residencia} onChange={e => setFormData({...formData, distrito_residencia: e.target.value})}>
                 <option value="">{isEn ? "Select..." : "Selecionar..."}</option>
                 {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
@@ -291,8 +297,8 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
             </div>
 
             <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-              <label className={labelClass}>{isEn ? "Where are you willing to work?" : "Em que zonas estás disponível para trabalhar?"}</label>
-              <p className="text-xs text-slate-500 font-medium mb-5">{isEn ? "You can select multiple zones, including 'Nationwide if accommodation is provided'." : "Podes selecionar múltiplas opções. Muitos campos fora da tua área de residência oferecem dormida e alimentação."}</p>
+              <label className={labelClass}>{isEn ? "Where are you willing to work?" : "Em que zonas está disponível para trabalhar?"}</label>
+              <p className="text-xs text-slate-500 font-medium mb-5">{isEn ? "You can select multiple zones, including 'Nationwide if accommodation is provided'." : "Pode selecionar múltiplas opções. Muitos campos fora da área de residência oferecem dormida e alimentação."}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {opcoesAtuacao.map(zona => (
                   <label key={zona} className={`flex items-start gap-3 p-3 bg-white border rounded-xl cursor-pointer hover:border-emerald-300 transition-colors select-none ${areasAtuacao.includes(zona) ? 'border-emerald-500 ring-1 ring-emerald-500 shadow-sm' : 'border-slate-200'}`}>
@@ -312,7 +318,6 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
             
             <div className="mb-6 relative max-w-sm">
               <label className={labelClass}>{isEn ? "Years of Experience" : "Anos de Experiência na Área"}</label>
-              {/* O select agora tem a classe text-sm para garantir a fonte pequena nas opções */}
               <select className={`${selectClass} text-sm`} value={formData.experiencia_anos} onChange={e => setFormData({...formData, experiencia_anos: e.target.value})}>
                 <option value="0" className="text-sm">{isEn ? "First Time / No experience" : "Nenhuma / Primeira vez"}</option>
                 <option value="1-2" className="text-sm">1-2 {isEn ? "years" : "anos"}</option>
@@ -339,15 +344,13 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
             </div>
           </div>
 
-          {/* SECÇÃO 4: DISPONIBILIDADE (EPOCAS + CALENDÁRIO) */}
+          {/* SECÇÃO 4: DISPONIBILIDADE E PITCH */}
           <div>
             <h3 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6">
               {isEn ? "4. Availability & Pitch" : "4. Disponibilidade e Apresentação"}
             </h3>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              
-              {/* Épocas Gerais */}
               <div>
                 <label className={labelClass}>{isEn ? "General Availability" : "Disponibilidade Geral"}</label>
                 <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "Select the school holidays you are usually free." : "Selecione as interrupções letivas onde tem interesse em trabalhar."}</p>
@@ -361,13 +364,11 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                 </div>
               </div>
 
-              {/* Calendário Interativo Estilo Airbnb */}
               <div>
                 <label className={labelClass}>{isEn ? "Specific Calendar" : "Calendário Específico (Opcional)"}</label>
                 <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "Click days to mark: Green (Available) or Red (Busy)." : "Clique nos dias para marcar: 1x Livre (Verde), 2x Ocupado (Vermelho)."}</p>
                 
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm select-none">
-                  {/* Navegação do Calendário */}
                   <div className="flex justify-between items-center mb-4">
                     <button type="button" onClick={() => mudarMes(-1)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 font-bold">&larr;</button>
                     <span className="text-sm font-black text-slate-800 uppercase tracking-widest">
@@ -375,47 +376,60 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                     </span>
                     <button type="button" onClick={() => mudarMes(1)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 font-bold">&rarr;</button>
                   </div>
-                  
-                  {/* Cabeçalho dos Dias da Semana */}
                   <div className="grid grid-cols-7 gap-1 mb-2 text-center">
                     {diasDaSemana.map(d => <span key={d} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{d}</span>)}
                   </div>
-                  
-                  {/* Grelha de Dias (Gerada Dinamicamente) */}
                   <div className="grid grid-cols-7 gap-1">
                     {renderDiasCalendario()}
                   </div>
-                  
-                  {/* Legenda */}
                   <div className="mt-4 flex gap-4 justify-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-100 border border-emerald-500 inline-block"></span> Livre</span>
                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-100 border border-red-500 inline-block"></span> Ocupado</span>
                   </div>
                 </div>
               </div>
-
             </div>
 
             <div>
-              <label className={labelClass}>{isEn ? "Short Bio / Pitch" : "A tua Bio / Carta de Apresentação"}</label>
-              <p className="text-xs text-slate-500 font-medium mb-2">{isEn ? "Write a short paragraph about why you're a great fit." : "O que é que as empresas vão ler sobre ti? Quais são os teus pontos fortes e dinâmicas que gostas de organizar?"}</p>
-              <textarea rows={5} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm resize-none" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} placeholder={isEn ? "Hi! I'm energetic and love working with kids..." : "Sou um jovem super dinâmico, adoro desporto e tenho muita facilidade em cativar grupos grandes..."} />
+              <label className={labelClass}>{isEn ? "Short Bio / Pitch" : "A sua Bio / Carta de Apresentação"}</label>
+              <p className="text-xs text-slate-500 font-medium mb-2">{isEn ? "Write a short paragraph about why you're a great fit." : "O que é que as empresas vão ler sobre o monitor? Quais são os seus pontos fortes e dinâmicas que gosta de organizar?"}</p>
+              <textarea rows={5} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm resize-none" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} placeholder={isEn ? "Hi! I'm energetic and love working with kids..." : "Sou um monitor super dinâmico, adoro desporto e tenho muita facilidade em cativar grupos grandes..."} />
             </div>
           </div>
 
-          {/* BOTÃO SUBMIT */}
-          <div className="pt-6 border-t border-slate-200 flex justify-end">
-            <button 
-              type="submit" 
-              disabled={submitting} 
-              className="w-full sm:w-auto bg-emerald-600 text-white font-black uppercase tracking-widest text-xs px-10 py-4 rounded-xl shadow-lg hover:bg-emerald-700 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none cursor-pointer"
-            >
-              {submitting ? (isEn ? "Saving Profile..." : "A Guardar e Publicar...") : (isEn ? "Publish My Profile" : "Publicar o meu Perfil")}
-            </button>
+          {/* TERMOS E SUBMISSÃO */}
+          <div className="pt-8 border-t border-slate-200">
+            
+            <label className="flex items-start gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
+              <input 
+                type="checkbox" 
+                required
+                checked={termosAceites}
+                onChange={(e) => setTermosAceites(e.target.checked)}
+                className="mt-0.5 w-5 h-5 accent-emerald-600 cursor-pointer flex-shrink-0"
+              />
+              <span className="text-xs md:text-sm font-medium text-slate-700 leading-relaxed">
+                {isEn ? (
+                  <>I declare that the information provided is completely true. I also acknowledge that I have read and agree to the <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-emerald-600 font-bold hover:underline">Terms & Conditions</Link> regarding the use of this portal.</>
+                ) : (
+                  <>Declaro sob compromisso de honra que todas as informações e documentos aqui fornecidos são verdadeiros. Tomei conhecimento e aceito expressamente os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-emerald-600 font-bold hover:underline">Termos e Condições</Link> da plataforma HelloCamp.</>
+                )}
+              </span>
+            </label>
+
+            <div className="flex justify-end">
+              <button 
+                type="submit" 
+                disabled={submitting || !termosAceites} 
+                className="w-full sm:w-auto bg-emerald-600 text-white font-black uppercase tracking-widest text-xs px-10 py-4 rounded-xl shadow-lg hover:bg-emerald-700 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none cursor-pointer"
+              >
+                {submitting ? (isEn ? "Saving Profile..." : "A Guardar e Publicar...") : (isEn ? "Publish My Profile" : "Publicar o meu Perfil")}
+              </button>
+            </div>
           </div>
 
         </form>
       </div>
-    </main>
+    </div>
   );
 }
