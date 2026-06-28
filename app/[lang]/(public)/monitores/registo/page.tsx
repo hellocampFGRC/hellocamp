@@ -9,7 +9,11 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   const isEn = lang === 'en';
   const router = useRouter();
 
+  // --- ESTADOS GERAIS ---
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [fotoUrl, setFotoUrl] = useState<string>("");
+
   const [formData, setFormData] = useState({
     nome_completo: "",
     data_nascimento: "",
@@ -17,21 +21,35 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     email: "",
     distrito_residencia: "",
     experiencia_anos: "0",
-    bio: "",
-    fotografia_url: "",
-    cv_url: ""
+    outras_competencias: "",
+    bio: ""
   });
 
   const [certificacoes, setCertificacoes] = useState<string[]>([]);
-  const [disponibilidade, setDisponibilidade] = useState<string[]>([]);
+  const [disponibilidadeEpocas, setDisponibilidadeEpocas] = useState<string[]>([]);
+  const [areasAtuacao, setAreasAtuacao] = useState<string[]>([]);
 
+  // --- ESTADOS DO CALENDÁRIO INTERATIVO ---
+  const [dataVisualizada, setDataVisualizada] = useState(new Date());
+  const [calendario, setCalendario] = useState<Record<string, 'Livre' | 'Ocupado'>>({});
+
+  // --- LISTAS DE DADOS ---
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
   
+  const opcoesAtuacao = [
+    ...distritosPT,
+    "Em todo o país (Com Alojamento / Deslocação)"
+  ];
+
   const listaCertificados = [
     { id: "IPDJ", pt: "Monitor de Campos de Férias (IPDJ)", en: "Camp Monitor (IPDJ)" },
-    { id: "Socorrismo", pt: "Primeiros Socorros / Socorrismo", en: "First Aid" },
+    { id: "Socorrismo", pt: "Primeiros Socorros / Suporte Básico", en: "First Aid / Basic Life Support" },
     { id: "Nadador", pt: "Nadador Salvador", en: "Lifeguard" },
-    { id: "Professor", pt: "Formação em Educação / Desporto", en: "Education / Sports Degree" }
+    { id: "Professor", pt: "Formação em Educação / Desporto", en: "Education / Sports Degree" },
+    { id: "Animacao", pt: "Animação Sociocultural", en: "Sociocultural Animation" },
+    { id: "Linguas", pt: "Fluência em Línguas Estrangeiras", en: "Foreign Languages Fluency" },
+    { id: "Artes", pt: "Artes Plásticas / Música / Teatro", en: "Arts / Music / Theater" },
+    { id: "NEE", pt: "Experiência com Necessidades Educativas Especiais", en: "Special Needs Experience" }
   ];
 
   const listaEpocas = [
@@ -40,52 +58,151 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     { id: "Natal", pt: "Férias de Natal", en: "Christmas Break" }
   ];
 
-  const handleCheckboxChange = (id: string, tipo: "cert" | "disp") => {
+  // --- HANDLERS (CHECKBOXES) ---
+  const handleCheckboxChange = (id: string, tipo: "cert" | "disp" | "zona") => {
     if (tipo === "cert") {
       setCertificacoes(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    } else {
-      setDisponibilidade(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    } else if (tipo === "disp") {
+      setDisponibilidadeEpocas(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    } else if (tipo === "zona") {
+      setAreasAtuacao(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     }
   };
 
+  // --- HANDLER UPLOAD FOTO (NATIVO SUPABASE) ---
+  const handleUploadFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingFoto(true);
+      if (!event.target.files || event.target.files.length === 0) {
+        throw new Error('Deve selecionar uma imagem.');
+      }
+
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('monitores-fotos')
+        .upload(filePath, file, { upsert: false });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('monitores-fotos').getPublicUrl(filePath);
+      setFotoUrl(urlData.publicUrl);
+    } catch (error: any) {
+      alert((isEn ? 'Error uploading photo: ' : 'Erro no upload da foto: ') + error.message);
+    } finally {
+      setUploadingFoto(false);
+    }
+  };
+
+  // --- LÓGICA DO CALENDÁRIO INTERATIVO ---
+  const mudarMes = (incremento: number) => {
+    setDataVisualizada(prev => new Date(prev.getFullYear(), prev.getMonth() + incremento, 1));
+  };
+
+  const toggleDiaCalendario = (dataISO: string) => {
+    setCalendario(prev => {
+      const atual = prev[dataISO];
+      if (!atual) return { ...prev, [dataISO]: 'Livre' }; // Click 1: Livre (Verde)
+      if (atual === 'Livre') return { ...prev, [dataISO]: 'Ocupado' }; // Click 2: Ocupado (Vermelho)
+      const novo = { ...prev };
+      delete novo[dataISO]; // Click 3: Limpa (Branco)
+      return novo;
+    });
+  };
+
+  const renderDiasCalendario = () => {
+    const ano = dataVisualizada.getFullYear();
+    const mes = dataVisualizada.getMonth();
+    
+    const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+    const primeiroDia = new Date(ano, mes, 1).getDay();
+    const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1; // Ajustar para Segunda-feira ser o dia 0
+
+    const dias = [];
+    
+    // Espaços vazios antes do dia 1
+    for (let i = 0; i < startDayIndex; i++) {
+      dias.push(<div key={`empty-${i}`} className="p-2"></div>);
+    }
+
+    // Dias do mês
+    for (let i = 1; i <= diasNoMes; i++) {
+      const dataStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      const estadoDia = calendario[dataStr];
+      
+      let coresClasses = "bg-white border-slate-200 text-slate-700 hover:bg-slate-100";
+      if (estadoDia === 'Livre') coresClasses = "bg-emerald-100 border-emerald-500 text-emerald-800 font-black shadow-inner";
+      if (estadoDia === 'Ocupado') coresClasses = "bg-red-100 border-red-500 text-red-800 font-black opacity-80 line-through";
+
+      dias.push(
+        <button
+          key={dataStr}
+          type="button"
+          onClick={() => toggleDiaCalendario(dataStr)}
+          className={`h-10 w-full rounded-lg border text-sm transition-all duration-200 flex items-center justify-center cursor-pointer ${coresClasses}`}
+        >
+          {i}
+        </button>
+      );
+    }
+    return dias;
+  };
+
+  const mesesNomes = isEn 
+    ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    : ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  
+  const diasDaSemana = isEn ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+  // --- SUBMISSÃO ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+
+    if (areasAtuacao.length === 0) {
+      alert(isEn ? "Please select at least one work area." : "Por favor, selecione pelo menos uma zona de atuação.");
+      setSubmitting(false); return;
+    }
 
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session) {
       alert(isEn ? "Please log in or create an account first." : "Por favor, inicie sessão ou crie uma conta primeiro.");
-      router.push(`/${lang}/login?redirectTo=monitores/registo`);
-      setSubmitting(false);
-      return;
+      router.push(`/${lang}/monitores/login?redirectTo=monitores/registo`);
+      setSubmitting(false); return;
     }
 
     const payload = {
       id: session.user.id,
       ...formData,
+      fotografia_url: fotoUrl,
       certificacoes,
-      disponibilidade
+      disponibilidade: disponibilidadeEpocas,
+      areas_atuacao: areasAtuacao,
+      calendario_disponibilidade: calendario
     };
 
     const { error } = await supabase.from("monitores").insert([payload]);
 
     if (error) {
-      alert(isEn ? "Error saving profile: " : "Erro ao guardar perfil: " + error.message);
+      alert((isEn ? "Error saving profile: " : "Erro ao guardar perfil: ") + error.message);
       setSubmitting(false);
     } else {
-      alert(isEn ? "Profile published successfully!" : "Perfil publicado com sucesso na Bolsa de Monitores!");
-      router.push(`/${lang}/monitores/sucesso`);
+      router.push(`/${lang}/monitores/portal/perfil`);
     }
   };
 
-  const labelClass = "text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 block";
-  const inputClass = "w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-xl text-base font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm";
-  const selectClass = "w-full py-3 px-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-base font-bold text-slate-700 outline-none focus:bg-white focus:border-emerald-500 appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1.25rem_center] bg-no-repeat";
+  // --- CLASSES CSS COMUNS ---
+  const labelClass = "text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 block";
+  const inputClass = "w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm";
+  const selectClass = "w-full py-3 px-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-bold text-slate-700 outline-none focus:bg-white focus:border-emerald-500 appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1.25rem_center] bg-no-repeat";
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 py-12 px-4 md:px-8 font-sans">
-      <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-[2rem] shadow-xl overflow-hidden">
+      <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-[2rem] shadow-xl overflow-hidden">
         
         {/* BANNER SUPERIOR */}
         <div className="bg-emerald-900 text-white p-8 md:p-12 relative overflow-hidden">
@@ -99,18 +216,46 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
           <p className="text-sm md:text-base text-emerald-100 font-medium m-0 leading-relaxed max-w-xl">
             {isEn 
               ? "Publish your availability, experience, and certificates so hundreds of verified camps can find and hire you directly." 
-              : "Cria o teu perfil, define a tua disponibilidade e competências, e sê encontrado diretamente pelas centenas de entidades organizadoras que usam a nossa plataforma."}
+              : "Cria o teu perfil, define a tua disponibilidade no calendário, e sê encontrado diretamente pelas entidades organizadoras."}
           </p>
         </div>
 
         {/* FORMULÁRIO */}
-        <form onSubmit={handleSubmit} className="p-8 md:p-12 space-y-8">
+        <form onSubmit={handleSubmit} className="p-6 md:p-12 space-y-10">
           
-          {/* SECÇÃO 1: Identificação Basica */}
+          {/* SECÇÃO 1: FOTO & IDENTIFICAÇÃO BÁSICA */}
           <div>
-            <h3 className="text-lg font-black text-slate-900 border-b border-slate-100 pb-3 mb-5">
-              {isEn ? "1. Personal Information" : "1. Informação Pessoal"}
+            <h3 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6">
+              {isEn ? "1. Personal Profile" : "1. O teu Perfil Pessoal"}
             </h3>
+            
+            <div className="mb-8 flex flex-col sm:flex-row items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-200">
+              <div className="w-24 h-24 rounded-full bg-white border-4 border-slate-100 shadow-sm overflow-hidden flex items-center justify-center flex-shrink-0 relative">
+                {fotoUrl ? (
+                  <img src={fotoUrl} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl text-slate-300">📸</span>
+                )}
+                {uploadingFoto && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div></div>}
+              </div>
+              <div className="flex-1 text-center sm:text-left">
+                <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Profile Picture" : "Fotografia de Rosto"}</label>
+                <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "Camps prefer profiles with clear photos." : "Um perfil com fotografia atrai 3x mais propostas de recrutamento."}</p>
+                <div className="relative inline-block">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleUploadFoto} 
+                    disabled={uploadingFoto}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <button type="button" className="bg-white border border-slate-300 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 transition-colors pointer-events-none">
+                    {uploadingFoto ? (isEn ? "Uploading..." : "A carregar...") : (isEn ? "Choose from device" : "Escolher Imagem (Dispositivo)")}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="sm:col-span-2">
                 <label className={labelClass}>{isEn ? "Full Name" : "Nome Completo"}</label>
@@ -124,83 +269,148 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                 <label className={labelClass}>{isEn ? "Phone Number" : "Contacto Telefónico"}</label>
                 <input type="tel" required className={inputClass} value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} placeholder="912 345 678" />
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <label className={labelClass}>{isEn ? "Email Address" : "E-mail de Contacto"}</label>
                 <input type="email" required className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="joao.martins@email.com" />
-              </div>
-              <div className="relative">
-                <label className={labelClass}>{isEn ? "District of Residence" : "Distrito de Residência"}</label>
-                <select required className={selectClass} value={formData.distrito_residencia} onChange={e => setFormData({...formData, distrito_residencia: e.target.value})}>
-                  <option value="">{isEn ? "Select..." : "Selecionar..."}</option>
-                  {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
               </div>
             </div>
           </div>
 
-          {/* SECÇÃO 2: Experiência e Certificados */}
+          {/* SECÇÃO 2: LOCALIZAÇÃO & ATUAÇÃO */}
           <div>
-            <h3 className="text-lg font-black text-slate-900 border-b border-slate-100 pb-3 mb-5">
-              {isEn ? "2. Qualifications & Experience" : "2. Qualificações e Experiência"}
+            <h3 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6">
+              {isEn ? "2. Location & Work Areas" : "2. Zonas de Atuação"}
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 items-end mb-6">
-              <div className="sm:col-span-1 relative">
-                <label className={labelClass}>{isEn ? "Years of Experience" : "Anos de Experiência"}</label>
-                <select className={selectClass} value={formData.experiencia_anos} onChange={e => setFormData({...formData, experiencia_anos: e.target.value})}>
-                  <option value="0">{isEn ? "First Time / No experience" : "Nenhuma / Primeira vez"}</option>
-                  <option value="1-2">1-2 {isEn ? "years" : "anos"}</option>
-                  <option value="3-5">3-5 {isEn ? "years" : "anos"}</option>
-                  <option value="+5">+5 {isEn ? "years" : "anos"}</option>
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass}>{isEn ? "Photo URL (Optional)" : "Hiperligação da tua Foto (Opcional)"}</label>
-                <input type="url" className={inputClass} value={formData.fotografia_url} onChange={e => setFormData({...formData, fotografia_url: e.target.value})} placeholder="https://..." />
-              </div>
+            
+            <div className="mb-6 relative">
+              <label className={labelClass}>{isEn ? "Where do you currently live?" : "Onde resides atualmente?"}</label>
+              <select required className={selectClass} value={formData.distrito_residencia} onChange={e => setFormData({...formData, distrito_residencia: e.target.value})}>
+                <option value="">{isEn ? "Select..." : "Selecionar..."}</option>
+                {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
             </div>
 
-            {/* Checkboxes de Certificações */}
-            <div className="mb-4">
-              <label className={labelClass}>{isEn ? "Certificates & Training" : "Certificações e Formações Extra"}</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                {listaCertificados.map(c => (
-                  <label key={c.id} className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors select-none">
-                    <input type="checkbox" checked={certificacoes.includes(c.id)} onChange={() => handleCheckboxChange(c.id, "cert")} className="w-4 h-4 accent-emerald-600 cursor-pointer" />
-                    <span className="text-sm font-bold text-slate-700">{isEn ? c.en : c.pt}</span>
+            <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
+              <label className={labelClass}>{isEn ? "Where are you willing to work?" : "Em que zonas estás disponível para trabalhar?"}</label>
+              <p className="text-xs text-slate-500 font-medium mb-5">{isEn ? "You can select multiple zones, including 'Nationwide if accommodation is provided'." : "Podes selecionar múltiplas opções. Muitos campos fora da tua área de residência oferecem dormida e alimentação."}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {opcoesAtuacao.map(zona => (
+                  <label key={zona} className={`flex items-start gap-3 p-3 bg-white border rounded-xl cursor-pointer hover:border-emerald-300 transition-colors select-none ${areasAtuacao.includes(zona) ? 'border-emerald-500 ring-1 ring-emerald-500 shadow-sm' : 'border-slate-200'}`}>
+                    <input type="checkbox" checked={areasAtuacao.includes(zona)} onChange={() => handleCheckboxChange(zona, "zona")} className="mt-0.5 w-4 h-4 accent-emerald-600 cursor-pointer" />
+                    <span className="text-xs font-bold text-slate-700 leading-tight">{zona}</span>
                   </label>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* SECÇÃO 3: Disponibilidade e Apresentação */}
+          {/* SECÇÃO 3: EXPERIÊNCIA E COMPETÊNCIAS */}
           <div>
-            <h3 className="text-lg font-black text-slate-900 border-b border-slate-100 pb-3 mb-5">
-              {isEn ? "3. Availability & Pitch" : "3. Disponibilidade e Apresentação"}
+            <h3 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6">
+              {isEn ? "3. Experience & Skills" : "3. Experiência e Competências"}
             </h3>
             
+            <div className="mb-6 relative max-w-sm">
+              <label className={labelClass}>{isEn ? "Years of Experience" : "Anos de Experiência na Área"}</label>
+              {/* O select agora tem a classe text-sm para garantir a fonte pequena nas opções */}
+              <select className={`${selectClass} text-sm`} value={formData.experiencia_anos} onChange={e => setFormData({...formData, experiencia_anos: e.target.value})}>
+                <option value="0" className="text-sm">{isEn ? "First Time / No experience" : "Nenhuma / Primeira vez"}</option>
+                <option value="1-2" className="text-sm">1-2 {isEn ? "years" : "anos"}</option>
+                <option value="3-5" className="text-sm">3-5 {isEn ? "years" : "anos"}</option>
+                <option value="+5" className="text-sm">+5 {isEn ? "years" : "anos"}</option>
+              </select>
+            </div>
+
             <div className="mb-6">
-              <label className={labelClass}>{isEn ? "When are you available to work?" : "Em que interrupções letivas podes trabalhar?"}</label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
-                {listaEpocas.map(e => (
-                  <label key={e.id} className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors select-none">
-                    <input type="checkbox" checked={disponibilidade.includes(e.id)} onChange={() => handleCheckboxChange(e.id, "disp")} className="w-4 h-4 accent-emerald-600 cursor-pointer" />
-                    <span className="text-sm font-bold text-slate-700">{isEn ? e.en : e.pt}</span>
+              <label className={labelClass}>{isEn ? "Certificates & Core Skills" : "Certificações e Habilidades Base"}</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                {listaCertificados.map(c => (
+                  <label key={c.id} className={`flex items-center gap-3 p-3 bg-white border rounded-xl cursor-pointer transition-colors select-none ${certificacoes.includes(c.id) ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <input type="checkbox" checked={certificacoes.includes(c.id)} onChange={() => handleCheckboxChange(c.id, "cert")} className="w-4 h-4 accent-emerald-600 cursor-pointer" />
+                    <span className="text-xs font-bold text-slate-700">{isEn ? c.en : c.pt}</span>
                   </label>
                 ))}
               </div>
             </div>
 
             <div>
-              <label className={labelClass}>{isEn ? "Short Bio / Pitch" : "A tua Bio / Carta de Apresentação (O que os campos vão ler)"}</label>
-              <textarea rows={4} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-base font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm resize-none" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} placeholder={isEn ? "Tell us about your experience with children, your skills, motivations..." : "Conta-nos um pouco sobre a tua experiência a liderar grupos de miúdos, os teus pontos fortes, hobbies úteis para campos, etc..."} />
+              <label className={labelClass}>{isEn ? "Other relevant skills (Optional)" : "Outras Competências / Talentos (Opcional)"}</label>
+              <input type="text" className={inputClass} value={formData.outras_competencias} onChange={e => setFormData({...formData, outras_competencias: e.target.value})} placeholder={isEn ? "E.g. Yoga instructor, DJ, Photography..." : "Ex: Toco viola, Instrutor de Yoga, Dança, Fotografia..."} />
+            </div>
+          </div>
+
+          {/* SECÇÃO 4: DISPONIBILIDADE (EPOCAS + CALENDÁRIO) */}
+          <div>
+            <h3 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6">
+              {isEn ? "4. Availability & Pitch" : "4. Disponibilidade e Apresentação"}
+            </h3>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              
+              {/* Épocas Gerais */}
+              <div>
+                <label className={labelClass}>{isEn ? "General Availability" : "Disponibilidade Geral"}</label>
+                <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "Select the school holidays you are usually free." : "Selecione as interrupções letivas onde tem interesse em trabalhar."}</p>
+                <div className="flex flex-col gap-3">
+                  {listaEpocas.map(e => (
+                    <label key={e.id} className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors select-none">
+                      <input type="checkbox" checked={disponibilidadeEpocas.includes(e.id)} onChange={() => handleCheckboxChange(e.id, "disp")} className="w-4 h-4 accent-emerald-600 cursor-pointer" />
+                      <span className="text-sm font-bold text-slate-700">{isEn ? e.en : e.pt}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Calendário Interativo Estilo Airbnb */}
+              <div>
+                <label className={labelClass}>{isEn ? "Specific Calendar" : "Calendário Específico (Opcional)"}</label>
+                <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "Click days to mark: Green (Available) or Red (Busy)." : "Clique nos dias para marcar: 1x Livre (Verde), 2x Ocupado (Vermelho)."}</p>
+                
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm select-none">
+                  {/* Navegação do Calendário */}
+                  <div className="flex justify-between items-center mb-4">
+                    <button type="button" onClick={() => mudarMes(-1)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 font-bold">&larr;</button>
+                    <span className="text-sm font-black text-slate-800 uppercase tracking-widest">
+                      {mesesNomes[dataVisualizada.getMonth()]} {dataVisualizada.getFullYear()}
+                    </span>
+                    <button type="button" onClick={() => mudarMes(1)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 font-bold">&rarr;</button>
+                  </div>
+                  
+                  {/* Cabeçalho dos Dias da Semana */}
+                  <div className="grid grid-cols-7 gap-1 mb-2 text-center">
+                    {diasDaSemana.map(d => <span key={d} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{d}</span>)}
+                  </div>
+                  
+                  {/* Grelha de Dias (Gerada Dinamicamente) */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {renderDiasCalendario()}
+                  </div>
+                  
+                  {/* Legenda */}
+                  <div className="mt-4 flex gap-4 justify-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                     <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-100 border border-emerald-500 inline-block"></span> Livre</span>
+                     <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-100 border border-red-500 inline-block"></span> Ocupado</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div>
+              <label className={labelClass}>{isEn ? "Short Bio / Pitch" : "A tua Bio / Carta de Apresentação"}</label>
+              <p className="text-xs text-slate-500 font-medium mb-2">{isEn ? "Write a short paragraph about why you're a great fit." : "O que é que as empresas vão ler sobre ti? Quais são os teus pontos fortes e dinâmicas que gostas de organizar?"}</p>
+              <textarea rows={5} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm resize-none" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} placeholder={isEn ? "Hi! I'm energetic and love working with kids..." : "Sou um jovem super dinâmico, adoro desporto e tenho muita facilidade em cativar grupos grandes..."} />
             </div>
           </div>
 
           {/* BOTÃO SUBMIT */}
-          <div className="pt-4 border-t border-slate-100 flex justify-end">
-            <button type="submit" disabled={submitting} className="w-full sm:w-auto bg-emerald-600 text-white font-black uppercase tracking-widest text-xs px-10 py-4 rounded-xl shadow-lg hover:bg-emerald-700 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none cursor-pointer">
-              {submitting ? (isEn ? "Publishing..." : "A publicar...") : (isEn ? "Publish Profile" : "Publicar o meu Perfil")}
+          <div className="pt-6 border-t border-slate-200 flex justify-end">
+            <button 
+              type="submit" 
+              disabled={submitting} 
+              className="w-full sm:w-auto bg-emerald-600 text-white font-black uppercase tracking-widest text-xs px-10 py-4 rounded-xl shadow-lg hover:bg-emerald-700 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none cursor-pointer"
+            >
+              {submitting ? (isEn ? "Saving Profile..." : "A Guardar e Publicar...") : (isEn ? "Publish My Profile" : "Publicar o meu Perfil")}
             </button>
           </div>
 
