@@ -6,15 +6,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import React from "react";
 
-export default function AssinaturaContratoPage({ params }: { params: Promise<{ lang: string, campoId: string }> }) {
-  const { lang, campoId } = use(params);
+export default function AssinaturaContratoGlobalPage({ params }: { params: Promise<{ lang: string }> }) {
+  const { lang } = use(params);
   const router = useRouter();
   const isEn = lang === 'en';
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [campo, setCampo] = useState<any>(null);
   const [perfil, setPerfil] = useState<any>(null);
+  const [totalCampos, setTotalCampos] = useState(0);
 
   // Variáveis do Contrato e Configurações da Base de Dados
   const [form, setForm] = useState({
@@ -41,28 +41,49 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push(`/${lang}/admin/login`); return; }
 
-      const { data: campoData } = await supabase.from('campos').select('*').eq('id', campoId).eq('organizador_id', session.user.id).single();
-      const { data: perfilData } = await supabase.from('perfis').select('*').eq('id', session.user.id).single();
+      const userId = session.user.id;
 
-      if (!campoData || !perfilData) {
-        alert("Acesso não autorizado ou campo inexistente.");
+      // Buscar perfil da Empresa
+      const { data: perfilData } = await supabase.from('perfis').select('*').eq('id', userId).single();
+      if (!perfilData) {
+        alert("Acesso não autorizado.");
         router.push(`/${lang}/admin/dashboard`);
         return;
       }
 
-      setCampo(campoData);
+      // Contar quantos campos esta empresa já tem criados
+      const { count } = await supabase.from('campos').select('*', { count: 'exact', head: true }).eq('organizador_id', userId);
+      
       setPerfil(perfilData);
-      
-      setForm(prev => ({
-        ...prev,
-        tipo_pagamento: campoData.tipo_pagamento || "",
-        politica_cancelamento: campoData.politica_cancelamento || ""
-      }));
-      
+      setTotalCampos(count || 0);
+
+      // Preencher o formulário caso o parceiro já tenha preenchido antes
+      if (perfilData.contrato_dados) {
+        const d = perfilData.contrato_dados;
+        setForm(prev => ({
+          ...prev,
+          pessoaContacto: d.pessoaContacto || "",
+          formaJuridica: d.formaJuridica || "",
+          morada: d.morada || "",
+          codigoPostal: d.codigoPostal || "",
+          telefone: d.telefone || "",
+          emailContacto: d.emailContacto || "",
+          emailReservas: d.emailReservas || "",
+          website: d.website || "",
+          responsavelRGPD: d.responsavelRGPD || "",
+          modalidadeReserva: d.modalidadeReserva || "",
+          tipo_pagamento: d.tipoPagamento || "",
+          politica_cancelamento: d.politicaCancelamento || "",
+          acordosComplementares: d.acordosComplementares || "",
+          assinaturaNome: d.assinaturaNome || "",
+          assinaturaCargo: d.assinaturaCargo || "",
+        }));
+      }
+
       setLoading(false);
     };
     fetchDados();
-  }, [campoId, lang, router]);
+  }, [lang, router]);
 
   const handleSubmeter = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,27 +115,36 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
       dataSubmissao: new Date().toISOString()
     };
 
-    // Grava o JSON e atualiza as colunas vitais para o Checkout e Portal dos Pais
-    const { error } = await supabase
+    // 1. Atualizar o Perfil da Empresa (Para que os futuros campos herdem este contrato)
+    const { error: perfilError } = await supabase
+      .from('perfis')
+      .update({
+         contrato_dados: payloadJSON,
+         status_contrato: 'Pendente de Revisão' // Adicione esta coluna na tabela perfis
+      })
+      .eq('id', perfil.id);
+
+    // 2. Atualizar TODOS os campos existentes desta empresa
+    const { error: camposError } = await supabase
       .from('campos')
       .update({
         contrato_dados: payloadJSON,
-        status_aprovacao: 'Pendente de Revisão',
+        status_aprovacao: 'Pendente',
         tipo_pagamento: form.tipo_pagamento,
         politica_cancelamento: form.politica_cancelamento
       })
-      .eq('id', campoId);
+      .eq('organizador_id', perfil.id);
 
-    if (error) {
-      alert("Erro ao submeter: " + error.message);
+    if (perfilError || camposError) {
+      alert("Erro ao submeter contrato.");
     } else {
-      alert("Contrato submetido com sucesso! A aguardar aprovação da equipa HelloCamp.");
+      alert("Contrato Global submetido com sucesso! A aguardar aprovação da equipa HelloCamp.");
       router.push(`/${lang}/admin/dashboard`);
     }
     setSubmitting(false);
   };
 
-  if (loading) return <div className="p-20 text-center font-bold text-slate-500">A processar documento legal...</div>;
+  if (loading) return <div className="p-20 text-center font-bold text-slate-500">A preparar o seu Contrato Global...</div>;
 
   const inputClass = "border-b border-gray-400 outline-none bg-transparent px-1 text-black placeholder:text-gray-400 w-full focus:border-black transition-colors";
   const dataAtual = new Date().toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -128,7 +158,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
             &larr; Voltar ao Painel
           </Link>
           <button onClick={handleSubmeter} disabled={submitting || !form.concordaTermos} className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md">
-            {submitting ? 'A submeter...' : 'Assinar e Submeter Contrato'}
+            {submitting ? 'A submeter...' : 'Assinar Contrato Global'}
           </button>
         </div>
 
@@ -139,10 +169,10 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
               <span className="text-black">Hello</span><span className="text-[#EBA914]">Camp</span>
             </div>
             <h1 className="text-2xl font-bold uppercase mb-2 tracking-widest border-b-2 border-black inline-block pb-2">
-              Contrato de Intermediação – HelloCamp
+              Contrato Global de Parceiro
             </h1>
             <p className="text-base italic text-gray-600 mt-4">
-              O seu contrato de parceria com a HelloCamp, explicado de forma simples e objetiva.
+              Um único acordo que abrange toda a sua operação na plataforma HelloCamp.
             </p>
           </div>
 
@@ -152,7 +182,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
               <div className="w-16 h-16 bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">📝</div>
               <div>
                 <h3 className="text-lg font-black uppercase text-slate-900 mb-2">1. Celebração do contrato</h3>
-                <p className="text-slate-600 text-justify leading-relaxed">Parabéns! Celebrou um contrato de parceria com a HelloCamp. Este contrato regula a divulgação e a intermediação das suas ofertas através da plataforma HelloCamp, estabelecendo os termos da colaboração entre ambas as partes. O acordo mantém-se válido até ao final do ano civil em curso, sendo automaticamente renovado por períodos sucessivos, salvo denúncia por qualquer uma das partes nos termos previstos contratualmente.</p>
+                <p className="text-slate-600 text-justify leading-relaxed">Celebraçaõ do contrato de parceria com a HelloCamp. Este contrato regula a divulgação e a intermediação das suas ofertas através da plataforma HelloCamp, estabelecendo os termos da colaboração entre ambas as partes. O acordo mantém-se válido até ao final do ano civil em curso, sendo automaticamente renovado por períodos sucessivos, salvo denúncia por qualquer uma das partes nos termos previstos contratualmente.</p>
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-6 items-start">
@@ -181,7 +211,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
           <div className="h-0.5 bg-black w-full my-16"></div>
 
           <div className="space-y-6 text-[15px] text-justify">
-            <h2 className="text-2xl font-bold text-center uppercase tracking-widest mb-10">Contrato de Intermediação</h2>
+            <h2 className="text-2xl font-bold text-center uppercase tracking-widest mb-10">Contrato Global de Intermediação</h2>
 
             <p className="mb-4">Entre:</p>
             <div className="ml-8 mb-8 space-y-1">
@@ -196,17 +226,27 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
               <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">Nome da Empresa:</label><input required type="text" className="border-b border-transparent bg-transparent px-1 font-bold text-gray-600 outline-none cursor-not-allowed" value={perfil.empresa_nome || ""} readOnly /></div>
               <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">Forma Jurídica:</label><input required type="text" className={inputClass} value={form.formaJuridica} onChange={e => setForm({...form, formaJuridica: e.target.value})} placeholder="Ex: Lda, Unipessoal" /></div>
               <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">NIF:</label><input required type="text" className="border-b border-transparent bg-transparent px-1 font-bold text-gray-600 outline-none cursor-not-allowed" value={perfil.nif_empresa || ""} readOnly /></div>
-              <div className="flex flex-col md:col-span-2"><label className="font-bold text-gray-700 mb-1">Morada:</label><input required type="text" className={inputClass} value={form.morada} onChange={e => setForm({...form, morada: e.target.value})} placeholder="Rua, número, andar" /></div>
+              <div className="flex flex-col md:col-span-2"><label className="font-bold text-gray-700 mb-1">Morada Sede:</label><input required type="text" className={inputClass} value={form.morada} onChange={e => setForm({...form, morada: e.target.value})} placeholder="Rua, número, andar" /></div>
               <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">Código Postal e Cidade:</label><input required type="text" className={inputClass} value={form.codigoPostal} onChange={e => setForm({...form, codigoPostal: e.target.value})} placeholder="0000-000 Localidade" /></div>
               <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">Número de Telefone:</label><input required type="text" className={inputClass} value={form.telefone} onChange={e => setForm({...form, telefone: e.target.value})} /></div>
-              <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">E-mail de Contacto:</label><input required type="email" className={inputClass} value={form.emailContacto} onChange={e => setForm({...form, emailContacto: e.target.value})} /></div>
-              <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">E-mail para Reservas:</label><input required type="email" className={inputClass} value={form.emailReservas} onChange={e => setForm({...form, emailReservas: e.target.value})} /></div>
+              <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">E-mail de Contacto Geral:</label><input required type="email" className={inputClass} value={form.emailContacto} onChange={e => setForm({...form, emailContacto: e.target.value})} /></div>
+              <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">E-mail Exclusivo p/ Reservas:</label><input required type="email" className={inputClass} value={form.emailReservas} onChange={e => setForm({...form, emailReservas: e.target.value})} /></div>
               <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">Website:</label><input type="text" className={inputClass} value={form.website} onChange={e => setForm({...form, website: e.target.value})} placeholder="Opcional" /></div>
               <div className="flex flex-col"><label className="font-bold text-gray-700 mb-1">Responsável RGPD:</label><input required type="text" className={inputClass} value={form.responsavelRGPD} onChange={e => setForm({...form, responsavelRGPD: e.target.value})} placeholder="Nome do responsável" /></div>
             </div>
             
             <p className="italic text-center mt-6 mb-8">- doravante designado por "Parceiro" -</p>
-            <p className="font-bold text-center">É celebrado o presente contrato de intermediação e divulgação comercial aplicável ao programa designado: <span className="underline decoration-2 underline-offset-4">{campo.nome}</span>.</p>
+            
+            <div className="text-center p-6 border-y-2 border-slate-200 bg-slate-50">
+               <p className="font-bold text-lg mb-2">É celebrado o presente contrato de intermediação e divulgação comercial aplicável a:</p>
+               <span className="block text-xl md:text-2xl font-black text-emerald-800 uppercase tracking-widest mt-4">
+                  Todas as atividades organizadas por {perfil.empresa_nome}
+               </span>
+               <span className="block text-sm text-gray-500 mt-2 font-sans font-medium">
+                  Este contrato abrange todos os {totalCampos > 0 ? `${totalCampos} campo(s)` : 'campos'} de férias atuais e quaisquer futuros programas criados pelo parceiro na plataforma HelloCamp.
+               </span>
+            </div>
+
           </div>
 
           <div className="space-y-6 text-[15px] text-justify pt-12">
@@ -380,7 +420,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
                 <label className="flex items-start gap-3 cursor-pointer group">
                   <input type="checkbox" required checked={form.concordaTermos} onChange={e => setForm({...form, concordaTermos: e.target.checked})} className="mt-1 w-5 h-5 accent-black cursor-pointer flex-shrink-0" />
                   <span className="text-sm text-gray-700 font-medium leading-relaxed group-hover:text-black transition-colors">
-                    Declaro ter lido e aceite os termos. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital.
+                    Declaro ter lido e aceite os termos do contrato global. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital, abrangendo todas as atividades presentes e futuras na plataforma.
                   </span>
                 </label>
               </div>

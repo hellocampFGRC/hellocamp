@@ -18,7 +18,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
     camposAtivos: 0,
     camposPendentes: 0,
     mediaEstrelas: 0,
-    pedidosPendentes: 0 // NOVO: Contador de pedidos de alteração/extras dos pais
+    pedidosPendentes: 0 
   });
 
   const [sugestoes, setSugestoes] = useState<any[]>([]);
@@ -30,8 +30,8 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
 
       const userId = session.user.id;
 
-      // 1. Busca Perfil
-      const { data: perfil } = await supabase.from('perfis').select('empresa_nome, nome_completo, stripe_account_id').eq('id', userId).single();
+      // 1. Busca Perfil (Agora inclui os dados do CONTRATO GLOBAL)
+      const { data: perfil } = await supabase.from('perfis').select('empresa_nome, nome_completo, stripe_account_id, contrato_dados, status_contrato').eq('id', userId).single();
       
       if (perfil) {
         if (perfil.empresa_nome && perfil.empresa_nome.trim() !== "") {
@@ -45,8 +45,8 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
         setNomeEmpresa(isEn ? "Organizer" : "Organizador");
       }
 
-      // 2. Busca Campos do Parceiro
-      const { data: campos } = await supabase.from('campos').select('id, nome, contrato_parceiro_url, rating_score, total_reviews, galeria, programas_pdf, imagem').eq('organizador_id', userId);
+      // 2. Busca Campos do Parceiro (Atualizado para ler o status_aprovacao)
+      const { data: campos } = await supabase.from('campos').select('id, nome, status_aprovacao, rating_score, total_reviews, galeria, programas_pdf').eq('organizador_id', userId);
       const camposIds = campos?.map(c => c.id) || [];
       
       let ativos = 0;
@@ -55,6 +55,28 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
       let totalComReviews = 0;
       const novasSugestoes: any[] = [];
 
+      // ALERTA: CONTRATO GLOBAL EM FALTA OU PENDENTE
+      if (!perfil?.contrato_dados) {
+        novasSugestoes.push({ 
+          tipo: 'critical', 
+          icon: '📝', 
+          titulo: isEn ? 'Global Contract Missing' : 'Contrato Global em Falta',
+          texto: isEn ? `You must sign the Global Partnership Agreement to publish your camps and recruit monitors.` : `A sua conta encontra-se restrita. Precisa de assinar o Contrato Global de Parceria para publicar campos e aceder à bolsa de recrutamento.`, 
+          link: `/${lang}/admin/contrato`,
+          actionText: isEn ? 'Sign Contract Now' : 'Assinar Contrato Agora'
+        });
+      } else if (perfil?.status_contrato === 'Pendente de Revisão' || perfil?.status_contrato === 'Pendente') {
+        novasSugestoes.push({ 
+          tipo: 'info', 
+          icon: '⏳', 
+          titulo: isEn ? 'Contract Under Review' : 'Contrato em Revisão',
+          texto: isEn ? `Your Global Contract is being reviewed by our legal team.` : `O seu Contrato Global foi submetido com sucesso e encontra-se a ser analisado pela nossa equipa.`, 
+          link: `/${lang}/admin/contrato`,
+          actionText: isEn ? 'View Document' : 'Ver Documento'
+        });
+      }
+
+      // ALERTA: STRIPE NÃO CONECTADO
       if (!perfil?.stripe_account_id) {
         novasSugestoes.push({ 
           tipo: 'critical', 
@@ -67,23 +89,17 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
       }
 
       campos?.forEach(c => {
-        if (c.contrato_parceiro_url) ativos++;
-        else pendentes++;
+        // Lógica de campos ativos vs pendentes
+        const status = (c.status_aprovacao || '').toLowerCase();
+        if (status === 'aprovado' || status === 'validado' || status === 'ativo' || status === 'active') {
+          ativos++;
+        } else {
+          pendentes++;
+        }
 
         if (c.rating_score > 0) {
           somaEstrelas += c.rating_score;
           totalComReviews++;
-        }
-
-        if (!c.contrato_parceiro_url) {
-          novasSugestoes.push({ 
-            tipo: 'critical', 
-            icon: '📝', 
-            titulo: isEn ? 'Contract Signature Required' : 'Assinatura de Contrato Pendente',
-            texto: isEn ? `The camp "${c.nome}" needs a signed agreement to be published.` : `O campo "${c.nome}" aguarda a assinatura do Acordo de Parceria para poder ser publicado.`, 
-            link: `/${lang}/admin/contratos/${c.id}`,
-            actionText: isEn ? 'Review and Sign' : 'Ler e Assinar Contrato'
-          });
         }
         
         if (!c.galeria || c.galeria.length === 0) {
@@ -108,7 +124,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
           });
         }
 
-        if (c.total_reviews === 0 && c.contrato_parceiro_url) {
+        if (c.total_reviews === 0 && (status === 'aprovado' || status === 'ativo')) {
           novasSugestoes.push({ 
             tipo: 'idea', 
             icon: '⭐', 
@@ -133,7 +149,6 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
         if (res.status_pagamento === 'Pago' || res.status_pagamento === 'Sinal Pago') {
           countReservas++;
         }
-        // Se a reserva tiver o JSON e lá dentro a propriedade do pedido pendente
         if (res.respostas_customizadas && res.respostas_customizadas.pedido_pai_pendente) {
           countPedidosUpsell++;
         }
@@ -152,7 +167,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
         camposAtivos: ativos,
         camposPendentes: pendentes,
         mediaEstrelas: totalComReviews > 0 ? (somaEstrelas / totalComReviews) : 0,
-        pedidosPendentes: countPedidosUpsell // Injeta o novo valor
+        pedidosPendentes: countPedidosUpsell 
       });
 
       const prioridade: Record<string, number> = { 'critical': 1, 'warning': 2, 'info': 3, 'idea': 4 };
@@ -179,14 +194,18 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
             {isEn ? 'Monitor your marketing traction and optimize your camps to sell more.' : 'Acompanhe a sua tração e descubra como otimizar os seus campos para vender mais.'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <Link href={`/${lang}/admin/campos/novo`} style={{ display: 'inline-block', backgroundColor: '#0f172a', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-            + {isEn ? 'Create Camp' : 'Novo Campo'}
+        
+        {/* BOTÕES DE ACÃO (NOVO: LINK PARA O CONTRATO) */}
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <Link href={`/${lang}/admin/contrato`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'white', border: '1px solid #cbd5e1', color: '#0f172a', padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', transition: 'background-color 0.2s' }}>
+            <span>📝</span> {isEn ? 'Global Contract' : 'Contrato Global'}
+          </Link>
+          <Link href={`/${lang}/admin/campos/novo`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#0f172a', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', transition: 'transform 0.2s' }}>
+            <span>+</span> {isEn ? 'Create Camp' : 'Novo Campo'}
           </Link>
         </div>
       </div>
 
-      {/* NOVO: BANNER DE ALERTA PARA PEDIDOS DE UPSELL DOS PAIS */}
       {metricas.pedidosPendentes > 0 && (
         <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', padding: '1.5rem', borderRadius: '1.25rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.5rem', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
@@ -254,7 +273,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
         </div>
 
         <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(15,23,42,0.05)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyItems: 'center', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {isEn ? 'Optimization Engine' : 'Motor de Otimização'}
             </h2>
@@ -270,7 +289,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
                 {isEn ? 'All set!' : 'Tudo perfeito!'}
               </h3>
               <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
-                {isEn ? 'Your camps are fully optimized.' : 'A sua conta bancária está ligada e os campos estão bem configurados.'}
+                {isEn ? 'Your account and camps are fully optimized.' : 'A sua conta bancária está ligada e os seus contratos estão em dia.'}
               </p>
             </div>
           ) : (
