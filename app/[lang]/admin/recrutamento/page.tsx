@@ -26,6 +26,15 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
   const [novaMensagem, setNovaMensagem] = useState("");
   const [sendingMsg, setSendingEdit] = useState(false);
 
+  // --- ESTADO DO CALENDÁRIO DA LIGHTBOX ---
+  const [mesModalView, setMesModalView] = useState(new Date());
+
+  const mesesNomes = isEn 
+    ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    : ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  
+  const diasDaSemana = isEn ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
   // --- CARREGAMENTO INICIAL DOS DADOS REAIS ---
   const carregarDadosRecrutamento = async () => {
     setLoading(true);
@@ -197,6 +206,44 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
   const selectClass = "w-full py-2 px-3 pr-8 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.6rem_auto] bg-[position:right_0.75rem_center] bg-no-repeat";
 
+  // --- LÓGICA DO CALENDÁRIO DA LIGHTBOX ---
+  const mudarMesModal = (incremento: number) => {
+    setMesModalView(prev => new Date(prev.getFullYear(), prev.getMonth() + incremento, 1));
+  };
+
+  const renderDiasCalendarioModal = (calendarioData: Record<string, string>) => {
+    const ano = mesModalView.getFullYear();
+    const mes = mesModalView.getMonth();
+    
+    const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+    const primeiroDia = new Date(ano, mes, 1).getDay();
+    const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1; // Ajustar para Segunda-feira ser o dia 0
+
+    const dias = [];
+    
+    // Espaços vazios
+    for (let i = 0; i < startDayIndex; i++) {
+      dias.push(<div key={`empty-${i}`} className="p-1"></div>);
+    }
+
+    // Dias do mês
+    for (let i = 1; i <= diasNoMes; i++) {
+      const dataStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      const estadoDia = calendarioData?.[dataStr];
+      
+      let coresClasses = "bg-white border-slate-100 text-slate-300"; // default (não especificado)
+      if (estadoDia === 'Livre') coresClasses = "bg-emerald-100 border-emerald-500 text-emerald-800 font-black shadow-inner";
+      if (estadoDia === 'Ocupado') coresClasses = "bg-red-100 border-red-500 text-red-800 font-black opacity-80 line-through";
+
+      dias.push(
+        <div key={dataStr} className={`h-8 w-full rounded border text-[11px] flex items-center justify-center ${coresClasses}`}>
+          {i}
+        </div>
+      );
+    }
+    return dias;
+  };
+
   // --- GRELHA DE MONITORES ---
   const renderGrelhaMonitores = (lista: any[], emptyMessage: string) => {
     if (loading) return <div className="text-center py-20 text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">{isEn ? "Loading talent pool..." : "A carregar talentos..."}</div>;
@@ -219,7 +266,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
               <div className="p-5 flex-1 flex flex-col">
                 <div className="mb-3"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{isEn ? "Experience" : "Experiência"}</span><span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded">{monitor.experiencia_anos === "0" ? (isEn ? "Beginner" : "Iniciante") : `${monitor.experiencia_anos} ${isEn ? "years" : "anos"}`}</span></div>
                 <div className="mb-5 flex-1"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{isEn ? "Certificates" : "Certificações"}</span><div className="flex flex-wrap gap-1">{monitor.certificacoes?.slice(0,2).map((cert: string) => (<span key={cert} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[9px] font-bold uppercase rounded border border-emerald-100 truncate max-w-full">{cert}</span>)) || <span className="text-[10px] text-slate-400 italic">Nenhuma</span>}</div></div>
-                <button onClick={() => setMonitorSelecionado(monitor)} className="w-full py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-600 transition-colors shadow-sm">{isEn ? "View Profile" : "Ver Perfil"}</button>
+                <button onClick={() => { setMonitorSelecionado(monitor); setMesModalView(new Date()); }} className="w-full py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-600 transition-colors shadow-sm">{isEn ? "View Profile" : "Ver Perfil"}</button>
               </div>
             </div>
           );
@@ -282,7 +329,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
         )}
       </div>
 
-      {/* NOVO MODAL / LIGHTBOX DE PERFIL COMPLETO (Estilo Dossier Profissional) */}
+      {/* NOVO MODAL / LIGHTBOX DE PERFIL COMPLETO */}
       {monitorSelecionado && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl flex flex-col overflow-hidden shadow-2xl">
@@ -362,7 +409,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
                         )}
                      </div>
 
-                     {/* Disponibilidade e Calendário Específico */}
+                     {/* Disponibilidade e Calendário Específico (READ ONLY) */}
                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Seasonal Availability" : "Disponibilidade Sazonal"}</h4>
                         <div className="flex flex-wrap gap-2 mb-5">
@@ -371,14 +418,29 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
                         
                         {monitorSelecionado.calendario_disponibilidade && Object.keys(monitorSelecionado.calendario_disponibilidade).length > 0 && (
                            <div className="border-t border-slate-100 pt-5">
-                              <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Marked Calendar Dates" : "Calendário Específico"}</h4>
-                              <div className="flex flex-wrap gap-2">
-                                 {/* CORREÇÃO AQUI: Converter 'status' para String para o React aceitar renderizar */}
-                                 {Object.entries(monitorSelecionado.calendario_disponibilidade).map(([date, status]) => (
-                                    <span key={date} className={`text-[11px] font-bold px-2 py-1 rounded border ${status === 'Livre' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                       {new Date(date).toLocaleDateString('pt-PT')} ({String(status)})
-                                    </span>
-                                 ))}
+                              <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Specific Calendar" : "Calendário Específico"}</h4>
+                              
+                              <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm select-none max-w-sm">
+                                 <div className="flex justify-between items-center mb-3">
+                                   <button type="button" onClick={() => mudarMesModal(-1)} className="p-1 hover:bg-slate-100 rounded text-slate-500 font-bold">&larr;</button>
+                                   <span className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                                     {mesesNomes[mesModalView.getMonth()]} {mesModalView.getFullYear()}
+                                   </span>
+                                   <button type="button" onClick={() => mudarMesModal(1)} className="p-1 hover:bg-slate-100 rounded text-slate-500 font-bold">&rarr;</button>
+                                 </div>
+                                 
+                                 <div className="grid grid-cols-7 gap-1 mb-1 text-center">
+                                   {diasDaSemana.map(d => <span key={d} className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{d}</span>)}
+                                 </div>
+                                 
+                                 <div className="grid grid-cols-7 gap-1">
+                                   {renderDiasCalendarioModal(monitorSelecionado.calendario_disponibilidade)}
+                                 </div>
+                                 
+                                 <div className="mt-3 flex gap-3 justify-center text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-100 border border-emerald-500 inline-block"></span> Livre</span>
+                                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-100 border border-red-500 inline-block"></span> Ocupado</span>
+                                 </div>
                               </div>
                            </div>
                         )}
