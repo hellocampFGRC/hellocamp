@@ -129,12 +129,12 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
 
       // Recomenda-se criar um bucket no Supabase chamado 'monitores-cvs'
       const { error: uploadError } = await supabase.storage
-        .from('campos-documentos') // Pode usar o mesmo que tem, ou criar um novo
+        .from('monitores-cvs') // Pode usar o mesmo que tem, ou criar um novo
         .upload(fileName, file, { upsert: false });
 
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
+      const { data: urlData } = supabase.storage.from('monitores-cvs').getPublicUrl(fileName);
       setCvUrl(urlData.publicUrl);
     } catch (error: any) {
       setCvFileName("");
