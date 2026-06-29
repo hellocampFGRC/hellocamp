@@ -22,7 +22,7 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
     setLoading(true);
     setError(null);
 
-    // 1. Criar Auth
+    // 1. Criar Auth com role cliente
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email, 
       password,
@@ -34,20 +34,22 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
       }
     });
 
-    if (authError) {
-      setError(authError.message);
+    if (authError || !authData.user) {
+      setError(authError?.message || "Erro desconhecido ao criar conta.");
       setLoading(false);
       return;
     }
 
     // 2. Gravar no perfil público
-    if (authData.user) {
-      await supabase.from('perfis').upsert({
-        id: authData.user.id,
-        email: email,
-        nome_completo: nome,
-        role: 'cliente'
-      });
+    const { error: perfilError } = await supabase.from('perfis').upsert({
+      id: authData.user.id,
+      email: email,
+      nome_completo: nome,
+      role: 'cliente'
+    });
+
+    if (perfilError) {
+      console.error("Aviso: Falha ao guardar perfil público:", perfilError);
     }
 
     // 3. Disparar o Email de Boas-Vindas
@@ -79,6 +81,7 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
           <input type="text" placeholder={isEn ? 'Full Name' : 'Nome Completo'} required onChange={e => setNome(e.target.value)} style={inputStyle} />
           <input type="email" placeholder="E-mail" required onChange={e => setEmail(e.target.value)} style={inputStyle} />
           <input type="password" placeholder="Password" minLength={6} required onChange={e => setPassword(e.target.value)} style={inputStyle} />
+          
           <button type="submit" disabled={loading} style={btnStyle}>
             {loading ? '...' : (isEn ? 'Register' : 'Registar')}
           </button>

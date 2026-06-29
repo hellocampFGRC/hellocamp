@@ -36,13 +36,11 @@ export default function AuthButton({ lang, dict }: { lang: string; dict: any }) 
     return () => { authListener.subscription.unsubscribe(); };
   }, []);
 
-  // Enquanto o Supabase verifica a sessão no refresh, mostramos um bloco neutro
-  // com a largura exata para "bloquear" o layout e evitar oscilações visuais
   if (loading) {
-    return <div className="w-48 h-10 bg-gray-50 rounded-lg animate-pulse"></div>;
+    return <div className="w-32 h-10 bg-gray-50 rounded-lg animate-pulse"></div>;
   }
 
-  // 1. Se tem sessão e é ORGANIZADOR (Parceiro)
+  // CASE 1: Utilizador é um PARCEIRO / ORGANIZADOR (Dashboard Verde)
   if (user && role === 'organizador') {
     return (
       <Link href={`/${lang}/admin/dashboard`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
@@ -51,7 +49,7 @@ export default function AuthButton({ lang, dict }: { lang: string; dict: any }) 
     );
   }
 
-  // 2. Se tem sessão e é MONITOR (Bolsa de Talentos)
+  // CASE 2: Utilizador é um MONITOR (Portal Azul)
   if (user && role === 'monitor') {
     return (
       <Link href={`/${lang}/monitores/portal/perfil`} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
@@ -60,7 +58,7 @@ export default function AuthButton({ lang, dict }: { lang: string; dict: any }) 
     );
   }
 
-  // 3. Se tem sessão e é CLIENTE (Portal dos Pais) - Fallback
+  // CASE 3: Utilizador é um PAI / CLIENTE (Portal dos Pais Verde)
   if (user) {
     return (
       <Link href={`/${lang}/cliente/dashboard`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
@@ -69,20 +67,20 @@ export default function AuthButton({ lang, dict }: { lang: string; dict: any }) 
     );
   }
 
-  // 4. Se NÃO tem sessão ativa (Mostra o fluxo completo para utilizadores anónimos)
+  // CASE 4: Ninguém tem sessão iniciada (Fluxo de Registo/Login padrão)
   return (
     <div className="flex items-center gap-6">
       <Link href={`/${lang}/admin/registo`} className="text-sm font-bold text-gray-600 hover:text-emerald-700 transition whitespace-nowrap no-underline">
         {dict?.footer?.info_parceiro || (isEn ? 'Become a Partner' : 'Seja Parceiro')}
       </Link>
       
-      <div className="h-5 w-px bg-gray-200"></div>
+      <div className="h-5 w-px bg-gray-200 hidden sm:block"></div>
       
       <Link href={`/${lang}/login`} className="text-sm font-bold text-slate-600 hover:text-emerald-700 no-underline transition whitespace-nowrap">
         {isEn ? 'Log in' : 'Entrar'}
       </Link>
       
-      <Link href={`/${lang}/registo`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
+      <Link href={`/${lang}/registo`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap hidden sm:inline-block">
         {isEn ? 'Sign Up' : 'Registar'}
       </Link>
     </div>

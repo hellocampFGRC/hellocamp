@@ -16,11 +16,14 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   const [fotoUrl, setFotoUrl] = useState<string>("");
   const [termosAceites, setTermosAceites] = useState(false);
 
+  // --- ESTADOS DE AUTENTICAÇÃO ---
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+
   const [formData, setFormData] = useState({
     nome_completo: "",
     data_nascimento: "",
     telefone: "",
-    email: "",
     distrito_residencia: "",
     experiencia_anos: "0",
     outras_competencias: "",
@@ -60,7 +63,6 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     { id: "Natal", pt: "Férias de Natal", en: "Christmas Break" }
   ];
 
-  // --- HANDLERS (CHECKBOXES) ---
   const handleCheckboxChange = (id: string, tipo: "cert" | "disp" | "zona") => {
     if (tipo === "cert") {
       setCertificacoes(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -71,7 +73,6 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     }
   };
 
-  // --- HANDLER UPLOAD FOTO (NATIVO SUPABASE) ---
   const handleUploadFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploadingFoto(true);
@@ -99,7 +100,6 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     }
   };
 
-  // --- LÓGICA DO CALENDÁRIO INTERATIVO ---
   const mudarMes = (incremento: number) => {
     setDataVisualizada(prev => new Date(prev.getFullYear(), prev.getMonth() + incremento, 1));
   };
@@ -157,7 +157,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   
   const diasDaSemana = isEn ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-  // --- SUBMISSÃO ---
+  // --- SUBMISSÃO E CRIAÇÃO DE CONTA ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -166,24 +166,53 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
       return;
     }
 
-    setSubmitting(true);
-
     if (areasAtuacao.length === 0) {
       alert(isEn ? "Please select at least one work area." : "Por favor, selecione pelo menos uma zona de atuação.");
-      setSubmitting(false); return;
+      return;
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      alert(isEn ? "Please log in or create an account first." : "Por favor, inicie sessão ou crie uma conta primeiro.");
-      router.push(`/${lang}/monitores/login?redirectTo=monitores/registo`);
-      setSubmitting(false); return;
+    setSubmitting(true);
+
+    // 1. Criar o Utilizador no Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: authEmail,
+      password: authPassword,
+      options: {
+        data: {
+          nome_completo: formData.nome_completo,
+          role: 'monitor'
+        }
+      }
+    });
+
+    if (authError || !authData.user) {
+      alert((isEn ? "Error creating account: " : "Erro ao criar conta: ") + (authError?.message || ""));
+      setSubmitting(false);
+      return;
     }
 
+    const userId = authData.user.id;
+
+    // 2. Gravar Perfil Base
+    await supabase.from('perfis').upsert({
+      id: userId,
+      email: authEmail,
+      nome_completo: formData.nome_completo,
+      telefone: formData.telefone,
+      role: 'monitor'
+    });
+
+    // 3. Gravar na Tabela de Monitores
     const payload = {
-      id: session.user.id,
-      ...formData,
+      id: userId,
+      email: authEmail,
+      nome_completo: formData.nome_completo,
+      data_nascimento: formData.data_nascimento,
+      telefone: formData.telefone,
+      distrito_residencia: formData.distrito_residencia,
+      experiencia_anos: formData.experiencia_anos,
+      outras_competencias: formData.outras_competencias,
+      bio: formData.bio,
       fotografia_url: fotoUrl,
       certificacoes,
       disponibilidade: disponibilidadeEpocas,
@@ -191,10 +220,10 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
       calendario_disponibilidade: calendario
     };
 
-    const { error } = await supabase.from("monitores").insert([payload]);
+    const { error: monitorError } = await supabase.from("monitores").insert([payload]);
 
-    if (error) {
-      alert((isEn ? "Error saving profile: " : "Erro ao guardar perfil: ") + error.message);
+    if (monitorError) {
+      alert((isEn ? "Error saving profile details: " : "Erro ao guardar dados de monitor: ") + monitorError.message);
       setSubmitting(false);
     } else {
       router.push(`/${lang}/monitores/portal/perfil`);
@@ -203,26 +232,26 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
 
   // --- CLASSES CSS COMUNS ---
   const labelClass = "text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 block";
-  const inputClass = "w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm";
-  const selectClass = "w-full py-3 px-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-bold text-slate-700 outline-none focus:bg-white focus:border-emerald-500 appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1.25rem_center] bg-no-repeat";
+  const inputClass = "w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all shadow-sm";
+  const selectClass = "w-full py-3 px-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1.25rem_center] bg-no-repeat";
 
   return (
     <div className="w-full flex-1 bg-slate-50 text-slate-900 py-12 px-4 md:px-8 font-sans">
       <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-[2rem] shadow-xl overflow-hidden">
         
         {/* BANNER SUPERIOR */}
-        <div className="bg-emerald-900 text-white p-8 md:p-12 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-          <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-800/50 px-4 py-2 rounded-full border border-emerald-700/50">
+        <div className="bg-blue-900 text-white p-8 md:p-12 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <span className="text-[10px] font-black uppercase tracking-widest bg-blue-800/50 px-4 py-2 rounded-full border border-blue-700/50">
             {isEn ? "Join our Network" : "Bolsa de Talentos HelloCamp"}
           </span>
           <h1 className="text-3xl md:text-4xl font-black tracking-tight mt-6 mb-3">
             {isEn ? "Promote Yourself as a Camp Monitor" : "Trabalha em Campos de Férias"}
           </h1>
-          <p className="text-sm md:text-base text-emerald-100 font-medium m-0 leading-relaxed max-w-xl">
+          <p className="text-sm md:text-base text-blue-100 font-medium m-0 leading-relaxed max-w-xl">
             {isEn 
               ? "Publish your availability, experience, and certificates so hundreds of verified camps can find and hire you directly." 
-              : "Cria o teu perfil, define a tua disponibilidade no calendário, e sê encontrado diretamente pelas entidades organizadoras."}
+              : "Cria a tua conta, define a tua disponibilidade no calendário, e sê encontrado diretamente pelas entidades organizadoras."}
           </p>
         </div>
 
@@ -242,7 +271,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                 ) : (
                   <span className="text-3xl text-slate-300">📸</span>
                 )}
-                {uploadingFoto && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div></div>}
+                {uploadingFoto && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>}
               </div>
               <div className="flex-1 text-center sm:text-left">
                 <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Profile Picture" : "Fotografia de Rosto"}</label>
@@ -275,10 +304,6 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                 <label className={labelClass}>{isEn ? "Phone Number" : "Contacto Telefónico"}</label>
                 <input type="tel" required className={inputClass} value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} placeholder="912 345 678" />
               </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass}>{isEn ? "Email Address" : "E-mail de Contacto"}</label>
-                <input type="email" required className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="joao.martins@email.com" />
-              </div>
             </div>
           </div>
 
@@ -301,8 +326,8 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
               <p className="text-xs text-slate-500 font-medium mb-5">{isEn ? "You can select multiple zones, including 'Nationwide if accommodation is provided'." : "Pode selecionar múltiplas opções. Muitos campos fora da área de residência oferecem dormida e alimentação."}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {opcoesAtuacao.map(zona => (
-                  <label key={zona} className={`flex items-start gap-3 p-3 bg-white border rounded-xl cursor-pointer hover:border-emerald-300 transition-colors select-none ${areasAtuacao.includes(zona) ? 'border-emerald-500 ring-1 ring-emerald-500 shadow-sm' : 'border-slate-200'}`}>
-                    <input type="checkbox" checked={areasAtuacao.includes(zona)} onChange={() => handleCheckboxChange(zona, "zona")} className="mt-0.5 w-4 h-4 accent-emerald-600 cursor-pointer" />
+                  <label key={zona} className={`flex items-start gap-3 p-3 bg-white border rounded-xl cursor-pointer hover:border-blue-300 transition-colors select-none ${areasAtuacao.includes(zona) ? 'border-blue-500 ring-1 ring-blue-500 shadow-sm' : 'border-slate-200'}`}>
+                    <input type="checkbox" checked={areasAtuacao.includes(zona)} onChange={() => handleCheckboxChange(zona, "zona")} className="mt-0.5 w-4 h-4 accent-blue-600 cursor-pointer" />
                     <span className="text-xs font-bold text-slate-700 leading-tight">{zona}</span>
                   </label>
                 ))}
@@ -330,8 +355,8 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
               <label className={labelClass}>{isEn ? "Certificates & Core Skills" : "Certificações e Habilidades Base"}</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                 {listaCertificados.map(c => (
-                  <label key={c.id} className={`flex items-center gap-3 p-3 bg-white border rounded-xl cursor-pointer transition-colors select-none ${certificacoes.includes(c.id) ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 hover:bg-slate-50'}`}>
-                    <input type="checkbox" checked={certificacoes.includes(c.id)} onChange={() => handleCheckboxChange(c.id, "cert")} className="w-4 h-4 accent-emerald-600 cursor-pointer" />
+                  <label key={c.id} className={`flex items-center gap-3 p-3 bg-white border rounded-xl cursor-pointer transition-colors select-none ${certificacoes.includes(c.id) ? 'border-blue-500 bg-blue-50/30' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <input type="checkbox" checked={certificacoes.includes(c.id)} onChange={() => handleCheckboxChange(c.id, "cert")} className="w-4 h-4 accent-blue-600 cursor-pointer" />
                     <span className="text-xs font-bold text-slate-700">{isEn ? c.en : c.pt}</span>
                   </label>
                 ))}
@@ -357,7 +382,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                 <div className="flex flex-col gap-3">
                   {listaEpocas.map(e => (
                     <label key={e.id} className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors select-none">
-                      <input type="checkbox" checked={disponibilidadeEpocas.includes(e.id)} onChange={() => handleCheckboxChange(e.id, "disp")} className="w-4 h-4 accent-emerald-600 cursor-pointer" />
+                      <input type="checkbox" checked={disponibilidadeEpocas.includes(e.id)} onChange={() => handleCheckboxChange(e.id, "disp")} className="w-4 h-4 accent-blue-600 cursor-pointer" />
                       <span className="text-sm font-bold text-slate-700">{isEn ? e.en : e.pt}</span>
                     </label>
                   ))}
@@ -393,26 +418,43 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
             <div>
               <label className={labelClass}>{isEn ? "Short Bio / Pitch" : "A sua Bio / Carta de Apresentação"}</label>
               <p className="text-xs text-slate-500 font-medium mb-2">{isEn ? "Write a short paragraph about why you're a great fit." : "O que é que as empresas vão ler sobre o monitor? Quais são os seus pontos fortes e dinâmicas que gosta de organizar?"}</p>
-              <textarea rows={5} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm resize-none" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} placeholder={isEn ? "Hi! I'm energetic and love working with kids..." : "Sou um monitor super dinâmico, adoro desporto e tenho muita facilidade em cativar grupos grandes..."} />
+              <textarea rows={5} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all shadow-sm resize-none" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} placeholder={isEn ? "Hi! I'm energetic and love working with kids..." : "Sou um monitor super dinâmico, adoro desporto e tenho muita facilidade em cativar grupos grandes..."} />
             </div>
           </div>
 
-          {/* TERMOS E SUBMISSÃO */}
+          {/* SECÇÃO FINAL: DADOS DE ACESSO */}
           <div className="pt-8 border-t border-slate-200">
-            
+            <h3 className="text-xl font-black text-slate-900 pb-3 mb-6">
+              {isEn ? "5. Access Credentials" : "5. Dados de Acesso"}
+            </h3>
+            <p className="text-sm text-slate-500 font-medium mb-6">
+              {isEn ? "Define the email and password you'll use to log in to your Monitor Portal." : "Defina o e-mail e palavra-passe que vai utilizar para aceder ao seu Portal de Monitor e gerir as marcações."}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
+              <div>
+                <label className={labelClass}>{isEn ? "Login Email" : "E-mail de Login"}</label>
+                <input type="email" required className={inputClass} value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="O seu e-mail de acesso" />
+              </div>
+              <div>
+                <label className={labelClass}>{isEn ? "Password" : "Palavra-Passe"}</label>
+                <input type="password" required minLength={6} className={inputClass} value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+              </div>
+            </div>
+
             <label className="flex items-start gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
               <input 
                 type="checkbox" 
                 required
                 checked={termosAceites}
                 onChange={(e) => setTermosAceites(e.target.checked)}
-                className="mt-0.5 w-5 h-5 accent-emerald-600 cursor-pointer flex-shrink-0"
+                className="mt-0.5 w-5 h-5 accent-blue-600 cursor-pointer flex-shrink-0"
               />
               <span className="text-xs md:text-sm font-medium text-slate-700 leading-relaxed">
                 {isEn ? (
-                  <>I declare that the information provided is completely true. I also acknowledge that I have read and agree to the <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-emerald-600 font-bold hover:underline">Terms & Conditions</Link> regarding the use of this portal and I compromise to follow the terms and conditions mentioned.</>
+                  <>I declare that the information provided is completely true. I also acknowledge that I have read and agree to the <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-blue-600 font-bold hover:underline">Terms & Conditions</Link> regarding the use of this portal and I compromise to follow the terms and conditions mentioned.</>
                 ) : (
-                  <>Declaro que todas as informações e documentos aqui fornecidos são verdadeiros. Tomei conhecimento e aceito expressamente os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-emerald-600 font-bold hover:underline">Termos e Condições</Link> da plataforma HelloCamp e comprometo-me a cumprir com os mesmos..</>
+                  <>Declaro sob compromisso de honra que as informações aqui fornecidas são verdadeiras. Tomei conhecimento e aceito expressamente os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-blue-600 font-bold hover:underline">Termos e Condições</Link> da plataforma HelloCamp e comprometo-me a cumprir com os mesmos.</>
                 )}
               </span>
             </label>
@@ -421,9 +463,9 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
               <button 
                 type="submit" 
                 disabled={submitting || !termosAceites} 
-                className="w-full sm:w-auto bg-emerald-600 text-white font-black uppercase tracking-widest text-xs px-10 py-4 rounded-xl shadow-lg hover:bg-emerald-700 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none cursor-pointer"
+                className="w-full sm:w-auto bg-blue-600 text-white font-black uppercase tracking-widest text-xs px-10 py-4 rounded-xl shadow-lg hover:bg-blue-700 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none cursor-pointer"
               >
-                {submitting ? (isEn ? "Saving Profile..." : "A Guardar e Publicar...") : (isEn ? "Publish My Profile" : "Publicar o meu Perfil")}
+                {submitting ? (isEn ? "Creating Account..." : "A Criar Perfil...") : (isEn ? "Create Profile" : "Publicar o meu Perfil")}
               </button>
             </div>
           </div>

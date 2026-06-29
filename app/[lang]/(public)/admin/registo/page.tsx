@@ -22,7 +22,7 @@ export default function RegistoAdmin({ params }: { params: Promise<{ lang: strin
     setLoading(true);
     setError(null);
 
-    // 1. Criar o Utilizador no Supabase Auth
+    // 1. Criar o Utilizador no Supabase Auth com role
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -34,25 +34,23 @@ export default function RegistoAdmin({ params }: { params: Promise<{ lang: strin
       }
     });
 
-    if (authError) {
-      setError(authError.message);
+    if (authError || !authData.user) {
+      setError(authError?.message || "Erro desconhecido ao criar conta.");
       setLoading(false);
       return;
     }
 
     // 2. Gravar explicitamente na tabela 'perfis'
-    if (authData.user) {
-      const { error: perfilError } = await supabase.from('perfis').upsert({
-        id: authData.user.id,
-        email: email,
-        empresa_nome: nomeEmpresa,
-        role: 'organizador',
-        parceiro_verificado: false
-      });
+    const { error: perfilError } = await supabase.from('perfis').upsert({
+      id: authData.user.id,
+      email: email,
+      empresa_nome: nomeEmpresa,
+      role: 'organizador',
+      parceiro_verificado: false
+    });
 
-      if (perfilError) {
-        console.error("Aviso: Falha ao guardar perfil público:", perfilError);
-      }
+    if (perfilError) {
+      console.error("Aviso: Falha ao guardar perfil público:", perfilError);
     }
 
     // 3. Disparar API do Email de Boas-Vindas
