@@ -177,7 +177,7 @@ export default function MonitoresLandingPage({ params }: { params: Promise<{ lan
                   {isEn ? "Ready for an epic summer?" : "Pronto para ter o melhor verão da tua vida?"}
                 </h3>
                 <p className="text-slate-300 font-medium mb-10 text-base md:text-lg">
-                  {isEn ? "Join hundreds of monitors who already found their dream summer job through our platform." : "Junta-te às centenas de jovens que já criaram perfil e encontraram trabalho através da nossa bolsa."}
+                  {isEn ? "Join hundreds of monitors who already found their dream summer job through our platform." : "Junta-te a centenas de monitores que já criaram perfil e encontraram trabalho através da nossa bolsa."}
                 </p>
                 <Link 
                   href={`/${lang}/monitores/registo`}

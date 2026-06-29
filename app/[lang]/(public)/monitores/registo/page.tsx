@@ -12,8 +12,16 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
 
   // --- ESTADOS GERAIS ---
   const [submitting, setSubmitting] = useState(false);
+  
+  // FOTO
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoUrl, setFotoUrl] = useState<string>("");
+  
+  // CV (NOVO)
+  const [uploadingCV, setUploadingCV] = useState(false);
+  const [cvUrl, setCvUrl] = useState<string>("");
+  const [cvFileName, setCvFileName] = useState<string>("");
+
   const [termosAceites, setTermosAceites] = useState(false);
 
   // --- ESTADOS DE AUTENTICAÇÃO ---
@@ -97,6 +105,42 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
       alert((isEn ? 'Error uploading photo: ' : 'Erro no upload da foto: ') + error.message);
     } finally {
       setUploadingFoto(false);
+    }
+  };
+
+  // --- NOVO: HANDLER UPLOAD CV ---
+  const handleUploadCV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingCV(true);
+      if (!event.target.files || event.target.files.length === 0) {
+        throw new Error('Nenhum ficheiro selecionado.');
+      }
+
+      const file = event.target.files[0];
+      // Verifica extensão
+      if (!file.type.includes('pdf') && !file.name.endsWith('.doc') && !file.name.endsWith('.docx')) {
+         throw new Error('Apenas ficheiros PDF ou Word são permitidos.');
+      }
+
+      setCvFileName(file.name);
+      
+      const fileExt = file.name.split('.').pop();
+      const fileName = `cv_${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+
+      // Recomenda-se criar um bucket no Supabase chamado 'monitores-cvs'
+      const { error: uploadError } = await supabase.storage
+        .from('campos-documentos') // Pode usar o mesmo que tem, ou criar um novo
+        .upload(fileName, file, { upsert: false });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
+      setCvUrl(urlData.publicUrl);
+    } catch (error: any) {
+      setCvFileName("");
+      alert((isEn ? 'Error uploading CV: ' : 'Erro no upload do Currículo: ') + error.message);
+    } finally {
+      setUploadingCV(false);
     }
   };
 
@@ -214,6 +258,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
       outras_competencias: formData.outras_competencias,
       bio: formData.bio,
       fotografia_url: fotoUrl,
+      cv_url: cvUrl, // Opcional, guarda a string do URL do PDF
       certificacoes,
       disponibilidade: disponibilidadeEpocas,
       areas_atuacao: areasAtuacao,
@@ -258,13 +303,14 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
         {/* FORMULÁRIO */}
         <form onSubmit={handleSubmit} className="p-6 md:p-12 space-y-10">
           
-          {/* SECÇÃO 1: FOTO & IDENTIFICAÇÃO BÁSICA */}
+          {/* SECÇÃO 1: FOTO E CV & IDENTIFICAÇÃO BÁSICA */}
           <div>
             <h3 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6">
-              {isEn ? "1. Personal Profile" : "1. O teu Perfil Pessoal"}
+              {isEn ? "1. Personal Profile & Resume" : "1. O teu Perfil Pessoal e CV"}
             </h3>
             
-            <div className="mb-8 flex flex-col sm:flex-row items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-200">
+            {/* Box Foto */}
+            <div className="mb-6 flex flex-col sm:flex-row items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-200">
               <div className="w-24 h-24 rounded-full bg-white border-4 border-slate-100 shadow-sm overflow-hidden flex items-center justify-center flex-shrink-0 relative">
                 {fotoUrl ? (
                   <img src={fotoUrl} alt="Preview" className="w-full h-full object-cover" />
@@ -285,7 +331,31 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
                   <button type="button" className="bg-white border border-slate-300 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 transition-colors pointer-events-none">
-                    {uploadingFoto ? (isEn ? "Uploading..." : "A carregar...") : (isEn ? "Choose from device" : "Escolher Imagem (Dispositivo)")}
+                    {uploadingFoto ? (isEn ? "Uploading..." : "A carregar...") : (isEn ? "Choose from device" : "Escolher Imagem")}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Box Currículo (CV) */}
+            <div className="mb-8 flex flex-col sm:flex-row items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-200">
+              <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0 relative">
+                <span className="text-2xl text-slate-400">📄</span>
+                {uploadingCV && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>}
+              </div>
+              <div className="flex-1 text-center sm:text-left">
+                <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Upload your Resume (CV)" : "Anexar Currículo (CV)"} <span className="text-slate-400 text-xs ml-1">(Opcional)</span></label>
+                <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "PDF or Word files only. It will only be visible to verified camps." : "Apenas ficheiros PDF ou DOCX. Fica visível apenas para os organizadores."}</p>
+                <div className="relative inline-block">
+                  <input 
+                    type="file" 
+                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+                    onChange={handleUploadCV} 
+                    disabled={uploadingCV}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <button type="button" className="bg-white border border-slate-300 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 transition-colors pointer-events-none">
+                    {uploadingCV ? (isEn ? "Uploading..." : "A carregar...") : (cvFileName ? `✔️ ${cvFileName.substring(0, 15)}...` : (isEn ? "Upload Resume" : "Carregar Currículo"))}
                   </button>
                 </div>
               </div>
@@ -452,9 +522,9 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
               />
               <span className="text-xs md:text-sm font-medium text-slate-700 leading-relaxed">
                 {isEn ? (
-                  <>I declare that the information provided is completely true. I also acknowledge that I have read and agree to the <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-blue-600 font-bold hover:underline">Terms & Conditions</Link> regarding the use of this portal and I compromise to follow the terms and conditions mentioned.</>
+                  <>I declare that the information provided is completely true. I also acknowledge that I have read and agree to the <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-blue-600 font-bold hover:underline">Terms & Conditions</Link> regarding the use of this portal, including data sharing consent, and I compromise to follow the terms mentioned.</>
                 ) : (
-                  <>Declaro sob compromisso de honra que as informações aqui fornecidas são verdadeiras. Tomei conhecimento e aceito expressamente os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-blue-600 font-bold hover:underline">Termos e Condições</Link> da plataforma HelloCamp e comprometo-me a cumprir com os mesmos.</>
+                  <>Declaro sob compromisso de honra que as informações aqui fornecidas são verdadeiras. Tomei conhecimento e aceito expressamente os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-blue-600 font-bold hover:underline">Termos e Condições</Link> da plataforma HelloCamp, incluindo os termos de partilha de dados RGPD com as entidades contratantes.</>
                 )}
               </span>
             </label>

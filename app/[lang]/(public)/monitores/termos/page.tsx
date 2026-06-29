@@ -102,6 +102,24 @@ export default function TermosMonitorPage({ params }: { params: Promise<{ lang: 
             : "A HelloCamp não se responsabiliza por litígios, falhas no pagamento de honorários, acidentes de trabalho, incumprimento de funções, ou falhas na verificação legal de documentos por parte dos campos. Todo e qualquer conflito deverá ser resolvido direta e exclusivamente entre o Monitor e a Entidade Contratante."}
         </p>
 
+        {/* NOVA SECÇÃO: PROTEÇÃO DE DADOS, CV E FOTOS */}
+        <h2>{isEn ? "5. Personal Data, Photos, CV and GDPR Consent" : "5. Privacidade, Fotografias, CV e Consentimento RGPD"}</h2>
+        <p>
+          {isEn 
+            ? "By creating a profile on HelloCamp, the Monitor expressly and unequivocally consents to the collection, storage, and processing of their personal data (including Full Name, Age, Contact Details, CV, and Photograph)." 
+            : "Ao criar um perfil na HelloCamp, o Monitor consente expressa e inequivocamente a recolha, armazenamento e processamento dos seus dados pessoais (incluindo Nome, Idade, Contactos, Currículo Vitae e Fotografia de Rosto)."}
+        </p>
+        <p>
+          {isEn 
+            ? "The Monitor authorizes HelloCamp to share and display this information, including the uploaded Resume/CV and profile picture, exclusively to validated Partners (Camp Organizers) registered on the platform, solely for recruitment purposes." 
+            : "O Monitor autoriza expressamente a HelloCamp a partilhar e exibir esta informação, incluindo o Currículo (CV) carregado e a fotografia, a Parceiros Validados (Organizadores de Campos) registados na plataforma, com o propósito único e exclusivo de promover o recrutamento."}
+        </p>
+        <ul>
+          <li>{isEn ? "The profile is strictly hidden from the general public and parents." : "O perfil do Monitor é estritamente oculto do público em geral, clientes ou pais. O acesso é restrito a empresas parceiras ativas."}</li>
+          <li>{isEn ? "HelloCamp cannot be held responsible for the misuse, download, or distribution of your CV or photo by third-party organizers once they have legally accessed the database." : "A HelloCamp declina qualquer responsabilidade pelo uso indevido, download ou distribuição do seu CV ou Fotografia por parte das entidades organizadoras terceiras, após estas acederem legitimamente à base de dados."}</li>
+          <li>{isEn ? "The Monitor retains the right to delete their account, CV, and photo at any time, ceasing future data sharing." : "O Monitor detém o direito a ser esquecido, podendo eliminar a sua conta, CV e fotografia da plataforma a qualquer momento através do seu portal, cessando a partilha futura de dados."}</li>
+        </ul>
+
       </article>
 
       <div className="max-w-3xl mx-auto px-4 md:px-8 mt-16 text-center">
