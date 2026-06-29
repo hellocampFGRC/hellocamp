@@ -15,7 +15,6 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
   const [form, setForm] = useState({
     nomeEmpresa: "",
     nif: "",
-    nomePrograma: "",
     pessoaContacto: "",
     formaJuridica: "",
     morada: "",
@@ -47,7 +46,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     }
 
     setLoading(true);
-    console.log("🚀 [INÍCIO] A iniciar submissão do contrato...");
+    console.log("🚀 [INÍCIO] A iniciar submissão do contrato global...");
 
     // ==========================================
     // PASSO 1: CRIAR UTILIZADOR (Auth)
@@ -75,38 +74,13 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
 
     console.log("✅ [PASSO 1] Conta criada com sucesso! User ID:", authData.user.id);
 
-    // Pausa para dar tempo ao Supabase de criar a linha base na tabela perfis via trigger
+    // Pausa para dar tempo ao Supabase de criar a linha base na tabela perfis via trigger (se aplicável)
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     // ==========================================
-    // PASSO 1.5: ATUALIZAR O PERFIL PÚBLICO
+    // PASSO 2: GUARDAR CONTRATO GLOBAL NO PERFIL
     // ==========================================
-    console.log("⏳ [PASSO 1.5] A guardar os dados na tabela 'perfis'...");
-    
-    // Usamos upsert para garantir que, caso a linha não exista, seja criada
-    const { error: perfilError } = await supabase.from('perfis').upsert({
-      id: authData.user.id,
-      email: auth.emailAcesso,
-      empresa_nome: form.nomeEmpresa,
-      nif_empresa: form.nif,
-      nome_completo: form.pessoaContacto,
-      telefone: form.telefone,
-      role: 'organizador',
-      parceiro_verificado: false
-    });
-
-    if (perfilError) {
-      console.error("⚠️ [AVISO] Falha ao atualizar tabela perfis:", perfilError);
-      // Não bloqueamos o resto do código porque o login já funciona, mas fica o aviso na consola
-    } else {
-      console.log("✅ [PASSO 1.5] Perfil público atualizado com sucesso!");
-    }
-
-
-    // ==========================================
-    // PASSO 2: GUARDAR O CONTRATO NA BD (campos)
-    // ==========================================
-    console.log("⏳ [PASSO 2] A inserir contrato na tabela 'campos'...");
+    console.log("⏳ [PASSO 2] A gravar os dados do Contrato Global na tabela 'perfis'...");
     
     const payloadJSON = {
       pessoaContacto: form.pessoaContacto,
@@ -130,42 +104,28 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       ipAssinatura: isEn ? "Captured via Unified Registration" : "Capturado via Registo Unificado"
     };
 
-    const { error: campoError } = await supabase
-      .from('campos')
-      .insert([
-        {
-          nome: form.nomePrograma,
-          organizador_id: authData.user.id,
-          contrato_dados: payloadJSON,
-          status_aprovacao: 'Pendente de Revisão',
-          tipo_pagamento: form.tipo_pagamento,
-          politica_cancelamento: form.politica_cancelamento,
-          ativo: false,
-          categoria: 'Por definir',
-          taxa_comissao: 12,
-          pais: 'Portugal',
-          vagas_totais: 20, 
-          turnos: [],
-          galeria: [],
-          perguntas_customizadas: [],
-          linguas_faladas: [],
-          tipo_cobranca_alimentacao: 'Por Turno',
-          tipo_cobranca_alojamento: 'Por Turno',
-          tipo_cobranca_prolongamento: 'Por Turno',
-          tipo_cobranca_transporte: 'Por Turno',
-          rating_score: 0,
-          total_reviews: 0
-        }
-      ]);
+    // Atualizamos o perfil com os dados pessoais e injetamos o contrato global
+    const { error: perfilError } = await supabase.from('perfis').upsert({
+      id: authData.user.id,
+      email: auth.emailAcesso,
+      empresa_nome: form.nomeEmpresa,
+      nif_empresa: form.nif,
+      nome_completo: form.pessoaContacto,
+      telefone: form.telefone,
+      role: 'organizador',
+      parceiro_verificado: false,
+      contrato_dados: payloadJSON,
+      status_contrato: 'Pendente de Revisão'
+    });
 
-    if (campoError) {
-      console.error("🛑 [ERRO BD] Falha ao gravar contrato:", campoError);
-      alert((isEn ? "Database error: " : "Erro ao gravar contrato na Base de Dados: ") + campoError.message);
+    if (perfilError) {
+      console.error("🛑 [ERRO BD] Falha ao gravar perfil e contrato:", perfilError);
+      alert((isEn ? "Database error: " : "Erro ao gravar contrato na Base de Dados: ") + perfilError.message);
       setLoading(false);
       return;
     }
 
-    console.log("✅ [PASSO 2] Contrato guardado na base de dados com sucesso!");
+    console.log("✅ [PASSO 2] Perfil e Contrato Global atualizados com sucesso!");
 
     // ==========================================
     // PASSO 3: DISPARAR EMAILS DE NOTIFICAÇÃO
@@ -191,7 +151,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     // ==========================================
     // PASSO FINAL: REDIRECIONAR O UTILIZADOR
     // ==========================================
-    alert(isEn ? "Contract signed and account successfully created! You can now access your portal." : "Contrato assinado e conta criada com sucesso! Pode agora aceder ao seu portal.");
+    alert(isEn ? "Global Contract signed and account successfully created! You can now access your portal." : "Contrato Global assinado e conta criada com sucesso! Pode agora aceder ao seu painel.");
     router.push(`/${lang}/admin/login`);
     
     setLoading(false);
@@ -213,8 +173,8 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
           </h1>
           <p className="text-sm md:text-base text-slate-600 font-medium mt-3 max-w-2xl mx-auto px-2">
             {isEn 
-              ? 'Please fill out the partnership agreement below to digitize your operation. At the end of the document, you will define your portal access details.' 
-              : 'Preencha o acordo de parceria abaixo para digitalizar a sua operação. No final do documento, definirá os seus dados de acesso ao portal.'}
+              ? 'Please fill out the global partnership agreement below to digitize your operation. At the end of the document, you will define your portal access details.' 
+              : 'Preencha o Acordo Global de Parceria abaixo para digitalizar toda a sua operação. No final do documento, definirá os seus dados de acesso ao portal.'}
           </p>
         </div>
 
@@ -225,10 +185,10 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
               <span className="text-black">Hello</span><span className="text-[#EBA914]">Camp</span>
             </div>
             <h1 className="text-xl md:text-2xl font-bold uppercase mb-2 tracking-widest border-b-2 border-black inline-block pb-2">
-              {isEn ? 'Intermediation Contract – HelloCamp' : 'Contrato de Intermediação – HelloCamp'}
+              {isEn ? 'Global Intermediation Contract' : 'Contrato Global de Intermediação'}
             </h1>
             <p className="text-sm md:text-base italic text-gray-600 mt-4">
-              {isEn ? 'Your partnership contract with HelloCamp, explained simply and objectively.' : 'O seu contrato de parceria com a HelloCamp, explicado de forma simples e objetiva.'}
+              {isEn ? 'A single agreement covering all your current and future activities on HelloCamp.' : 'Um único acordo que abrange todas as suas atividades presentes e futuras na plataforma HelloCamp.'}
             </p>
           </div>
 
@@ -291,7 +251,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
 
           <div className="space-y-4 font-serif text-sm md:text-[15px]">
             <h2 className="text-lg md:text-xl font-bold text-center uppercase tracking-widest mb-6 md:mb-8">
-              {isEn ? 'Service Provision Agreement' : 'Acordo de Prestação de Serviços'}
+              {isEn ? 'Global Service Agreement' : 'Acordo Global de Prestação de Serviços'}
             </h2>
             <p className="text-justify">
               {isEn 
@@ -315,14 +275,18 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
             
             <p className="mt-6 italic text-center">{isEn ? '- hereinafter referred to as the "Partner" -' : '- doravante designado por "Parceiro" -'}</p>
             
-            <div className="bg-emerald-50 border border-emerald-200 p-5 sm:p-8 my-8 font-sans rounded-xl shadow-inner">
-              <label className="text-xs sm:text-sm font-bold text-emerald-900 block mb-3 uppercase tracking-widest">
-                {isEn ? 'What is the name of your main program / summer camp? *' : 'Qual é o nome do seu programa principal / campo de férias? *'}
-              </label>
-              <input required type="text" className="w-full border-b-2 border-emerald-600 bg-transparent text-xl sm:text-2xl font-black text-emerald-900 outline-none placeholder:text-emerald-300 transition-colors focus:border-emerald-800 py-1" value={form.nomePrograma} onChange={e => setForm({...form, nomePrograma: e.target.value})} placeholder="Ex: Summer Surf Camp 2026" />
-              <p className="text-xs sm:text-sm font-medium text-emerald-700 mt-4 leading-relaxed">
-                {isEn ? 'This intermediation and commercial promotion contract is concluded for this specific program.' : 'É celebrado o presente contrato de intermediação e divulgação comercial para este programa específico.'}
-              </p>
+            <div className="text-center p-6 sm:p-8 mt-8 border-y-2 border-slate-200 bg-slate-50">
+               <p className="font-bold text-base sm:text-lg mb-2">
+                 {isEn ? 'This intermediation and commercial promotion contract applies to:' : 'É celebrado o presente contrato de intermediação e divulgação comercial aplicável a:'}
+               </p>
+               <span className="block text-lg sm:text-2xl font-black text-emerald-800 uppercase tracking-widest mt-4">
+                  {isEn ? 'All activities organized by' : 'Todas as atividades organizadas por'} <br/> {form.nomeEmpresa || "..."}
+               </span>
+               <span className="block text-xs sm:text-sm text-gray-500 mt-4 font-sans font-medium">
+                  {isEn 
+                    ? 'This contract covers all summer camps, programs, and activities created by the partner on the HelloCamp platform.' 
+                    : 'Este contrato é global e abrange todos os campos de férias e programas que o parceiro venha a criar na plataforma HelloCamp.'}
+               </span>
             </div>
           </div>
 
@@ -548,8 +512,8 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
                   <input type="checkbox" required checked={form.concordaTermos} onChange={e => setForm({...form, concordaTermos: e.target.checked})} className="mt-1 w-5 h-5 accent-black cursor-pointer flex-shrink-0" />
                   <span className="text-xs sm:text-sm text-gray-700 font-medium leading-relaxed group-hover:text-black transition-colors">
                     {isEn 
-                      ? 'I declare that I have read and accepted the terms. I confirm I have the legal authority to bind the entity identified above through this digital signature.' 
-                      : 'Declaro ter lido e aceite os termos. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital.'}
+                      ? 'I declare that I have read and accepted the Global Agreement terms. I confirm I have the legal authority to bind the entity identified above through this digital signature.' 
+                      : 'Declaro ter lido e aceite os termos do Contrato Global. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital.'}
                   </span>
                 </label>
               </div>
@@ -559,7 +523,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
           {/* CRIAÇÃO DA CONTA B2B */}
           <div className="bg-slate-900 p-6 md:p-8 rounded-2xl text-white font-sans mt-12 md:mt-16 shadow-2xl relative overflow-hidden">
             <h3 className="text-xl sm:text-2xl font-black mb-2 relative z-10">{isEn ? 'Final Step: Access Account' : 'Último Passo: Conta de Acesso'}</h3>
-            <p className="text-xs sm:text-sm text-slate-400 mb-6 md:mb-8 relative z-10">{isEn ? 'Define your credentials to access your Organizer Dashboard.' : 'Defina as credenciais para aceder ao seu Dashboard de Organizador e gerir este campo.'}</p>
+            <p className="text-xs sm:text-sm text-slate-400 mb-6 md:mb-8 relative z-10">{isEn ? 'Define your credentials to access your Organizer Dashboard.' : 'Defina as credenciais para aceder ao seu Dashboard de Parceiro e gerir a sua conta.'}</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 relative z-10">
               <div>
@@ -576,7 +540,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
               <button type="submit" disabled={loading || !form.concordaTermos} className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-bold px-6 sm:px-10 py-3 sm:py-4 rounded-xl shadow-lg transition-transform hover:-translate-y-1 cursor-pointer w-full md:w-auto text-base sm:text-lg border border-emerald-400">
                 {loading 
                   ? (isEn ? 'Creating secure environment...' : 'A criar ambiente seguro...') 
-                  : (isEn ? 'Sign Contract and Create Account' : 'Assinar Contrato e Criar Conta')}
+                  : (isEn ? 'Sign Contract and Create Account' : 'Assinar Contrato Global e Criar Conta')}
               </button>
             </div>
           </div>

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
-import Link from "next/link"; // IMPORTANTE: Adicionado o import do Link
+import Link from "next/link";
 
 export default function RecrutamentoParceirosPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
@@ -14,10 +14,15 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
   const [parceiroId, setParceiroId] = useState<string | null>(null);
   const [parceiroPerfil, setParceiroPerfil] = useState<any>(null);
 
-  // --- CONTROLO DE ACESSO (PAYWALL / CONTRATO) ---
+  // --- CONTROLO DE ACESSO E TERMOS LEGAIS ---
   const [statusContrato, setStatusContrato] = useState<string>("Não Iniciado");
   const [temAcesso, setTemAcesso] = useState(false);
   const [showLockModal, setShowLockModal] = useState(false);
+  
+  // NOVO: Estado para gerir a aceitação dos Termos de Recrutamento
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [checkboxTermos, setCheckboxTermos] = useState(false);
+  const [savingTerms, setSavingTerms] = useState(false);
 
   // --- DATA STATES ---
   const [monitores, setMonitores] = useState<any[]>([]);
@@ -50,18 +55,22 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     const userId = session.user.id;
     setParceiroId(userId);
 
-    // 1. Obter Perfil do Parceiro
-    const { data: perfilData } = await supabase.from('perfis').select('empresa_nome').eq('id', userId).single();
+    // 1. Obter Perfil do Parceiro (Lê também os termos_recrutamento_aceites)
+    const { data: perfilData } = await supabase.from('perfis').select('empresa_nome, termos_recrutamento_aceites').eq('id', userId).single();
     setParceiroPerfil(perfilData);
 
-    // 2. VERIFICAR STATUS DO CONTRATO NA TABELA 'campos'
+    // Se os termos nunca foram aceites, mostra o Modal de Termos
+    if (!perfilData?.termos_recrutamento_aceites) {
+      setShowTermsModal(true);
+    }
+
+    // 2. VERIFICAR STATUS DO CONTRATO GLOBAL NA TABELA 'campos'
     const { data: camposData } = await supabase.from('campos').select('status_aprovacao').eq('organizador_id', userId);
     
     let acesso = false;
     let currentStatus = isEn ? "Not Started" : "Não Iniciado";
 
     if (camposData && camposData.length > 0) {
-      // Verifica se existe algum campo validado
       const isApproved = camposData.some(c => {
          const st = (c.status_aprovacao || '').toLowerCase();
          return st === 'aprovado' || st === 'validado' || st === 'ativo' || st === 'active';
@@ -130,14 +139,27 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     carregarDadosRecrutamento();
   }, [conversaAtiva?.monitor_id]);
 
-  // --- LÓGICA DE FAVORITOS E MENSAGENS ---
-  const toggleGuardar = async (e: React.MouseEvent, idMonitor: string) => {
-    e.stopPropagation();
-    if (!temAcesso) {
-      setShowLockModal(true);
+  // --- SALVAR TERMOS DE RECRUTAMENTO ---
+  const handleAceitarTermos = async () => {
+    if (!checkboxTermos || !parceiroId) return;
+    setSavingTerms(true);
+
+    const { error } = await supabase.from('perfis').update({ termos_recrutamento_aceites: true }).eq('id', parceiroId);
+    
+    if (error) {
+      alert("Erro ao gravar aceitação dos termos: " + error.message);
+      setSavingTerms(false);
       return;
     }
 
+    setShowTermsModal(false);
+    setSavingTerms(false);
+  };
+
+  // --- LÓGICA DE FAVORITOS E MENSAGENS ---
+  const toggleGuardar = async (e: React.MouseEvent, idMonitor: string) => {
+    e.stopPropagation();
+    if (!temAcesso) { setShowLockModal(true); return; }
     if (!parceiroId) return;
 
     if (guardadosIds.includes(idMonitor)) {
@@ -151,10 +173,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
 
   const handleEnviarMensagem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!temAcesso) {
-      setShowLockModal(true);
-      return;
-    }
+    if (!temAcesso) { setShowLockModal(true); return; }
     if (!novaMensagem.trim() || !parceiroId || !conversaAtiva) return;
     setSendingEdit(true);
 
@@ -200,19 +219,13 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
   };
 
   const selecionarConversa = (conv: any) => {
-    if (!temAcesso) {
-      setShowLockModal(true);
-      return;
-    }
+    if (!temAcesso) { setShowLockModal(true); return; }
     setConversaAtiva(conv);
     marcarComoLidas(conv.monitor_id);
   };
 
   const iniciarConversaComMonitor = async (monitor: any) => {
-    if (!temAcesso) {
-      setShowLockModal(true);
-      return;
-    }
+    if (!temAcesso) { setShowLockModal(true); return; }
     if (!parceiroId) return;
     setMonitorSelecionado(null);
     
@@ -304,8 +317,8 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
           return (
             <div key={monitor.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all duration-300 flex flex-col group relative">
               
-              {/* PAYWALL / OVERLAY BLUR SE NÃO TIVER ACESSO */}
-              {!temAcesso && (
+              {/* PAYWALL / OVERLAY BLUR SE NÃO TIVER ACESSO (CONTRATO) */}
+              {!temAcesso && !showTermsModal && (
                 <div 
                   className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[6px] cursor-pointer hover:bg-white/50 transition-colors"
                   onClick={() => setShowLockModal(true)}
@@ -317,7 +330,6 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
 
               <button onClick={(e) => toggleGuardar(e, monitor.id)} className={`absolute top-4 right-4 z-10 w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${isGuardado ? 'bg-amber-100 text-amber-500 border-amber-200' : 'bg-white text-slate-300 border-slate-200 hover:text-amber-400'}`}>★</button>
               
-              {/* O conteúdo do card fica ligeiramente transparente e "unselectable" se não houver acesso */}
               <div className={`flex flex-col flex-1 ${!temAcesso ? 'select-none opacity-50' : ''}`}>
                 <div className="p-5 pb-3 border-b border-slate-100 flex items-start gap-4">
                   <div className="w-12 h-12 rounded-full bg-slate-100 border overflow-hidden flex-shrink-0 flex items-center justify-center">{monitor.fotografia_url ? <img src={monitor.fotografia_url} alt="" className="w-full h-full object-cover" /> : <span className="text-lg">🧑‍🏫</span>}</div>
@@ -341,6 +353,58 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
 
   return (
     <div className="max-w-7xl mx-auto flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-80px)] font-sans">
+      
+      {/* MODAL OBRIGATÓRIO DOS TERMOS DE RECRUTAMENTO (Clickwrap Agreement) */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+          <div className="bg-white w-full max-w-lg rounded-3xl flex flex-col overflow-hidden shadow-2xl p-8">
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-6 shadow-inner border border-blue-100">
+              ⚖️
+            </div>
+            
+            <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">
+              {isEn ? "Legal Disclaimer" : "Aviso Legal de Recrutamento"}
+            </h2>
+            <p className="text-sm text-slate-600 font-medium mb-6 leading-relaxed text-center">
+              {isEn 
+                ? "Before accessing the talent pool, you must read and agree to our Recruitment Terms."
+                : "Antes de aceder à Bolsa de Talentos, tem de concordar com os nossos Termos de Recrutamento."}
+            </p>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8 text-sm text-slate-700 leading-relaxed font-medium">
+               A HelloCamp atua <strong>exclusivamente</strong> como uma plataforma digital de contacto e publicitação.
+               <br/><br/>
+               Declaramos expressamente que <strong>não validamos</strong> a identidade, não verificamos as certificações submetidas, nem solicitamos o Registo Criminal dos monitores inscritos na plataforma.
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer group mb-8 p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200">
+              <input 
+                type="checkbox" 
+                checked={checkboxTermos} 
+                onChange={(e) => setCheckboxTermos(e.target.checked)} 
+                className="mt-1 w-5 h-5 accent-blue-600 cursor-pointer flex-shrink-0" 
+              />
+              <span className="text-xs text-slate-700 font-bold leading-relaxed">
+                {isEn ? (
+                  <>I declare that I have read and understood the <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-blue-600 hover:underline">Recruitment Terms & Conditions</Link>. I assume full responsibility for conducting interviews and legally verifying the monitor's Criminal Record before any activity begins.</>
+                ) : (
+                  <>Declaro ter lido e compreendido os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-blue-600 hover:underline">Termos e Condições de Recrutamento</Link>. Assumo total responsabilidade pela condução de entrevistas e pela exigência/verificação legal do Registo Criminal do monitor antes do início de qualquer atividade.</>
+                )}
+              </span>
+            </label>
+
+            <button 
+              onClick={handleAceitarTermos} 
+              disabled={!checkboxTermos || savingTerms}
+              className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingTerms ? (isEn ? "Saving..." : "A Guardar...") : (isEn ? "Accept and Enter" : "Aceitar e Entrar na Bolsa")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* RESTO DA PÁGINA (Apenas visível atrás do Modal se os termos ainda não tiverem sido aceites) */}
       <div className="mb-4 flex-shrink-0">
         <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight m-0 mb-1">{isEn ? "Staff Recruitment" : "Recrutamento de Equipa"}</h1>
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">{isEn ? "Find, save, and contact monitors" : "Pesquisa, Shortlist e Contacto Direto"}</p>
@@ -365,8 +429,8 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
         {activeTab === "mensagens" && (
           <div className="h-full min-h-[400px] flex bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm relative">
             
-            {/* BLOQUEIO ESPECÍFICO NA INBOX SE NÃO TIVER ACESSO */}
-            {!temAcesso && (
+            {/* BLOQUEIO ESPECÍFICO NA INBOX SE NÃO TIVER ACESSO (CONTRATO) */}
+            {!temAcesso && !showTermsModal && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm p-6 text-center">
                 <div className="w-16 h-16 bg-slate-900 text-white rounded-full flex items-center justify-center text-2xl shadow-lg mb-4">🔒</div>
                 <h2 className="text-xl font-black text-slate-900 mb-2">{isEn ? "Inbox Locked" : "Mensagens Bloqueadas"}</h2>
@@ -406,8 +470,8 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
         )}
       </div>
 
-      {/* MODAL DE BLOQUEIO DE CONTRATO (FREEMIUM / PAYWALL) */}
-      {showLockModal && (
+      {/* MODAL DE BLOQUEIO DE CONTRATO GLOBAL (FREEMIUM / PAYWALL) */}
+      {showLockModal && !showTermsModal && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-md rounded-3xl flex flex-col overflow-hidden shadow-2xl p-8 text-center relative">
             <button onClick={() => setShowLockModal(false)} className="absolute top-4 right-5 text-slate-400 hover:text-slate-900 font-bold text-2xl transition-colors leading-none bg-transparent border-none cursor-pointer">&times;</button>
@@ -443,7 +507,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
       )}
 
       {/* MODAL / LIGHTBOX DE PERFIL COMPLETO (SÓ APARECE SE TIVER ACESSO) */}
-      {monitorSelecionado && temAcesso && (
+      {monitorSelecionado && temAcesso && !showTermsModal && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl flex flex-col overflow-hidden shadow-2xl">
             
