@@ -13,6 +13,11 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
   const [parceiroId, setParceiroId] = useState<string | null>(null);
   const [parceiroPerfil, setParceiroPerfil] = useState<any>(null);
 
+  // --- CONTROLO DE ACESSO (PAYWALL / CONTRATO) ---
+  const [statusContrato, setStatusContrato] = useState<string>("Não Iniciado");
+  const [temAcesso, setTemAcesso] = useState(false);
+  const [showLockModal, setShowLockModal] = useState(false);
+
   // --- DATA STATES ---
   const [monitores, setMonitores] = useState<any[]>([]);
   const [guardadosIds, setGuardadosIds] = useState<string[]>([]);
@@ -44,9 +49,35 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     const userId = session.user.id;
     setParceiroId(userId);
 
+    // 1. Obter Perfil do Parceiro
     const { data: perfilData } = await supabase.from('perfis').select('empresa_nome').eq('id', userId).single();
     setParceiroPerfil(perfilData);
 
+    // 2. VERIFICAR STATUS DO CONTRATO NA TABELA 'campos'
+    const { data: camposData } = await supabase.from('campos').select('status_aprovacao').eq('organizador_id', userId);
+    
+    let acesso = false;
+    let currentStatus = isEn ? "Not Started" : "Não Iniciado";
+
+    if (camposData && camposData.length > 0) {
+      // Verifica se existe algum campo validado
+      const isApproved = camposData.some(c => {
+         const st = (c.status_aprovacao || '').toLowerCase();
+         return st === 'aprovado' || st === 'validado' || st === 'ativo' || st === 'active';
+      });
+      
+      if (isApproved) {
+         acesso = true;
+         currentStatus = isEn ? "Validated" : "Validado";
+      } else {
+         currentStatus = camposData[0].status_aprovacao || (isEn ? "Pending" : "Pendente");
+      }
+    }
+    
+    setTemAcesso(acesso);
+    setStatusContrato(currentStatus);
+
+    // 3. Carregar Monitores e Guardados
     const { data: monitoresData } = await supabase.from('monitores').select('*').order('criado_at', { ascending: false });
     setMonitores(monitoresData || []);
 
@@ -55,6 +86,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
       setGuardadosIds(favsData.map(f => f.monitor_id));
     }
 
+    // 4. Carregar Histórico de Mensagens
     const { data: msgData } = await supabase
       .from('mensagens_recrutamento')
       .select('*, monitores(nome_completo, fotografia_url, email)')
@@ -100,6 +132,11 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
   // --- LÓGICA DE FAVORITOS E MENSAGENS ---
   const toggleGuardar = async (e: React.MouseEvent, idMonitor: string) => {
     e.stopPropagation();
+    if (!temAcesso) {
+      setShowLockModal(true);
+      return;
+    }
+
     if (!parceiroId) return;
 
     if (guardadosIds.includes(idMonitor)) {
@@ -113,6 +150,10 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
 
   const handleEnviarMensagem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!temAcesso) {
+      setShowLockModal(true);
+      return;
+    }
     if (!novaMensagem.trim() || !parceiroId || !conversaAtiva) return;
     setSendingEdit(true);
 
@@ -158,11 +199,19 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
   };
 
   const selecionarConversa = (conv: any) => {
+    if (!temAcesso) {
+      setShowLockModal(true);
+      return;
+    }
     setConversaAtiva(conv);
     marcarComoLidas(conv.monitor_id);
   };
 
   const iniciarConversaComMonitor = async (monitor: any) => {
+    if (!temAcesso) {
+      setShowLockModal(true);
+      return;
+    }
     if (!parceiroId) return;
     setMonitorSelecionado(null);
     
@@ -217,21 +266,19 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     
     const diasNoMes = new Date(ano, mes + 1, 0).getDate();
     const primeiroDia = new Date(ano, mes, 1).getDay();
-    const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1; // Ajustar para Segunda-feira ser o dia 0
+    const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1;
 
     const dias = [];
     
-    // Espaços vazios
     for (let i = 0; i < startDayIndex; i++) {
       dias.push(<div key={`empty-${i}`} className="p-1"></div>);
     }
 
-    // Dias do mês
     for (let i = 1; i <= diasNoMes; i++) {
       const dataStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       const estadoDia = calendarioData?.[dataStr];
       
-      let coresClasses = "bg-white border-slate-100 text-slate-300"; // default (não especificado)
+      let coresClasses = "bg-white border-slate-100 text-slate-300"; 
       if (estadoDia === 'Livre') coresClasses = "bg-emerald-100 border-emerald-500 text-emerald-800 font-black shadow-inner";
       if (estadoDia === 'Ocupado') coresClasses = "bg-red-100 border-red-500 text-red-800 font-black opacity-80 line-through";
 
@@ -244,7 +291,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     return dias;
   };
 
-  // --- GRELHA DE MONITORES ---
+  // --- GRELHA DE MONITORES COM EFEITO BLUR E LOCK ---
   const renderGrelhaMonitores = (lista: any[], emptyMessage: string) => {
     if (loading) return <div className="text-center py-20 text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">{isEn ? "Loading talent pool..." : "A carregar talentos..."}</div>;
     if (lista.length === 0) return <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center shadow-sm w-full"><span className="text-4xl block mb-2">🔍</span><h3 className="text-sm font-black text-slate-900 mb-1">{isEn ? "No monitors found" : "Nenhum monitor encontrado"}</h3><p className="text-xs text-slate-500 font-medium">{emptyMessage}</p></div>;
@@ -254,19 +301,35 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
         {lista.map(monitor => {
           const isGuardado = guardadosIds.includes(monitor.id);
           return (
-            <div key={monitor.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col group relative">
-              <button onClick={(e) => toggleGuardar(e, monitor.id)} className={`absolute top-4 right-4 z-10 w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${isGuardado ? 'bg-amber-100 text-amber-500 border-amber-200' : 'bg-white text-slate-300 border-slate-200 hover:text-amber-400'}`}>★</button>
-              <div className="p-5 pb-3 border-b border-slate-100 flex items-start gap-4">
-                <div className="w-12 h-12 rounded-full bg-slate-100 border overflow-hidden flex-shrink-0 flex items-center justify-center">{monitor.fotografia_url ? <img src={monitor.fotografia_url} alt="" className="w-full h-full object-cover" /> : <span className="text-lg">🧑‍🏫</span>}</div>
-                <div className="flex-1 overflow-hidden pr-6">
-                  <h3 className="text-sm font-black text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors">{monitor.nome_completo}</h3>
-                  <div className="text-[10px] font-bold text-slate-500 mt-1 flex items-center gap-1 truncate"><span>📍 {monitor.distrito_residencia}</span><span>•</span><span>{calcularIdade(monitor.data_nascimento)} {isEn ? "yrs" : "anos"}</span></div>
+            <div key={monitor.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all duration-300 flex flex-col group relative">
+              
+              {/* PAYWALL / OVERLAY BLUR SE NÃO TIVER ACESSO */}
+              {!temAcesso && (
+                <div 
+                  className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[6px] cursor-pointer hover:bg-white/50 transition-colors"
+                  onClick={() => setShowLockModal(true)}
+                >
+                  <div className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center text-lg shadow-lg mb-2">🔒</div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-900 bg-white px-3 py-1 rounded-full shadow-sm">{isEn ? "Locked Profile" : "Perfil Oculto"}</span>
                 </div>
-              </div>
-              <div className="p-5 flex-1 flex flex-col">
-                <div className="mb-3"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{isEn ? "Experience" : "Experiência"}</span><span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded">{monitor.experiencia_anos === "0" ? (isEn ? "Beginner" : "Iniciante") : `${monitor.experiencia_anos} ${isEn ? "years" : "anos"}`}</span></div>
-                <div className="mb-5 flex-1"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{isEn ? "Certificates" : "Certificações"}</span><div className="flex flex-wrap gap-1">{monitor.certificacoes?.slice(0,2).map((cert: string) => (<span key={cert} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[9px] font-bold uppercase rounded border border-emerald-100 truncate max-w-full">{cert}</span>)) || <span className="text-[10px] text-slate-400 italic">Nenhuma</span>}</div></div>
-                <button onClick={() => { setMonitorSelecionado(monitor); setMesModalView(new Date()); }} className="w-full py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-600 transition-colors shadow-sm">{isEn ? "View Profile" : "Ver Perfil"}</button>
+              )}
+
+              <button onClick={(e) => toggleGuardar(e, monitor.id)} className={`absolute top-4 right-4 z-10 w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${isGuardado ? 'bg-amber-100 text-amber-500 border-amber-200' : 'bg-white text-slate-300 border-slate-200 hover:text-amber-400'}`}>★</button>
+              
+              {/* O conteúdo do card fica ligeiramente transparente e "unselectable" se não houver acesso */}
+              <div className={`flex flex-col flex-1 ${!temAcesso ? 'select-none opacity-50' : ''}`}>
+                <div className="p-5 pb-3 border-b border-slate-100 flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 border overflow-hidden flex-shrink-0 flex items-center justify-center">{monitor.fotografia_url ? <img src={monitor.fotografia_url} alt="" className="w-full h-full object-cover" /> : <span className="text-lg">🧑‍🏫</span>}</div>
+                  <div className="flex-1 overflow-hidden pr-6">
+                    <h3 className="text-sm font-black text-slate-900 leading-tight truncate transition-colors">{!temAcesso ? "Monitor Registado" : monitor.nome_completo}</h3>
+                    <div className="text-[10px] font-bold text-slate-500 mt-1 flex items-center gap-1 truncate"><span>📍 {monitor.distrito_residencia}</span><span>•</span><span>{!temAcesso ? "**" : calcularIdade(monitor.data_nascimento)} {isEn ? "yrs" : "anos"}</span></div>
+                  </div>
+                </div>
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="mb-3"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{isEn ? "Experience" : "Experiência"}</span><span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded">{monitor.experiencia_anos === "0" ? (isEn ? "Beginner" : "Iniciante") : `${monitor.experiencia_anos} ${isEn ? "years" : "anos"}`}</span></div>
+                  <div className="mb-5 flex-1"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{isEn ? "Certificates" : "Certificações"}</span><div className="flex flex-wrap gap-1">{monitor.certificacoes?.slice(0,2).map((cert: string) => (<span key={cert} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[9px] font-bold uppercase rounded border border-emerald-100 truncate max-w-full">{cert}</span>)) || <span className="text-[10px] text-slate-400 italic">Nenhuma</span>}</div></div>
+                  <button onClick={() => { if(temAcesso) { setMonitorSelecionado(monitor); setMesModalView(new Date()); } else { setShowLockModal(true); } }} className="w-full py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-600 transition-colors shadow-sm">{isEn ? "View Profile" : "Ver Perfil"}</button>
+                </div>
               </div>
             </div>
           );
@@ -287,7 +350,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 relative">
         {/* TABS DE CONTEÚDO */}
         {activeTab === "descobrir" && (
           <div>
@@ -299,8 +362,21 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
         {activeTab === "guardados" && <div>{renderGrelhaMonitores(monitoresGuardados, isEn ? "No saved profiles." : "Ainda não guardou nenhum monitor nesta lista.")}</div>}
 
         {activeTab === "mensagens" && (
-          <div className="h-full min-h-[400px] flex bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-            <div className={`w-full md:w-1/3 border-r border-slate-100 bg-slate-50 overflow-y-auto ${conversaAtiva ? 'hidden md:block' : 'block'}`}>
+          <div className="h-full min-h-[400px] flex bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm relative">
+            
+            {/* BLOQUEIO ESPECÍFICO NA INBOX SE NÃO TIVER ACESSO */}
+            {!temAcesso && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm p-6 text-center">
+                <div className="w-16 h-16 bg-slate-900 text-white rounded-full flex items-center justify-center text-2xl shadow-lg mb-4">🔒</div>
+                <h2 className="text-xl font-black text-slate-900 mb-2">{isEn ? "Inbox Locked" : "Mensagens Bloqueadas"}</h2>
+                <p className="text-sm font-medium text-slate-500 max-w-sm mb-6">{isEn ? "You need an active contract to send and receive messages from monitors." : "Apenas parceiros com contrato validado e ativo podem enviar propostas e conversar diretamente com os monitores da bolsa."}</p>
+                <button onClick={() => setShowLockModal(true)} className="bg-emerald-600 text-white font-black uppercase tracking-widest text-xs px-6 py-3 rounded-xl shadow-md hover:bg-emerald-700 transition-colors">
+                  {isEn ? "Check Contract Status" : "Ver Estado do Contrato"}
+                </button>
+              </div>
+            )}
+
+            <div className={`w-full md:w-1/3 border-r border-slate-100 bg-slate-50 overflow-y-auto ${conversaAtiva ? 'hidden md:block' : 'block'} ${!temAcesso ? 'opacity-30 pointer-events-none' : ''}`}>
               {conversas.map(conv => (
                 <button key={conv.monitor_id} onClick={() => selecionarConversa(conv)} className={`w-full text-left p-4 border-b border-slate-100 flex flex-col bg-slate-50 hover:bg-white transition-colors ${conversaAtiva?.monitor_id === conv.monitor_id ? 'bg-white border-l-4 border-l-emerald-500' : ''}`}>
                   <div className="flex justify-between items-center w-full"><span className="text-xs font-black text-slate-900 truncate">{conv.monitor_nome}</span><span className="text-[9px] font-bold text-slate-400 flex-shrink-0 ml-2">{conv.data}</span></div>
@@ -308,7 +384,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
                 </button>
               ))}
             </div>
-            <div className={`w-full md:w-2/3 flex flex-col bg-white ${!conversaAtiva ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`w-full md:w-2/3 flex flex-col bg-white ${!conversaAtiva ? 'hidden md:flex' : 'flex'} ${!temAcesso ? 'opacity-30 pointer-events-none' : ''}`}>
               {!conversaAtiva ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-300 p-8"><span className="text-3xl mb-2">💬</span><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{isEn ? "Select a candidate to chat" : "Selecione um candidato para falar"}</p></div>
               ) : (
@@ -329,22 +405,56 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
         )}
       </div>
 
-      {/* NOVO MODAL / LIGHTBOX DE PERFIL COMPLETO */}
-      {monitorSelecionado && (
+      {/* MODAL DE BLOQUEIO DE CONTRATO (FREEMIUM / PAYWALL) */}
+      {showLockModal && (
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-3xl flex flex-col overflow-hidden shadow-2xl p-8 text-center relative">
+            <button onClick={() => setShowLockModal(false)} className="absolute top-4 right-5 text-slate-400 hover:text-slate-900 font-bold text-2xl transition-colors leading-none bg-transparent border-none cursor-pointer">&times;</button>
+            
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-4xl mx-auto mb-6 shadow-inner">
+              📄
+            </div>
+            
+            <h2 className="text-2xl font-black text-slate-900 mb-2">
+              {isEn ? "Contract Validation Required" : "Acesso Restrito"}
+            </h2>
+            <p className="text-sm text-slate-500 font-medium mb-8 leading-relaxed">
+              {isEn 
+                ? "To access the full talent pool, view photos, and contact monitors, your partnership contract with HelloCamp must be signed and validated."
+                : "Para aceder aos perfis completos, ver fotografias e contactar a bolsa de monitores, o seu contrato de parceria com a HelloCamp necessita de estar finalizado e validado."}
+            </p>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8 text-left flex items-center justify-between">
+               <div>
+                  <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{isEn ? "Contract Status" : "Estado do seu Contrato"}</span>
+                  <span className={`text-sm font-black uppercase tracking-widest ${statusContrato.toLowerCase() === 'pendente' ? 'text-amber-500' : 'text-slate-700'}`}>
+                    {statusContrato}
+                  </span>
+               </div>
+               <div className={`w-3 h-3 rounded-full ${statusContrato.toLowerCase() === 'pendente' ? 'bg-amber-400 animate-pulse' : 'bg-slate-300'}`}></div>
+            </div>
+
+            <button onClick={() => setShowLockModal(false)} className="w-full bg-slate-900 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-md">
+              {isEn ? "Understood" : "Compreendido"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL / LIGHTBOX DE PERFIL COMPLETO (SÓ APARECE SE TIVER ACESSO) */}
+      {monitorSelecionado && temAcesso && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl flex flex-col overflow-hidden shadow-2xl">
             
-            {/* Header Modal */}
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white flex-shrink-0">
                <div className="text-xs font-black text-slate-500 uppercase tracking-widest">{isEn ? "Candidate Dossier" : "Dossier do Candidato"}</div>
                <button onClick={() => setMonitorSelecionado(null)} className="text-slate-400 hover:text-slate-900 font-bold text-2xl transition-colors leading-none bg-transparent border-none cursor-pointer">&times;</button>
             </div>
 
-            {/* Corpo Modal em 2 Colunas */}
             <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6 md:p-8">
                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   
-                  {/* Coluna Esquerda: Foto, Resumo e Ações Rápidas */}
+                  {/* Coluna Esquerda */}
                   <div className="lg:col-span-1 flex flex-col gap-6">
                      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm text-center">
                         <div className="w-32 h-32 mx-auto rounded-full bg-slate-100 border-4 border-white shadow-md overflow-hidden mb-4">
@@ -370,16 +480,14 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
                      </div>
                   </div>
 
-                  {/* Coluna Direita: CV, Certificados e Disponibilidade */}
+                  {/* Coluna Direita */}
                   <div className="lg:col-span-2 flex flex-col gap-6">
                      
-                     {/* Pitch */}
                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Presentation / Bio" : "Carta de Apresentação"}</h4>
                         <p className="text-sm text-slate-700 leading-relaxed font-medium m-0 whitespace-pre-wrap">{monitorSelecionado.bio || "Sem carta de apresentação."}</p>
                      </div>
 
-                     {/* Experiência e Zonas de Atuação */}
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                            <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2">{isEn ? "Experience" : "Experiência"}</h4>
@@ -394,7 +502,6 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
                         </div>
                      </div>
 
-                     {/* Certificados e Outras Competências */}
                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Core Certificates" : "Certificados Base"}</h4>
                         <div className="flex flex-wrap gap-2 mb-5">
@@ -409,7 +516,6 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
                         )}
                      </div>
 
-                     {/* Disponibilidade e Calendário Específico (READ ONLY) */}
                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3">{isEn ? "Seasonal Availability" : "Disponibilidade Sazonal"}</h4>
                         <div className="flex flex-wrap gap-2 mb-5">
