@@ -2,7 +2,6 @@
 
 import React, { use } from "react";
 import Link from "next/link";
-import Image from "next/image";
 
 export default function MonitoresLandingPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
@@ -86,7 +85,7 @@ export default function MonitoresLandingPage({ params }: { params: Promise<{ lan
         </div>
       </section>
 
-      {/* WHY JOIN US (Benefícios) */}
+      {/* WHY JOIN US */}
       <section className="bg-white border-y border-slate-200 py-20 px-4 md:px-8">
         <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           

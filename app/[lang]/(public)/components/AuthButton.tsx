@@ -42,7 +42,7 @@ export default function AuthButton({ lang, dict }: { lang: string; dict: any }) 
     return <div className="w-48 h-10 bg-gray-50 rounded-lg animate-pulse"></div>;
   }
 
-  // 1. Se tem sessão e é ORGANIZADOR (Oculta o convite estático)
+  // 1. Se tem sessão e é ORGANIZADOR (Parceiro)
   if (user && role === 'organizador') {
     return (
       <Link href={`/${lang}/admin/dashboard`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
@@ -51,7 +51,16 @@ export default function AuthButton({ lang, dict }: { lang: string; dict: any }) 
     );
   }
 
-  // 2. Se tem sessão e é CLIENTE / Pai (Oculta o convite estático)
+  // 2. Se tem sessão e é MONITOR (Bolsa de Talentos)
+  if (user && role === 'monitor') {
+    return (
+      <Link href={`/${lang}/monitores/portal/perfil`} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
+        {isEn ? 'Monitor Portal' : 'Portal do Monitor'}
+      </Link>
+    );
+  }
+
+  // 3. Se tem sessão e é CLIENTE (Portal dos Pais) - Fallback
   if (user) {
     return (
       <Link href={`/${lang}/cliente/dashboard`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
@@ -60,7 +69,7 @@ export default function AuthButton({ lang, dict }: { lang: string; dict: any }) 
     );
   }
 
-  // 3. Se NÃO tem sessão ativa (Mostra o fluxo completo para utilizadores anónimos)
+  // 4. Se NÃO tem sessão ativa (Mostra o fluxo completo para utilizadores anónimos)
   return (
     <div className="flex items-center gap-6">
       <Link href={`/${lang}/admin/registo`} className="text-sm font-bold text-gray-600 hover:text-emerald-700 transition whitespace-nowrap no-underline">
