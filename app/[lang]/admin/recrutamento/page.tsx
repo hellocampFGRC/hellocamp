@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link"; // IMPORTANTE: Adicionado o import do Link
 
 export default function RecrutamentoParceirosPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
@@ -370,9 +371,9 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
                 <div className="w-16 h-16 bg-slate-900 text-white rounded-full flex items-center justify-center text-2xl shadow-lg mb-4">🔒</div>
                 <h2 className="text-xl font-black text-slate-900 mb-2">{isEn ? "Inbox Locked" : "Mensagens Bloqueadas"}</h2>
                 <p className="text-sm font-medium text-slate-500 max-w-sm mb-6">{isEn ? "You need an active contract to send and receive messages from monitors." : "Apenas parceiros com contrato validado e ativo podem enviar propostas e conversar diretamente com os monitores da bolsa."}</p>
-                <button onClick={() => setShowLockModal(true)} className="bg-emerald-600 text-white font-black uppercase tracking-widest text-xs px-6 py-3 rounded-xl shadow-md hover:bg-emerald-700 transition-colors">
-                  {isEn ? "Check Contract Status" : "Ver Estado do Contrato"}
-                </button>
+                <Link href={`/${lang}/admin/contrato`} className="bg-emerald-600 text-white font-black uppercase tracking-widest text-xs px-6 py-3 rounded-xl shadow-md hover:bg-emerald-700 transition-colors no-underline">
+                  {isEn ? "Sign Global Contract" : "Assinar Contrato Global"}
+                </Link>
               </div>
             )}
 
@@ -421,7 +422,7 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
             <p className="text-sm text-slate-500 font-medium mb-8 leading-relaxed">
               {isEn 
                 ? "To access the full talent pool, view photos, and contact monitors, your partnership contract with HelloCamp must be signed and validated."
-                : "Para aceder aos perfis completos, ver fotografias e contactar a bolsa de monitores, o seu contrato de parceria com a HelloCamp necessita de estar finalizado e validado."}
+                : "Para aceder aos perfis completos, ver fotografias e contactar a bolsa de monitores, o seu contrato de parceria com a HelloCamp necessita de estar assinado e validado."}
             </p>
 
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8 text-left flex items-center justify-between">
@@ -434,9 +435,9 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
                <div className={`w-3 h-3 rounded-full ${statusContrato.toLowerCase() === 'pendente' ? 'bg-amber-400 animate-pulse' : 'bg-slate-300'}`}></div>
             </div>
 
-            <button onClick={() => setShowLockModal(false)} className="w-full bg-slate-900 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-md">
-              {isEn ? "Understood" : "Compreendido"}
-            </button>
+            <Link href={`/${lang}/admin/contrato`} className="block w-full bg-slate-900 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-md no-underline">
+              {isEn ? "Sign Contract Now" : "Assinar Contrato Agora"}
+            </Link>
           </div>
         </div>
       )}
