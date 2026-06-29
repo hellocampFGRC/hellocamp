@@ -182,7 +182,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
               <div className="w-16 h-16 bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">📝</div>
               <div>
                 <h3 className="text-lg font-black uppercase text-slate-900 mb-2">1. Celebração do contrato</h3>
-                <p className="text-slate-600 text-justify leading-relaxed">Celebraçaõ do contrato de parceria com a HelloCamp. Este contrato regula a divulgação e a intermediação das suas ofertas através da plataforma HelloCamp, estabelecendo os termos da colaboração entre ambas as partes. O acordo mantém-se válido até ao final do ano civil em curso, sendo automaticamente renovado por períodos sucessivos, salvo denúncia por qualquer uma das partes nos termos previstos contratualmente.</p>
+                <p className="text-slate-600 text-justify leading-relaxed">Celebração do contrato de parceria com a HelloCamp. Este contrato regula a divulgação e a intermediação das suas ofertas através da plataforma HelloCamp, estabelecendo os termos da colaboração entre ambas as partes. O acordo mantém-se válido até ao final do ano civil em curso, sendo automaticamente renovado por períodos sucessivos, salvo denúncia por qualquer uma das partes nos termos previstos contratualmente.</p>
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-6 items-start">
