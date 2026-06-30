@@ -320,7 +320,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                 {uploadingFoto && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>}
               </div>
               <div className="flex-1 text-center sm:text-left">
-                <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Profile Picture" : "Fotografia de Rosto"}</label>
+                <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Profile Picture" : "Fotografia"}</label>
                 <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "Camps prefer profiles with clear photos." : "Um perfil com fotografia atrai 3x mais propostas de recrutamento."}</p>
                 <div className="relative inline-block">
                   <input 
