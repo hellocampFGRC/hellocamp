@@ -331,7 +331,7 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
                 {uploadingFoto && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>}
               </div>
               <div className="flex-1 text-center sm:text-left">
-                <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Profile Picture" : "Fotografia de Rosto"}</label>
+                <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Profile Picture" : "Fotografia"}</label>
                 <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "Camps prefer profiles with clear photos." : "Um perfil com fotografia atrai 3x mais propostas de recrutamento."}</p>
                 <div className="relative inline-block">
                   <input type="file" accept="image/*" onChange={handleUploadFoto} disabled={uploadingFoto} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
@@ -349,13 +349,29 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
               </div>
               <div className="flex-1 text-center sm:text-left">
                 <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Update your Resume (CV)" : "Atualizar Currículo (CV)"} <span className="text-slate-400 text-xs ml-1">(Opcional)</span></label>
-                <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "PDF or Word files only. Only visible to verified camps." : "Apenas ficheiros PDF ou DOCX. Fica visível apenas para os organizadores."}</p>
-                <div className="relative inline-block">
-                  <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleUploadCV} disabled={uploadingCV} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                  <button type="button" className="bg-white border border-slate-300 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 transition-colors pointer-events-none">
-                    {uploadingCV ? (isEn ? "Uploading..." : "A carregar...") : (cvFileName ? `✔️ ${cvFileName.substring(0, 15)}...` : (isEn ? "Upload Resume" : "Carregar Currículo"))}
-                  </button>
+                <p className="text-xs text-slate-500 font-medium mb-4">{isEn ? "PDF or Word files only. Only visible to verified camps." : "Apenas ficheiros PDF ou DOCX. Fica visível apenas para os organizadores."}</p>
+                
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                  <div className="relative inline-block">
+                    <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleUploadCV} disabled={uploadingCV} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <button type="button" className="bg-white border border-slate-300 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 transition-colors pointer-events-none">
+                      {uploadingCV ? (isEn ? "Uploading..." : "A carregar...") : (cvFileName ? `✔️ ${cvFileName.substring(0, 15)}...` : (isEn ? "Upload Resume" : "Substituir Currículo"))}
+                    </button>
+                  </div>
+
+                  {/* NOVO: BOTÃO PARA VISUALIZAR O CV ATUAL (SE EXISTIR) */}
+                  {cvUrl && (
+                    <a 
+                      href={cvUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="inline-flex items-center text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-5 py-2.5 rounded-xl transition-colors no-underline border border-blue-100"
+                    >
+                      {isEn ? "View Current CV" : "Ver CV Atual"}
+                    </a>
+                  )}
                 </div>
+
               </div>
             </div>
 
