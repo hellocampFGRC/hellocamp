@@ -7,12 +7,7 @@ import Link from "next/link";
 import imageCompression from 'browser-image-compression';
 import React from "react";
 
-type ImagePreview = {
-  file?: File;
-  url?: string;
-  preview: string;
-  isMain: boolean;
-};
+type ImagePreview = { file?: File; url?: string; preview: string; isMain: boolean; };
 
 const FOTOS_PADRAO = [
   { url: "https://images.unsplash.com/photo-1502680390469-be75c86b636f?q=80&w=1200&auto=format&fit=crop", nome: "Surf" },
@@ -23,10 +18,7 @@ const FOTOS_PADRAO = [
   { url: "https://images.unsplash.com/photo-1606092195730-5d7b9af1efc5?q=80&w=1200&auto=format&fit=crop", nome: "Diversão" }
 ];
 
-// Limpeza de Caracteres Especiais
-const sanitizeFileName = (name: string) => {
-  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
-};
+const sanitizeFileName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
 
 export default function SuperAdminEditarCampo({ params }: { params: Promise<{ lang: string; id: string }> }) {
   const resolvedParams = use(params);
@@ -53,7 +45,10 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
   const [pais, setPais] = useState("Portugal");
   const [linguas, setLinguas] = useState({ pt: false, en: false, es: false, fr: false, de: false });
 
+  // TURNOS
   const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
+  // DESCONTOS FLEXIVEIS
+  const [descontos, setDescontos] = useState([{ nome: "", valor: 0, tipo: "percentagem" }]);
 
   const [formData, setFormData] = useState({
     nome: "", categoria: "", idade: "", local: "", Distrito: "", racio_monitores: "", duracao_dias: 7,
@@ -71,10 +66,15 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       const { data, error } = await supabase.from('campos').select('*').eq('id', id).single();
       if (data) {
         setFormData({ ...data, taxa_comissao: data.taxa_comissao || '', base_comissao: data.base_comissao || '', contrato_parceiro_url: data.contrato_parceiro_url || '' });
+        
         if (data.turnos) {
           const turnosMapeados = data.turnos.map((t: any) => ({ ...t, vagas: t.vagas || data.vagas_totais || 20 }));
           setTurnos(turnosMapeados);
         }
+        if (data.descontos) {
+          setDescontos(data.descontos.length > 0 ? data.descontos : [{ nome: "", valor: 0, tipo: "percentagem" }]);
+        }
+
         if (data.pais) setPais(data.pais);
         if (data.latitude && data.longitude) setMapPreview({ lat: data.latitude, lon: data.longitude });
         if (data.linguas_faladas) {
@@ -123,10 +123,18 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     return ativas.join(", ");
   };
 
+  // TURNOS
   const handleAddTurno = () => setTurnos([...turnos, { nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
   const handleRemoveTurno = (index: number) => setTurnos(turnos.filter((_, i) => i !== index));
   const handleTurnoChange = (index: number, field: string, value: string | number | boolean) => {
     const novosTurnos = [...turnos]; novosTurnos[index] = { ...novosTurnos[index], [field]: value }; setTurnos(novosTurnos);
+  };
+
+  // DESCONTOS
+  const handleAddDesconto = () => setDescontos([...descontos, { nome: "", valor: 0, tipo: "percentagem" }]);
+  const handleRemoveDesconto = (index: number) => setDescontos(descontos.filter((_, i) => i !== index));
+  const handleDescontoChange = (index: number, field: string, value: string | number) => {
+    const d = [...descontos]; d[index] = { ...d[index], [field]: value }; setDescontos(d);
   };
 
   const buscarNoMapaManual = async () => {
@@ -160,7 +168,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       const uploadedImages = await Promise.all(images.map(async (img) => {
         if (!img.file) return { url: img.url, isMain: img.isMain };
         const compressedFile = await imageCompression(img.file, { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true });
-        const fileName = `${Date.now()}-${sanitizeFileName(compressedFile.name)}`; // LIMPEZA APLICADA AQUI
+        const fileName = `${Date.now()}-${sanitizeFileName(compressedFile.name)}`;
         const { error } = await supabase.storage.from('campos-imagens').upload(fileName, compressedFile);
         if (error) throw error;
         const { data: publicUrlData } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
@@ -172,7 +180,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
 
       setStatusText("A processar documentos de programa...");
       const novosDocs = await Promise.all(documentos.map(async (doc) => {
-        const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`; // LIMPEZA APLICADA AQUI
+        const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`;
         const { error } = await supabase.storage.from('campos-documentos').upload(fileName, doc);
         if (error) throw error;
         const { data: publicUrlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
@@ -184,7 +192,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       setStatusText("A processar Contrato Parceiro...");
       let urlContratoFinal = formData.contrato_parceiro_url;
       if (contratoFile) {
-        const fileContratoName = `contrato-${Date.now()}-${sanitizeFileName(contratoFile.name)}`; // LIMPEZA APLICADA AQUI
+        const fileContratoName = `contrato-${Date.now()}-${sanitizeFileName(contratoFile.name)}`;
         const { error: errContrato } = await supabase.storage.from('campos-documentos').upload(fileContratoName, contratoFile);
         if (errContrato) throw errContrato;
         urlContratoFinal = supabase.storage.from('campos-documentos').getPublicUrl(fileContratoName).data.publicUrl;
@@ -204,12 +212,16 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       ]);
 
       const turnos_en = await Promise.all(turnos.map(async (t) => ({ ...t, nome: await traduzirParaIngles(t.nome) })));
-      const precoGlobal = turnos[0]?.preco || 0;
+      
+      const precos = turnos.map(t => Number(t.preco)).filter(p => !isNaN(p) && p > 0);
+      const precoMinimo = precos.length > 0 ? Math.min(...precos) : 0;
+      
       const formatarDataStr = (d: string) => d ? new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) : '';
       const textoDatas = turnos.map(t => `${formatarDataStr(t.data_inicio)} a ${formatarDataStr(t.data_fim)}`).join(", ");
       const textoDatasEn = turnos.map(t => `${formatarDataStr(t.data_inicio)} to ${formatarDataStr(t.data_fim)}`).join(", ");
-      
       const totalVagasCalculado = turnos.reduce((acc, curr) => acc + (Number(curr.vagas) || 0), 0);
+
+      const descontosLimpos = descontos.filter(d => d.nome.trim() !== "" && Number(d.valor) > 0);
 
       const taxaFinal = formData.taxa_comissao === '' ? null : Number(formData.taxa_comissao);
       const baseFinal = formData.base_comissao === '' ? null : formData.base_comissao;
@@ -222,10 +234,10 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         descricao: formData.descricao, regras_termos: formData.regras_termos,
         extra_alimentacao: formData.extra_alimentacao, extra_alojamento: formData.extra_alojamento,
         extra_prolongamento: formData.extra_prolongamento, extra_transporte: formData.extra_transporte,
-        preco: precoGlobal, datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatasEn, pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
+        preco: precoMinimo, datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatasEn, pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
         linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais,
         imagem: mainImageUrl, galeria: galeriaUrls, programas_pdf: programasDocsFinais, regras_termos_en,
-        latitude: mapPreview.lat, longitude: mapPreview.lon, turnos, turnos_en,
+        latitude: mapPreview.lat, longitude: mapPreview.lon, turnos, turnos_en, descontos: descontosLimpos,
         nome_en, categoria_en, local_en, idade_en, descricao_en, alimentacao_en, alojamento_en, seguro_en, Distrito_en,
         taxa_comissao: taxaFinal, base_comissao: baseFinal, contrato_parceiro_url: urlContratoFinal
       }).eq('id', id);
@@ -379,6 +391,23 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
               </div>
             </div>
           ))}
+
+          {/* DESCONTOS GERAIS */}
+          <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '2px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>Códigos de Desconto (Opcional)</h2>
+              <button type="button" onClick={handleAddDesconto} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>+ Adicionar Desconto</button>
+            </div>
+            
+            {descontos.map((desc, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '1rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
+                <div style={{ flex: '1 1 200px' }}><label style={labelStyle}>Nome / Título (ex: Early Bird)</label><input type="text" value={desc.nome} onChange={e => handleDescontoChange(idx, 'nome', e.target.value)} style={inputStyle} placeholder="Nome do Desconto" /></div>
+                <div style={{ width: '120px' }}><label style={labelStyle}>Valor</label><input type="number" value={desc.valor} onChange={e => handleDescontoChange(idx, 'valor', Number(e.target.value))} style={inputStyle} /></div>
+                <div style={{ width: '150px' }}><label style={labelStyle}>Tipo</label><select value={desc.tipo} onChange={e => handleDescontoChange(idx, 'tipo', e.target.value)} style={selectStyle}><option value="percentagem">Percentagem (%)</option><option value="fixo">Fixo (€)</option></select></div>
+                <button type="button" onClick={() => handleRemoveDesconto(idx)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>Remover</button>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div style={sectionStyle}>
@@ -409,7 +438,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         </div>
 
         <div style={sectionStyle}>
-          <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}><h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>5. Custos Opcionais (€)</h2></div>
+          <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}><h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>5. Custos Opcionais Extras (€)</h2></div>
           <div style={gridStyle}>
             {['alimentacao', 'alojamento', 'prolongamento', 'transporte'].map(extra => (
               <div key={extra} style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>

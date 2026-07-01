@@ -107,13 +107,14 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
             <tr>
               <th style={thStyle}>PROGRAMA</th>
               <th style={thStyle}>PARCEIRO</th>
+              <th style={thStyle}>TURNOS / OPÇÕES</th>
               <th style={thStyle}>COMISSÃO</th>
               <th style={thStyle}>AÇÕES</th>
             </tr>
           </thead>
           <tbody>
             {campos.length === 0 ? (
-              <tr><td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Sem programas registados.</td></tr>
+              <tr><td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Sem programas registados.</td></tr>
             ) : (
               campos.map((campo) => {
                 const isCustom = campo.taxa_comissao !== null && campo.taxa_comissao !== undefined;
@@ -123,18 +124,26 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
                   <tr key={campo.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ ...tdStyle, fontWeight: '900', color: '#0f172a' }}>
                       {campo.nome}
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', marginTop: '0.25rem' }}>{campo.local}</div>
+                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', marginTop: '0.25rem' }}>📍 {campo.local}</div>
                     </td>
                     <td style={tdStyle}><span style={{ fontWeight: 'bold', color: '#334155' }}>{campo.perfis?.empresa_nome}</span></td>
                     <td style={tdStyle}>
-                      <span style={{ backgroundColor: '#f8fafc', color: '#0f172a', padding: '0.25rem 0.5rem', borderRadius: '0.5rem', fontSize: '12px', fontWeight: 'bold', border: '1px solid #e2e8f0' }}>
-                        {taxaVisual}% {isCustom ? '(Específica)' : ''}
+                      <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#059669' }}>
+                         {campo.turnos?.length || 0} Turnos
+                      </span>
+                      <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold' }}>
+                         a partir de €{campo.preco || 0}
+                      </span>
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={{ backgroundColor: isCustom ? '#fef3c7' : '#f8fafc', color: isCustom ? '#b45309' : '#0f172a', padding: '0.35rem 0.6rem', borderRadius: '0.5rem', fontSize: '12px', fontWeight: 'bold', border: `1px solid ${isCustom ? '#fde68a' : '#e2e8f0'}` }}>
+                        {taxaVisual}% {isCustom ? '⭐' : ''}
                       </span>
                     </td>
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <Link href={`/${lang}/campo/${campo.id}`} target="_blank" style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Ver Campo</Link>
-                        <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} target="_blank" style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Editar</Link>
+                        <Link href={`/${lang}/campo/${campo.id}`} target="_blank" style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Ver</Link>
+                        <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Editar</Link>
                         <button onClick={() => { setCampoEmEdicao(campo); setShowModal(true); }} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Comissão</button>
                         <button onClick={() => handleApagarCampo(campo.id, campo.nome)} style={btnActionStyle('#fef2f2', '#dc2626', '#fecaca')}>Apagar</button>
                       </div>
