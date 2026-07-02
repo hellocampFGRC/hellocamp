@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import React from "react";
 
 const calcularIdade = (dataNasc: string) => {
@@ -48,17 +49,15 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   }
 
   // ==========================================
-  // CÁLCULOS DINÂMICOS (SINCRONIZADOS COM A CAIXA RESERVA)
+  // CÁLCULOS DINÂMICOS
   // ==========================================
   const isDiaSolto = turnoSelecionado?.tipo === 'dia';
   const numDiasSoltos = turnoSelecionado?.dias_soltos?.length || 1;
   const multiplicadorBase = isDiaSolto ? numDiasSoltos : 1;
   
-  // Preço Base 
   const precoBaseTurno = Number(turnoSelecionado?.preco) || Number(campo?.preco) || 0;
   const precoBaseUnitario = precoBaseTurno * multiplicadorBase;
 
-  // Dias para efeitos de extras
   const totalDiasExtras = Number(turnoSelecionado?.quantidade) || 1;
   const noites = Math.max(1, totalDiasExtras - 1);
 
@@ -68,19 +67,22 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const valTransporte = extTransporte ? (Number(campo?.extra_transporte) || 0) * totalDiasExtras : 0;
 
   const totalExtrasPorCrianca = valAlimentacao + valAlojamento + valProlongamento + valTransporte;
-  
   const precoFinalTotal = (precoBaseUnitario + totalExtrasPorCrianca) * quantidade;
 
-  // Lógica de Fracionamento de Pagamento (50% ou 100%)
   const isPagamentoFracionado = campo?.tipo_pagamento === '50_sinal';
   const valorACobrarAgora = isPagamentoFracionado ? (precoFinalTotal / 2) : precoFinalTotal;
   const valorPendente = isPagamentoFracionado ? (precoFinalTotal / 2) : 0;
 
   // ==========================================
-  // ESTADOS DO FORMULÁRIO DE PARTICIPANTES
+  // ESTADOS DO FORMULÁRIO
   // ==========================================
   const [selecoesCriancas, setSelecoesCriancas] = useState<string[]>(Array(quantidade).fill(""));
   const [respostasCustomizadas, setRespostasCustomizadas] = useState<Record<number, Record<string, string>>>({});
+  
+  // GUEST CHECKOUT STATE
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestData, setGuestData] = useState({ nome: "", email: "", telefone: "" });
+  const [concordaTermos, setConcordaTermos] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [indexToAssign, setIndexToAssign] = useState<number | null>(null);
@@ -96,13 +98,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   useEffect(() => {
     const fetchDados = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        sessionStorage.setItem('redirect_after_login', window.location.href);
-        router.push(`/${lang}/login`);
-        return;
-      }
-      setUser(session.user);
-
+      
       const { data: campoData } = await supabase.from("campos").select("*").eq("id", id).single();
       if (!campoData) { 
         router.push(`/${lang}`); 
@@ -113,11 +109,17 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       const { data: orgData } = await supabase.from("perfis").select("*").eq("id", campoData.organizador_id).single();
       setOrganizador(orgData);
 
-      const { data: criancasData } = await supabase.from("criancas").select("*").eq("cliente_id", session.user.id).order('created_at', { ascending: false });
-      setCriancas(criancasData || []);
-      
-      const { data: reservasData } = await supabase.from("reservas").select("crianca_id, turno_nome").eq("cliente_id", session.user.id).eq("campo_id", id);
-      setReservasExistentes(reservasData || []);
+      if (session) {
+        setUser(session.user);
+        const { data: criancasData } = await supabase.from("criancas").select("*").eq("cliente_id", session.user.id).order('created_at', { ascending: false });
+        setCriancas(criancasData || []);
+        
+        const { data: reservasData } = await supabase.from("reservas").select("crianca_id, turno_nome").eq("cliente_id", session.user.id).eq("campo_id", id);
+        setReservasExistentes(reservasData || []);
+      } else {
+        // MODO CONVIDADO ATIVO
+        setIsGuest(true);
+      }
 
       setLoading(false);
     };
@@ -140,6 +142,21 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     e.preventDefault();
     setSavingChild(true);
     
+    if (isGuest) {
+      // Em modo convidado, guardamos na memória local (não no Supabase ainda)
+      const fakeId = "guest_" + Date.now();
+      const novoMembro = { id: fakeId, ...newChild, isGuestChild: true };
+      setCriancas(prev => [novoMembro, ...prev]);
+      
+      const novasSelecoes = [...selecoesCriancas];
+      novasSelecoes[indexToAssign as number] = fakeId;
+      setSelecoesCriancas(novasSelecoes);
+      setShowModal(false);
+      setSavingChild(false);
+      return;
+    }
+
+    // Modo Utilizador Autenticado
     const { data, error } = await supabase.from('criancas').insert({
       cliente_id: user.id,
       ...newChild
@@ -162,6 +179,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   };
 
   const handleSaveDBCrianca = async (idDaCrianca: string, campoTabela: string, valor: string) => {
+    if (isGuest) return; // Se for convidado, gravamos tudo no fim, não faz onBlur
     await supabase.from('criancas').update({ [campoTabela]: valor }).eq('id', idDaCrianca);
   };
 
@@ -175,68 +193,66 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     }));
   };
 
-  // Processamento Seguro da Reserva com RPC (Bloqueio de Overbooking)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!concordaTermos) {
+      alert(isEn ? "You must accept the Terms and Conditions to proceed." : "Tem de aceitar os Termos e Condições para avançar.");
+      return;
+    }
+
     if (selecoesCriancas.some(c => c === "")) {
       alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione um participante válido para todas as vagas."); 
+      return;
+    }
+
+    if (isGuest && (!guestData.nome || !guestData.email || !guestData.telefone)) {
+      alert(isEn ? "Please fill in your contact details." : "Por favor, preencha os seus dados de contacto.");
       return;
     }
 
     setProcessingStripe(true);
 
     try {
-      const insercoes = selecoesCriancas.map((crianca_id, index) => ({
-        cliente_id: user.id, 
-        crianca_id: crianca_id, 
-        campo_id: campo.id,
-        organizador_id: campo.organizador_id, 
-        quantidade_criancas: 1,
-        valor_total: precoFinalTotal / quantidade,
-        turno_nome: turnoSelecionado?.nome || 'Programa Base',
-        status_pagamento: 'Pendente',
-        extras_escolhidos: { 
-          extAlimentacao, 
-          extAlojamento, 
-          extProlongamento, 
-          extTransporte, 
-          dias_inscritos: totalDiasExtras,
-          dias_soltos: turnoSelecionado?.dias_soltos || [] // INJEÇÃO CRUCIAL PARA O PARCEIRO VER OS DIAS ESCOLHIDOS
-        },
-        respostas_customizadas: respostasCustomizadas[index] || {} 
-      }));
-
-      // CHAMADA ATÓMICA DE SEGURANÇA À BASE DE DADOS
-      const { data: idsCriados, error: rpcError } = await supabase.rpc('criar_reserva_segura', {
-        p_insercoes: insercoes
-      });
+      // PREPARAR PAYLOAD DE RESERVA
+      const criancasParaEnviar = selecoesCriancas.map(id => criancas.find(c => c.id === id));
       
-      if (rpcError) {
-        if (rpcError.message.includes('ESGOTADO')) {
-          throw new Error(isEn ? "We're sorry, but the last spots for this shift were just taken by another user." : "Lamentamos, mas as vagas para este turno acabaram de esgotar.");
+      const payloadCheckout = {
+        totalAmount: precoFinalTotal,
+        userEmail: isGuest ? guestData.email : user.email,
+        lang: lang,
+        campoNome: campo.nome,
+        stripeAccountId: organizador?.stripe_account_id,
+        tipoPagamento: campo?.tipo_pagamento,
+        campoId: campo.id,
+        
+        // Dados para a API processar no backend
+        isGuest: isGuest,
+        guestData: isGuest ? guestData : null,
+        criancas: criancasParaEnviar,
+        
+        // Detalhes da Reserva
+        reservaSpecs: {
+          turno_nome: turnoSelecionado?.nome || 'Programa Base',
+          extras_escolhidos: { 
+            extAlimentacao, 
+            extAlojamento, 
+            extProlongamento, 
+            extTransporte, 
+            dias_inscritos: totalDiasExtras,
+            dias_soltos: turnoSelecionado?.dias_soltos || []
+          },
+          respostas_customizadas: respostasCustomizadas,
+          quantidade_reservas: quantidade,
+          valor_por_reserva: precoFinalTotal / quantidade
         }
-        throw new Error("Erro na Base de Dados: " + rpcError.message);
-      }
+      };
 
-      if (organizador?.modelo_pagamento === 'parceiro_recebe') {
-        router.push(`/${lang}/sucesso`);
-        return;
-      }
-
+      // Na API /api/stripe-checkout, terá de lidar com o registo silencioso do Guest e criação das crianças antes de devolver a URL de pagamento.
       const res = await fetch('/api/stripe-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reservasIds: idsCriados,
-          totalAmount: precoFinalTotal,
-          userEmail: user.email,
-          lang: lang,
-          campoNome: campo.nome,
-          stripeAccountId: organizador?.stripe_account_id,
-          tipoPagamento: campo?.tipo_pagamento,
-          campoId: campo.id
-        })
+        body: JSON.stringify(payloadCheckout)
       });
 
       if (!res.ok) {
@@ -265,7 +281,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#f3f4f6', fontFamily: 'sans-serif', paddingBottom: '5rem', paddingTop: '3rem', position: 'relative' }}>
       
-      {/* OVERLAY DE CARREGAMENTO */}
       {processingStripe && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <div className="spinner" style={{ width: '50px', height: '50px', border: '5px solid #e2e8f0', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }}></div>
@@ -303,21 +318,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                     <option value="Prefiro não dizer">{isEn ? 'Prefer not to say' : 'Prefiro não dizer'}</option>
                   </select>
                 </div>
-                
-                <div style={{ flex: '1 1 200px' }}>
-                  <label style={labelStyle}>{isEn ? 'Blood Type' : 'Tipo Sanguíneo'}</label>
-                  <select value={newChild.tipo_sanguineo} onChange={e => setNewChild({...newChild, tipo_sanguineo: e.target.value})} style={selectStyle}>
-                    <option value="">N/A</option>
-                    <option value="A+">A+</option>
-                    <option value="A-">A-</option>
-                    <option value="B+">B+</option>
-                    <option value="B-">B-</option>
-                    <option value="AB+">AB+</option>
-                    <option value="AB-">AB-</option>
-                    <option value="O+">O+</option>
-                    <option value="O-">O-</option>
-                  </select>
-                </div>
               </div>
 
               <div>
@@ -333,15 +333,53 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         </div>
       )}
 
-      {/* ÁREA PRINCIPAL DO CHECKOUT */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem', display: 'flex', flexWrap: 'wrap', gap: '3rem', alignItems: 'flex-start' }}>
         
         <div style={{ flex: '1 1 60%', minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          
+          {/* HEADER SE FOR GUEST */}
+          {isGuest && (
+            <div style={{ backgroundColor: '#fffbeb', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: '900', color: '#92400e', margin: '0 0 0.25rem 0' }}>{isEn ? 'Checking out as Guest' : 'A reservar como Convidado'}</h3>
+                <p style={{ fontSize: '13px', color: '#b45309', margin: 0 }}>{isEn ? 'Already have an account?' : 'Já tem conta criada?'}</p>
+              </div>
+              <button onClick={() => {
+                  sessionStorage.setItem('redirect_after_login', window.location.href);
+                  router.push(`/${lang}/login`);
+                }} 
+                style={{ padding: '0.5rem 1rem', backgroundColor: '#d97706', color: 'white', fontWeight: 'bold', borderRadius: '0.5rem', fontSize: '12px', border: 'none', cursor: 'pointer' }}>
+                {isEn ? 'Login to speed up' : 'Fazer Login e acelerar'}
+              </button>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             
+            {/* 0. DADOS DO PARENTE (Apenas se for Guest) */}
+            {isGuest && (
+              <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0, marginBottom: '1.5rem' }}>{isEn ? 'Your Details (Parent/Guardian)' : 'Os Seus Dados (Encarregado)'}</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+                  <div>
+                    <label style={labelStyle}>{isEn ? 'Full Name' : 'Nome Completo'} *</label>
+                    <input type="text" required value={guestData.nome} onChange={e => setGuestData({...guestData, nome: e.target.value})} style={inputStyle} placeholder={isEn ? "John Doe" : "Ex: Rui Silva"} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>{isEn ? 'Email Address' : 'E-mail'} *</label>
+                    <input type="email" required value={guestData.email} onChange={e => setGuestData({...guestData, email: e.target.value})} style={inputStyle} placeholder="email@exemplo.com" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>{isEn ? 'Phone Number' : 'Telefone'} *</label>
+                    <input type="tel" required value={guestData.telefone} onChange={e => setGuestData({...guestData, telefone: e.target.value})} style={inputStyle} placeholder="912 345 678" />
+                  </div>
+                </div>
+              </section>
+            )}
+
             {/* 1. SELEÇÃO DE PARTICIPANTES */}
             <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0, marginBottom: '1.5rem' }}>{isEn ? 'Select Participants' : 'Selecionar Participantes'}</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0, marginBottom: '1.5rem' }}>{isEn ? 'Participants' : 'Participantes'}</h2>
 
               {Array.from({ length: quantidade }).map((_, i) => {
                 const childId = selecoesCriancas[i];
@@ -389,12 +427,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                       <div style={{ marginTop: '1.5rem', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                           <h4 style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>{isEn ? 'Verify Details & Safety' : 'Verificar Detalhes de Segurança'}</h4>
-                          <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>💾 {isEn ? 'Auto-saves' : 'Grava autom.'}</span>
                         </div>
                         
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-                          
-                          {/* Dados Pessoais */}
                           <div style={{ gridColumn: '1 / -1' }}>
                             <label style={labelStyle}>{isEn ? 'Full Name' : 'Nome Completo'}</label>
                             <input type="text" required value={childInfo.nome || ''} onChange={e => handleUpdateLocalCrianca(childId, 'nome', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'nome', e.target.value)} style={inputStyle} />
@@ -413,37 +448,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                               <option value="Prefiro não dizer">{isEn ? 'Prefer not to say' : 'Prefiro não dizer'}</option>
                             </select>
                           </div>
-                          
-                          <div>
-                            <label style={labelStyle}>{isEn ? 'T-Shirt Size' : 'Tamanho T-Shirt'}</label>
-                            <select value={childInfo.tamanho_tshirt || ''} onChange={e => {handleUpdateLocalCrianca(childId, 'tamanho_tshirt', e.target.value); handleSaveDBCrianca(childId, 'tamanho_tshirt', e.target.value);}} style={selectStyle}>
-                              <option value="">N/A</option>
-                              <option value="5-6 Anos">5-6 Anos</option>
-                              <option value="7-8 Anos">7-8 Anos</option>
-                              <option value="9-11 Anos">9-11 Anos</option>
-                              <option value="12-14 Anos">12-14 Anos</option>
-                              <option value="S Adulto">S</option>
-                              <option value="M Adulto">M</option>
-                              <option value="L Adulto">L</option>
-                            </select>
-                          </div>
-                          
-                          <div>
-                            <label style={labelStyle}>{isEn ? 'Blood Type' : 'Tipo Sanguíneo'}</label>
-                            <select value={childInfo.tipo_sanguineo || ''} onChange={e => {handleUpdateLocalCrianca(childId, 'tipo_sanguineo', e.target.value); handleSaveDBCrianca(childId, 'tipo_sanguineo', e.target.value);}} style={selectStyle}>
-                              <option value="">N/A</option>
-                              <option value="A+">A+</option>
-                              <option value="A-">A-</option>
-                              <option value="B+">B+</option>
-                              <option value="B-">B-</option>
-                              <option value="AB+">AB+</option>
-                              <option value="AB-">AB-</option>
-                              <option value="O+">O+</option>
-                              <option value="O-">O-</option>
-                            </select>
-                          </div>
 
-                          {/* Dados Médicos */}
                           <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #cbd5e1', paddingTop: '1rem', marginTop: '0.5rem' }}>
                             <label style={{...labelStyle, color: '#991b1b'}}>{isEn ? 'Medical Profile' : 'Perfil Médico (Alergias e Condições)'}</label>
                           </div>
@@ -497,9 +502,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
             {/* 2. INFORMAÇÃO DE PAGAMENTO & REGRAS */}
             <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{isEn ? 'Secure Payment' : 'Pagamento Seguro'}</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{isEn ? 'Secure Payment & Terms' : 'Pagamento Seguro e Termos'}</h2>
               
-              {/* LÓGICA DE AVISOS CLAROS: 50% SINAL OU 100% TOTAL */}
               {isPagamentoFracionado ? (
                 <div style={{ padding: '1.5rem', backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '1rem', marginBottom: '1.5rem' }}>
                   <p style={{ fontWeight: '900', color: '#1e3a8a', margin: '0 0 0.5rem 0' }}>{isEn ? 'Payment Plan (50% Deposit)' : 'Facilidade de Pagamento (Sinal de 50%)'}</p>
@@ -520,28 +524,32 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                 </div>
               )}
 
-              {organizador?.modelo_pagamento === 'parceiro_recebe' ? (
-                <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '1rem' }}>
-                  <p style={{ fontWeight: 'bold', color: '#334155', marginBottom: '0.5rem' }}>Transferência Bancária Direta (Parceiro)</p>
-                  <p style={{ fontSize: '14px', color: '#475569', margin: 0 }}>Entidade: {organizador.empresa_nome}</p>
-                  <p style={{ fontSize: '14px', color: '#475569', margin: 0 }}>IBAN: {organizador.iban}</p>
-                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '1rem' }}>* A sua reserva ficará pendente e o seu lugar fica temporariamente bloqueado. O parceiro irá processar o seu comprovativo e validar a inscrição final.</p>
+              <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div>
+                  <p style={{ fontWeight: 'bold', color: '#0f172a', margin: '0 0 0.5rem 0' }}>Stripe Checkout</p>
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Pague de forma 100% segura através de MB WAY, Cartão de Crédito ou Débito.</p>
                 </div>
-              ) : (
-                <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <p style={{ fontWeight: 'bold', color: '#0f172a', margin: '0 0 0.5rem 0' }}>Stripe Checkout</p>
-                    <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Pague de forma 100% segura através de MB WAY, Cartão de Crédito ou Débito.</p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontWeight: 'bold', color: '#0f172a' }}>
-                    <span style={{ fontStyle: 'italic', color: '#005f8f' }}>MB WAY</span>
-                    <span style={{ fontSize: '24px' }}>💳</span>
-                  </div>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontWeight: 'bold', color: '#0f172a' }}>
+                  <span style={{ fontStyle: 'italic', color: '#005f8f' }}>MB WAY</span>
+                  <span style={{ fontSize: '24px' }}>💳</span>
                 </div>
-              )}
+              </div>
+
+              {/* CHECKBOX DOS TERMOS */}
+              <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#fff', border: '1px dashed #cbd5e1', borderRadius: '0.75rem' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
+                  <input type="checkbox" required checked={concordaTermos} onChange={e => setConcordaTermos(e.target.checked)} style={{ marginTop: '0.25rem', width: '1.25rem', height: '1.25rem', accentColor: '#0f172a' }} />
+                  <span style={{ fontSize: '13px', color: '#475569', lineHeight: 1.5 }}>
+                    {isEn 
+                      ? <>I declare that I am of legal age and have read and accept HelloCamp's <Link href={`/${lang}/termos`} target="_blank" style={{ color: '#059669', fontWeight: 'bold', textDecoration: 'underline' }}>Terms & Conditions</Link>. {isGuest && "By continuing, a secure account will be automatically generated to manage this booking."}</>
+                      : <>Declaro que sou maior de idade, e confirmo ter lido e aceite os <Link href={`/${lang}/termos`} target="_blank" style={{ color: '#059669', fontWeight: 'bold', textDecoration: 'underline' }}>Termos e Condições</Link> da plataforma. {isGuest && "Ao prosseguir, será criada automaticamente uma conta segura associada ao seu email para poder gerir esta reserva."}</>}
+                  </span>
+                </label>
+              </div>
+
             </section>
 
-            <button type="submit" disabled={processingStripe} style={{ width: '100%', padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontSize: '1.125rem', fontWeight: '900', borderRadius: '1rem', border: 'none', cursor: processingStripe ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.3)', transition: 'transform 0.2s' }}>
+            <button type="submit" disabled={processingStripe || !concordaTermos} style={{ width: '100%', padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontSize: '1.125rem', fontWeight: '900', borderRadius: '1rem', border: 'none', cursor: processingStripe || !concordaTermos ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.3)', transition: 'transform 0.2s', opacity: concordaTermos ? 1 : 0.7 }}>
               {isEn ? `Confirm and Pay ${valorACobrarAgora.toFixed(2)}€` : `Confirmar e Pagar ${valorACobrarAgora.toFixed(2)}€`} {isPagamentoFracionado ? '(Sinal)' : ''}
             </button>
           </form>
@@ -560,7 +568,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                 <p style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', margin: 0 }}>{turnoSelecionado?.nome || campo?.nome}</p>
               </div>
 
-              {/* BLOCO VISUAL DE DATAS EXATAS (Serve para Dias Soltos ou Semanas) */}
               {turnoSelecionado?.dias_soltos?.length > 0 && (
                 <div>
                   <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>
@@ -595,7 +602,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
               )}
             </div>
 
-            {/* SEPARADOR FINANCEIRO */}
             <div style={{ borderTop: '2px dashed #e2e8f0', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#0f172a' }}>{isEn ? 'Total Cost' : 'Custo Total'}</span>
               <span style={{ fontSize: '1.125rem', fontWeight: '900', color: '#0f172a' }}>{precoFinalTotal.toFixed(2)}€</span>
