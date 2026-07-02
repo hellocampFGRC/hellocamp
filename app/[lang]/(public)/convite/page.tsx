@@ -25,6 +25,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     website: "",
     responsavelRGPD: "",
     modalidadeReserva: "", 
+    linkExternoReserva: "", // Novo campo para o link do form externo
     tipo_pagamento: "", 
     politica_cancelamento: "", 
     acordosComplementares: "",
@@ -42,6 +43,11 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     e.preventDefault();
     if (!form.modalidadeReserva || !form.tipo_pagamento || !form.politica_cancelamento) {
       alert(isEn ? "Please select the mandatory options in Annexes 1, 2, and 3." : "Por favor, selecione as opções obrigatórias nos Anexos 1, 2 e 3.");
+      return;
+    }
+
+    if (form.modalidadeReserva === 'link_externo' && !form.linkExternoReserva) {
+      alert(isEn ? "Please provide the external link for the booking form." : "Por favor, insira o link externo do formulário de reserva.");
       return;
     }
 
@@ -93,6 +99,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       website: form.website,
       responsavelRGPD: form.responsavelRGPD,
       modalidadeReserva: form.modalidadeReserva,
+      linkExternoReserva: form.linkExternoReserva,
       tipoPagamento: form.tipo_pagamento,
       politicaCancelamento: form.politica_cancelamento,
       acordosComplementares: form.acordosComplementares,
@@ -298,8 +305,8 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
             <h4 className="font-bold">{isEn ? 'Article 1 – Commission' : 'Artigo 1.º – Comissão'}</h4>
             <p className="mb-4">
               {isEn 
-                ? 'The Partner commits to paying HelloCamp a 12% commission (VAT not included) on each booking made through the platform, under the terms defined in this contract or a supplementary agreement.' 
-                : 'O Parceiro compromete-se a pagar à HelloCamp uma comissão de 12% (iva não incluído) sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes.'}
+                ? 'The Partner commits to paying HelloCamp a 12% commission (VAT included) on each booking made through the platform, under the terms defined in this contract or a supplementary agreement.' 
+                : 'O Parceiro compromete-se a pagar à HelloCamp uma comissão de 12% (IVA incluído) sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes.'}
             </p>
             <p className="mb-4">
               {isEn 
@@ -330,8 +337,8 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
             <h4 className="font-bold">{isEn ? 'Article 2 – Payment Conditions' : 'Artigo 2.º – Condições de Pagamento'}</h4>
             <p className="mb-8">
               {isEn 
-                ? 'Commissions due to HelloCamp will be invoiced according to the agreed payment model. The Partner commits to settling invoices within the stated deadlines. Agreed amounts do not include VAT or other applicable taxes.' 
-                : 'As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado entre as partes. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados não incluem IVA ou outros impostos legalmente aplicáveis.'}
+                ? 'Commissions due to HelloCamp will be invoiced according to the agreed payment model. The Partner commits to settling invoices within the stated deadlines. Agreed amounts include VAT or other applicable taxes.' 
+                : 'As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado entre as partes. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados incluem IVA ou outros impostos legalmente aplicáveis.'}
             </p>
 
             <h4 className="font-bold">{isEn ? 'Article 3 – Partner Obligations' : 'Artigo 3.º – Obrigações do Parceiro'}</h4>
@@ -391,6 +398,34 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
                   <div>
                     <strong className="block text-black mb-1">{isEn ? 'Email Communication (Booking Upon Request)' : 'Comunicação por E-mail (Reserva Sob Consulta)'}</strong>
                     <span className="text-gray-600 leading-relaxed block">{isEn ? 'HelloCamp will send the Partner an email with all necessary booking details. The Partner has 2 business days to reject a booking. Without a response, it is considered accepted.' : 'A HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias para a gestão da reserva, incluindo os dados do participante, os dados do responsável pela reserva e os detalhes da atividade reservada. O Parceiro dispõe de 2 (dois) dias úteis para comunicar à HelloCamp a rejeição de uma reserva por motivo devidamente justificado. Na ausência de resposta dentro deste prazo, a reserva considerar-se-á aceite, sendo aplicável a comissão prevista no contrato.'}</span>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.modalidadeReserva === 'link_externo' ? 'bg-white border-black shadow-sm' : 'border-transparent hover:bg-gray-100'}`}>
+                  <input type="radio" name="anexo1" required value="link_externo" checked={form.modalidadeReserva === 'link_externo'} onChange={e => setForm({...form, modalidadeReserva: e.target.value})} className="mt-1 w-4 h-4 accent-black flex-shrink-0" />
+                  <div className="w-full">
+                    <strong className="block text-black mb-1">{isEn ? 'External Form or Link (e.g., Google Forms)' : 'Formulário ou Link Externo (ex: Google Forms)'}</strong>
+                    <span className="text-gray-600 leading-relaxed block mb-4">
+                      {isEn 
+                        ? 'Clients register their interest on HelloCamp and are redirected to the external link below to complete the booking. HelloCamp records the customer\'s name, email, and phone number (the lead) and emails this data to the Partner, with HelloCamp in CC to ensure transparency. The Partner commits to being truthful in reporting which leads successfully completed the booking, avoiding omissions for commission purposes.' 
+                        : 'O tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência e evitar omissões, antes de reencaminhar o cliente, a HelloCamp recolhe a intenção de reserva (Nome, Email e Telefone do potencial cliente). Estes dados da "Lead" são enviados automaticamente para o Parceiro com conhecimento (em CC) à HelloCamp. O Parceiro compromete-se sob compromisso de honra a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.'}
+                    </span>
+                    
+                    {form.modalidadeReserva === 'link_externo' && (
+                      <div className="bg-gray-50 border border-gray-300 p-4 rounded-lg mt-2 w-full">
+                        <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 block">
+                          {isEn ? 'Insert External Link (URL) *' : 'Insira o Link Externo (URL) *'}
+                        </label>
+                        <input 
+                          type="url" 
+                          required 
+                          placeholder="https://forms.gle/..." 
+                          className="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-black"
+                          value={form.linkExternoReserva}
+                          onChange={e => setForm({...form, linkExternoReserva: e.target.value})}
+                        />
+                      </div>
+                    )}
                   </div>
                 </label>
               </div>
