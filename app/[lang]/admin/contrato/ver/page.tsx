@@ -46,6 +46,12 @@ export default function VerContratoGlobalPage({ params }: { params: Promise<{ la
     statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
   }
 
+  // Helper para o nome da modalidade do Anexo 1
+  let modalidadeNome = "";
+  if (dadosContrato.modalidadeReserva === 'direta') modalidadeNome = "✅ Reserva Direta com Pagamento Automático";
+  else if (dadosContrato.modalidadeReserva === 'email') modalidadeNome = "✅ Comunicação por E-mail (Reserva Sob Consulta)";
+  else if (dadosContrato.modalidadeReserva === 'link_externo') modalidadeNome = "✅ Formulário ou Link Externo (Redirecionamento)";
+
   return (
     <main className="min-h-screen bg-slate-200 py-12 px-4 font-sans text-black selection:bg-yellow-200">
       <div className="max-w-[900px] mx-auto">
@@ -115,7 +121,7 @@ export default function VerContratoGlobalPage({ params }: { params: Promise<{ la
 
           <div className="space-y-6 text-[15px] text-justify pt-12">
             <h3 className="font-bold text-xl uppercase tracking-widest border-b border-black pb-2 mb-8">Cláusulas Contratuais Base</h3>
-            <p className="mb-4"><strong>Artigo 1.º – Comissão:</strong> O Parceiro compromete-se a pagar à HelloCamp uma comissão de 12% (iva não incluído) sobre cada reserva efetuada através da plataforma. A comissão é calculada sobre o valor efetivamente pago pelo cliente.</p>
+            <p className="mb-4"><strong>Artigo 1.º – Comissão:</strong> O Parceiro compromete-se a pagar à HelloCamp uma comissão de 12% (IVA incluído) sobre cada reserva efetuada através da plataforma. A comissão é calculada sobre o valor efetivamente pago pelo cliente.</p>
             <p className="mb-4"><strong>Artigo 2.º – Condições de Pagamento:</strong> As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado. O Parceiro compromete-se a liquidar as faturas emitidas dentro dos prazos nelas indicados.</p>
             <p className="mb-4"><strong>Artigo 3.º – Obrigações do Parceiro:</strong> O Parceiro compromete-se a manter as informações atualizadas, garantir a realização das atividades e não praticar preços superiores aos oferecidos nos seus canais diretos.</p>
             <p className="mb-8"><strong>Artigo 4.º – Duração e Renovação:</strong> O presente contrato produz efeitos a partir da data da sua assinatura. O contrato mantém-se válido até ao final do ano civil, renovando-se automaticamente por períodos de um ano.</p>
@@ -129,9 +135,12 @@ export default function VerContratoGlobalPage({ params }: { params: Promise<{ la
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
               <h3 className="font-black text-lg mb-4 text-black uppercase border-l-4 border-[#EBA914] pl-3">Anexo 1 – Procedimento de Reserva Acordado</h3>
               <div className="p-4 bg-white border border-black rounded-lg shadow-sm">
-                <strong className="block text-black mb-1">
-                  {dadosContrato.modalidadeReserva === 'direta' ? '✅ Reserva Direta com Pagamento Automático' : '✅ Comunicação por E-mail (Reserva Sob Consulta)'}
-                </strong>
+                <strong className="block text-black mb-1">{modalidadeNome}</strong>
+                {dadosContrato.modalidadeReserva === 'link_externo' && dadosContrato.linkExternoReserva && (
+                  <p className="mt-2 text-gray-600 bg-gray-50 p-2 rounded text-xs font-mono break-all border border-gray-200">
+                    URL: {dadosContrato.linkExternoReserva}
+                  </p>
+                )}
               </div>
             </div>
 

@@ -98,9 +98,19 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       .from('campos')
       .update({ 
         contrato_dados: editForm,
-        taxa_comissao: editComissao 
+        taxa_comissao: editComissao,
+        modalidade_reserva: editForm.modalidadeReserva,
+        link_externo_reserva: editForm.linkExternoReserva 
       })
       .eq('id', modalContrato.id);
+
+    // Também atualizar no perfil
+    if (modalContrato?.organizador_id) {
+        await supabase.from('perfis').update({
+            modalidade_reserva: editForm.modalidadeReserva,
+            link_externo_reserva: editForm.linkExternoReserva
+        }).eq('id', modalContrato.organizador_id);
+    }
 
     if (error) {
       alert("Erro ao guardar edição: " + error.message);
@@ -143,9 +153,14 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       return;
     }
 
-    let anexo1Text = dados.modalidadeReserva === 'direta' 
-      ? "<strong>Reserva Direta com Pagamento Automático (Recomendado):</strong> As reservas efetuadas através da plataforma HelloCamp serão registadas diretamente no sistema de reservas do Parceiro. Nesta modalidade, a HelloCamp terá direito à comissão acordada sobre cada reserva concluída. O formulário de reserva será configurado de acordo com as necessidades do Parceiro, recolhendo as informações necessárias para a correta gestão das inscrições. O Parceiro compromete-se a manter atualizadas as disponibilidades, preços e demais informações relevantes das atividades disponibilizadas através da plataforma."
-      : "<strong>Comunicação por E-mail (Reserva Sob Consulta):</strong> A HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias para a gestão da reserva, incluindo os dados do participante, os dados do responsável pela reserva e os detalhes da atividade reservada. O Parceiro dispõe de 2 (dois) dias úteis para comunicar à HelloCamp a rejeição de uma reserva por motivo devidamente justificado. Na ausência de resposta dentro deste prazo, a reserva considerar-se-á aceite, sendo aplicável a comissão prevista no contrato.";
+    let anexo1Text = "";
+    if (dados.modalidadeReserva === 'direta') {
+        anexo1Text = "<strong>Reserva Direta com Pagamento Automático (Recomendado):</strong> As reservas efetuadas através da plataforma HelloCamp serão registadas diretamente no sistema de reservas do Parceiro. Nesta modalidade, a HelloCamp terá direito à comissão acordada sobre cada reserva concluída. O formulário de reserva será configurado de acordo com as necessidades do Parceiro, recolhendo as informações necessárias para a correta gestão das inscrições. O Parceiro compromete-se a manter atualizadas as disponibilidades, preços e demais informações relevantes das atividades disponibilizadas através da plataforma.";
+    } else if (dados.modalidadeReserva === 'email') {
+        anexo1Text = "<strong>Comunicação por E-mail (Reserva Sob Consulta):</strong> A HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias para a gestão da reserva, incluindo os dados do participante, os dados do responsável pela reserva e os detalhes da atividade reservada. O Parceiro dispõe de 2 (dois) dias úteis para comunicar à HelloCamp a rejeição de uma reserva por motivo devidamente justificado. Na ausência de resposta dentro deste prazo, a reserva considerar-se-á aceite, sendo aplicável a comissão prevista no contrato.";
+    } else if (dados.modalidadeReserva === 'link_externo') {
+        anexo1Text = `<strong>Formulário ou Link Externo:</strong> O tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência e evitar omissões, antes de reencaminhar o cliente, a HelloCamp recolhe a intenção de reserva (Nome, Email e Telefone do potencial cliente). Estes dados da "Lead" são enviados automaticamente para o Parceiro com conhecimento (em CC) à HelloCamp. O Parceiro compromete-se sob compromisso de honra a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.<br/><br/>URL Fornecido: <span style="font-family: monospace;">${dados.linkExternoReserva || 'N/A'}</span>`;
+    }
 
     let anexo2Text = dados.tipoPagamento === '100_total'
       ? "<strong>100% Pago no Ato da Reserva (Pagamento Imediato):</strong> O cliente liquida a totalidade do valor do programa para assegurar a vaga de imediato."
@@ -229,12 +244,12 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
         <div class="clause">
           <span class="clause-title">Artigo 1.º – Comissão</span><br>
-          O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (iva não incluído)</strong> sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes. A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados. A comissão torna-se devida após a confirmação da reserva. O Parceiro deverá enviar ao cliente a confirmação da reserva e assegurar a prestação dos serviços contratados. Caso uma reserva não possa ser realizada por motivos justificados, o Parceiro deverá informar a HelloCamp com a maior brevidade possível.
+          O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (IVA incluído)</strong> sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes. A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados. A comissão torna-se devida após a confirmação da reserva. O Parceiro deverá enviar ao cliente a confirmação da reserva e assegurar a prestação dos serviços contratados. Caso uma reserva não possa ser realizada por motivos justificados, o Parceiro deverá informar a HelloCamp com a maior brevidade possível.
         </div>
 
         <div class="clause">
           <span class="clause-title">Artigo 2.º – Condições de Pagamento</span><br>
-          As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados não incluem IVA ou outros impostos legalmente aplicáveis.
+          As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados incluem IVA ou outros impostos legalmente aplicáveis.
         </div>
 
         <div class="clause">
@@ -419,7 +434,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
               </div>
             </div>
             
-            {/* CORPO DO MODAL (Grelha mais apertada) */}
+            {/* CORPO DO MODAL */}
             <div className="p-5 overflow-y-auto flex-1 bg-white">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 
@@ -471,14 +486,41 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                     <div className={`${isEditing ? 'bg-white p-3 rounded-lg border border-blue-200 mt-2 space-y-3' : 'space-y-2 text-xs'}`}>
                       {isEditing ? (
                         <>
-                          <div><label className={labelClass}>Reserva</label><select className={selectClass} value={editForm.modalidadeReserva || ''} onChange={e => setEditForm({...editForm, modalidadeReserva: e.target.value})}><option value="direta">Direta</option><option value="email">Sob Consulta</option></select></div>
+                          <div>
+                            <label className={labelClass}>Reserva</label>
+                            <select className={selectClass} value={editForm.modalidadeReserva || ''} onChange={e => setEditForm({...editForm, modalidadeReserva: e.target.value})}>
+                              <option value="direta">Direta</option>
+                              <option value="email">Sob Consulta</option>
+                              <option value="link_externo">Link Externo</option>
+                            </select>
+                          </div>
+                          {editForm.modalidadeReserva === 'link_externo' && (
+                            <div>
+                              <label className={labelClass}>URL Formulário</label>
+                              <input type="url" className={inputClass} value={editForm.linkExternoReserva || ''} onChange={e => setEditForm({...editForm, linkExternoReserva: e.target.value})} placeholder="https://..." />
+                            </div>
+                          )}
                           <div><label className={labelClass}>Pagamento</label><select className={selectClass} value={editForm.tipoPagamento || ''} onChange={e => setEditForm({...editForm, tipoPagamento: e.target.value})}><option value="100_total">100% no Ato</option><option value="50_sinal">Sinal 50%</option></select></div>
                           <div><label className={labelClass}>Cancelamento</label><select className={selectClass} value={editForm.politicaCancelamento || ''} onChange={e => setEditForm({...editForm, politicaCancelamento: e.target.value})}><option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (7 dias)</option><option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (15 dias)</option><option value="Estrita (Sem reembolso após reserva)">Estrita</option></select></div>
                         </>
                       ) : (
                         <>
-                          <div className="flex justify-between pb-1"><strong className="text-blue-900">Modelo</strong><span className="font-bold text-blue-800 text-right">{modalContrato.contrato_dados?.modalidadeReserva === 'direta' ? 'Reserva Direta' : 'Sob Consulta'}</span></div>
-                          <div className="flex justify-between pb-1"><strong className="text-blue-900">Pagamento</strong><span className="font-bold text-blue-800 text-right">{modalContrato.contrato_dados?.tipoPagamento === '100_total' ? '100% Imediato' : 'Sinal 50%'}</span></div>
+                          <div className="flex justify-between pb-1">
+                            <strong className="text-blue-900">Modelo</strong>
+                            <span className="font-bold text-blue-800 text-right">
+                              {modalContrato.contrato_dados?.modalidadeReserva === 'direta' ? 'Reserva Direta' : 
+                               modalContrato.contrato_dados?.modalidadeReserva === 'link_externo' ? 'Link Externo' : 'Sob Consulta'}
+                            </span>
+                          </div>
+                          {modalContrato.contrato_dados?.modalidadeReserva === 'link_externo' && (
+                            <div className="flex justify-between pb-1 border-b border-blue-100">
+                               <strong className="text-blue-900">URL Form</strong>
+                               <span className="text-[10px] text-blue-700 text-right font-mono truncate max-w-[150px]" title={modalContrato.contrato_dados?.linkExternoReserva}>
+                                  {modalContrato.contrato_dados?.linkExternoReserva}
+                               </span>
+                            </div>
+                          )}
+                          <div className="flex justify-between pb-1 mt-1"><strong className="text-blue-900">Pagamento</strong><span className="font-bold text-blue-800 text-right">{modalContrato.contrato_dados?.tipoPagamento === '100_total' ? '100% Imediato' : 'Sinal 50%'}</span></div>
                           <div className="pt-1"><strong className="block text-blue-900 mb-1">Pol. Cancelamento:</strong><p className="text-[10px] text-blue-800 leading-tight bg-white p-2 rounded border border-blue-100 m-0">{modalContrato.contrato_dados?.politicaCancelamento}</p></div>
                         </>
                       )}
@@ -486,7 +528,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                   </div>
                 </div>
 
-                {/* Bloco de Acordos Complementares (Se aplicável) - Só visível à direita */}
+                {/* Bloco de Acordos Complementares (Se aplicável) */}
                 {isEditing && (
                    <div className="bg-white p-4 rounded-lg border border-blue-100 col-span-1 lg:col-span-2">
                      <label className={labelClass}>Acordos Complementares / Exceções:</label>

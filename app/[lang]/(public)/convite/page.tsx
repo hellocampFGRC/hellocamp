@@ -25,7 +25,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     website: "",
     responsavelRGPD: "",
     modalidadeReserva: "", 
-    linkExternoReserva: "", // Novo campo para o link do form externo
+    linkExternoReserva: "",
     tipo_pagamento: "", 
     politica_cancelamento: "", 
     acordosComplementares: "",
@@ -80,14 +80,15 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
 
     console.log("✅ [PASSO 1] Conta criada com sucesso! User ID:", authData.user.id);
 
-    // Pausa para dar tempo ao Supabase de criar a linha base na tabela perfis via trigger (se aplicável)
+    // Pausa para dar tempo ao Supabase de criar a linha base na tabela perfis via trigger
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     // ==========================================
-    // PASSO 2: GUARDAR CONTRATO GLOBAL NO PERFIL
+    // PASSO 2: GUARDAR DADOS NO PERFIL
     // ==========================================
-    console.log("⏳ [PASSO 2] A gravar os dados do Contrato Global na tabela 'perfis'...");
+    console.log("⏳ [PASSO 2] A gravar os dados na tabela 'perfis'...");
     
+    // O JSON mantém-se para histórico documental do contrato tal como foi assinado
     const payloadJSON = {
       pessoaContacto: form.pessoaContacto,
       formaJuridica: form.formaJuridica,
@@ -111,7 +112,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       ipAssinatura: isEn ? "Captured via Unified Registration" : "Capturado via Registo Unificado"
     };
 
-    // Atualizamos o perfil com os dados pessoais e injetamos o contrato global
+    // Upsert com as novas colunas mapeadas diretamente para fácil acesso na Base de Dados
     const { error: perfilError } = await supabase.from('perfis').upsert({
       id: authData.user.id,
       email: auth.emailAcesso,
@@ -121,8 +122,10 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       telefone: form.telefone,
       role: 'organizador',
       parceiro_verificado: false,
+      status_contrato: 'Pendente de Revisão',
       contrato_dados: payloadJSON,
-      status_contrato: 'Pendente de Revisão'
+      modalidade_reserva: form.modalidadeReserva,         // NOVA COLUNA DIRETA
+      link_externo_reserva: form.linkExternoReserva       // NOVA COLUNA DIRETA
     });
 
     if (perfilError) {
@@ -132,7 +135,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       return;
     }
 
-    console.log("✅ [PASSO 2] Perfil e Contrato Global atualizados com sucesso!");
+    console.log("✅ [PASSO 2] Perfil e dados da reserva atualizados com sucesso!");
 
     // ==========================================
     // PASSO 3: DISPARAR EMAILS DE NOTIFICAÇÃO

@@ -28,6 +28,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
     website: "",
     responsavelRGPD: "",
     modalidadeReserva: "", // Anexo 1
+    linkExternoReserva: "", // NOVO CAMPO - Anexo 1
     tipo_pagamento: "", // Anexo 2
     politica_cancelamento: "", // Anexo 3
     acordosComplementares: "",
@@ -71,7 +72,8 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
           emailReservas: d.emailReservas || "",
           website: d.website || "",
           responsavelRGPD: d.responsavelRGPD || "",
-          modalidadeReserva: d.modalidadeReserva || "",
+          modalidadeReserva: d.modalidadeReserva || perfilData.modalidade_reserva || "",
+          linkExternoReserva: d.linkExternoReserva || perfilData.link_externo_reserva || "",
           tipo_pagamento: d.tipoPagamento || "",
           politica_cancelamento: d.politicaCancelamento || "",
           acordosComplementares: d.acordosComplementares || "",
@@ -92,6 +94,11 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       return;
     }
 
+    if (form.modalidadeReserva === 'link_externo' && !form.linkExternoReserva) {
+      alert("Por favor, insira o link externo do formulário de reserva.");
+      return;
+    }
+
     setSubmitting(true);
 
     const payloadJSON = {
@@ -105,6 +112,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       website: form.website,
       responsavelRGPD: form.responsavelRGPD,
       modalidadeReserva: form.modalidadeReserva,
+      linkExternoReserva: form.linkExternoReserva,
       tipoPagamento: form.tipo_pagamento,
       politicaCancelamento: form.politica_cancelamento,
       acordosComplementares: form.acordosComplementares,
@@ -120,7 +128,9 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       .from('perfis')
       .update({
          contrato_dados: payloadJSON,
-         status_contrato: 'Pendente de Revisão' // Adicione esta coluna na tabela perfis
+         status_contrato: 'Pendente de Revisão',
+         modalidade_reserva: form.modalidadeReserva,
+         link_externo_reserva: form.linkExternoReserva
       })
       .eq('id', perfil.id);
 
@@ -131,7 +141,9 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
         contrato_dados: payloadJSON,
         status_aprovacao: 'Pendente',
         tipo_pagamento: form.tipo_pagamento,
-        politica_cancelamento: form.politica_cancelamento
+        politica_cancelamento: form.politica_cancelamento,
+        modalidade_reserva: form.modalidadeReserva,
+        link_externo_reserva: form.linkExternoReserva
       })
       .eq('organizador_id', perfil.id);
 
@@ -146,7 +158,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
 
   if (loading) return <div className="p-20 text-center font-bold text-slate-500">A preparar o seu Contrato Global...</div>;
 
-  const inputClass = "border-b border-gray-400 outline-none bg-transparent px-1 text-black placeholder:text-gray-400 w-full focus:border-black transition-colors";
+  const inputClass = "border-b border-gray-400 outline-none bg-transparent px-1 py-1 text-black placeholder:text-gray-400 w-full focus:border-black transition-colors";
   const dataAtual = new Date().toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
@@ -253,7 +265,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
             <h3 className="font-bold text-xl uppercase tracking-widest border-b border-black pb-2 mb-8">Cláusulas Contratuais</h3>
             
             <h4 className="font-bold">Artigo 1.º – Comissão</h4>
-            <p className="mb-4">O Parceiro compromete-se a pagar à HelloCamp uma comissão de 12% (iva não incluído) sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes.</p>
+            <p className="mb-4">O Parceiro compromete-se a pagar à HelloCamp uma comissão de 12% (IVA incluído) sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes.</p>
             <p className="mb-4">A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados através da plataforma.</p>
             <p className="mb-4">A comissão torna-se devida após a confirmação da reserva pelo Parceiro e a transmissão dos respetivos dados de reserva.</p>
             <p className="mb-4">O Parceiro deverá enviar ao cliente a confirmação da reserva e assegurar a prestação dos serviços contratados.</p>
@@ -261,7 +273,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
             <p className="mb-8">Em caso de cancelamento por iniciativa do cliente, aplicar-se-ão as condições previstas no Anexo 3 – Cancelamento de Reservas.</p>
 
             <h4 className="font-bold">Artigo 2.º – Condições de Pagamento</h4>
-            <p className="mb-8">As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado entre as partes. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados não incluem IVA ou outros impostos legalmente aplicáveis.</p>
+            <p className="mb-8">As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado entre as partes. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados incluem IVA ou outros impostos legalmente aplicáveis.</p>
 
             <h4 className="font-bold">Artigo 3.º – Obrigações do Parceiro</h4>
             <p className="mb-4">O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades, incluindo descrições, preços, disponibilidade, fotografias e demais conteúdos relevantes.</p>
@@ -308,6 +320,30 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
                   <div>
                     <strong className="block text-black mb-1">Comunicação por E-mail (Reserva Sob Consulta)</strong>
                     <span className="text-gray-600 leading-relaxed block">A HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias para a gestão da reserva, incluindo os dados do participante, os dados do responsável pela reserva e os detalhes da atividade reservada. O Parceiro dispõe de 2 (dois) dias úteis para comunicar à HelloCamp a rejeição de uma reserva por motivo devidamente justificado. Na ausência de resposta dentro deste prazo, a reserva considerar-se-á aceite, sendo aplicável a comissão prevista no contrato.</span>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.modalidadeReserva === 'link_externo' ? 'bg-white border-black shadow-sm' : 'border-transparent hover:bg-gray-100'}`}>
+                  <input type="radio" name="anexo1" required value="link_externo" checked={form.modalidadeReserva === 'link_externo'} onChange={e => setForm({...form, modalidadeReserva: e.target.value})} className="mt-1 w-4 h-4 accent-black flex-shrink-0" />
+                  <div className="w-full">
+                    <strong className="block text-black mb-1">Formulário ou Link Externo (ex: Google Forms)</strong>
+                    <span className="text-gray-600 leading-relaxed block mb-4">O tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência e evitar omissões, antes de reencaminhar o cliente, a HelloCamp recolhe a intenção de reserva (Nome, Email e Telefone do potencial cliente). Estes dados da "Lead" são enviados automaticamente para o Parceiro com conhecimento (em CC) à HelloCamp. O Parceiro compromete-se sob compromisso de honra a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.</span>
+                    
+                    {form.modalidadeReserva === 'link_externo' && (
+                      <div className="bg-gray-50 border border-gray-300 p-4 rounded-lg mt-2 w-full">
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 block">
+                          Insira o Link Externo (URL) *
+                        </label>
+                        <input 
+                          type="url" 
+                          required 
+                          placeholder="https://forms.gle/..." 
+                          className="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-black"
+                          value={form.linkExternoReserva}
+                          onChange={e => setForm({...form, linkExternoReserva: e.target.value})}
+                        />
+                      </div>
+                    )}
                   </div>
                 </label>
               </div>
