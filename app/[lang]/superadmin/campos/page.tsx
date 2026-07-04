@@ -21,7 +21,6 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
     const camposComPerfis = (camposData || []).map(campo => {
       const organizador = perfisData?.find(p => p.id === campo.organizador_id);
       
-      // Calcular preço mínimo dinâmico com base nos pacotes e variantes novos
       let precoMinimo = campo.preco || 0;
       if (campo.pacotes && campo.pacotes.length > 0) {
         const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes?.map((v: any) => v.preco) || []);
@@ -33,7 +32,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
       return {
         ...campo,
         precoCalculado: precoMinimo,
-        perfis: organizador || { empresa_nome: 'Sem Registo Associado', email: '' }
+        perfis: organizador || { empresa_nome: 'Sem Registo', email: '' }
       };
     });
 
@@ -71,10 +70,21 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
     } else alert("Erro: " + error.message);
   };
 
+  // Lógica do Link de Contrato Inteligente
+  const handleGerarContrato = async (campoId: string) => {
+    const url = `${window.location.origin}/${lang}/assinatura-contrato/${campoId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      alert(`✅ Link de assinatura gerado e copiado!\n\nEnvie este link ao parceiro:\n${url}\n\nO parceiro poderá rever os dados preenchidos, assinar digitalmente e o PDF será gravado na base de dados.`);
+    } catch (err) {
+      alert(`Erro ao copiar o link. Por favor copie manualmente:\n${url}`);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     if (status === 'Aprovado') return { bg: '#dcfce7', text: '#059669', border: '#bbf7d0' };
     if (status === 'Rejeitado') return { bg: '#fee2e2', text: '#dc2626', border: '#fecaca' };
-    return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' }; // Pendente
+    return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' }; 
   };
 
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>A carregar programas do Quartel General...</div>;
@@ -82,22 +92,22 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
   return (
     <div style={{ fontFamily: 'sans-serif', paddingBottom: '3rem' }}>
       
-      <div style={{ marginBottom: '3rem' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>Todos os Campos</h1>
-        <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: '15px' }}>Gestão geral de programas e comissões associadas.</p>
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>Gestão de Campos</h1>
+        <p style={{ color: '#64748b', marginTop: '0.25rem', fontSize: '13px' }}>Controlo absoluto sobre programas, comissões e aprovação de contratos.</p>
       </div>
 
       {showModal && campoEmEdicao && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0, fontWeight: '900', fontSize: '1.25rem' }}>Ajustar Comissão: {campoEmEdicao.nome}</h2>
+              <h2 style={{ margin: 0, fontWeight: '900', fontSize: '1.125rem' }}>Ajustar Comissão: {campoEmEdicao.nome}</h2>
               <button onClick={() => setShowModal(false)} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer' }}>×</button>
             </div>
             
             <form onSubmit={handleSalvarComissao} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '1rem' }}>
-                Se deixar em branco, será usada a comissão geral do parceiro ({campoEmEdicao.perfis?.taxa_comissao || 12}%).
+              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '0.5rem' }}>
+                Se vazio, usa a comissão geral do parceiro ({campoEmEdicao.perfis?.taxa_comissao || 12}%).
               </p>
               <div>
                 <label style={labelStyle}>Taxa de Comissão (%)</label>
@@ -118,20 +128,20 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
         </div>
       )}
 
-      <div style={{ backgroundColor: 'white', borderRadius: '1.5rem', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', overflowX: 'auto', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px' }}>
+          <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
             <tr>
               <th style={thStyle}>PROGRAMA</th>
               <th style={thStyle}>PARCEIRO</th>
               <th style={thStyle}>LOGÍSTICA & STATUS</th>
               <th style={thStyle}>PREÇO & COMISSÃO</th>
-              <th style={thStyle}>AÇÕES</th>
+              <th style={thStyle}>AÇÕES E CONTRATO</th>
             </tr>
           </thead>
           <tbody>
             {campos.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Sem programas registados.</td></tr>
+              <tr><td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>Sem programas registados.</td></tr>
             ) : (
               campos.map((campo) => {
                 const isCustom = campo.taxa_comissao !== null && campo.taxa_comissao !== undefined;
@@ -140,41 +150,62 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
                 
                 return (
                   <tr key={campo.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ ...tdStyle, fontWeight: '900', color: '#0f172a' }}>
-                      {campo.nome}
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', marginTop: '0.25rem' }}>📍 {campo.local}</div>
-                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '0.15rem' }}>{campo.categoria}</div>
+                    
+                    {/* PROGRAMA */}
+                    <td style={{ ...tdStyle, color: '#0f172a' }}>
+                      <div style={{ fontWeight: '900', fontSize: '12px' }}>{campo.nome}</div>
+                      <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold', marginTop: '0.25rem' }}>📍 {campo.local?.split(',')[0]}</div>
+                      <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '0.15rem' }}>{campo.categoria}</div>
                     </td>
-                    <td style={tdStyle}><span style={{ fontWeight: 'bold', color: '#334155' }}>{campo.perfis?.empresa_nome}</span></td>
+                    
+                    {/* PARCEIRO */}
+                    <td style={{ ...tdStyle, fontSize: '11px' }}>
+                      <span style={{ fontWeight: 'bold', color: '#334155' }}>{campo.perfis?.empresa_nome}</span>
+                    </td>
+                    
+                    {/* LOGÍSTICA & STATUS */}
                     <td style={tdStyle}>
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                        <span style={{ fontSize: '10px', padding: '0.25rem 0.5rem', backgroundColor: statusColor.bg, color: statusColor.text, borderRadius: '0.25rem', fontWeight: 'bold', border: `1px solid ${statusColor.border}` }}>
+                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
+                        <span style={{ fontSize: '9px', padding: '0.15rem 0.35rem', backgroundColor: statusColor.bg, color: statusColor.text, borderRadius: '0.25rem', fontWeight: 'bold', border: `1px solid ${statusColor.border}` }}>
                           {campo.status_aprovacao || 'Pendente'}
                         </span>
-                        <span style={{ fontSize: '10px', padding: '0.25rem 0.5rem', backgroundColor: '#eef2ff', color: '#4f46e5', borderRadius: '0.25rem', fontWeight: 'bold' }}>
-                          {campo.modalidade_reserva === 'link_externo' ? '🔗 Externo' : (campo.modalidade_reserva === 'email' ? '✉️ Consulta' : '🛒 Checkout')}
+                        <span style={{ fontSize: '9px', padding: '0.15rem 0.35rem', backgroundColor: '#eef2ff', color: '#4f46e5', borderRadius: '0.25rem', fontWeight: 'bold' }}>
+                          {campo.modalidade_reserva === 'link_externo' ? '🔗 Ext.' : (campo.modalidade_reserva === 'email' ? '✉️ Cons.' : '🛒 Check.')}
                         </span>
                       </div>
-                      <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>
+                      <span style={{ display: 'block', fontSize: '10px', fontWeight: 'bold', color: '#64748b' }}>
                         {campo.vagas_totais || 0} Vagas • {campo.pacotes?.length || 0} Pacotes
                       </span>
                     </td>
+                    
+                    {/* PREÇO E COMISSÃO */}
                     <td style={tdStyle}>
-                      <span style={{ display: 'block', fontSize: '13px', fontWeight: '900', color: '#0f172a', marginBottom: '0.25rem' }}>
+                      <span style={{ display: 'block', fontSize: '12px', fontWeight: '900', color: '#0f172a', marginBottom: '0.25rem' }}>
                          a partir de €{campo.precoCalculado}
                       </span>
-                      <span style={{ backgroundColor: isCustom ? '#fef3c7' : '#f8fafc', color: isCustom ? '#b45309' : '#0f172a', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '10px', fontWeight: 'bold', border: `1px solid ${isCustom ? '#fde68a' : '#e2e8f0'}` }}>
-                        Comissão: {taxaVisual}% {isCustom ? '⭐' : ''}
+                      <span style={{ backgroundColor: isCustom ? '#fef3c7' : '#f8fafc', color: isCustom ? '#b45309' : '#475569', padding: '0.15rem 0.3rem', borderRadius: '0.25rem', fontSize: '9px', fontWeight: 'bold', border: `1px solid ${isCustom ? '#fde68a' : '#e2e8f0'}` }}>
+                        Comissão: {taxaVisual}%
                       </span>
                     </td>
+                    
+                    {/* AÇÕES E CONTRATOS */}
                     <td style={tdStyle}>
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <Link href={`/${lang}/campo/${campo.id}`} target="_blank" style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Ver</Link>
+                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', maxWidth: '250px' }}>
+                        <Link href={`/${lang}/campo/${campo.id}`} target="_blank" style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Ver Perfil</Link>
                         <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Editar HQ</Link>
                         <button onClick={() => { setCampoEmEdicao(campo); setShowModal(true); }} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Comissão</button>
+                        
+                        {/* BOTÃO INTELIGENTE DO CONTRATO */}
+                        {campo.contrato_parceiro_url ? (
+                          <a href={campo.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" style={btnActionStyle('#ecfdf5', '#059669', '#a7f3d0')}>Ver Contrato</a>
+                        ) : (
+                          <button onClick={() => handleGerarContrato(campo.id)} style={btnActionStyle('#eff6ff', '#2563eb', '#bfdbfe')}>Gerar Contrato</button>
+                        )}
+
                         <button onClick={() => handleApagarCampo(campo.id, campo.nome)} style={btnActionStyle('#fef2f2', '#dc2626', '#fecaca')}>Apagar</button>
                       </div>
                     </td>
+
                   </tr>
                 );
               })
@@ -188,11 +219,23 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
 
 // ESTILOS GERAIS
 const modalOverlayStyle = { position: 'fixed' as const, inset: 0, backgroundColor: 'rgba(15,23,42,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' };
-const modalContentStyle = { backgroundColor: 'white', width: '100%', maxWidth: '500px', borderRadius: '1.5rem', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' };
-const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '800', color: '#334155', textTransform: 'uppercase' as const, marginBottom: '0.5rem' };
-const inputStyle = { width: '100%', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', color: '#0f172a', outline: 'none' };
+const modalContentStyle = { backgroundColor: 'white', width: '100%', maxWidth: '400px', borderRadius: '1rem', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' };
+const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#334155', textTransform: 'uppercase' as const, marginBottom: '0.3rem' };
+const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '13px', color: '#0f172a', outline: 'none' };
 const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const };
-const btnSubmitStyle = { width: '100%', padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: 'bold', borderRadius: '0.75rem', border: 'none', cursor: 'pointer' };
-const thStyle = { padding: '1.25rem 1.5rem', fontSize: '11px', fontWeight: '800', color: '#64748b', letterSpacing: '0.05em' };
-const tdStyle = { padding: '1rem 1.5rem', color: '#334155', verticalAlign: 'middle' };
-const btnActionStyle = (bg: string, color: string, border: string) => ({ padding: '0.4rem 0.8rem', backgroundColor: bg, color: color, borderRadius: '0.5rem', textDecoration: 'none' as const, fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', border: `1px solid ${border}`, display: 'inline-flex' });
+const btnSubmitStyle = { width: '100%', padding: '1rem', backgroundColor: '#0f172a', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', marginTop: '0.5rem' };
+const thStyle = { padding: '1rem 1rem', fontSize: '10px', fontWeight: '800', color: '#64748b', letterSpacing: '0.05em' };
+const tdStyle = { padding: '0.85rem 1rem', color: '#334155', verticalAlign: 'middle' };
+
+const btnActionStyle = (bg: string, color: string, border: string) => ({ 
+  padding: '0.35rem 0.6rem', 
+  backgroundColor: bg, 
+  color: color, 
+  borderRadius: '0.4rem', 
+  textDecoration: 'none' as const, 
+  fontWeight: 'bold', 
+  fontSize: '10px', 
+  cursor: 'pointer', 
+  border: `1px solid ${border}`, 
+  display: 'inline-flex' 
+});
