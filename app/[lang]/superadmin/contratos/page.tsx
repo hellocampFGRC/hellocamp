@@ -16,6 +16,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
   const [editComissao, setEditComissao] = useState<number>(12);
+  const [editBaseComissao, setEditBaseComissao] = useState<string>('total');
   const [savingEdit, setSavingEdit] = useState(false);
 
   const labelClass = "text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1 block";
@@ -25,12 +26,17 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
   const fetchContratos = async () => {
     // Agora lemos a tabela PERFIS para ver os Contratos Globais de cada parceiro
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('perfis')
-      .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao')
+      .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao, base_comissao')
       .not('contrato_dados', 'is', null)
       .order('created_at', { ascending: false });
       
+    if (error) {
+      console.error("Erro ao ler perfis:", error);
+      alert("Erro ao ler a base de dados: " + error.message);
+    }
+
     setContratos(data || []);
     
     // Se não existir nenhum contrato pendente, muda o filtro para "Todos"
@@ -55,6 +61,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       politicaCancelamento: dadosContrato.politicaCancelamento || 'Moderada (Reembolso a 50% até 15 dias antes)'
     });
     setEditComissao(perfil.taxa_comissao !== null && perfil.taxa_comissao !== undefined ? perfil.taxa_comissao : 12);
+    setEditBaseComissao(perfil.base_comissao || 'total');
     setIsEditing(false);
   };
 
@@ -96,7 +103,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             parceiroEmail: dados.emailContacto || modalPerfil?.email, 
-            nomeCampo: "Contrato Global",
+            nomeCampo: "Contrato Global B2B",
             status: novoStatus,
             lang: lang
           })
@@ -125,6 +132,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       .update({
          contrato_dados: novoJsonContrato,
          taxa_comissao: editComissao,
+         base_comissao: editBaseComissao,
          modalidade_reserva: editForm.modalidadeReserva,
          link_externo_reserva: editForm.modalidadeReserva === 'link_externo' ? editForm.linkExternoReserva : null
       })
@@ -136,12 +144,13 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       return;
     }
 
-    // 2. Propagar atualizações operacionais (Comissão, Reserva, Pagamento) para os campos
+    // 2. Propagar atualizações operacionais (Comissão, Reserva, Pagamento) para os campos do parceiro
     await supabase
       .from('campos')
       .update({ 
         contrato_dados: novoJsonContrato,
         taxa_comissao: editComissao,
+        base_comissao: editBaseComissao,
         modalidade_reserva: editForm.modalidadeReserva,
         link_externo_reserva: editForm.modalidadeReserva === 'link_externo' ? editForm.linkExternoReserva : null,
         tipo_pagamento: editForm.modalidadeReserva !== 'link_externo' ? editForm.tipoPagamento : null,
@@ -155,7 +164,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           parceiroEmail: editForm.emailContacto || modalPerfil?.email, 
-          nomeCampo: "Contrato Global",
+          nomeCampo: "Contrato Global B2B",
           status: 'Editado',
           lang: lang
         })
@@ -166,7 +175,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
     alert("Contrato Global editado com sucesso e propagado para os respetivos campos!");
     
-    setModalPerfil({ ...modalPerfil, contrato_dados: novoJsonContrato, taxa_comissao: editComissao, modalidade_reserva: editForm.modalidadeReserva, link_externo_reserva: editForm.linkExternoReserva });
+    setModalPerfil({ ...modalPerfil, contrato_dados: novoJsonContrato, taxa_comissao: editComissao, base_comissao: editBaseComissao, modalidade_reserva: editForm.modalidadeReserva, link_externo_reserva: editForm.linkExternoReserva });
     setIsEditing(false);
     setSavingEdit(false);
     fetchContratos();
@@ -176,6 +185,11 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     if (!modalPerfil || !modalPerfil.contrato_dados) return;
     const dados = modalPerfil.contrato_dados;
     const comissaoText = modalPerfil.taxa_comissao !== null && modalPerfil.taxa_comissao !== undefined ? modalPerfil.taxa_comissao : 12;
+    
+    let baseComissaoText = "Sobre Valor Total (Programa + Extras)";
+    if (modalPerfil.base_comissao === "apenas_programa") baseComissaoText = "Apenas sobre Valor Base do Programa";
+    if (modalPerfil.base_comissao === "sem_comissao") baseComissaoText = "Isento de Comissão (0%)";
+
     const dataContrato = dados.dataSubmissao ? new Date(dados.dataSubmissao).toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('pt-PT');
     
     const printWindow = window.open('', '_blank');
@@ -279,7 +293,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
         <div class="clause">
           <span class="clause-title">Artigo 1.º – Comissão</span><br>
-          O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (IVA incluído)</strong> sobre cada reserva efetuada através da plataforma, nos termos definidos no Anexo 2 deste documento. A comissão é calculada sobre o valor efetivamente pago pelo cliente.
+          O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (IVA incluído)</strong> sobre cada reserva efetuada através da plataforma. Incidência: <strong>${baseComissaoText}</strong>. A comissão é calculada sobre o valor faturado.
         </div>
 
         <div class="clause">
@@ -517,8 +531,19 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                         <span className="text-xl font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-md border border-blue-100">{modalPerfil.taxa_comissao !== null && modalPerfil.taxa_comissao !== undefined ? modalPerfil.taxa_comissao : 12}%</span>
                       )}
                     </div>
+                    
+                    {isEditing && (
+                      <div className="pt-1">
+                         <label className={labelClass}>Base de Incidência</label>
+                         <select className={selectClass} value={editBaseComissao} onChange={e => setEditBaseComissao(e.target.value)}>
+                           <option value="total">Valor Total (Programa + Extras)</option>
+                           <option value="apenas_programa">Apenas sobre o Programa</option>
+                           <option value="sem_comissao">Isento (0%)</option>
+                         </select>
+                      </div>
+                    )}
 
-                    <div className={`${isEditing ? 'space-y-3 pt-2' : 'space-y-3 text-xs pt-2'}`}>
+                    <div className={`${isEditing ? 'bg-white p-3 rounded-lg border border-blue-200 mt-2 space-y-3' : 'space-y-3 text-xs pt-2'}`}>
                       {isEditing ? (
                         <>
                           <div>
