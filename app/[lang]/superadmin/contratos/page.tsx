@@ -9,7 +9,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   
   const [contratos, setContratos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modalContrato, setModalContrato] = useState<any>(null);
+  const [modalPerfil, setModalPerfil] = useState<any>(null);
   
   const [filtroStatus, setFiltroStatus] = useState<string>('Pendente de Revisão');
   
@@ -24,18 +24,17 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const textareaClass = "w-full p-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 outline-none focus:border-gray-800 focus:ring-1 focus:ring-gray-800 transition-all shadow-sm resize-y";
 
   const fetchContratos = async () => {
-    // Vamos buscar os campos que já têm contrato preenchido (ou que estão pendentes de validação)
+    // Agora lemos a tabela PERFIS para ver os Contratos Globais de cada parceiro
     const { data } = await supabase
-      .from('campos')
-      .select('id, nome, contrato_dados, status_aprovacao, taxa_comissao, ativo, organizador_id, modalidade_reserva, link_externo_reserva, tipo_pagamento, politica_cancelamento')
+      .from('perfis')
+      .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao')
       .not('contrato_dados', 'is', null)
       .order('created_at', { ascending: false });
       
     setContratos(data || []);
     
-    // Se não existir nenhum contrato com "contrato_dados", significa que a BD está vazia dessa info
-    // Forçamos o filtro para "Todos" para podermos pelo menos ver os que estão pendentes e não filtrados.
-    if (data && data.length > 0 && !data.some(c => c.status_aprovacao === 'Pendente de Revisão')) {
+    // Se não existir nenhum contrato pendente, muda o filtro para "Todos"
+    if (data && data.length > 0 && !data.some(c => c.status_contrato === 'Pendente de Revisão')) {
       setFiltroStatus('Todos');
     }
 
@@ -44,45 +43,70 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
   useEffect(() => { fetchContratos(); }, []);
 
-  const abrirModal = (contrato: any) => {
-    setModalContrato(contrato);
-    const dadosContrato = contrato.contrato_dados || {};
+  const abrirModal = (perfil: any) => {
+    setModalPerfil(perfil);
+    const dadosContrato = perfil.contrato_dados || {};
     
-    // Assegurar que os dados no EditForm vêm das configurações atuais do campo ou do JSON
     setEditForm({
       ...dadosContrato,
-      modalidadeReserva: contrato.modalidade_reserva || dadosContrato.modalidadeReserva || 'direta',
-      linkExternoReserva: contrato.link_externo_reserva || dadosContrato.linkExternoReserva || '',
-      tipoPagamento: contrato.tipo_pagamento || dadosContrato.tipoPagamento || '100_total',
-      politicaCancelamento: contrato.politica_cancelamento || dadosContrato.politicaCancelamento || 'Moderada'
+      modalidadeReserva: perfil.modalidade_reserva || dadosContrato.modalidadeReserva || 'direta',
+      linkExternoReserva: perfil.link_externo_reserva || dadosContrato.linkExternoReserva || '',
+      tipoPagamento: dadosContrato.tipoPagamento || '100_total',
+      politicaCancelamento: dadosContrato.politicaCancelamento || 'Moderada (Reembolso a 50% até 15 dias antes)'
     });
-    setEditComissao(contrato.taxa_comissao !== null ? contrato.taxa_comissao : 12);
+    setEditComissao(perfil.taxa_comissao !== null && perfil.taxa_comissao !== undefined ? perfil.taxa_comissao : 12);
     setIsEditing(false);
   };
 
   const handleAcaoContrato = async (id: string, novoStatus: string) => {
     const isApproved = novoStatus === 'Aprovado';
     
-    const updatePayload: any = { 
-      status_aprovacao: novoStatus,
-      ativo: isApproved 
-    };
+    // 1. Atualizar o Perfil do Parceiro
+    const { error: perfilError } = await supabase
+      .from('perfis')
+      .update({ 
+        status_contrato: novoStatus,
+        parceiro_verificado: isApproved 
+      })
+      .eq('id', id);
 
-    const { error } = await supabase.from('campos').update(updatePayload).eq('id', id);
+    if (perfilError) {
+      alert("Erro ao atualizar parceiro: " + perfilError.message);
+      return;
+    }
 
-    if (error) {
-      alert("Erro ao atualizar base de dados: " + error.message);
+    // 2. Propagar a decisão em cascata para TODOS os campos deste parceiro
+    const { error: camposError } = await supabase
+      .from('campos')
+      .update({
+        status_aprovacao: novoStatus,
+        ativo: isApproved,
+        contrato_parceiro_url: isApproved ? `https://hellocamp.pt/contratos/global_${id}.pdf` : null
+      })
+      .eq('organizador_id', id);
+
+    if (camposError) {
+      alert("Parceiro atualizado, mas erro ao propagar para os campos: " + camposError.message);
     } else {
-      // Se for aprovado, atualizar também o parceiro no perfil como Verificado
-      if (modalContrato?.organizador_id) {
-        await supabase
-          .from('perfis')
-          .update({ parceiro_verificado: isApproved })
-          .eq('id', modalContrato.organizador_id);
+      
+      try {
+        const dados = modalPerfil?.contrato_dados || {};
+        await fetch('/api/notificacoes/status-contrato', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            parceiroEmail: dados.emailContacto || modalPerfil?.email, 
+            nomeCampo: "Contrato Global",
+            status: novoStatus,
+            lang: lang
+          })
+        });
+      } catch (err) {
+        console.error("Erro ao notificar parceiro da alteração de estado:", err);
       }
 
-      alert(`Sucesso! Contrato alterado para ${novoStatus}. O campo está agora ${isApproved ? 'ATIVO' : 'OCULTO'}.`);
-      setModalContrato((prev: any) => ({ ...prev, status_aprovacao: novoStatus, ativo: isApproved }));
+      alert(`Sucesso! O Parceiro está agora ${novoStatus}. Todos os campos associados foram atualizados.`);
+      setModalPerfil((prev: any) => ({ ...prev, status_contrato: novoStatus }));
       fetchContratos();
     }
   };
@@ -90,13 +114,30 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const handleGuardarEdicao = async () => {
     setSavingEdit(true);
     
-    // Atualizar JSON com as novas alterações
     const novoJsonContrato = {
-      ...modalContrato.contrato_dados,
+      ...modalPerfil.contrato_dados,
       ...editForm,
     };
 
-    const { error } = await supabase
+    // 1. Atualizar no Perfil (Fonte da Verdade Global)
+    const { error: perfilError } = await supabase
+      .from('perfis')
+      .update({
+         contrato_dados: novoJsonContrato,
+         taxa_comissao: editComissao,
+         modalidade_reserva: editForm.modalidadeReserva,
+         link_externo_reserva: editForm.modalidadeReserva === 'link_externo' ? editForm.linkExternoReserva : null
+      })
+      .eq('id', modalPerfil.id);
+
+    if (perfilError) {
+      alert("Erro ao guardar edição no parceiro: " + perfilError.message);
+      setSavingEdit(false);
+      return;
+    }
+
+    // 2. Propagar atualizações operacionais (Comissão, Reserva, Pagamento) para os campos
+    await supabase
       .from('campos')
       .update({ 
         contrato_dados: novoJsonContrato,
@@ -106,35 +147,35 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
         tipo_pagamento: editForm.modalidadeReserva !== 'link_externo' ? editForm.tipoPagamento : null,
         politica_cancelamento: editForm.modalidadeReserva !== 'link_externo' ? editForm.politicaCancelamento : null
       })
-      .eq('id', modalContrato.id);
+      .eq('organizador_id', modalPerfil.id);
 
-    // Também atualizar no perfil (se quisermos garantir que o organizador herda isto para futuros campos)
-    if (modalContrato?.organizador_id) {
-        await supabase.from('perfis').update({
-            modalidade_reserva: editForm.modalidadeReserva,
-            link_externo_reserva: editForm.modalidadeReserva === 'link_externo' ? editForm.linkExternoReserva : null,
-            contrato_dados: novoJsonContrato
-        }).eq('id', modalContrato.organizador_id);
+    try {
+      await fetch('/api/notificacoes/contrato-editado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          parceiroEmail: editForm.emailContacto || modalPerfil?.email, 
+          nomeCampo: "Contrato Global",
+          status: 'Editado',
+          lang: lang
+        })
+      });
+    } catch (err) {
+      console.error("Erro ao notificar parceiro da edição:", err);
     }
 
-    if (error) {
-      alert("Erro ao guardar edição: " + error.message);
-      setSavingEdit(false);
-      return;
-    }
-
-    alert("Contrato editado com sucesso!");
+    alert("Contrato Global editado com sucesso e propagado para os respetivos campos!");
     
-    setModalContrato({ ...modalContrato, contrato_dados: novoJsonContrato, taxa_comissao: editComissao });
+    setModalPerfil({ ...modalPerfil, contrato_dados: novoJsonContrato, taxa_comissao: editComissao, modalidade_reserva: editForm.modalidadeReserva, link_externo_reserva: editForm.linkExternoReserva });
     setIsEditing(false);
     setSavingEdit(false);
     fetchContratos();
   };
 
   const handleImprimirPDF = () => {
-    if (!modalContrato || !modalContrato.contrato_dados) return;
-    const dados = modalContrato.contrato_dados;
-    const comissaoText = modalContrato.taxa_comissao !== null ? modalContrato.taxa_comissao : 12;
+    if (!modalPerfil || !modalPerfil.contrato_dados) return;
+    const dados = modalPerfil.contrato_dados;
+    const comissaoText = modalPerfil.taxa_comissao !== null && modalPerfil.taxa_comissao !== undefined ? modalPerfil.taxa_comissao : 12;
     const dataContrato = dados.dataSubmissao ? new Date(dados.dataSubmissao).toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('pt-PT');
     
     const printWindow = window.open('', '_blank');
@@ -149,7 +190,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     } else if (dados.modalidadeReserva === 'email') {
         anexo1Text = "<strong>Comunicação por E-mail (Reserva Sob Consulta):</strong> A HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias para a gestão da reserva. O Parceiro dispõe de 2 (dois) dias úteis para comunicar à HelloCamp a rejeição. Na ausência de resposta dentro deste prazo, a reserva considerar-se-á aceite.";
     } else if (dados.modalidadeReserva === 'link_externo') {
-        anexo1Text = `<strong>Formulário ou Link Externo:</strong> O tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência e evitar omissões, antes de reencaminhar o cliente, a HelloCamp recolhe a intenção de reserva (Nome e Email). Estes dados da "Lead" são enviados para o Parceiro. O Parceiro compromete-se a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.<br/><br/>URL Oficial: <span style="font-family: monospace; color: blue;">${dados.linkExternoReserva || 'N/A'}</span>`;
+        anexo1Text = `<strong>Formulário ou Link Externo:</strong> O tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência, a HelloCamp recolhe a intenção de reserva (Nome e Email). Estes dados da "Lead" são enviados para o Parceiro. O Parceiro compromete-se a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.<br/><br/>URL Oficial: <span style="font-family: monospace; color: blue;">${dados.linkExternoReserva || 'N/A'}</span>`;
     }
 
     let anexo2Text = "";
@@ -168,8 +209,8 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
           anexo3Text = "<strong>Estrita (Sem reembolso após reserva):</strong> As reservas efetuadas são finais e não reembolsáveis. A comissão da HelloCamp é devida na sua totalidade, uma vez que a receita do Parceiro fica inteiramente garantida.";
         }
     } else {
-        anexo2Text = "<strong>Gestão Independente:</strong> Sendo uma reserva por link externo, o Parceiro fará a cobrança de forma independente fora da plataforma HelloCamp. A comissão acordada será devida pelas intenções de reserva (leads) convertidas em clientes efetivos pelo Parceiro, conforme apuramento mensal efetuado entre as partes.";
-        anexo3Text = "<strong>Política Externa:</strong> As políticas de cancelamento e reembolso ficam sujeitas aos Termos e Condições praticados externamente pelo Parceiro no seu website/formulário de inscrição.";
+        anexo2Text = "<strong>Gestão Independente:</strong> Sendo uma reserva por link externo, o Parceiro fará a cobrança de forma independente fora da plataforma HelloCamp. A comissão acordada será devida pelas intenções de reserva (leads) convertidas em clientes efetivos pelo Parceiro.";
+        anexo3Text = "<strong>Política Externa:</strong> As políticas de cancelamento e reembolso ficam sujeitas aos Termos e Condições praticados externamente pelo Parceiro no seu formulário de inscrição.";
     }
 
     const html = `
@@ -177,7 +218,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       <html lang="pt">
       <head>
         <meta charset="UTF-8">
-        <title>Contrato Oficial - ${dados.empresaNome || modalContrato.nome}</title>
+        <title>Contrato Global Oficial - ${dados.empresaNome || modalPerfil.empresa_nome}</title>
         <style>
           body { font-family: "Times New Roman", Times, serif; color: #000; max-width: 850px; margin: 0 auto; padding: 40px 30px; line-height: 1.5; font-size: 14px; text-align: justify; }
           .header { text-align: center; margin-bottom: 40px; }
@@ -210,45 +251,45 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       </head>
       <body>
         <div class="print-btn" style="text-align: center; margin-bottom: 30px;">
-          <button onclick="window.print()" style="padding: 10px 25px; background: #000; color: #fff; font-weight: bold; border: none; cursor: pointer; font-size: 16px;">Imprimir Contrato Jurídico</button>
+          <button onclick="window.print()" style="padding: 10px 25px; background: #000; color: #fff; font-weight: bold; border: none; cursor: pointer; font-size: 16px;">Imprimir Contrato Global</button>
         </div>
 
         <div class="header">
-          <h1>Contrato de Intermediação e Serviços</h1>
+          <h1>Contrato Global de Intermediação e Serviços</h1>
           <p>Plataforma HelloCamp Portugal</p>
         </div>
 
         <p>Entre a <strong>HelloCamp</strong>, com website em www.hellocamp.pt e contacto via info@hellocamp.pt, doravante designada por "Primeira Outorgante"; e do outro lado:</p>
         
         <div class="party-block">
-          <p><strong>Nome da Empresa (Entidade Organizadora):</strong> ${dados.empresaNome || 'N/A'}</p>
-          <p><strong>NIF:</strong> ${dados.nif || 'N/A'}</p>
+          <p><strong>Nome da Empresa (Entidade Organizadora):</strong> ${dados.empresaNome || modalPerfil.empresa_nome}</p>
+          <p><strong>NIF:</strong> ${dados.nif || modalPerfil.nif_empresa}</p>
           <p><strong>Forma Jurídica:</strong> ${dados.formaJuridica || 'N/A'}</p>
           <p><strong>Morada Fiscal:</strong> ${dados.morada || 'N/A'}, ${dados.codigoPostal || 'N/A'}</p>
           <p><strong>Pessoa de Contacto:</strong> ${dados.pessoaContacto || 'N/A'}</p>
-          <p><strong>Telefone:</strong> ${dados.telefone || 'N/A'}</p>
-          <p><strong>E-mail Comercial:</strong> ${dados.emailContacto || 'N/A'}</p>
+          <p><strong>Telefone:</strong> ${dados.telefone || modalPerfil.telefone}</p>
+          <p><strong>E-mail Comercial:</strong> ${dados.emailContacto || modalPerfil.email}</p>
         </div>
 
         <p style="text-align: center; font-style: italic;">- doravante designado por "Parceiro" -</p>
 
-        <p>É celebrado o presente contrato de intermediação e divulgação comercial aplicável ao programa/campo de férias com a designação: <strong>"${modalContrato.nome}"</strong>.</p>
+        <p>É celebrado o presente contrato global aplicável a <strong>todas as atividades e campos de férias organizados pelo Parceiro na plataforma HelloCamp</strong>.</p>
 
         <h2>Cláusulas Contratuais Gerais</h2>
 
         <div class="clause">
           <span class="clause-title">Artigo 1.º – Comissão</span><br>
-          O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (IVA incluído)</strong> sobre cada reserva efetuada através da plataforma, nos termos definidos no Anexo 2 deste documento. A comissão é calculada sobre o valor efetivamente pago pelo cliente. A comissão torna-se devida após a confirmação da reserva pelo Parceiro.
+          O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (IVA incluído)</strong> sobre cada reserva efetuada através da plataforma, nos termos definidos no Anexo 2 deste documento. A comissão é calculada sobre o valor efetivamente pago pelo cliente.
         </div>
 
         <div class="clause">
           <span class="clause-title">Artigo 2.º – Obrigações do Parceiro</span><br>
-          O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades. O Parceiro garante que possui todos os direitos necessários sobre os conteúdos. Os preços divulgados na plataforma não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas da mesma atividade.
+          O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades. O Parceiro garante que possui todos os direitos necessários sobre os conteúdos. Os preços divulgados na plataforma não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas.
         </div>
 
         <div class="clause">
           <span class="clause-title">Artigo 3.º – Limitação de Responsabilidade e Seguros</span><br>
-          A HelloCamp atua exclusivamente como plataforma intermediária e motor de busca. A HelloCamp não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes ou disputas durante as atividades. O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei.
+          A HelloCamp atua exclusivamente como plataforma intermediária. O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei.
         </div>
 
         <div class="page-break"></div>
@@ -289,11 +330,11 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
             <div class="sig-details">Data da Assinatura: ${dataContrato}</div>
             
             <div class="stamp">
-              <strong>Declaração de Vinculação:</strong> "Declaro ter lido e aceite os termos do contrato e anexos operacionais. Confirmo possuir poderes legais para vincular a entidade."<br><br>
+              <strong>Declaração de Vinculação:</strong> "Declaro ter lido e aceite os termos do contrato e anexos. Confirmo possuir poderes legais para vincular a entidade a todas as atividades presentes e futuras."<br><br>
               <strong>Registo de Assinatura:</strong><br>
               Plataforma Segura HelloCamp<br>
               Timestamp: ${dados.dataSubmissao || new Date().toISOString()}<br>
-              ID Registo: ${modalContrato.id}
+              ID Perfil Sistema: ${modalPerfil.id}
             </div>
           </div>
         </div>
@@ -308,18 +349,14 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     }, 500);
   };
 
-  const tabs = ['Pendente', 'Pendente de Revisão', 'Aprovado', 'Rejeitado', 'Todos'];
+  const tabs = ['Pendente de Revisão', 'Aprovado', 'Rejeitado', 'Todos'];
   
-  // Tratamos o "Pendente" (que vem do update no portal do parceiro) e o "Pendente de Revisão" como sendo a mesma view para facilidade do SuperAdmin.
   const contratosFiltrados = contratos.filter(c => {
     if (filtroStatus === 'Todos') return true;
-    if (filtroStatus === 'Pendente de Revisão' || filtroStatus === 'Pendente') {
-      return c.status_aprovacao === 'Pendente de Revisão' || c.status_aprovacao === 'Pendente';
-    }
-    return c.status_aprovacao === filtroStatus;
+    return c.status_contrato === filtroStatus;
   });
 
-  if (loading) return <div className="p-8 text-center text-gray-500 font-bold animate-pulse">A procurar documentos e contratos...</div>;
+  if (loading) return <div className="p-8 text-center text-gray-500 font-bold animate-pulse">A carregar Contratos Globais de Parceiros...</div>;
 
   return (
     <div className="max-w-7xl mx-auto font-sans pb-16">
@@ -333,13 +370,9 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       {/* TABS COMPACTAS */}
       <div className="flex flex-wrap gap-2 mb-6">
         {tabs.map(tab => {
-          // Esconder as tabs duplicadas no UI
-          if (tab === 'Pendente') return null;
-
           const count = contratos.filter(c => {
             if (tab === 'Todos') return true;
-            if (tab === 'Pendente de Revisão') return c.status_aprovacao === 'Pendente de Revisão' || c.status_aprovacao === 'Pendente';
-            return c.status_aprovacao === tab;
+            return c.status_contrato === tab;
           }).length;
 
           return (
@@ -353,15 +386,15 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
         })}
       </div>
 
-      {/* TABELA DE CONTRATOS */}
+      {/* TABELA DE CONTRATOS GLOBAIS */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
         <table className="w-full text-left min-w-[700px]">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-4 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Programa Assinado</th>
               <th className="px-4 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Entidade Jurídica</th>
+              <th className="px-4 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Contacto / E-mail</th>
               <th className="px-4 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Operação</th>
-              <th className="px-4 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Status / Aprovação</th>
+              <th className="px-4 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Status Geral</th>
               <th className="px-4 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Ação</th>
             </tr>
           </thead>
@@ -371,19 +404,19 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
             ) : contratosFiltrados.map(c => {
               const dados = c.contrato_dados || {};
               let statusColor = "bg-gray-100 text-gray-600";
-              if (c.status_aprovacao === 'Aprovado') statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
-              if (c.status_aprovacao === 'Rejeitado') statusColor = "bg-red-100 text-red-800 border-red-200";
-              if (c.status_aprovacao === 'Pendente de Revisão' || c.status_aprovacao === 'Pendente') statusColor = "bg-amber-100 text-amber-800 border-amber-200";
+              if (c.status_contrato === 'Aprovado') statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
+              if (c.status_contrato === 'Rejeitado') statusColor = "bg-red-100 text-red-800 border-red-200";
+              if (c.status_contrato === 'Pendente de Revisão' || !c.status_contrato) statusColor = "bg-amber-100 text-amber-800 border-amber-200";
 
               return (
                 <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
-                    <div className="font-bold text-sm text-gray-900 truncate max-w-[250px]">{c.nome}</div>
-                    <div className="text-[10px] font-bold text-gray-400 mt-0.5">Assinado: {dados.dataSubmissao ? new Date(dados.dataSubmissao).toLocaleDateString('pt-PT') : 'N/D'}</div>
+                    <div className="font-black text-sm text-gray-900 truncate max-w-[200px]">{dados.empresaNome || c.empresa_nome || 'N/D'}</div>
+                    <div className="text-[10px] font-medium text-gray-500 mt-0.5">NIF: {dados.nif || c.nif_empresa || '---'}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-sm font-black text-gray-700 truncate max-w-[200px]">{dados.empresaNome || 'N/D'}</div>
-                    <div className="text-[10px] text-gray-500 font-medium mt-0.5">NIF: {dados.nif || '---'}</div>
+                    <div className="text-sm font-bold text-gray-700 truncate max-w-[200px]">{dados.pessoaContacto || c.nome_completo || 'N/A'}</div>
+                    <div className="text-[10px] text-gray-500 font-mono mt-0.5">{dados.emailContacto || c.email}</div>
                   </td>
                   <td className="px-4 py-3">
                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 uppercase tracking-wider">
@@ -392,12 +425,12 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-md border shadow-sm ${statusColor}`}>
-                      {c.status_aprovacao === 'Pendente' ? 'Pendente de Revisão' : c.status_aprovacao}
+                      {c.status_contrato || 'Pendente'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => abrirModal(c)} className="bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors shadow-sm">
-                      Rever Termos
+                      Rever Contrato
                     </button>
                   </td>
                 </tr>
@@ -408,7 +441,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       </div>
 
       {/* MODAL COMPACTO E ELEGANTE */}
-      {modalContrato && (
+      {modalPerfil && (
         <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl border border-gray-200">
             
@@ -416,10 +449,10 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
             <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center bg-white flex-shrink-0">
               <div>
                 <h2 className="text-xl font-black text-gray-900 flex items-center gap-2 m-0 leading-none">
-                  {modalContrato.nome}
+                  {modalPerfil.contrato_dados?.empresaNome || modalPerfil.empresa_nome}
                   {isEditing && <span className="bg-amber-400 text-amber-950 text-[10px] uppercase tracking-widest font-black px-2 py-0.5 rounded-md ml-2">Modo Edição</span>}
                 </h2>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2 m-0">Contrato de Serviço B2B</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2 m-0">Contrato Global de Parceiro</p>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={handleImprimirPDF} className="text-xs font-bold text-gray-700 hover:text-black bg-gray-100 px-4 py-2 rounded-lg transition-colors shadow-sm mr-2 hidden sm:block border border-gray-200">
@@ -430,7 +463,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                     Editar Termos
                   </button>
                 )}
-                <button onClick={() => setModalContrato(null)} className="text-gray-400 hover:text-gray-900 bg-white border border-gray-200 w-9 h-9 rounded-lg flex items-center justify-center font-bold transition-colors">&times;</button>
+                <button onClick={() => setModalPerfil(null)} className="text-gray-400 hover:text-gray-900 bg-white border border-gray-200 w-9 h-9 rounded-lg flex items-center justify-center font-bold transition-colors">&times;</button>
               </div>
             </div>
             
@@ -453,10 +486,10 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                       </div>
                     ) : (
                       <div className="space-y-3 text-xs">
-                        <div className="flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100"><strong className="text-gray-500">Empresa</strong><span className="font-black text-gray-900 text-right ml-4 text-sm">{modalContrato.contrato_dados?.empresaNome}</span></div>
-                        <div className="flex justify-between items-center"><strong className="text-gray-500">NIF</strong><span className="font-mono font-bold text-gray-800 text-right ml-4">{modalContrato.contrato_dados?.nif}</span></div>
-                        <div className="flex justify-between items-center"><strong className="text-gray-500">Contacto Pessoal</strong><span className="font-medium text-gray-800 text-right ml-4">{modalContrato.contrato_dados?.pessoaContacto} <br/><span className="text-gray-400 font-bold">{modalContrato.contrato_dados?.telefone}</span></span></div>
-                        <div className="flex justify-between items-center"><strong className="text-gray-500">E-mail Operacional</strong><span className="font-bold text-blue-600 text-right ml-4 break-all">{modalContrato.contrato_dados?.emailReservas}</span></div>
+                        <div className="flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100"><strong className="text-gray-500">Empresa</strong><span className="font-black text-gray-900 text-right ml-4 text-sm">{modalPerfil.contrato_dados?.empresaNome}</span></div>
+                        <div className="flex justify-between items-center"><strong className="text-gray-500">NIF</strong><span className="font-mono font-bold text-gray-800 text-right ml-4">{modalPerfil.contrato_dados?.nif}</span></div>
+                        <div className="flex justify-between items-center"><strong className="text-gray-500">Contacto Pessoal</strong><span className="font-medium text-gray-800 text-right ml-4">{modalPerfil.contrato_dados?.pessoaContacto} <br/><span className="text-gray-400 font-bold">{modalPerfil.contrato_dados?.telefone}</span></span></div>
+                        <div className="flex justify-between items-center"><strong className="text-gray-500">E-mail Operacional</strong><span className="font-bold text-blue-600 text-right ml-4 break-all">{modalPerfil.contrato_dados?.emailReservas || modalPerfil.contrato_dados?.emailContacto || modalPerfil.email}</span></div>
                       </div>
                     )}
                   </div>
@@ -465,9 +498,9 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                   <div className="bg-white border-2 border-emerald-100 p-5 rounded-xl shadow-sm relative overflow-hidden">
                     <div className="absolute -right-4 -top-4 text-emerald-50 text-7xl font-serif italic">A</div>
                     <span className="relative block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Assinatura Digital</span>
-                    <p className="relative font-serif text-2xl font-black italic text-emerald-950 mb-1">{modalContrato.contrato_dados?.assinaturaNome}</p>
-                    <p className="relative text-xs text-emerald-700 font-bold mb-3">{modalContrato.contrato_dados?.assinaturaCargo}</p>
-                    <p className="relative text-[9px] text-gray-400 font-mono m-0 uppercase tracking-widest">Registado a: {modalContrato.contrato_dados?.dataSubmissao ? new Date(modalContrato.contrato_dados?.dataSubmissao).toLocaleString('pt-PT') : 'N/D'}</p>
+                    <p className="relative font-serif text-2xl font-black italic text-emerald-950 mb-1">{modalPerfil.contrato_dados?.assinaturaNome}</p>
+                    <p className="relative text-xs text-emerald-700 font-bold mb-3">{modalPerfil.contrato_dados?.assinaturaCargo}</p>
+                    <p className="relative text-[9px] text-gray-400 font-mono m-0 uppercase tracking-widest">Registado a: {modalPerfil.contrato_dados?.dataSubmissao ? new Date(modalPerfil.contrato_dados?.dataSubmissao).toLocaleString('pt-PT') : 'N/D'}</p>
                   </div>
                 </div>
 
@@ -481,7 +514,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                       {isEditing ? (
                         <input type="number" step="0.1" className={`${inputClass} font-black text-blue-700 text-lg`} value={editComissao} onChange={e => setEditComissao(Number(e.target.value))} />
                       ) : (
-                        <span className="text-xl font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-md border border-blue-100">{modalContrato.taxa_comissao !== null ? modalContrato.taxa_comissao : 12}%</span>
+                        <span className="text-xl font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-md border border-blue-100">{modalPerfil.taxa_comissao !== null && modalPerfil.taxa_comissao !== undefined ? modalPerfil.taxa_comissao : 12}%</span>
                       )}
                     </div>
 
@@ -514,28 +547,28 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                           <div className="flex justify-between items-center border-b border-gray-100 pb-2">
                             <strong className="text-gray-500 uppercase tracking-wider text-[10px]">Modelo</strong>
                             <span className="font-bold text-gray-900 bg-gray-100 px-2 py-1 rounded text-xs">
-                              {modalContrato.contrato_dados?.modalidadeReserva === 'direta' ? 'Reserva Direta no Checkout' : 
-                               modalContrato.contrato_dados?.modalidadeReserva === 'link_externo' ? 'Encaminhamento Link Externo' : 'Comunicação por Email'}
+                              {modalPerfil.contrato_dados?.modalidadeReserva === 'direta' ? 'Reserva Direta no Checkout' : 
+                               modalPerfil.contrato_dados?.modalidadeReserva === 'link_externo' ? 'Encaminhamento Link Externo' : 'Comunicação por Email'}
                             </span>
                           </div>
                           
-                          {modalContrato.contrato_dados?.modalidadeReserva === 'link_externo' ? (
-                            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
+                          {modalPerfil.contrato_dados?.modalidadeReserva === 'link_externo' ? (
+                            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 mt-2">
                                <strong className="block text-amber-800 text-[10px] uppercase tracking-widest mb-1">URL Oficial de Inscrição</strong>
-                               <a href={modalContrato.contrato_dados?.linkExternoReserva} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline break-all">
-                                  {modalContrato.contrato_dados?.linkExternoReserva}
+                               <a href={modalPerfil.contrato_dados?.linkExternoReserva || modalPerfil.link_externo_reserva} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline break-all">
+                                  {modalPerfil.contrato_dados?.linkExternoReserva || modalPerfil.link_externo_reserva}
                                </a>
                             </div>
                           ) : (
                             <>
-                              <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <div className="flex justify-between items-center border-b border-gray-100 pb-2 mt-2">
                                 <strong className="text-gray-500 uppercase tracking-wider text-[10px]">Pagamento</strong>
-                                <span className="font-bold text-gray-900 text-right">{modalContrato.contrato_dados?.tipoPagamento === '100_total' ? '100% Imediato' : 'Sinal de 50%'}</span>
+                                <span className="font-bold text-gray-900 text-right">{modalPerfil.contrato_dados?.tipoPagamento === '100_total' ? '100% Imediato' : 'Sinal de 50%'}</span>
                               </div>
-                              <div className="pt-1">
+                              <div className="pt-2">
                                 <strong className="block text-gray-500 uppercase tracking-wider text-[10px] mb-1">Pol. Cancelamento Acordada:</strong>
                                 <p className="text-xs text-gray-700 leading-tight bg-gray-50 p-2 rounded-md border border-gray-100 m-0 font-medium">
-                                  {modalContrato.contrato_dados?.politicaCancelamento || modalContrato.politica_cancelamento || 'Não definida'}
+                                  {modalPerfil.contrato_dados?.politicaCancelamento || 'Não definida'}
                                 </p>
                               </div>
                             </>
@@ -546,7 +579,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                   </div>
                 </div>
 
-                {/* Bloco de Acordos Complementares (Se aplicável ou se estamos a editar) */}
+                {/* Bloco de Acordos Complementares */}
                 {(isEditing || editForm.acordosComplementares) && (
                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm col-span-1 lg:col-span-2">
                      <label className={`${labelClass} text-gray-900`}>Acordos Extraordinários (Anexo 4)</label>
@@ -571,8 +604,8 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
             {/* RODAPÉ E ACÕES */}
             <div className="px-6 py-5 border-t border-gray-200 bg-white flex flex-wrap gap-3 justify-between items-center flex-shrink-0">
               <div>
-                {!isEditing && modalContrato.status_aprovacao !== 'Pendente de Revisão' && modalContrato.status_aprovacao !== 'Pendente' && (
-                  <button onClick={() => handleAcaoContrato(modalContrato.id, 'Pendente de Revisão')} className="text-xs font-bold text-gray-400 hover:text-gray-800 underline">Desfazer Aprovação (Reverter)</button>
+                {!isEditing && modalPerfil.status_contrato !== 'Pendente de Revisão' && (
+                  <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Pendente de Revisão')} className="text-xs font-bold text-gray-400 hover:text-gray-800 underline">Desfazer Aprovação (Reverter)</button>
                 )}
               </div>
               
@@ -584,11 +617,11 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                   </>
                 ) : (
                   <>
-                    {modalContrato.status_aprovacao !== 'Rejeitado' && (
-                      <button onClick={() => handleAcaoContrato(modalContrato.id, 'Rejeitado')} className="bg-white border border-red-200 text-red-600 font-bold px-5 py-2.5 rounded-xl text-sm hover:bg-red-50 transition-colors">Rejeitar Parceiro</button>
+                    {modalPerfil.status_contrato !== 'Rejeitado' && (
+                      <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Rejeitado')} className="bg-white border border-red-200 text-red-600 font-bold px-5 py-2.5 rounded-xl text-sm hover:bg-red-50 transition-colors">Rejeitar Parceiro</button>
                     )}
-                    {modalContrato.status_aprovacao !== 'Aprovado' && (
-                      <button onClick={() => handleAcaoContrato(modalContrato.id, 'Aprovado')} className="bg-emerald-600 text-white font-black px-6 py-2.5 rounded-xl text-sm shadow-md hover:bg-emerald-700 transition-colors tracking-wide">Validar e Aprovar Programa</button>
+                    {modalPerfil.status_contrato !== 'Aprovado' && (
+                      <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Aprovado')} className="bg-emerald-600 text-white font-black px-6 py-2.5 rounded-xl text-sm shadow-md hover:bg-emerald-700 transition-colors tracking-wide">Validar e Aprovar Parceiro</button>
                     )}
                   </>
                 )}
