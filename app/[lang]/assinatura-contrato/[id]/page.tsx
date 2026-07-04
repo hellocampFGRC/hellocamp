@@ -71,7 +71,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     }
   };
 
-  const gerarEGuardarPDF = async () => {
+  const gerarEGuardarPDF = async (userIP: string) => {
     const doc = new jsPDF({ format: 'a4', unit: 'mm' });
     const pageWidth = doc.internal.pageSize.getWidth();
     
@@ -143,23 +143,23 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     const startAceitacao = acordosComplementares ? 200 : 160;
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("4. DECLARAÇÃO DE ACEITAÇÃO", 20, startAceitacao);
+    doc.text("4. DECLARAÇÃO DE ACEITAÇÃO E CONVENÇÃO DE PROVA", 20, startAceitacao);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
-    const textoDeclaracao = `O Organizador declara ter lido, compreendido e aceite integralmente os Termos e Condições Gerais da HelloCamp, bem como as condições específicas financeiras e operacionais descritas neste documento referente à comercialização do programa "${campo?.nome}".`;
-    doc.text(textoDeclaracao, 20, startAceitacao + 10, { maxWidth: pageWidth - 40 });
+    const textoDeclaracao = `O Organizador declara ter lido e aceite integralmente as condições descritas. As partes reconhecem expressamente a validade desta aceitação digital, convencionando que os registos recolhidos (IP, Timestamp, Nome) constituem prova plena da autoria e integridade do acordo, renunciando à invocação de nulidade por ausência de assinatura autógrafa ou qualificada.`;
+    doc.text(doc.splitTextToSize(textoDeclaracao, pageWidth - 40), 20, startAceitacao + 10);
 
     // ASSINATURAS
-    doc.line(20, startAceitacao + 35, 100, startAceitacao + 35); // Linha Assinatura
-    doc.text(`Assinado Digitalmente por:`, 20, startAceitacao + 42);
+    doc.line(20, startAceitacao + 40, 100, startAceitacao + 40); // Linha Assinatura
+    doc.text(`Assinado Digitalmente por:`, 20, startAceitacao + 47);
     doc.setFont("helvetica", "bold");
-    doc.text(`${assinaturaNome} (${assinaturaCargo})`, 20, startAceitacao + 49);
+    doc.text(`${assinaturaNome} (${assinaturaCargo})`, 20, startAceitacao + 54);
     
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.text(`Data/Hora: ${new Date().toLocaleString('pt-PT')}`, 20, startAceitacao + 56);
-    doc.text(`IP de Assinatura: Registado via Plataforma Segura HelloCamp`, 20, startAceitacao + 62);
+    doc.text(`Data/Hora: ${new Date().toLocaleString('pt-PT')}`, 20, startAceitacao + 61);
+    doc.text(`IP de Assinatura: ${userIP} (Registado via Plataforma Segura HelloCamp)`, 20, startAceitacao + 67);
 
     return doc.output('blob');
   };
@@ -182,6 +182,19 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     }
 
     setSaving(true);
+    
+    // Captura de IP
+    let userIP = "Desconhecido";
+    try {
+      const res = await fetch("https://api.ipify.org?format=json");
+      if (res.ok) {
+        const ipData = await res.json();
+        userIP = ipData.ip;
+      }
+    } catch (err) {
+      console.error("Não foi possível capturar o IP.", err);
+    }
+
     try {
       // 1. Atualizar Perfil do Organizador com os dados editados
       if (campo.organizador_id) {
@@ -193,8 +206,8 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
         if (perfilErr) throw new Error("Erro ao atualizar dados da empresa: " + perfilErr.message);
       }
 
-      // 2. Gerar e Guardar PDF
-      const pdfBlob = await gerarEGuardarPDF();
+      // 2. Gerar e Guardar PDF (Passamos o IP)
+      const pdfBlob = await gerarEGuardarPDF(userIP);
       const fileName = `contrato_parceiro_${campo.id}_${Date.now()}.pdf`;
       const { error: uploadError } = await supabase.storage.from('campos-documentos').upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
       if (uploadError) throw new Error("Erro ao guardar o contrato: " + uploadError.message);
@@ -409,6 +422,18 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
                   ? 'The Partner is solely and exclusively responsible for the provision of services and the safety of the participants, guaranteeing that they hold all legally mandatory insurance (including civil liability and personal accident), licenses, and certifications required to carry out their activity.' 
                   : 'O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças e certificações exigidas para o exercício da sua atividade.'}
               </p>
+
+              <h4 className="font-bold text-[#EBA914]">{isEn ? 'Article 7 – Digital Signature and Evidence Agreement' : 'Artigo 4.º – Validade da Assinatura e Convenção de Prova'}</h4>
+              <p className="mb-4 text-[#EBA914]">
+                {isEn 
+                  ? 'The parties expressly acknowledge the validity and binding force of the acceptance of this contract through electronic means (namely by typing the legal representative\'s name and checking the acceptance box on the web portal).' 
+                  : 'As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos (designadamente a aposição do nome do representante legal e seleção da caixa de aceitação no portal web da HelloCamp).'}
+              </p>
+              <p className="mb-8 text-[#EBA914]">
+                {isEn 
+                  ? 'Under the freedom of probatory stipulation, the parties agree that the computer records collected by HelloCamp (including IP address, session data, typed name, and timestamp) constitute fully valid and sufficient evidence to attest to the authorship, integrity, and irrevocable acceptance of these clauses. The Partner waives the right to invoke the nullity of the contract based on the absence of a handwritten signature or qualified electronic signature.' 
+                  : 'Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria, a integridade e a aceitação irrevogável das presentes cláusulas operacionais e financeiras, renunciando o Parceiro a invocar a nulidade ou ineficácia do contrato com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada (Chave Móvel Digital / Cartão de Cidadão).'}
+              </p>
             </div>
 
             <div className="h-px bg-gray-300 w-full my-8 md:my-12"></div>
@@ -534,7 +559,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
                     <span className="text-xs sm:text-sm text-gray-700 font-medium leading-relaxed group-hover:text-black transition-colors">
                       {isEn 
                         ? 'I declare that I have read and accepted the Contractual terms. I confirm I have the legal authority to bind the entity through this digital signature.' 
-                        : 'Declaro ter lido e aceite os Termos Operacionais apresentados e as Cláusulas do Contrato. Confirmo possuir poderes legais para vincular a entidade parceira identificada através desta assinatura digital.'}
+                        : 'Declaro ter lido e aceite os Termos Operacionais apresentados e as Cláusulas do Contrato. Confirmo possuir poderes legais para vincular a entidade parceira identificada através desta assinatura digital legalmente vinculativa.'}
                     </span>
                   </label>
                 </div>
