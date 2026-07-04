@@ -7,7 +7,13 @@ import Link from "next/link";
 import imageCompression from 'browser-image-compression';
 import React from "react";
 
+// ==========================================
+// 1. TIPAGEM E DADOS DE REFERÊNCIA
+// ==========================================
 type ImagePreview = { file?: File; url?: string; preview: string; isMain: boolean; };
+interface Variante { nome: string; preco: number; }
+interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; }
+interface Desconto { id: string; nome: string; percentagem: number; acumulavel: boolean; }
 
 const FOTOS_PADRAO = [
   { url: "https://images.unsplash.com/photo-1502680390469-be75c86b636f?q=80&w=1200&auto=format&fit=crop", nome: "Surf" },
@@ -18,8 +24,16 @@ const FOTOS_PADRAO = [
   { url: "https://images.unsplash.com/photo-1606092195730-5d7b9af1efc5?q=80&w=1200&auto=format&fit=crop", nome: "Diversão" }
 ];
 
+const DIAS_SEMANA = [
+  { id: 1, pt: 'Seg' }, { id: 2, pt: 'Ter' }, { id: 3, pt: 'Qua' }, 
+  { id: 4, pt: 'Qui' }, { id: 5, pt: 'Sex' }, { id: 6, pt: 'Sáb' }, { id: 0, pt: 'Dom' }
+];
+
 const sanitizeFileName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
 
+// ==========================================
+// COMPONENTE PRINCIPAL SUPERADMIN HQ
+// ==========================================
 export default function SuperAdminEditarCampo({ params }: { params: Promise<{ lang: string; id: string }> }) {
   const resolvedParams = use(params);
   const { lang, id } = resolvedParams;
@@ -31,49 +45,85 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
   const [saving, setSaving] = useState(false);
   const [statusText, setStatusText] = useState("");
   
+  // Imagens & Documentos
   const [images, setImages] = useState<ImagePreview[]>([]);
   const [usarFotoPadrao, setUsarFotoPadrao] = useState(false);
-  
   const [documentos, setDocumentos] = useState<File[]>([]);
   const [documentosExistentes, setDocumentosExistentes] = useState<{nome: string, url: string}[]>([]);
-  
   const [contratoFile, setContratoFile] = useState<File | null>(null);
   
+  // Localização
   const [mapPreview, setMapPreview] = useState<{lat: number, lon: number} | null>(null);
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
-
   const [pais, setPais] = useState("Portugal");
   const [linguas, setLinguas] = useState({ pt: false, en: false, es: false, fr: false, de: false });
 
-  // TURNOS
-  const [turnos, setTurnos] = useState([{ nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
-  // DESCONTOS FLEXIVEIS
-  const [descontos, setDescontos] = useState([{ nome: "", valor: 0, tipo: "percentagem" }]);
+  // Arrays Complexos
+  const [pacotes, setPacotes] = useState<Pacote[]>([]);
+  const [descontos, setDescontos] = useState<Desconto[]>([]);
+  const [perguntas, setPerguntas] = useState<string[]>([]);
 
+  // DADOS GERAIS
   const [formData, setFormData] = useState({
-    nome: "", categoria: "", idade: "", local: "", Distrito: "", racio_monitores: "", duracao_dias: 7,
-    alimentacao: "Não tem", alojamento: "Não tem", seguro: "Incluído no Preço", descricao: "", regras_termos: "",
-    extra_alimentacao: 0, tipo_cobranca_alimentacao: "Por Turno", extra_alojamento: 0, tipo_cobranca_alojamento: "Por Turno",
-    extra_prolongamento: 0, tipo_cobranca_prolongamento: "Por Turno", extra_transporte: 0, tipo_cobranca_transporte: "Por Turno",
-    taxa_comissao: "", base_comissao: "", contrato_parceiro_url: ""
+    nome: "", categoria: "", local: "", Distrito: "", 
+    idade_min: 6, idade_max: 14, vagas_totais: 50,
+    racio_monitores: "", alimentacao: "", alojamento: "", seguro: "", 
+    descricao: "", regras_termos: "",
+    
+    // Extras Opcionais Financeiros
+    extra_seguro: 0, tipo_extra_seguro: "fixo", 
+    extra_transporte: 0, tipo_extra_transporte: "diario",
+    
+    // HQ Specifics
+    taxa_comissao: "", base_comissao: "", contrato_parceiro_url: "",
+    status_aprovacao: "Pendente de Revisão", 
+    modalidade_reserva: "direta", link_externo_reserva: "",
+    tipo_pagamento: "100_total", politica_cancelamento: "Moderada (Reembolso a 50% até 15 dias antes)",
+    calendario_funcionamento: { data_inicio: "", data_fim: "", dias_semana: [1, 2, 3, 4, 5] }
   });
 
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
   const paises = [{ pt: "Portugal", en: "Portugal" }, { pt: "Espanha", en: "Spain" }, { pt: "França", en: "France" }, { pt: "Reino Unido", en: "United Kingdom" }, { pt: "Brasil", en: "Brazil" }, { pt: "Estados Unidos", en: "United States" }, { pt: "Outro", en: "Other" }];
 
+  // ==========================================
+  // CARREGAR DADOS DO CAMPO
+  // ==========================================
   useEffect(() => {
     const fetchCampo = async () => {
       const { data, error } = await supabase.from('campos').select('*').eq('id', id).single();
       if (data) {
-        setFormData({ ...data, taxa_comissao: data.taxa_comissao || '', base_comissao: data.base_comissao || '', contrato_parceiro_url: data.contrato_parceiro_url || '' });
+        setFormData({ 
+          nome: data.nome || "",
+          categoria: data.categoria || "",
+          local: data.local || "",
+          Distrito: data.Distrito || "",
+          idade_min: data.idade_min || 6,
+          idade_max: data.idade_max || 14,
+          vagas_totais: data.vagas_totais || 50,
+          racio_monitores: data.racio_monitores || "",
+          alimentacao: data.alimentacao || "",
+          alojamento: data.alojamento || "",
+          seguro: data.seguro || "",
+          descricao: data.descricao || "",
+          regras_termos: data.regras_termos || "",
+          extra_seguro: data.extra_seguro || 0,
+          tipo_extra_seguro: data.tipo_extra_seguro || 'fixo',
+          extra_transporte: data.extra_transporte || 0,
+          tipo_extra_transporte: data.tipo_extra_transporte || 'diario',
+          taxa_comissao: data.taxa_comissao || '', 
+          base_comissao: data.base_comissao || '', 
+          contrato_parceiro_url: data.contrato_parceiro_url || '',
+          modalidade_reserva: data.modalidade_reserva || 'direta',
+          link_externo_reserva: data.link_externo_reserva || '',
+          tipo_pagamento: data.tipo_pagamento || '100_total',
+          politica_cancelamento: data.politica_cancelamento || 'Moderada (Reembolso a 50% até 15 dias antes)',
+          calendario_funcionamento: data.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [1, 2, 3, 4, 5] },
+          status_aprovacao: data.status_aprovacao || 'Pendente de Revisão',
+        });
         
-        if (data.turnos) {
-          const turnosMapeados = data.turnos.map((t: any) => ({ ...t, vagas: t.vagas || data.vagas_totais || 20 }));
-          setTurnos(turnosMapeados);
-        }
-        if (data.descontos) {
-          setDescontos(data.descontos.length > 0 ? data.descontos : [{ nome: "", valor: 0, tipo: "percentagem" }]);
-        }
+        setPacotes(data.pacotes || []);
+        setDescontos(data.descontos || []);
+        setPerguntas(data.perguntas_customizadas || []);
 
         if (data.pais) setPais(data.pais);
         if (data.latitude && data.longitude) setMapPreview({ lat: data.latitude, lon: data.longitude });
@@ -91,6 +141,9 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     fetchCampo();
   }, [id]);
 
+  // ==========================================
+  // HANDLERS LOCAIS (FOTOS E DOCS)
+  // ==========================================
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newImages = Array.from(e.target.files).map((file, index) => ({ file, preview: URL.createObjectURL(file), isMain: images.length === 0 && index === 0 }));
@@ -123,19 +176,17 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     return ativas.join(", ");
   };
 
-  // TURNOS
-  const handleAddTurno = () => setTurnos([...turnos, { nome: "", data_inicio: "", data_fim: "", preco: 0, permite_dias: false, preco_dia: 0, vagas: 20 }]);
-  const handleRemoveTurno = (index: number) => setTurnos(turnos.filter((_, i) => i !== index));
-  const handleTurnoChange = (index: number, field: string, value: string | number | boolean) => {
-    const novosTurnos = [...turnos]; novosTurnos[index] = { ...novosTurnos[index], [field]: value }; setTurnos(novosTurnos);
+  const toggleDiaSemana = (diaId: number) => {
+    const dias = formData.calendario_funcionamento.dias_semana.includes(diaId)
+      ? formData.calendario_funcionamento.dias_semana.filter((d: number) => d !== diaId)
+      : [...formData.calendario_funcionamento.dias_semana, diaId].sort();
+    setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, dias_semana: dias } });
   };
 
-  // DESCONTOS
-  const handleAddDesconto = () => setDescontos([...descontos, { nome: "", valor: 0, tipo: "percentagem" }]);
-  const handleRemoveDesconto = (index: number) => setDescontos(descontos.filter((_, i) => i !== index));
-  const handleDescontoChange = (index: number, field: string, value: string | number) => {
-    const d = [...descontos]; d[index] = { ...d[index], [field]: value }; setDescontos(d);
-  };
+  // Perguntas Custom
+  const addPergunta = () => setPerguntas([...perguntas, ""]);
+  const removePergunta = (index: number) => setPerguntas(perguntas.filter((_, i) => i !== index));
+  const updatePergunta = (index: number, value: string) => setPerguntas(perguntas.map((p, i) => i === index ? value : p));
 
   const buscarNoMapaManual = async () => {
     if (formData.local.length < 3) return;
@@ -157,6 +208,9 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     } catch (e) { return texto; }
   };
 
+  // ==========================================
+  // GUARDAR ALTERAÇÕES TOTAIS (HQ DB SYNC)
+  // ==========================================
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -164,7 +218,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     if (images.length === 0) { alert("Adicione uma fotografia."); setSaving(false); return; }
 
     try {
-      setStatusText("A processar fotografias...");
+      setStatusText("A processar media...");
       const uploadedImages = await Promise.all(images.map(async (img) => {
         if (!img.file) return { url: img.url, isMain: img.isMain };
         const compressedFile = await imageCompression(img.file, { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true });
@@ -178,7 +232,6 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       const mainImageUrl = uploadedImages.find(i => i.isMain)?.url || uploadedImages[0]?.url;
       const galeriaUrls = uploadedImages.filter(i => !i.isMain).map(i => i.url);
 
-      setStatusText("A processar documentos de programa...");
       const novosDocs = await Promise.all(documentos.map(async (doc) => {
         const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`;
         const { error } = await supabase.storage.from('campos-documentos').upload(fileName, doc);
@@ -186,10 +239,8 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         const { data: publicUrlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
         return { nome: doc.name, url: publicUrlData.publicUrl };
       }));
-
       const programasDocsFinais = [...documentosExistentes, ...novosDocs];
 
-      setStatusText("A processar Contrato Parceiro...");
       let urlContratoFinal = formData.contrato_parceiro_url;
       if (contratoFile) {
         const fileContratoName = `contrato-${Date.now()}-${sanitizeFileName(contratoFile.name)}`;
@@ -198,88 +249,154 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         urlContratoFinal = supabase.storage.from('campos-documentos').getPublicUrl(fileContratoName).data.publicUrl;
       }
 
-      setStatusText("A traduzir dados...");
+      setStatusText("A traduzir textos...");
       const linguasFinais = getLinguasString();
 
       const [
-        nome_en, categoria_en, local_en, idade_en, descricao_en,
+        nome_en, categoria_en, local_en, descricao_en,
         alimentacao_en, alojamento_en, seguro_en, Distrito_en, regras_termos_en
       ] = await Promise.all([
         traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
-        traduzirParaIngles(formData.idade), traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
+        traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
         traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.Distrito),
         traduzirParaIngles(formData.regras_termos)
       ]);
-
-      const turnos_en = await Promise.all(turnos.map(async (t) => ({ ...t, nome: await traduzirParaIngles(t.nome) })));
-      
-      const precos = turnos.map(t => Number(t.preco)).filter(p => !isNaN(p) && p > 0);
-      const precoMinimo = precos.length > 0 ? Math.min(...precos) : 0;
       
       const formatarDataStr = (d: string) => d ? new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) : '';
-      const textoDatas = turnos.map(t => `${formatarDataStr(t.data_inicio)} a ${formatarDataStr(t.data_fim)}`).join(", ");
-      const textoDatasEn = turnos.map(t => `${formatarDataStr(t.data_inicio)} to ${formatarDataStr(t.data_fim)}`).join(", ");
-      const totalVagasCalculado = turnos.reduce((acc, curr) => acc + (Number(curr.vagas) || 0), 0);
-
-      const descontosLimpos = descontos.filter(d => d.nome.trim() !== "" && Number(d.valor) > 0);
+      const dataInic = formData.calendario_funcionamento.data_inicio;
+      const dataFim = formData.calendario_funcionamento.data_fim;
+      const textoDatas = dataInic && dataFim ? `${formatarDataStr(dataInic)} a ${formatarDataStr(dataFim)}` : '';
+      const textoDatasEn = dataInic && dataFim ? `${formatarDataStr(dataInic)} to ${formatarDataStr(dataFim)}` : '';
 
       const taxaFinal = formData.taxa_comissao === '' ? null : Number(formData.taxa_comissao);
       const baseFinal = formData.base_comissao === '' ? null : formData.base_comissao;
+      
+      const perguntasLimpas = perguntas.filter(p => p.trim() !== "");
 
-      setStatusText("A guardar alterações no Quartel General...");
+      // Preço Mínimo dinâmico a partir dos pacotes
+      let precoMinimo = 0;
+      if (pacotes && pacotes.length > 0) {
+        const todosPrecos = pacotes.flatMap((p: any) => p.variantes.map((v: any) => v.preco));
+        if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
+      }
+
+      setStatusText("A guardar Quartel General...");
       const { error } = await supabase.from("campos").update({
-        nome: formData.nome, categoria: formData.categoria, idade: formData.idade, local: formData.local, Distrito: formData.Distrito,
-        vagas_totais: totalVagasCalculado, racio_monitores: formData.racio_monitores, duracao_dias: formData.duracao_dias,
-        alimentacao: formData.alimentacao, alojamento: formData.alojamento, seguro: formData.seguro,
-        descricao: formData.descricao, regras_termos: formData.regras_termos,
-        extra_alimentacao: formData.extra_alimentacao, extra_alojamento: formData.extra_alojamento,
-        extra_prolongamento: formData.extra_prolongamento, extra_transporte: formData.extra_transporte,
-        preco: precoMinimo, datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatasEn, pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
+        // Dados Base
+        nome: formData.nome, nome_en, 
+        categoria: formData.categoria, categoria_en, 
+        local: formData.local, local_en, Distrito: formData.Distrito, Distrito_en,
+        idade_min: formData.idade_min, idade_max: formData.idade_max, vagas_totais: formData.vagas_totais,
+        
+        // Logística e Infos
+        racio_monitores: formData.racio_monitores, racio_monitores_en: formData.racio_monitores,
+        alimentacao: formData.alimentacao, alimentacao_en, 
+        alojamento: formData.alojamento, alojamento_en, 
+        seguro: formData.seguro, seguro_en,
+        descricao: formData.descricao, descricao_en, 
+        regras_termos: formData.regras_termos, regras_termos_en,
+        perguntas_customizadas: perguntasLimpas,
+
+        // Extras Opcionais Financeiros
+        extra_seguro: formData.extra_seguro, tipo_extra_seguro: formData.tipo_extra_seguro,
+        extra_transporte: formData.extra_transporte, tipo_extra_transporte: formData.tipo_extra_transporte,
+        
+        // Arrays e Estruturas
+        preco: precoMinimo, datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatasEn, 
+        pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
         linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais,
-        imagem: mainImageUrl, galeria: galeriaUrls, programas_pdf: programasDocsFinais, regras_termos_en,
-        latitude: mapPreview.lat, longitude: mapPreview.lon, turnos, turnos_en, descontos: descontosLimpos,
-        nome_en, categoria_en, local_en, idade_en, descricao_en, alimentacao_en, alojamento_en, seguro_en, Distrito_en,
-        taxa_comissao: taxaFinal, base_comissao: baseFinal, contrato_parceiro_url: urlContratoFinal
+        latitude: mapPreview.lat, longitude: mapPreview.lon, 
+        descontos: descontos, pacotes: pacotes, calendario_funcionamento: formData.calendario_funcionamento,
+        imagem: mainImageUrl, galeria: galeriaUrls, programas_pdf: programasDocsFinais, 
+
+        // HQ e Operação
+        taxa_comissao: taxaFinal, base_comissao: baseFinal, contrato_parceiro_url: urlContratoFinal,
+        status_aprovacao: formData.status_aprovacao, modalidade_reserva: formData.modalidade_reserva,
+        link_externo_reserva: formData.link_externo_reserva, tipo_pagamento: formData.tipo_pagamento,
+        politica_cancelamento: formData.politica_cancelamento, ativo: formData.status_aprovacao === 'Aprovado'
       }).eq('id', id);
 
       if (error) throw error;
-      alert("Campo atualizado com sucesso (Modo SuperAdmin).");
+      alert("Campo atualizado com sucesso (Sincronizado com Nova Estrutura Partner).");
       router.push(`/${lang}/superadmin/campos`);
     } catch (error: any) { alert("Erro: " + error.message); } finally { setSaving(false); setStatusText(""); }
   };
 
-  if (loading) return <div style={{ padding: '4rem', textAlign: 'center' }}>A carregar dados do campo (Modo HQ)...</div>;
+  if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>A carregar Master HQ...</div>;
 
   return (
-    <main style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
+    <main style={{ maxWidth: '850px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
       
       <Link href={`/${lang}/superadmin/campos`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem', color: '#64748b', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', backgroundColor: 'white', padding: '0.5rem 1rem', borderRadius: '999px', border: '1px solid #e2e8f0' }}>
         &larr; Voltar ao Diretório Global
       </Link>
 
       <h1 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem', color: '#0f172a' }}>
-        Editar Campo: {formData.nome} <span style={{ fontSize: '12px', backgroundColor: '#fef2f2', color: '#dc2626', padding: '0.25rem 0.5rem', borderRadius: '0.5rem', verticalAlign: 'middle', marginLeft: '0.5rem' }}>SuperAdmin HQ</span>
+        Editar Campo Master: {formData.nome} 
+        <span style={{ fontSize: '12px', backgroundColor: '#fef2f2', color: '#dc2626', padding: '0.25rem 0.5rem', borderRadius: '0.5rem', verticalAlign: 'middle', marginLeft: '0.5rem' }}>HQ Sync</span>
       </h1>
 
-      <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
         
-        {/* REGRAS DE COMISSÃO E CONTRATO (HQ) */}
+        {/* ========================================== */}
+        {/* 1. OPERAÇÃO E CONTRATO (HQ ONLY)           */}
+        {/* ========================================== */}
         <div style={{ ...sectionStyle, border: '2px solid #fbbf24', backgroundColor: '#fffbeb' }}>
-          <h2 style={sectionTitleStyle}>⚡ Comissão & Contrato HelloCamp</h2>
+          <h2 style={sectionTitleStyle}>⚡ Operação e Contrato HelloCamp</h2>
+          
+          <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'white', borderRadius: '0.75rem', border: '1px solid #fde68a' }}>
+            <label style={labelStyle}>Status do Campo (Aprovação / Listagem)</label>
+            <select value={formData.status_aprovacao} onChange={e => setFormData({...formData, status_aprovacao: e.target.value})} style={{...selectStyle, borderColor: formData.status_aprovacao === 'Aprovado' ? '#059669' : '#fbbf24', borderWidth: '2px'}}>
+              <option value="Aprovado">Aprovado (Ativo e Visível)</option>
+              <option value="Pendente de Revisão">Pendente de Revisão (Inativo)</option>
+              <option value="Rejeitado">Rejeitado (Inativo)</option>
+            </select>
+          </div>
+
           <div style={gridStyle}>
             <div>
-              <label style={labelStyle}>Taxa Específica do Campo (%)</label>
-              <input type="number" step="0.1" value={formData.taxa_comissao} onChange={e => setFormData({...formData, taxa_comissao: e.target.value})} style={inputStyle} placeholder="Vazio = Usa regra do parceiro" />
+              <label style={labelStyle}>Taxa de Comissão (%)</label>
+              <input type="number" step="0.1" value={formData.taxa_comissao || ''} onChange={e => setFormData({...formData, taxa_comissao: e.target.value})} style={inputStyle} placeholder="Vazio = Regra do parceiro" />
             </div>
             <div>
               <label style={labelStyle}>Base de Incidência</label>
-              <select value={formData.base_comissao} onChange={e => setFormData({...formData, base_comissao: e.target.value})} style={selectStyle}>
-                <option value="">-- Regra Geral do Parceiro --</option>
+              <select value={formData.base_comissao || ''} onChange={e => setFormData({...formData, base_comissao: e.target.value})} style={selectStyle}>
+                <option value="">-- Regra do Parceiro --</option>
                 <option value="total">Sobre Valor Total (Programa + Extras)</option>
                 <option value="apenas_programa">Apenas sobre Programa</option>
                 <option value="sem_comissao">Isento (0%)</option>
               </select>
             </div>
+            
+            <div>
+              <label style={labelStyle}>Anexo 1: Modalidade de Reserva</label>
+              <select value={formData.modalidade_reserva} onChange={e => setFormData({...formData, modalidade_reserva: e.target.value})} style={selectStyle}>
+                <option value="direta">Reserva Direta (Checkout)</option>
+                <option value="email">Sob Consulta (E-mail)</option>
+                <option value="link_externo">Link Externo / Google Forms</option>
+              </select>
+              {formData.modalidade_reserva === 'link_externo' && (
+                 <input type="url" placeholder="URL do Formulário..." value={formData.link_externo_reserva || ''} onChange={e => setFormData({...formData, link_externo_reserva: e.target.value})} style={{...inputStyle, marginTop: '0.5rem', borderColor: '#3b82f6'}} />
+              )}
+            </div>
+
+            <div>
+              <label style={labelStyle}>Anexo 2: Pagamento</label>
+              <select value={formData.tipo_pagamento} onChange={e => setFormData({...formData, tipo_pagamento: e.target.value})} style={selectStyle}>
+                <option value="100_total">100% no Ato</option>
+                <option value="50_sinal">Sinal 50%</option>
+              </select>
+            </div>
+
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>Anexo 3: Cancelamento</label>
+              <select value={formData.politica_cancelamento} onChange={e => setFormData({...formData, politica_cancelamento: e.target.value})} style={selectStyle}>
+                <option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (100% a 7 dias)</option>
+                <option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (50% a 15 dias)</option>
+                <option value="Estrita (Sem reembolso após reserva)">Estrita (Sem reembolso)</option>
+              </select>
+            </div>
+
             <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #fde68a', paddingTop: '1.5rem', marginTop: '0.5rem' }}>
               <label style={labelStyle}>Upload de Contrato de Parceiro Assinado (PDF)</label>
               {formData.contrato_parceiro_url && (
@@ -288,12 +405,13 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
                 </div>
               )}
               <input type="file" accept=".pdf" onChange={handleContratoSelect} style={{ width: '100%', padding: '0.75rem', backgroundColor: 'white', borderRadius: '0.5rem', border: '1px dashed #fbbf24' }} />
-              <p style={{ fontSize: '12px', color: '#b45309', marginTop: '0.5rem' }}>* Ao anexar o contrato que o campo paga à HelloCamp, este ficará disponível para download no painel do parceiro.</p>
             </div>
           </div>
         </div>
 
-        {/* RESTANTES SECÇÕES - IGUAL AO PARCEIRO */}
+        {/* ========================================== */}
+        {/* 2. INFORMAÇÕES BÁSICAS                     */}
+        {/* ========================================== */}
         <div style={sectionStyle}>
           <h2 style={sectionTitleStyle}>1. Informações Básicas</h2>
           <div style={gridStyle}>
@@ -304,13 +422,15 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
                 <option value="">Selecione...</option><option value="Desporto">Desporto</option><option value="Aventura & Natureza">Aventura & Natureza</option><option value="Tecnologia & Ciência">Tecnologia & Ciência</option><option value="Artes & Criatividade">Artes & Criatividade</option><option value="Línguas">Línguas</option>
               </select>
             </div>
-            <div>
-              <label style={labelStyle}>Faixa Etária</label>
-              <select required value={formData.idade || ''} onChange={e => setFormData({...formData, idade: e.target.value})} style={selectStyle}>
-                <option value="">Selecione...</option><option value="6-9 anos">6-9 anos</option><option value="10-13 anos">10-13 anos</option><option value="14-17 anos">14-17 anos</option><option value="Todas as idades">Todas as idades</option>
-              </select>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div><label style={labelStyle}>Idade Min.</label><input type="number" required value={formData.idade_min} onChange={e => setFormData({...formData, idade_min: Number(e.target.value)})} style={inputStyle} /></div>
+              <div><label style={labelStyle}>Idade Max.</label><input type="number" required value={formData.idade_max} onChange={e => setFormData({...formData, idade_max: Number(e.target.value)})} style={inputStyle} /></div>
             </div>
-            <div>
+
+            <div><label style={labelStyle}>Vagas Máximas</label><input type="number" required value={formData.vagas_totais} onChange={e => setFormData({...formData, vagas_totais: Number(e.target.value)})} style={inputStyle} /></div>
+            
+            <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>Línguas Faladas</label>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
                 <label style={checkboxLabelStyle}><input type="checkbox" checked={linguas.pt} onChange={() => handleLinguasChange('pt')} /> PT</label>
@@ -323,6 +443,9 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
           </div>
         </div>
 
+        {/* ========================================== */}
+        {/* 3. LOCALIZAÇÃO                             */}
+        {/* ========================================== */}
         <div style={sectionStyle}>
           <h2 style={sectionTitleStyle}>2. Localização</h2>
           <div style={gridStyle}>
@@ -361,125 +484,153 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
           )}
         </div>
 
+        {/* ========================================== */}
+        {/* 4. MOTOR DE ESTRUTURA E PACOTES            */}
+        {/* ========================================== */}
         <div style={sectionStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>3. Turnos e Vagas</h2>
-            <button type="button" onClick={handleAddTurno} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>+ Adicionar Turno</button>
+          <h2 style={sectionTitleStyle}>3. Calendário e Motor de Vendas</h2>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+            <div>
+              <label style={labelStyle}>Data Início do Campo</label>
+              <input type="date" value={formData.calendario_funcionamento.data_inicio || ''} onChange={e => setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, data_inicio: e.target.value } })} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Data Fim do Campo</label>
+              <input type="date" value={formData.calendario_funcionamento.data_fim || ''} onChange={e => setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, data_fim: e.target.value } })} style={inputStyle} />
+            </div>
           </div>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={labelStyle}>Duração Base Global (em Dias)</label>
-            <input type="number" required value={formData.duracao_dias || 0} onChange={e => setFormData({...formData, duracao_dias: Number(e.target.value)})} style={{...inputStyle, maxWidth: '200px'}} />
+
+          <div style={{ marginBottom: '2rem' }}>
+            <label style={labelStyle}>Dias da Semana Operacionais</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {DIAS_SEMANA.map(dia => (
+                <button type="button" key={dia.id} onClick={() => toggleDiaSemana(dia.id)} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: formData.calendario_funcionamento.dias_semana.includes(dia.id) ? '#4f46e5' : '#f8fafc', color: formData.calendario_funcionamento.dias_semana.includes(dia.id) ? 'white' : '#64748b', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
+                  {dia.pt}
+                </button>
+              ))}
+            </div>
           </div>
-          {turnos.map((turno, index) => (
-            <div key={index} style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '0.75rem', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
-                <div style={{ flex: '1 1 180px' }}><label style={labelStyle}>Nome do Turno</label><input type="text" required value={turno.nome || ''} onChange={e => handleTurnoChange(index, 'nome', e.target.value)} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>Início</label><input type="date" required value={turno.data_inicio || ''} onChange={e => handleTurnoChange(index, 'data_inicio', e.target.value)} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 110px' }}><label style={labelStyle}>Fim</label><input type="date" required value={turno.data_fim || ''} onChange={e => handleTurnoChange(index, 'data_fim', e.target.value)} style={inputStyle} /></div>
-                <div style={{ width: '90px' }}><label style={labelStyle}>Vagas</label><input type="number" required value={turno.vagas || 0} onChange={e => handleTurnoChange(index, 'vagas', Number(e.target.value))} style={inputStyle} /></div>
-                <div style={{ width: '100px' }}><label style={labelStyle}>Preço (€)</label><input type="number" required value={turno.preco || 0} onChange={e => handleTurnoChange(index, 'preco', Number(e.target.value))} style={inputStyle} /></div>
-                {turnos.length > 1 && <button type="button" onClick={() => handleRemoveTurno(index)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>}
-              </div>
-              <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '1rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                <label style={checkboxLabelStyle}><input type="checkbox" checked={turno.permite_dias || false} onChange={e => handleTurnoChange(index, 'permite_dias', e.target.checked)} /> Permitir inscrição em dias isolados?</label>
-                {turno.permite_dias && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Preço por Dia (€):</label>
-                    <input type="number" required={turno.permite_dias} value={turno.preco_dia || 0} onChange={e => handleTurnoChange(index, 'preco_dia', Number(e.target.value))} style={{ ...inputStyle, width: '100px', padding: '0.5rem' }} />
+
+          {/* LISTA DE PACOTES Apenas de Leitura (Para evitar conflitos de Edição Complexa no Admin) */}
+          <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+            <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', marginBottom: '1rem' }}>PACOTES CONFIGURADOS PELO PARCEIRO ({pacotes.length})</p>
+            {pacotes.length === 0 ? <p style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Nenhum pacote definido.</p> : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {pacotes.map((pac: any, idx: number) => (
+                  <div key={idx} style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '14px' }}>
+                    <strong style={{ color: '#0f172a' }}>{pac.titulo}</strong> <span style={{ color: '#64748b', fontSize: '12px' }}>({pac.tipo} - Qtd: {pac.quantidade})</span>
+                    <div style={{ marginTop: '0.5rem', fontSize: '13px', color: '#059669', fontWeight: 'bold' }}>Variantes: {pac.variantes?.map((v: any) => `${v.nome}: ${v.preco}€`).join(' | ')}</div>
                   </div>
-                )}
+                ))}
               </div>
-            </div>
-          ))}
+            )}
+          </div>
 
-          {/* DESCONTOS GERAIS */}
+          {/* DESCONTOS */}
           <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '2px solid #f1f5f9' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>Códigos de Desconto (Opcional)</h2>
-              <button type="button" onClick={handleAddDesconto} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>+ Adicionar Desconto</button>
-            </div>
-            
-            {descontos.map((desc, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '1rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
-                <div style={{ flex: '1 1 200px' }}><label style={labelStyle}>Nome / Título (ex: Early Bird)</label><input type="text" value={desc.nome} onChange={e => handleDescontoChange(idx, 'nome', e.target.value)} style={inputStyle} placeholder="Nome do Desconto" /></div>
-                <div style={{ width: '120px' }}><label style={labelStyle}>Valor</label><input type="number" value={desc.valor} onChange={e => handleDescontoChange(idx, 'valor', Number(e.target.value))} style={inputStyle} /></div>
-                <div style={{ width: '150px' }}><label style={labelStyle}>Tipo</label><select value={desc.tipo} onChange={e => handleDescontoChange(idx, 'tipo', e.target.value)} style={selectStyle}><option value="percentagem">Percentagem (%)</option><option value="fixo">Fixo (€)</option></select></div>
-                <button type="button" onClick={() => handleRemoveDesconto(idx)} style={{ padding: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>Remover</button>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', marginBottom: '1.5rem' }}>Códigos de Desconto (Read-Only HQ)</h2>
+            {descontos.length === 0 ? <p style={{ fontSize: '12px', color: '#94a3b8' }}>Nenhum desconto.</p> : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                {descontos.map((desc, idx) => (
+                  <div key={idx} style={{ padding: '1rem', backgroundColor: '#f0fdf4', border: '1px dashed #10b981', borderRadius: '0.5rem', width: '250px' }}>
+                    <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', fontSize: '14px', color: '#065f46' }}>{desc.nome}</p>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#047857' }}>{desc.percentagem}% | {desc.acumulavel ? 'Acumulável' : 'Não Acumulável'}</p>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         </div>
 
+        {/* ========================================== */}
+        {/* 5. TEXTOS LOGÍSTICOS E EXTRAS              */}
+        {/* ========================================== */}
         <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>4. Programa e Condições</h2>
+          <h2 style={sectionTitleStyle}>4. Logística e Extras Opcionais</h2>
           <div style={gridStyle}>
-            <div><label style={labelStyle}>Alimentação</label><select value={formData.alimentacao || ''} onChange={e => setFormData({...formData, alimentacao: e.target.value})} style={selectStyle}><option value="Incluído no Preço">Incluído no Preço</option><option value="Opcional (Pago à parte)">Opcional</option><option value="Não tem">Não tem</option></select></div>
-            <div><label style={labelStyle}>Alojamento</label><select value={formData.alojamento || ''} onChange={e => setFormData({...formData, alojamento: e.target.value})} style={selectStyle}><option value="Incluído no Preço">Incluído no Preço</option><option value="Opcional (Pago à parte)">Opcional</option><option value="Não tem">Não tem</option></select></div>
-            <div><label style={labelStyle}>Seguro</label><select value={formData.seguro || ''} onChange={e => setFormData({...formData, seguro: e.target.value})} style={selectStyle}><option value="Incluído no Preço">Incluído</option><option value="Pago à parte no local">Pago no local</option></select></div>
             <div><label style={labelStyle}>Rácio Monitores</label><input type="text" value={formData.racio_monitores || ''} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} style={inputStyle} /></div>
+            <div><label style={labelStyle}>Alimentação (Texto)</label><input type="text" value={formData.alimentacao || ''} onChange={e => setFormData({...formData, alimentacao: e.target.value})} style={inputStyle} /></div>
+            <div><label style={labelStyle}>Alojamento (Texto)</label><input type="text" value={formData.alojamento || ''} onChange={e => setFormData({...formData, alojamento: e.target.value})} style={inputStyle} /></div>
+            <div><label style={labelStyle}>Seguro Geral (Texto)</label><input type="text" value={formData.seguro || ''} onChange={e => setFormData({...formData, seguro: e.target.value})} style={inputStyle} /></div>
             
-            <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Descrição Completa</label><textarea rows={5} required value={formData.descricao || ''} onChange={e => setFormData({...formData, descricao: e.target.value})} style={{...inputStyle, resize: 'vertical'}} /></div>
-            <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Regras e Termos</label><textarea rows={4} value={formData.regras_termos || ''} onChange={e => setFormData({...formData, regras_termos: e.target.value})} style={{...inputStyle, resize: 'vertical'}} /></div>
-
-            {/* DOCUMENTOS */}
-            <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
-              <label style={labelStyle}>Programa do Campo (PDF/Word)</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'flex-start' }}>
-                {documentosExistentes.map((doc, idx) => (
-                  <div key={`exist-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', fontSize: '13px' }}><span style={{ fontWeight: 'bold' }}>📄 {doc.nome} (Atual)</span><button type="button" onClick={() => removeDocExistente(idx)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button></div>
-                ))}
-                {documentos.map((doc, idx) => (
-                  <div key={`novo-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', width: '100%', fontSize: '13px' }}><span style={{ fontWeight: 'bold', color: '#059669' }}>📄 {doc.name} (Novo)</span><button type="button" onClick={() => removeNovoDoc(idx)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button></div>
-                ))}
-                <label style={{ padding: '0.75rem 1.5rem', backgroundColor: '#e2e8f0', color: '#334155', fontWeight: 'bold', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '14px' }}>+ Anexar Documento <input type="file" accept=".pdf,.doc,.docx" multiple onChange={handleDocSelect} style={{ display: 'none' }} /></label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={sectionStyle}>
-          <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}><h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>5. Custos Opcionais Extras (€)</h2></div>
-          <div style={gridStyle}>
-            {['alimentacao', 'alojamento', 'prolongamento', 'transporte'].map(extra => (
-              <div key={extra} style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-                <label style={labelStyle}>{extra.charAt(0).toUpperCase() + extra.slice(1)} Extra</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input type="number" value={(formData as any)[`extra_${extra}`] || 0} onChange={e => setFormData({...formData, [`extra_${extra}`]: Number(e.target.value)})} style={{...inputStyle, flex: 1}} />
-                  <select value={(formData as any)[`tipo_cobranca_${extra}`] || ''} onChange={e => setFormData({...formData, [`tipo_cobranca_${extra}`]: e.target.value})} style={{...selectStyle, flex: 1}}><option value="Por Turno">Por Turno</option><option value="Por Dia">Por Dia</option></select>
+            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #e2e8f0', margin: '1rem 0', paddingTop: '1.5rem' }}>
+              <label style={labelStyle}>Valores Extra (Opções Fora dos Pacotes)</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                  <label style={{...labelStyle, color: '#0f172a'}}>Seguro Opcional (€)</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="number" value={formData.extra_seguro || 0} onChange={e => setFormData({...formData, extra_seguro: Number(e.target.value)})} style={{...inputStyle, flex: 1}} />
+                    <select value={formData.tipo_extra_seguro || 'fixo'} onChange={e => setFormData({...formData, tipo_extra_seguro: e.target.value})} style={{...selectStyle, flex: 1}}><option value="fixo">Taxa Fixa</option><option value="diario">Por Dia</option></select>
+                  </div>
+                </div>
+                <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                  <label style={{...labelStyle, color: '#0f172a'}}>Transporte Opcional (€)</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="number" value={formData.extra_transporte || 0} onChange={e => setFormData({...formData, extra_transporte: Number(e.target.value)})} style={{...inputStyle, flex: 1}} />
+                    <select value={formData.tipo_extra_transporte || 'diario'} onChange={e => setFormData({...formData, tipo_extra_transporte: e.target.value})} style={{...selectStyle, flex: 1}}><option value="fixo">Taxa Fixa</option><option value="diario">Por Dia</option></select>
+                  </div>
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Descrição Completa</label><textarea rows={5} value={formData.descricao || ''} onChange={e => setFormData({...formData, descricao: e.target.value})} style={{...inputStyle, resize: 'vertical'}} /></div>
+            <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Regras e Termos (Campo)</label><textarea rows={4} value={formData.regras_termos || ''} onChange={e => setFormData({...formData, regras_termos: e.target.value})} style={{...inputStyle, resize: 'vertical'}} /></div>
           </div>
         </div>
 
+        {/* ========================================== */}
+        {/* 6. GALERIA E PERGUNTAS                     */}
+        {/* ========================================== */}
         <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>6. Galeria</h2>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '0.75rem', textTransform: 'uppercase' }}>Opção A: Escolher Padrão</p>
-            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-              {FOTOS_PADRAO.map((foto, idx) => (
-                <div key={idx} onClick={() => selecionarFotoPadrao(foto.url)} style={{ minWidth: '120px', height: '80px', borderRadius: '0.5rem', overflow: 'hidden', border: images[0]?.url === foto.url ? '3px solid #059669' : '1px solid #cbd5e1', cursor: 'pointer', position: 'relative' }}>
-                  <img src={foto.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  {images[0]?.url === foto.url && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5, 150, 105, 0.2)' }} />}
+          <h2 style={sectionTitleStyle}>5. Media e Formulários</h2>
+          
+          <div style={{ marginBottom: '2rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', cursor: 'pointer', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.75rem' }}><span style={{ fontWeight: 'bold', color: '#64748b' }}>📸 Clique para enviar fotos...</span><input type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} /></label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
+              {images.map((img, idx) => (
+                <div key={idx} style={{ position: 'relative', borderRadius: '0.75rem', overflow: 'hidden', border: img.isMain ? '3px solid #059669' : '1px solid #e2e8f0', height: '120px' }}>
+                  <img src={img.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <button type="button" onClick={() => removeImage(idx)} style={{ position: 'absolute', top: '5px', right: '5px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '24px', height: '24px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+                  {!img.isMain && <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}>Principal</button>}
                 </div>
               ))}
             </div>
           </div>
-          <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', margin: '1.5rem 0', fontSize: '12px' }}>OU</div>
-          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', cursor: 'pointer', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.75rem' }}><span style={{ fontWeight: 'bold', color: '#64748b' }}>📸 Clique para enviar fotos...</span><input type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} /></label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
-            {images.map((img, idx) => (
-              <div key={idx} style={{ position: 'relative', borderRadius: '0.75rem', overflow: 'hidden', border: img.isMain ? '3px solid #059669' : '1px solid #e2e8f0', height: '120px' }}>
-                <img src={img.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                <button type="button" onClick={() => removeImage(idx)} style={{ position: 'absolute', top: '5px', right: '5px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '24px', height: '24px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
-                {!img.isMain && <button type="button" onClick={() => setMainImage(idx)} style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', background: 'rgba(15,23,42,0.85)', color: 'white', fontSize: '11px', padding: '6px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}>Principal</button>}
-              </div>
-            ))}
+
+          <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <label style={labelStyle}>Perguntas Personalizadas ao Pai</label>
+              <button type="button" onClick={addPergunta} style={{ backgroundColor: '#f1f5f9', color: '#059669', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>+ Pergunta</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {perguntas.map((p, i) => (
+                <div key={i} style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input type="text" value={p || ''} onChange={e => updatePergunta(i, e.target.value)} style={{...inputStyle, flex: 1}} placeholder="Pergunta a apresentar no checkout..." />
+                  <button type="button" onClick={() => removePergunta(i)} style={{ width: '40px', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* DOCUMENTOS PDF DO CAMPO */}
+          <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '2rem', marginTop: '2rem' }}>
+            <label style={labelStyle}>Programa do Campo (PDF/Word para Clientes)</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'flex-start' }}>
+              {documentosExistentes.map((doc, idx) => (
+                <div key={`exist-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', fontSize: '13px' }}><span style={{ fontWeight: 'bold' }}>📄 {doc.nome} (Atual)</span><button type="button" onClick={() => removeDocExistente(idx)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button></div>
+              ))}
+              {documentos.map((doc, idx) => (
+                <div key={`novo-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', width: '100%', fontSize: '13px' }}><span style={{ fontWeight: 'bold', color: '#059669' }}>📄 {doc.name} (Novo)</span><button type="button" onClick={() => removeNovoDoc(idx)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>X</button></div>
+              ))}
+              <label style={{ padding: '0.75rem 1.5rem', backgroundColor: '#e2e8f0', color: '#334155', fontWeight: 'bold', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '14px' }}>+ Anexar Documento <input type="file" accept=".pdf,.doc,.docx" multiple onChange={handleDocSelect} style={{ display: 'none' }} /></label>
+            </div>
+          </div>
+
         </div>
 
-        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '1.125rem' }}>
-          {saving ? statusText : 'Guardar Alterações (HQ)'}
+        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '1.125rem', marginTop: '1rem' }}>
+          {saving ? statusText : 'Guardar Alterações e Sincronizar (HQ)'}
         </button>
       </form>
     </main>
@@ -487,10 +638,10 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
 }
 
 // ESTILOS GERAIS
-const sectionStyle = { backgroundColor: 'white', padding: '2.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' };
+const sectionStyle = { backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' };
 const sectionTitleStyle = { fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '2rem' };
-const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' };
-const labelStyle = { display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '0.5rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
-const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '15px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };
-const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' };
-const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '14px', color: '#334155', cursor: 'pointer', fontWeight: '600' };
+const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' };
+const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
+const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', fontWeight: '600', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };
+const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2em' };
+const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '13px', color: '#334155', cursor: 'pointer', fontWeight: '700' };
