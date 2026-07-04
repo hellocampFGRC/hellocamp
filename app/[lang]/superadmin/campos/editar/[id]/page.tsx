@@ -250,8 +250,15 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       const queryStr = pais === "Portugal" && formData.Distrito ? `${formData.local}, ${formData.Distrito}, ${pais}` : `${formData.local}, ${pais}`;
       const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}`);
       const data = await res.json();
-      if (data && data.length > 0) setMapPreview({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) });
-    } catch (e) { console.error(e); }
+      if (data && data.length > 0) {
+        setMapPreview({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) });
+      } else {
+        setMapPreview(null);
+      }
+    } catch (e) { 
+      console.error(e); 
+      setMapPreview(null);
+    }
     setAddressSuggestions([]);
   };
 
@@ -270,8 +277,8 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    if (!mapPreview) { alert("Garanta que o mapa carregou."); setSaving(false); return; }
-    if (images.length === 0) { alert("Adicione uma fotografia."); setSaving(false); return; }
+    
+    if (images.length === 0) { alert("Adicione pelo menos uma fotografia."); setSaving(false); return; }
 
     try {
       setStatusText("A processar media...");
@@ -317,12 +324,6 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.Distrito),
         traduzirParaIngles(formData.regras_termos)
       ]);
-      
-      const formatarDataStr = (d: string) => d ? new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) : '';
-      const dataInic = formData.calendario_funcionamento.data_inicio;
-      const dataFim = formData.calendario_funcionamento.data_fim;
-      const textoDatas = dataInic && dataFim ? `${formatarDataStr(dataInic)} a ${formatarDataStr(dataFim)}` : '';
-      const textoDatasEn = dataInic && dataFim ? `${formatarDataStr(dataInic)} to ${formatarDataStr(dataFim)}` : '';
 
       const taxaFinal = formData.taxa_comissao === '' ? null : Number(formData.taxa_comissao);
       const baseFinal = formData.base_comissao === '' ? null : formData.base_comissao;
@@ -358,10 +359,11 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         extra_transporte: formData.extra_transporte, tipo_extra_transporte: formData.tipo_extra_transporte,
         
         // Arrays e Estruturas
-        preco: precoMinimo, datas_disponiveis: textoDatas, datas_disponiveis_en: textoDatasEn, 
+        preco: precoMinimo, 
         pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
         linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais,
-        latitude: mapPreview.lat, longitude: mapPreview.lon, 
+        latitude: mapPreview ? mapPreview.lat : null, 
+        longitude: mapPreview ? mapPreview.lon : null, 
         descontos: descontos, pacotes: pacotes, calendario_funcionamento: formData.calendario_funcionamento,
         imagem: mainImageUrl, galeria: galeriaUrls, programas_pdf: programasDocsFinais, 
 
@@ -744,7 +746,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
                 </div>
                 <div>
                   <label style={labelStyle}>Qtd ({novoPacote.tipo === 'semana' ? 'Sem' : 'Dias'})</label>
-                  <input type="number" min="1" value={novoPacote.quantidade} onChange={e => setNovoPacote({...novoPacote, quantidade: Number(e.target.value)})} style={{...inputStyle, textAlign: 'center', color: '#4f46e5', fontWeight: 'black'}} />
+                  <input type="number" min="1" value={novoPacote.quantidade} onChange={e => setNovoPacote({...novoPacote, quantidade: Number(e.target.value)})} style={{...inputStyle, textAlign: 'center', color: '#4f46e5', fontWeight: 'bold'}} />
                 </div>
               </div>
 
@@ -758,7 +760,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
                     <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', padding: '0.5rem', borderRadius: '0.75rem' }}>
                       <input type="text" value={v.nome} onChange={e => atualizarVariante(i, 'nome', e.target.value)} placeholder="Nome (Ex: c/ Almoço)" style={{...inputStyle, flex: 2, padding: '0.5rem', fontSize: '13px'}} />
                       <div style={{ flex: 1, display: 'flex', alignItems: 'center', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', paddingRight: '0.5rem' }}>
-                        <input type="number" min="0" value={v.preco} onChange={e => atualizarVariante(i, 'preco', Number(e.target.value))} style={{ width: '100%', padding: '0.5rem', border: 'none', outline: 'none', textAlign: 'right', fontWeight: 'black', color: '#4f46e5', borderRadius: '0.5rem' }} />
+                        <input type="number" min="0" value={v.preco} onChange={e => atualizarVariante(i, 'preco', Number(e.target.value))} style={{ width: '100%', padding: '0.5rem', border: 'none', outline: 'none', textAlign: 'right', fontWeight: 'bold', color: '#4f46e5', borderRadius: '0.5rem' }} />
                         <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#94a3b8' }}>€</span>
                       </div>
                       {novoPacote.variantes.length > 1 && (
@@ -794,7 +796,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
               </div>
               <div>
                 <label style={labelStyle}>Percentagem a Retirar (%)</label>
-                <input type="number" min="1" max="100" value={novoDesconto.percentagem} onChange={e => setNovoDesconto({...novoDesconto, percentagem: Number(e.target.value)})} style={{...inputStyle, fontWeight: 'black', fontSize: '18px'}} />
+                <input type="number" min="1" max="100" value={novoDesconto.percentagem} onChange={e => setNovoDesconto({...novoDesconto, percentagem: Number(e.target.value)})} style={{...inputStyle, fontWeight: 'bold', fontSize: '18px'}} />
               </div>
               <div style={{ backgroundColor: '#eff6ff', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setNovoDesconto({...novoDesconto, acumulavel: !novoDesconto.acumulavel})}>
                 <div>
