@@ -47,9 +47,9 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       const userId = session.user.id;
 
       // Buscar perfil da Empresa
-      const { data: perfilData } = await supabase.from('perfis').select('*').eq('id', userId).single();
-      if (!perfilData) {
-        alert("Acesso não autorizado.");
+      const { data: perfilData, error: perfilErro } = await supabase.from('perfis').select('*').eq('id', userId).single();
+      if (perfilErro || !perfilData) {
+        alert("Acesso não autorizado ou perfil não encontrado.");
         router.push(`/${lang}/admin/dashboard`);
         return;
       }
@@ -115,7 +115,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
     }
 
     if (form.modalidadeReserva !== 'link_externo' && (!form.tipo_pagamento || !form.politica_cancelamento)) {
-       alert("Por favor, preencha as opções obrigatórias de pagamento e cancelamento.");
+       alert("Por favor, preencha as opções obrigatórias de pagamento e cancelamento nos anexos seguintes.");
        return;
     }
 
@@ -148,7 +148,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       dataSubmissao: new Date().toISOString()
     };
 
-    // 1. Atualizar o Perfil da Empresa (incluindo os dados fiscais corrigidos)
+    // 1. Atualizar o Perfil da Empresa
     const { error: perfilError } = await supabase
       .from('perfis')
       .update({
@@ -162,10 +162,18 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       })
       .eq('id', perfil.id);
 
-    // 2. Atualizar TODOS os campos existentes desta empresa (Status e Dados Operacionais)
+    if (perfilError) {
+      alert("Falha na gravação do perfil! Detalhes do erro: " + perfilError.message);
+      console.error("Erro Perfil:", perfilError);
+      setSubmitting(false);
+      return;
+    }
+
+    // 2. Atualizar TODOS os campos existentes desta empresa
     const { error: camposError } = await supabase
       .from('campos')
       .update({
+        contrato_dados: payloadJSON, // Guardamos também o histórico do contrato em cada campo
         status_aprovacao: 'Pendente',
         modalidade_reserva: form.modalidadeReserva,
         link_externo_reserva: form.modalidadeReserva === 'link_externo' ? form.linkExternoReserva : null,
@@ -174,13 +182,15 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       })
       .eq('organizador_id', perfil.id);
 
-    if (perfilError || camposError) {
-      alert("Erro ao submeter contrato.");
-      console.error(perfilError, camposError);
-    } else {
-      alert("Contrato Global submetido com sucesso! A aguardar validação da equipa HelloCamp.");
-      router.push(`/${lang}/admin/dashboard`);
+    if (camposError) {
+      alert("Perfil guardado, mas falhou na atualização dos campos! Erro: " + camposError.message);
+      console.error("Erro Campos:", camposError);
+      setSubmitting(false);
+      return;
     }
+
+    alert("Contrato Global submetido com sucesso! A aguardar validação da equipa HelloCamp.");
+    router.push(`/${lang}/admin/dashboard`);
     setSubmitting(false);
   };
 
