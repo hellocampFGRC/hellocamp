@@ -46,11 +46,16 @@ export default function VerContratoGlobalPage({ params }: { params: Promise<{ la
     statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
   }
 
-  // Helper para o nome da modalidade do Anexo 1
+  // Helpers Visuais
   let modalidadeNome = "";
   if (dadosContrato.modalidadeReserva === 'direta') modalidadeNome = "✅ Reserva Direta com Pagamento Automático";
   else if (dadosContrato.modalidadeReserva === 'email') modalidadeNome = "✅ Comunicação por E-mail (Reserva Sob Consulta)";
   else if (dadosContrato.modalidadeReserva === 'link_externo') modalidadeNome = "✅ Formulário ou Link Externo (Redirecionamento)";
+
+  const comissaoText = perfil.taxa_comissao !== null && perfil.taxa_comissao !== undefined ? perfil.taxa_comissao : 12;
+  let baseComissaoText = "Sobre Valor Total (Programa + Extras)";
+  if (perfil.base_comissao === "apenas_programa") baseComissaoText = "Apenas sobre Valor Base do Programa";
+  if (perfil.base_comissao === "sem_comissao") baseComissaoText = "Isento de Comissão (0%)";
 
   return (
     <main className="min-h-screen bg-slate-200 py-12 px-4 font-sans text-black selection:bg-yellow-200">
@@ -96,11 +101,11 @@ export default function VerContratoGlobalPage({ params }: { params: Promise<{ la
 
             <p className="mb-4">E</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8 ml-8 mb-8 bg-gray-50 p-6 border border-gray-300 font-sans text-sm">
-              <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Pessoa de Contacto</span><span className="font-bold text-base">{dadosContrato.pessoaContacto}</span></div>
-              <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Nome da Empresa</span><span className="font-bold text-base">{dadosContrato.empresaNome}</span></div>
-              <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Forma Jurídica</span><span className="font-bold text-base">{dadosContrato.formaJuridica}</span></div>
+              <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Nome da Empresa (Faturação)</span><span className="font-bold text-base">{dadosContrato.empresaNome}</span></div>
               <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">NIF</span><span className="font-bold text-base">{dadosContrato.nif}</span></div>
-              <div className="md:col-span-2"><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Morada Sede</span><span className="font-bold text-base">{dadosContrato.morada}</span></div>
+              <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Pessoa de Contacto</span><span className="font-bold text-base">{dadosContrato.pessoaContacto}</span></div>
+              <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Forma Jurídica</span><span className="font-bold text-base">{dadosContrato.formaJuridica}</span></div>
+              <div className="md:col-span-2"><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Morada Sede Fiscal</span><span className="font-bold text-base">{dadosContrato.morada}</span></div>
               <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Código Postal e Cidade</span><span className="font-bold text-base">{dadosContrato.codigoPostal}</span></div>
               <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">Número de Telefone</span><span className="font-bold text-base">{dadosContrato.telefone}</span></div>
               <div><span className="block text-xs text-gray-500 uppercase font-bold mb-1">E-mail de Contacto Geral</span><span className="font-bold text-base">{dadosContrato.emailContacto}</span></div>
@@ -121,10 +126,13 @@ export default function VerContratoGlobalPage({ params }: { params: Promise<{ la
 
           <div className="space-y-6 text-[15px] text-justify pt-12">
             <h3 className="font-bold text-xl uppercase tracking-widest border-b border-black pb-2 mb-8">Cláusulas Contratuais Base</h3>
-            <p className="mb-4"><strong>Artigo 1.º – Comissão:</strong> O Parceiro compromete-se a pagar à HelloCamp uma comissão de 12% (IVA incluído) sobre cada reserva efetuada através da plataforma. A comissão é calculada sobre o valor efetivamente pago pelo cliente.</p>
+            <p className="mb-4"><strong>Artigo 1.º – Comissão:</strong> O Parceiro compromete-se a pagar à HelloCamp uma comissão de {comissaoText}% (IVA incluído) sobre cada reserva efetuada através da plataforma. Incidência: {baseComissaoText}.</p>
             <p className="mb-4"><strong>Artigo 2.º – Condições de Pagamento:</strong> As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado. O Parceiro compromete-se a liquidar as faturas emitidas dentro dos prazos nelas indicados.</p>
             <p className="mb-4"><strong>Artigo 3.º – Obrigações do Parceiro:</strong> O Parceiro compromete-se a manter as informações atualizadas, garantir a realização das atividades e não praticar preços superiores aos oferecidos nos seus canais diretos.</p>
-            <p className="mb-8"><strong>Artigo 4.º – Duração e Renovação:</strong> O presente contrato produz efeitos a partir da data da sua assinatura. O contrato mantém-se válido até ao final do ano civil, renovando-se automaticamente por períodos de um ano.</p>
+            <p className="mb-4"><strong>Artigo 4.º – Duração e Renovação:</strong> O presente contrato produz efeitos a partir da data da sua assinatura. O contrato mantém-se válido até ao final do ano civil, renovando-se automaticamente por períodos de um ano.</p>
+            
+            <h4 className="font-bold border-l-4 border-black pl-3 mt-8">Artigo 7.º – Validade da Assinatura e Convenção de Prova</h4>
+            <p className="mb-8">As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos. Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria e a integridade das cláusulas operacionais, renunciando o Parceiro a invocar a nulidade com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada.</p>
           </div>
 
           <div className="h-px bg-gray-300 w-full my-12"></div>
@@ -133,34 +141,43 @@ export default function VerContratoGlobalPage({ params }: { params: Promise<{ la
           <div className="space-y-12 font-sans text-sm text-slate-800">
             
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-              <h3 className="font-black text-lg mb-4 text-black uppercase border-l-4 border-[#EBA914] pl-3">Anexo 1 – Procedimento de Reserva Acordado</h3>
+              <h3 className="font-black text-lg mb-4 text-black uppercase border-l-4 border-gray-400 pl-3">Anexo 1 – Procedimento de Reserva Acordado</h3>
               <div className="p-4 bg-white border border-black rounded-lg shadow-sm">
                 <strong className="block text-black mb-1">{modalidadeNome}</strong>
                 {dadosContrato.modalidadeReserva === 'link_externo' && dadosContrato.linkExternoReserva && (
                   <p className="mt-2 text-gray-600 bg-gray-50 p-2 rounded text-xs font-mono break-all border border-gray-200">
-                    URL: {dadosContrato.linkExternoReserva}
+                    URL Oficial: {dadosContrato.linkExternoReserva}
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-              <h3 className="font-black text-lg mb-4 text-blue-950 uppercase border-l-4 border-blue-600 pl-3">Anexo 2 – Pagamento e comissão Acordado</h3>
-              <div className="p-4 bg-white border border-blue-600 rounded-lg shadow-sm">
-                <strong className="block text-blue-950 mb-1">
-                  {dadosContrato.tipoPagamento === '100_total' ? '✅ 100% Pago no Ato da Reserva (Pagamento Imediato)' : '✅ Sinal de 50% Agora + 50% 1 Semana Antes'}
-                </strong>
-              </div>
-            </div>
+            {dadosContrato.modalidadeReserva !== 'link_externo' ? (
+              <>
+                <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
+                  <h3 className="font-black text-lg mb-4 text-blue-950 uppercase border-l-4 border-blue-600 pl-3">Anexo 2 – Pagamento e Comissão</h3>
+                  <div className="p-4 bg-white border border-blue-600 rounded-lg shadow-sm">
+                    <strong className="block text-blue-950 mb-1">
+                      {dadosContrato.tipoPagamento === '100_total' ? '✅ 100% Pago no Ato da Reserva (Pagamento Imediato)' : '✅ Sinal de 50% Agora + 50% 1 Semana Antes'}
+                    </strong>
+                  </div>
+                </div>
 
-            <div className="bg-amber-50 p-6 rounded-xl border border-amber-100">
-              <h3 className="font-black text-lg mb-4 text-amber-950 uppercase border-l-4 border-amber-500 pl-3">Anexo 3 – Política de Cancelamento Acordada</h3>
-              <div className="p-4 bg-white border border-amber-500 rounded-lg shadow-sm">
-                <strong className="block text-amber-950 mb-1">
-                  ✅ {dadosContrato.politicaCancelamento}
-                </strong>
+                <div className="bg-amber-50 p-6 rounded-xl border border-amber-100">
+                  <h3 className="font-black text-lg mb-4 text-amber-950 uppercase border-l-4 border-amber-500 pl-3">Anexo 3 – Política de Cancelamento</h3>
+                  <div className="p-4 bg-white border border-amber-500 rounded-lg shadow-sm">
+                    <strong className="block text-amber-950 mb-1">
+                      ✅ {dadosContrato.politicaCancelamento || 'Estrita (Sem reembolso)'}
+                    </strong>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                 <h3 className="font-black text-lg mb-4 text-gray-600 uppercase border-l-4 border-gray-400 pl-3">Anexos 2 e 3 – Gestão Externa</h3>
+                 <p className="text-gray-600 font-medium">Os pagamentos, bem como as políticas de cancelamento e reembolso, são geridos externamente pelo Parceiro no seu website/formulário de inscrição. A comissão acordada ({comissaoText}%) é faturada pela HelloCamp consoante as leads validadas mensalmente.</p>
               </div>
-            </div>
+            )}
 
             {dadosContrato.acordosComplementares && (
               <div className="bg-white p-6 rounded-xl border border-gray-200">
@@ -185,8 +202,13 @@ export default function VerContratoGlobalPage({ params }: { params: Promise<{ la
               <p className="font-serif text-2xl italic text-black mb-1">{dadosContrato.assinaturaNome}</p>
               <p className="text-sm font-bold text-gray-500 mb-4">{dadosContrato.assinaturaCargo}</p>
               <p className="text-sm font-medium border-t border-gray-200 mt-6 pt-4">Data de submissão: {dataSubmissao}</p>
-              <div className="mt-4 inline-flex items-center gap-2 bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded text-xs font-bold border border-emerald-200">
-                <span>✓</span> Aceitou Termos e Condições
+              
+              <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                 <p className="text-[10px] text-gray-500 font-mono m-0">Registo de Aceitação Legal</p>
+                 <p className="text-[10px] text-gray-500 font-mono m-0">Endereço IP: {dadosContrato.ipAssinatura || 'Registado pelo Servidor'}</p>
+                 <div className="mt-2 inline-flex items-center gap-2 bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded text-xs font-bold border border-emerald-200">
+                   <span>✓</span> Termos e Artigo 7.º Aceites
+                 </div>
               </div>
             </div>
           </div>
