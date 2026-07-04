@@ -18,8 +18,8 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
 
   // Variáveis do Contrato e Configurações da Base de Dados
   const [form, setForm] = useState({
-    nomeEmpresa: "",     // Agora editável
-    nifEmpresa: "",      // Agora editável
+    nomeEmpresa: "",     // Editável
+    nifEmpresa: "",      // Editável
     pessoaContacto: "",
     formaJuridica: "",
     morada: "",
@@ -119,6 +119,11 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
        return;
     }
 
+    if (!form.assinaturaNome || !form.assinaturaCargo || !form.concordaTermos) {
+      alert("Por favor, preencha os dados da assinatura e confirme a aceitação dos termos no final do documento.");
+      return;
+    }
+
     setSubmitting(true);
 
     const payloadJSON = {
@@ -143,7 +148,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       dataSubmissao: new Date().toISOString()
     };
 
-    // 1. Atualizar o Perfil da Empresa (incluindo os dados fiscais corrigidos agora)
+    // 1. Atualizar o Perfil da Empresa (incluindo os dados fiscais corrigidos)
     const { error: perfilError } = await supabase
       .from('perfis')
       .update({
@@ -158,7 +163,6 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       .eq('id', perfil.id);
 
     // 2. Atualizar TODOS os campos existentes desta empresa (Status e Dados Operacionais)
-    // Para que as políticas de cancelamento e modelo de pagamento se repliquem pelos campos.
     const { error: camposError } = await supabase
       .from('campos')
       .update({
@@ -174,7 +178,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       alert("Erro ao submeter contrato.");
       console.error(perfilError, camposError);
     } else {
-      alert("Contrato Global submetido com sucesso! A aguardar aprovação da equipa HelloCamp.");
+      alert("Contrato Global submetido com sucesso! A aguardar validação da equipa HelloCamp.");
       router.push(`/${lang}/admin/dashboard`);
     }
     setSubmitting(false);
@@ -182,20 +186,19 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
 
   if (loading) return <div className="p-20 text-center font-bold text-slate-500">A preparar o seu Contrato Global...</div>;
 
-  const inputClass = "border-b border-gray-400 outline-none bg-transparent px-1 py-1 text-black placeholder:text-gray-400 w-full focus:border-black transition-colors";
+  const inputClass = "border-b border-gray-400 outline-none bg-transparent px-1 py-1.5 text-black placeholder:text-gray-400 w-full focus:border-black transition-colors";
+  const inputClassCustom = "border-b-2 border-black outline-none bg-transparent px-1 py-1.5 text-base font-bold text-slate-900 placeholder:text-gray-400 w-full focus:border-[#EBA914] transition-colors rounded-t-sm";
   const dataAtual = new Date().toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
     <main className="min-h-screen bg-slate-200 py-12 px-4 font-sans text-black selection:bg-yellow-200">
       <div className="max-w-[900px] mx-auto">
         
-        <div className="mb-6 flex flex-wrap justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm">
-          <Link href={`/${lang}/admin/dashboard`} className="text-sm font-bold text-slate-500 hover:text-black transition-colors">
+        {/* BARRA DE TOPO SIMPLIFICADA */}
+        <div className="mb-6 bg-white p-4 rounded-xl shadow-sm">
+          <Link href={`/${lang}/admin/dashboard`} className="text-sm font-bold text-slate-500 hover:text-black transition-colors flex items-center gap-2">
             &larr; Voltar ao Painel
           </Link>
-          <button onClick={handleSubmeter} disabled={submitting || !form.concordaTermos} className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md">
-            {submitting ? 'A submeter...' : 'Assinar Contrato Global'}
-          </button>
         </div>
 
         <form id="contrato-form" onSubmit={handleSubmeter} className="bg-white shadow-2xl p-8 md:p-16 text-black leading-relaxed rounded-sm font-serif">
@@ -225,21 +228,21 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
               <div className="w-16 h-16 bg-blue-50 border border-blue-200 rounded-full flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">🏖️</div>
               <div>
                 <h3 className="text-lg font-black uppercase text-slate-900 mb-2">2. Divulgação das ofertas</h3>
-                <p className="text-slate-600 text-justify leading-relaxed">Após a celebração do contrato, a HelloCamp procede à recolha e organização das informações relativas às atividades disponibilizadas pelo parceiro, criando e publicando as respetivas páginas de oferta na plataforma. Paralelamente, promove os programas através dos seus canais digitais e poderá solicitar informações adicionais sempre que tal se revele necessário para garantir a qualidade e atualização dos conteúdos. A publicação das ofertas apenas ocorrerá após o cumprimento das condições contratuais aplicáveis e da validação de toda a informação necessária.</p>
+                <p className="text-slate-600 text-justify leading-relaxed">Após a celebração do contrato, a HelloCamp procede à recolha e organização das informações relativas às atividades disponibilizadas pelo parceiro, criando e publicando as respetivas páginas de oferta na plataforma. Paralelamente, promove os programas através dos seus canais digitais e poderá solicitar informações adicionais sempre que tal se revele necessário para garantir a qualidade e atualização dos conteúdos.</p>
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-6 items-start">
               <div className="w-16 h-16 bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">💻</div>
               <div>
                 <h3 className="text-lg font-black uppercase text-slate-900 mb-2">3. Reservas através da HelloCamp</h3>
-                <p className="text-slate-600 text-justify leading-relaxed">As reservas das atividades poderão ser efetuadas diretamente através da plataforma HelloCamp. Sempre que uma reserva seja realizada, a HelloCamp comunicará ao parceiro os dados do cliente, os detalhes da reserva e todas as informações necessárias à adequada gestão da inscrição. Por sua vez, o parceiro compromete-se a manter permanentemente atualizadas a disponibilidade das atividades, os preços praticados, os programas oferecidos e quaisquer outras informações relevantes relacionadas com as suas ofertas, assegurando a exatidão dos dados apresentados aos clientes.</p>
+                <p className="text-slate-600 text-justify leading-relaxed">As reservas das atividades poderão ser efetuadas diretamente através da plataforma HelloCamp. Sempre que uma reserva seja realizada, a HelloCamp comunicará ao parceiro os dados do cliente e os detalhes da reserva. O parceiro compromete-se a manter permanentemente atualizadas a disponibilidade das atividades e os preços praticados.</p>
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-6 items-start">
               <div className="w-16 h-16 bg-slate-900 text-white border border-slate-700 rounded-full flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">€</div>
               <div>
                 <h3 className="text-lg font-black uppercase text-slate-900 mb-2">4. Pagamento da Comissão</h3>
-                <p className="text-slate-600 text-justify leading-relaxed">A HelloCamp cobra uma comissão sobre cada reserva concluída através da plataforma. O modelo de pagamento poderá assumir diferentes formas, nomeadamente através de pagamento direto ao parceiro pelo cliente, pagamento parcial processado pela HelloCamp ou qualquer outro modelo que venha a ser acordado entre ambas as partes. As condições específicas aplicáveis serão definidas de acordo com os termos estabelecidos no contrato de parceria.</p>
+                <p className="text-slate-600 text-justify leading-relaxed">A HelloCamp cobra uma comissão sobre cada reserva concluída através da plataforma. O modelo de pagamento poderá assumir diferentes formas (reserva direta, e-mail ou reencaminhamento externo). As condições específicas aplicáveis serão definidas de acordo com as escolhas nos Anexos Operacionais abaixo.</p>
               </div>
             </div>
           </div>
@@ -260,49 +263,49 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
             
             {/* DADOS DE FATURAÇÃO DO PARCEIRO */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8 ml-8 mb-8 bg-gray-50 p-6 border border-gray-300 font-sans text-sm shadow-inner rounded-lg">
-              <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">Nome da Empresa (Faturação) *</label>
-                <input required type="text" className={`${inputClass} border-b-2 border-black font-bold`} value={form.nomeEmpresa} onChange={e => setForm({...form, nomeEmpresa: e.target.value})} placeholder="Designação legal" />
+              <div className="flex flex-col md:col-span-2">
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Nome da Empresa (Faturação / Entidade Organizadora) *</label>
+                <input required type="text" className={inputClassCustom} value={form.nomeEmpresa} onChange={e => setForm({...form, nomeEmpresa: e.target.value})} placeholder="Designação legal da empresa" />
               </div>
               <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">NIF *</label>
-                <input required type="text" className={`${inputClass} border-b-2 border-black font-bold`} value={form.nifEmpresa} onChange={e => setForm({...form, nifEmpresa: e.target.value})} placeholder="Número de Identificação Fiscal" />
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">NIF *</label>
+                <input required type="text" className={inputClassCustom} value={form.nifEmpresa} onChange={e => setForm({...form, nifEmpresa: e.target.value})} placeholder="Ex: 500 000 000" />
               </div>
               <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">Pessoa de Contacto *</label>
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Pessoa de Contacto *</label>
                 <input required type="text" className={inputClass} value={form.pessoaContacto} onChange={e => setForm({...form, pessoaContacto: e.target.value})} placeholder="Nome completo" />
               </div>
               <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">Forma Jurídica *</label>
-                <input required type="text" className={inputClass} value={form.formaJuridica} onChange={e => setForm({...form, formaJuridica: e.target.value})} placeholder="Ex: Lda, Unipessoal" />
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Forma Jurídica *</label>
+                <input required type="text" className={inputClass} value={form.formaJuridica} onChange={e => setForm({...form, formaJuridica: e.target.value})} placeholder="Ex: Lda, Unipessoal, Associação" />
               </div>
               <div className="flex flex-col md:col-span-2">
-                <label className="font-bold text-gray-700 mb-1">Morada Sede Fiscal *</label>
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Morada Sede Fiscal *</label>
                 <input required type="text" className={inputClass} value={form.morada} onChange={e => setForm({...form, morada: e.target.value})} placeholder="Rua, número, andar" />
               </div>
               <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">Código Postal e Cidade *</label>
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Código Postal e Cidade *</label>
                 <input required type="text" className={inputClass} value={form.codigoPostal} onChange={e => setForm({...form, codigoPostal: e.target.value})} placeholder="0000-000 Localidade" />
               </div>
               <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">Número de Telefone *</label>
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Número de Telefone *</label>
                 <input required type="text" className={inputClass} value={form.telefone} onChange={e => setForm({...form, telefone: e.target.value})} />
               </div>
               <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">E-mail de Contacto Geral *</label>
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">E-mail de Contacto Geral *</label>
                 <input required type="email" className={inputClass} value={form.emailContacto} onChange={e => setForm({...form, emailContacto: e.target.value})} />
               </div>
               <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">E-mail Exclusivo p/ Reservas *</label>
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">E-mail Exclusivo p/ Reservas *</label>
                 <input required type="email" className={inputClass} value={form.emailReservas} onChange={e => setForm({...form, emailReservas: e.target.value})} />
               </div>
               <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">Website</label>
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Website</label>
                 <input type="text" className={inputClass} value={form.website} onChange={e => setForm({...form, website: e.target.value})} placeholder="Opcional" />
               </div>
               <div className="flex flex-col">
-                <label className="font-bold text-gray-700 mb-1">Responsável de Dados (RGPD) *</label>
-                <input required type="text" className={inputClass} value={form.responsavelRGPD} onChange={e => setForm({...form, responsavelRGPD: e.target.value})} placeholder="Nome do responsável pela gestão de leads e dados" />
+                <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Responsável de Dados (RGPD) *</label>
+                <input required type="text" className={inputClass} value={form.responsavelRGPD} onChange={e => setForm({...form, responsavelRGPD: e.target.value})} placeholder="Nome do responsável pela gestão de dados" />
               </div>
             </div>
             
@@ -324,10 +327,9 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
             <h3 className="font-bold text-xl uppercase tracking-widest border-b border-black pb-2 mb-8">Cláusulas Contratuais</h3>
             
             <h4 className="font-bold">Artigo 1.º – Comissão</h4>
-            <p className="mb-4">O Parceiro compromete-se a pagar à HelloCamp uma comissão de 12% (IVA incluído) sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes.</p>
+            <p className="mb-4">O Parceiro compromete-se a pagar à HelloCamp a comissão (IVA incluído) acordada individualmente com a equipa HelloCamp sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes.</p>
             <p className="mb-4">A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados através da plataforma ou de leads encaminhadas.</p>
             <p className="mb-4">A comissão torna-se devida após a confirmação da reserva pelo Parceiro e a transmissão dos respetivos dados de reserva.</p>
-            <p className="mb-4">O Parceiro deverá enviar ao cliente a confirmação da reserva e assegurar a prestação dos serviços contratados.</p>
             <p className="mb-4">Caso uma reserva não possa ser realizada por motivos devidamente justificados, nomeadamente indisponibilidade da atividade ou não verificação das condições mínimas de realização, o Parceiro deverá informar a HelloCamp com a maior brevidade possível.</p>
             <p className="mb-8">Em caso de cancelamento por iniciativa do cliente, aplicar-se-ão as condições previstas no Anexo 3 – Cancelamento de Reservas.</p>
 
@@ -337,9 +339,8 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
             <h4 className="font-bold">Artigo 3.º – Obrigações do Parceiro</h4>
             <p className="mb-4">O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades, incluindo descrições, preços, disponibilidade, fotografias e demais conteúdos relevantes.</p>
             <p className="mb-4">O Parceiro garante que possui todos os direitos necessários sobre os conteúdos disponibilizados à HelloCamp, incluindo direitos de autor, direitos de imagem e demais autorizações legalmente exigidas.</p>
-            <p className="mb-4">A HelloCamp poderá utilizar os conteúdos fornecidos pelo Parceiro para efeitos de promoção, comercialização e divulgação das atividades na plataforma e nos seus canais de comunicação.</p>
             <p className="mb-4">Os preços divulgados na plataforma HelloCamp não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas da mesma atividade.</p>
-            <p className="mb-4">O Parceiro compromete-se a realizar as atividades promovidas através da plataforma, salvo nos casos expressamente previstos nos seus termos e condições ou em situações de força maior.</p>
+            <p className="mb-4">O Parceiro compromete-se a informar imediatamente a HelloCamp de quaisquer alterações relativas às suas atividades, incluindo preços, disponibilidade e programas.</p>
             <p className="mb-8">O Parceiro deverá comunicar à HelloCamp quaisquer alterações aos seus termos e condições gerais ou às condições aplicáveis às atividades disponibilizadas na plataforma.</p>
 
             <h4 className="font-bold">Artigo 4.º – Duração e Renovação</h4>
@@ -348,9 +349,6 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
             <h4 className="font-bold">Artigo 5.º – Limitação de Responsabilidade e Seguros</h4>
             <p className="mb-4">A HelloCamp atua exclusivamente como plataforma intermediária e motor de busca. A HelloCamp não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos, incidentes ou disputas que ocorram durante a realização das atividades.</p>
             <p className="mb-8">O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei, licenças e certificações exigidas para o exercício da sua atividade.</p>
-
-            <h4 className="font-bold">Artigo 6.º – Acordos Complementares</h4>
-            <p className="mb-8">Quaisquer alterações ao presente contrato ou acordos complementares celebrados entre a HelloCamp e o Parceiro deverão ser efetuados por escrito, no anexo 4, para produzirem efeitos.</p>
           </div>
 
           <div className="h-px bg-gray-300 w-full my-12"></div>
@@ -361,7 +359,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
             {/* ANEXO 1 - PROCEDIMENTO DE RESERVA */}
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
               <h3 className="font-black text-lg mb-4 text-black uppercase border-l-4 border-[#EBA914] pl-3">Anexo 1 – Procedimento de Reserva</h3>
-              <p className="mb-6">Selecione a modalidade de gestão de reservas aplicável à sua parceria com a HelloCamp.</p>
+              <p className="mb-6">Selecione a modalidade de gestão de reservas aplicável à sua parceria global com a HelloCamp.</p>
               
               <div className="space-y-3">
                 <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.modalidadeReserva === 'direta' ? 'bg-white border-black shadow-sm' : 'border-transparent hover:bg-gray-100'}`}>
@@ -389,7 +387,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
                     {form.modalidadeReserva === 'link_externo' && (
                       <div className="bg-gray-50 border border-gray-300 p-4 rounded-lg mt-2 w-full">
                         <label className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 block">
-                          Insira o Link Externo (URL) *
+                          Insira o Link Externo (URL) Principal *
                         </label>
                         <input 
                           type="url" 
@@ -406,7 +404,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
               </div>
             </div>
 
-            {/* ANEXO 2 E 3 SÓ APARECEM SE NÃO FOR LINK EXTERNO */}
+            {/* ANEXOS 2 E 3 CONDICIONAIS */}
             {form.modalidadeReserva !== 'link_externo' && (
               <>
                 <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
@@ -521,6 +519,16 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
                 </label>
               </div>
             </div>
+          </div>
+
+          <div className="pt-10 mt-12 border-t border-gray-300 flex justify-end font-sans">
+            <button 
+              type="submit" 
+              disabled={submitting || !form.concordaTermos || !form.assinaturaNome || !form.assinaturaCargo} 
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-400 text-white font-black px-6 sm:px-12 py-4 sm:py-5 rounded-xl shadow-lg transition-transform hover:-translate-y-1 cursor-pointer w-full text-base sm:text-lg border border-emerald-400"
+            >
+              {submitting ? 'A Submeter Contrato Global...' : 'Assinar Digitalmente e Concluir'}
+            </button>
           </div>
 
         </form>
