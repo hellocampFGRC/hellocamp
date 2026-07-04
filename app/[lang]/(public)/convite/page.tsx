@@ -139,7 +139,9 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       status_contrato: 'Pendente de Revisão',
       contrato_dados: payloadJSON,
       modalidade_reserva: form.modalidadeReserva,         // NOVA COLUNA DIRETA
-      link_externo_reserva: form.linkExternoReserva       // NOVA COLUNA DIRETA
+      link_externo_reserva: form.linkExternoReserva,       // NOVA COLUNA DIRET
+      taxa_comissao: 12,           // <-- NOVO: Força a comissão padrão
+      base_comissao: 'total'
     });
 
     if (perfilError) {
