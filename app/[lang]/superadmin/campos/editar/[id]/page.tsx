@@ -58,10 +58,17 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
   const [pais, setPais] = useState("Portugal");
   const [linguas, setLinguas] = useState({ pt: false, en: false, es: false, fr: false, de: false });
 
-  // Arrays Complexos
+  // Arrays Complexos (Totalmente Editáveis)
   const [pacotes, setPacotes] = useState<Pacote[]>([]);
   const [descontos, setDescontos] = useState<Desconto[]>([]);
   const [perguntas, setPerguntas] = useState<string[]>([]);
+
+  // Estados dos Modais de Edição
+  const [isPacoteModalOpen, setIsPacoteModalOpen] = useState(false);
+  const [novoPacote, setNovoPacote] = useState<Pacote>({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
+
+  const [isDescontoModalOpen, setIsDescontoModalOpen] = useState(false);
+  const [novoDesconto, setNovoDesconto] = useState<Desconto>({ id: "", nome: "", percentagem: 10, acumulavel: false });
 
   // DADOS GERAIS
   const [formData, setFormData] = useState({
@@ -188,6 +195,55 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
   const removePergunta = (index: number) => setPerguntas(perguntas.filter((_, i) => i !== index));
   const updatePergunta = (index: number, value: string) => setPerguntas(perguntas.map((p, i) => i === index ? value : p));
 
+  // ==========================================
+  // HANDLERS: PACOTES (TOTALMENTE EDITÁVEIS HQ)
+  // ==========================================
+  const atualizarVariante = (index: number, campo: 'nome' | 'preco', valor: string | number) => {
+    const novasVariantes = [...novoPacote.variantes];
+    novasVariantes[index] = { ...novasVariantes[index], [campo]: valor } as Variante;
+    setNovoPacote({ ...novoPacote, variantes: novasVariantes });
+  };
+
+  const adicionarVariante = () => {
+    setNovoPacote(prev => ({ ...prev, variantes: [...prev.variantes, { nome: "", preco: 0 }] }));
+  };
+
+  const removerVariante = (index: number) => {
+    setNovoPacote(prev => ({ ...prev, variantes: prev.variantes.filter((_, i) => i !== index) }));
+  };
+
+  const guardarPacote = () => {
+    if (!novoPacote.titulo || novoPacote.variantes.length === 0) return alert("Preencha o título e pelo menos 1 preço.");
+    const pacoteFinal: Pacote = { ...novoPacote, id: novoPacote.id || Math.random().toString(36).substring(2, 9) };
+    const novosPacotes = novoPacote.id ? pacotes.map((p: Pacote) => p.id === novoPacote.id ? pacoteFinal : p) : [...pacotes, pacoteFinal];
+    setPacotes(novosPacotes);
+    setIsPacoteModalOpen(false);
+    setNovoPacote({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
+  };
+
+  const eliminarPacote = (id: string) => {
+    setPacotes(pacotes.filter(p => p.id !== id));
+  };
+
+  // ==========================================
+  // HANDLERS: DESCONTOS (TOTALMENTE EDITÁVEIS HQ)
+  // ==========================================
+  const guardarDesconto = () => {
+    if (!novoDesconto.nome || novoDesconto.percentagem <= 0) return alert("Preencha o nome e um valor superior a 0.");
+    const descontoFinal = { ...novoDesconto, id: novoDesconto.id || Math.random().toString(36).substring(2, 9) };
+    const novosDescontos = novoDesconto.id ? descontos.map((d: Desconto) => d.id === novoDesconto.id ? descontoFinal : d) : [...descontos, descontoFinal];
+    setDescontos(novosDescontos);
+    setIsDescontoModalOpen(false);
+    setNovoDesconto({ id: "", nome: "", percentagem: 10, acumulavel: false });
+  };
+
+  const eliminarDesconto = (id: string) => {
+    setDescontos(descontos.filter(d => d.id !== id));
+  };
+
+  // ==========================================
+  // API GOOGLE MAPS E TRADUÇÕES
+  // ==========================================
   const buscarNoMapaManual = async () => {
     if (formData.local.length < 3) return;
     try {
@@ -276,7 +332,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       // Preço Mínimo dinâmico a partir dos pacotes
       let precoMinimo = 0;
       if (pacotes && pacotes.length > 0) {
-        const todosPrecos = pacotes.flatMap((p: any) => p.variantes.map((v: any) => v.preco));
+        const todosPrecos = pacotes.flatMap((p: Pacote) => p.variantes.map((v: Variante) => v.preco));
         if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
       }
 
@@ -324,6 +380,8 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
 
   if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>A carregar Master HQ...</div>;
 
+  const showContratoWarning = formData.status_aprovacao === 'Aprovado' && !formData.contrato_parceiro_url;
+
   return (
     <main style={{ maxWidth: '850px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
       
@@ -347,10 +405,18 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
           <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'white', borderRadius: '0.75rem', border: '1px solid #fde68a' }}>
             <label style={labelStyle}>Status do Campo (Aprovação / Listagem)</label>
             <select value={formData.status_aprovacao} onChange={e => setFormData({...formData, status_aprovacao: e.target.value})} style={{...selectStyle, borderColor: formData.status_aprovacao === 'Aprovado' ? '#059669' : '#fbbf24', borderWidth: '2px'}}>
-              <option value="Aprovado">Aprovado (Ativo e Visível)</option>
-              <option value="Pendente de Revisão">Pendente de Revisão (Inativo)</option>
+              <option value="Pendente de Revisão">Pendente (Invisível)</option>
+              <option value="Aprovado">Aprovado & Validado (Fica Visível online)</option>
               <option value="Rejeitado">Rejeitado (Inativo)</option>
             </select>
+            {showContratoWarning && (
+              <p style={{ margin: '0.75rem 0 0 0', fontSize: '12px', color: '#dc2626', fontWeight: 'bold', backgroundColor: '#fee2e2', padding: '0.5rem', borderRadius: '0.5rem' }}>
+                ⚠️ Atenção: Colocou como Aprovado, mas não existe contrato anexado! Um campo deve idealmente ter contrato validado para estar ativo.
+              </p>
+            )}
+            <p style={{ margin: '0.5rem 0 0 0', fontSize: '11px', color: '#92400e' }}>
+              * Apenas o estado "Aprovado" torna o campo ativo e pesquisável no motor de busca da HelloCamp.
+            </p>
           </div>
 
           <div style={gridStyle}>
@@ -401,7 +467,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
               <label style={labelStyle}>Upload de Contrato de Parceiro Assinado (PDF)</label>
               {formData.contrato_parceiro_url && (
                 <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#fef3c7', borderRadius: '0.5rem', fontSize: '13px', fontWeight: 'bold' }}>
-                  ✅ Contrato anexado: <a href={formData.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" style={{ color: '#b45309' }}>Ver Documento</a>
+                  ✅ Contrato validado e anexado: <a href={formData.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" style={{ color: '#b45309', textDecoration: 'underline' }}>Ver Documento</a>
                 </div>
               )}
               <input type="file" accept=".pdf" onChange={handleContratoSelect} style={{ width: '100%', padding: '0.75rem', backgroundColor: 'white', borderRadius: '0.5rem', border: '1px dashed #fbbf24' }} />
@@ -512,30 +578,47 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
             </div>
           </div>
 
-          {/* LISTA DE PACOTES Apenas de Leitura (Para evitar conflitos de Edição Complexa no Admin) */}
+          {/* PACOTES EDITÁVEIS HQ */}
           <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-            <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', marginBottom: '1rem' }}>PACOTES CONFIGURADOS PELO PARCEIRO ({pacotes.length})</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', margin: 0 }}>PACOTES CONFIGURADOS ({pacotes.length})</p>
+              <button type="button" onClick={() => setIsPacoteModalOpen(true)} style={{ backgroundColor: '#0f172a', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontSize: '12px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
+                + Adicionar Pacote
+              </button>
+            </div>
             {pacotes.length === 0 ? <p style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Nenhum pacote definido.</p> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {pacotes.map((pac: any, idx: number) => (
-                  <div key={idx} style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '14px' }}>
-                    <strong style={{ color: '#0f172a' }}>{pac.titulo}</strong> <span style={{ color: '#64748b', fontSize: '12px' }}>({pac.tipo} - Qtd: {pac.quantidade})</span>
-                    <div style={{ marginTop: '0.5rem', fontSize: '13px', color: '#059669', fontWeight: 'bold' }}>Variantes: {pac.variantes?.map((v: any) => `${v.nome}: ${v.preco}€`).join(' | ')}</div>
+                  <div key={idx} style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <strong style={{ color: '#0f172a', fontSize: '14px' }}>{pac.titulo}</strong> <span style={{ color: '#64748b', fontSize: '12px' }}>({pac.tipo} - Qtd: {pac.quantidade})</span>
+                      <div style={{ marginTop: '0.5rem', fontSize: '13px', color: '#059669', fontWeight: 'bold' }}>Variantes: {pac.variantes?.map((v: any) => `${v.nome}: ${v.preco}€`).join(' | ')}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button type="button" onClick={() => { setNovoPacote(pac); setIsPacoteModalOpen(true); }} style={{ padding: '0.25rem 0.5rem', backgroundColor: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Editar</button>
+                      <button type="button" onClick={() => eliminarPacote(pac.id)} style={{ padding: '0.25rem 0.5rem', backgroundColor: '#fef2f2', color: '#dc2626', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Apagar</button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* DESCONTOS */}
+          {/* DESCONTOS EDITÁVEIS HQ */}
           <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '2px solid #f1f5f9' }}>
-            <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', marginBottom: '1.5rem' }}>Códigos de Desconto (Read-Only HQ)</h2>
-            {descontos.length === 0 ? <p style={{ fontSize: '12px', color: '#94a3b8' }}>Nenhum desconto.</p> : (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>Códigos de Desconto</h2>
+              <button type="button" onClick={() => setIsDescontoModalOpen(true)} style={{ backgroundColor: '#f0fdf4', color: '#059669', border: '1px solid #6ee7b7', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                + Adicionar Desconto
+              </button>
+            </div>
+            {descontos.length === 0 ? <p style={{ fontSize: '12px', color: '#94a3b8' }}>Nenhum desconto configurado.</p> : (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
                 {descontos.map((desc, idx) => (
-                  <div key={idx} style={{ padding: '1rem', backgroundColor: '#f0fdf4', border: '1px dashed #10b981', borderRadius: '0.5rem', width: '250px' }}>
+                  <div key={idx} style={{ padding: '1rem', backgroundColor: '#f0fdf4', border: '1px dashed #10b981', borderRadius: '0.5rem', width: '250px', position: 'relative' }}>
                     <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', fontSize: '14px', color: '#065f46' }}>{desc.nome}</p>
                     <p style={{ margin: 0, fontSize: '12px', color: '#047857' }}>{desc.percentagem}% | {desc.acumulavel ? 'Acumulável' : 'Não Acumulável'}</p>
+                    <button type="button" onClick={() => eliminarDesconto(desc.id)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
                   </div>
                 ))}
               </div>
@@ -556,7 +639,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
             
             <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #e2e8f0', margin: '1rem 0', paddingTop: '1.5rem' }}>
               <label style={labelStyle}>Valores Extra (Opções Fora dos Pacotes)</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
                 <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
                   <label style={{...labelStyle, color: '#0f172a'}}>Seguro Opcional (€)</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -633,6 +716,105 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
           {saving ? statusText : 'Guardar Alterações e Sincronizar (HQ)'}
         </button>
       </form>
+
+      {/* ========================================== */}
+      {/* MODAL: PACOTES */}
+      {/* ========================================== */}
+      {isPacoteModalOpen && (
+        <div style={modalOverlayStyle}>
+          <div style={modalContentStyle}>
+            <div style={{ padding: '1.25rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <h3 style={{ fontWeight: '900', color: '#0f172a', fontSize: '1.125rem', margin: 0 }}>{novoPacote.id ? 'Editar Pacote (HQ)' : 'Novo Pacote (HQ)'}</h3>
+              <button type="button" onClick={() => setIsPacoteModalOpen(false)} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'white', border: '1px solid #cbd5e1', cursor: 'pointer', fontWeight: 'bold' }}>×</button>
+            </div>
+
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <label style={labelStyle}>Tipo de Logística</label>
+                <div style={{ display: 'flex', gap: '0.5rem', backgroundColor: '#f1f5f9', padding: '0.375rem', borderRadius: '0.75rem' }}>
+                  <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'semana'})} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer', backgroundColor: novoPacote.tipo === 'semana' ? 'white' : 'transparent', color: novoPacote.tipo === 'semana' ? '#4f46e5' : '#64748b', boxShadow: novoPacote.tipo === 'semana' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none' }}>Semanas</button>
+                  <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'dia'})} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer', backgroundColor: novoPacote.tipo === 'dia' ? 'white' : 'transparent', color: novoPacote.tipo === 'dia' ? '#4f46e5' : '#64748b', boxShadow: novoPacote.tipo === 'dia' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none' }}>Dias Individuais</button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={labelStyle}>Nome do Passe</label>
+                  <input type="text" value={novoPacote.titulo} onChange={e => setNovoPacote({...novoPacote, titulo: e.target.value})} style={inputStyle} placeholder="Ex: Pack 1 Semana" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Qtd ({novoPacote.tipo === 'semana' ? 'Sem' : 'Dias'})</label>
+                  <input type="number" min="1" value={novoPacote.quantidade} onChange={e => setNovoPacote({...novoPacote, quantidade: Number(e.target.value)})} style={{...inputStyle, textAlign: 'center', color: '#4f46e5', fontWeight: 'black'}} />
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <label style={{...labelStyle, margin: 0}}>Variantes e Preços</label>
+                  <button type="button" onClick={adicionarVariante} style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: '#4f46e5', backgroundColor: '#eef2ff', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}>+ Variante</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {novoPacote.variantes.map((v, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', padding: '0.5rem', borderRadius: '0.75rem' }}>
+                      <input type="text" value={v.nome} onChange={e => atualizarVariante(i, 'nome', e.target.value)} placeholder="Nome (Ex: c/ Almoço)" style={{...inputStyle, flex: 2, padding: '0.5rem', fontSize: '13px'}} />
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', paddingRight: '0.5rem' }}>
+                        <input type="number" min="0" value={v.preco} onChange={e => atualizarVariante(i, 'preco', Number(e.target.value))} style={{ width: '100%', padding: '0.5rem', border: 'none', outline: 'none', textAlign: 'right', fontWeight: 'black', color: '#4f46e5', borderRadius: '0.5rem' }} />
+                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#94a3b8' }}>€</span>
+                      </div>
+                      {novoPacote.variantes.length > 1 && (
+                        <button type="button" onClick={() => removerVariante(i)} style={{ width: '32px', height: '32px', borderRadius: '0.5rem', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', fontWeight: 'bold', cursor: 'pointer' }}>X</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button type="button" onClick={() => setIsPacoteModalOpen(false)} style={{ padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', border: '1px solid #cbd5e1', backgroundColor: 'white', color: '#64748b', cursor: 'pointer' }}>Cancelar</button>
+              <button type="button" onClick={guardarPacote} style={{ padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', border: 'none', backgroundColor: '#0f172a', color: 'white', cursor: 'pointer' }}>✓ Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DESCONTOS */}
+      {isDescontoModalOpen && (
+        <div style={modalOverlayStyle}>
+          <div style={{...modalContentStyle, maxWidth: '400px'}}>
+            <div style={{ padding: '1.25rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <h3 style={{ fontWeight: '900', color: '#0f172a', fontSize: '1.125rem', margin: 0 }}>Novo Desconto (HQ)</h3>
+              <button type="button" onClick={() => setIsDescontoModalOpen(false)} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'white', border: '1px solid #cbd5e1', cursor: 'pointer', fontWeight: 'bold' }}>×</button>
+            </div>
+
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <label style={labelStyle}>Nome do Desconto (Visível no Recibo)</label>
+                <input type="text" value={novoDesconto.nome} onChange={e => setNovoDesconto({...novoDesconto, nome: e.target.value})} style={inputStyle} placeholder="Ex: Desconto Irmãos" />
+              </div>
+              <div>
+                <label style={labelStyle}>Percentagem a Retirar (%)</label>
+                <input type="number" min="1" max="100" value={novoDesconto.percentagem} onChange={e => setNovoDesconto({...novoDesconto, percentagem: Number(e.target.value)})} style={{...inputStyle, fontWeight: 'black', fontSize: '18px'}} />
+              </div>
+              <div style={{ backgroundColor: '#eff6ff', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setNovoDesconto({...novoDesconto, acumulavel: !novoDesconto.acumulavel})}>
+                <div>
+                  <p style={{ margin: '0 0 0.25rem 0', fontWeight: 'bold', color: '#1e3a8a', fontSize: '13px' }}>É Acumulável?</p>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#3b82f6' }}>Soma a outros descontos no carrinho.</p>
+                </div>
+                <div style={{ width: '40px', height: '20px', borderRadius: '10px', backgroundColor: novoDesconto.acumulavel ? '#2563eb' : '#cbd5e1', position: 'relative', transition: 'background-color 0.2s' }}>
+                  <div style={{ position: 'absolute', top: '2px', left: novoDesconto.acumulavel ? '22px' : '2px', width: '16px', height: '16px', backgroundColor: 'white', borderRadius: '50%', transition: 'left 0.2s' }}></div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button type="button" onClick={() => setIsDescontoModalOpen(false)} style={{ padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', border: '1px solid #cbd5e1', backgroundColor: 'white', color: '#64748b', cursor: 'pointer' }}>Cancelar</button>
+              <button type="button" onClick={guardarDesconto} style={{ padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', border: 'none', backgroundColor: '#4f46e5', color: 'white', cursor: 'pointer' }}>✓ Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
@@ -645,3 +827,7 @@ const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', colo
 const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', fontWeight: '600', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };
 const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2em' };
 const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '13px', color: '#334155', cursor: 'pointer', fontWeight: '700' };
+
+// ESTILOS MODAIS
+const modalOverlayStyle: React.CSSProperties = { position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' };
+const modalContentStyle: React.CSSProperties = { backgroundColor: 'white', borderRadius: '1.5rem', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column' };
