@@ -126,6 +126,18 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
 
     setSubmitting(true);
 
+    // 0. Capturar o IP do utilizador para prova legal
+    let userIP = "Desconhecido";
+    try {
+      const res = await fetch("https://api.ipify.org?format=json");
+      if (res.ok) {
+        const ipData = await res.json();
+        userIP = ipData.ip;
+      }
+    } catch (err) {
+      console.error("Não foi possível capturar o IP.");
+    }
+
     const payloadJSON = {
       pessoaContacto: form.pessoaContacto,
       formaJuridica: form.formaJuridica,
@@ -145,7 +157,8 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
       assinaturaCargo: form.assinaturaCargo,
       empresaNome: form.nomeEmpresa,
       nif: form.nifEmpresa,
-      dataSubmissao: new Date().toISOString()
+      dataSubmissao: new Date().toISOString(),
+      ipAssinatura: userIP // IP GUARDADO AQUI PARA FINS DE PROVA
     };
 
     // 1. Atualizar o Perfil da Empresa
@@ -173,7 +186,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
     const { error: camposError } = await supabase
       .from('campos')
       .update({
-        contrato_dados: payloadJSON, // Guardamos também o histórico do contrato em cada campo
+        contrato_dados: payloadJSON,
         status_aprovacao: 'Pendente',
         modalidade_reserva: form.modalidadeReserva,
         link_externo_reserva: form.modalidadeReserva === 'link_externo' ? form.linkExternoReserva : null,
@@ -359,6 +372,13 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
             <h4 className="font-bold">Artigo 5.º – Limitação de Responsabilidade e Seguros</h4>
             <p className="mb-4">A HelloCamp atua exclusivamente como plataforma intermediária e motor de busca. A HelloCamp não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos, incidentes ou disputas que ocorram durante a realização das atividades.</p>
             <p className="mb-8">O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei, licenças e certificações exigidas para o exercício da sua atividade.</p>
+
+            <h4 className="font-bold">Artigo 6.º – Acordos Complementares</h4>
+            <p className="mb-8">Quaisquer alterações ao presente contrato ou acordos complementares celebrados entre a HelloCamp e o Parceiro deverão ser efetuados por escrito, no anexo 4, para produzirem efeitos.</p>
+
+            <h4 className="font-bold text-[#EBA914]">Artigo 7.º – Validade da Assinatura e Convenção de Prova</h4>
+            <p className="mb-4 text-[#EBA914]">As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos (designadamente a aposição do nome do representante legal e seleção da caixa de aceitação no portal web da HelloCamp).</p>
+            <p className="mb-8 text-[#EBA914]">Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria, a integridade e a aceitação irrevogável das presentes cláusulas operacionais e financeiras, renunciando o Parceiro a invocar a nulidade ou ineficácia do contrato com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada (Chave Móvel Digital / Cartão de Cidadão).</p>
           </div>
 
           <div className="h-px bg-gray-300 w-full my-12"></div>
@@ -524,7 +544,7 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
                 <label className="flex items-start gap-3 cursor-pointer group">
                   <input type="checkbox" required checked={form.concordaTermos} onChange={e => setForm({...form, concordaTermos: e.target.checked})} className="mt-1 w-5 h-5 accent-black cursor-pointer flex-shrink-0" />
                   <span className="text-sm text-gray-700 font-medium leading-relaxed group-hover:text-black transition-colors">
-                    Declaro ter lido e aceite os termos do contrato global. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital, abrangendo todas as atividades presentes e futuras na plataforma.
+                    Declaro ter lido e aceite os termos do contrato global e a convenção de prova do Artigo 7.º. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital, abrangendo todas as atividades presentes e futuras na plataforma.
                   </span>
                 </label>
               </div>
