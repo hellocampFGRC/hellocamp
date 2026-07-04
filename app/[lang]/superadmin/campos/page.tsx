@@ -15,13 +15,24 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
   const [campoEmEdicao, setCampoEmEdicao] = useState<any>(null);
 
   const fetchCamposGerais = async () => {
-    const { data: camposData } = await supabase.from('campos').select('*').order('id', { ascending: false });
+    const { data: camposData } = await supabase.from('campos').select('*').order('created_at', { ascending: false });
     const { data: perfisData } = await supabase.from('perfis').select('id, empresa_nome, email, taxa_comissao, base_comissao');
 
     const camposComPerfis = (camposData || []).map(campo => {
       const organizador = perfisData?.find(p => p.id === campo.organizador_id);
+      
+      // Calcular preço mínimo dinâmico com base nos pacotes e variantes novos
+      let precoMinimo = campo.preco || 0;
+      if (campo.pacotes && campo.pacotes.length > 0) {
+        const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes?.map((v: any) => v.preco) || []);
+        if (todosPrecos.length > 0) {
+          precoMinimo = Math.min(...todosPrecos);
+        }
+      }
+
       return {
         ...campo,
+        precoCalculado: precoMinimo,
         perfis: organizador || { empresa_nome: 'Sem Registo Associado', email: '' }
       };
     });
@@ -60,7 +71,13 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
     } else alert("Erro: " + error.message);
   };
 
-  if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>A carregar programas...</div>;
+  const getStatusColor = (status: string) => {
+    if (status === 'Aprovado') return { bg: '#dcfce7', text: '#059669', border: '#bbf7d0' };
+    if (status === 'Rejeitado') return { bg: '#fee2e2', text: '#dc2626', border: '#fecaca' };
+    return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' }; // Pendente
+  };
+
+  if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>A carregar programas do Quartel General...</div>;
 
   return (
     <div style={{ fontFamily: 'sans-serif', paddingBottom: '3rem' }}>
@@ -95,7 +112,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
                   <option value="sem_comissao">Isento (0%)</option>
                 </select>
               </div>
-              <button type="submit" style={btnSubmitStyle}>Guardar</button>
+              <button type="submit" style={btnSubmitStyle}>Guardar Alteração</button>
             </form>
           </div>
         </div>
@@ -107,8 +124,8 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
             <tr>
               <th style={thStyle}>PROGRAMA</th>
               <th style={thStyle}>PARCEIRO</th>
-              <th style={thStyle}>TURNOS / OPÇÕES</th>
-              <th style={thStyle}>COMISSÃO</th>
+              <th style={thStyle}>LOGÍSTICA & STATUS</th>
+              <th style={thStyle}>PREÇO & COMISSÃO</th>
               <th style={thStyle}>AÇÕES</th>
             </tr>
           </thead>
@@ -119,31 +136,41 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
               campos.map((campo) => {
                 const isCustom = campo.taxa_comissao !== null && campo.taxa_comissao !== undefined;
                 const taxaVisual = isCustom ? campo.taxa_comissao : (campo.perfis?.taxa_comissao || 12);
+                const statusColor = getStatusColor(campo.status_aprovacao);
                 
                 return (
                   <tr key={campo.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ ...tdStyle, fontWeight: '900', color: '#0f172a' }}>
                       {campo.nome}
                       <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', marginTop: '0.25rem' }}>📍 {campo.local}</div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '0.15rem' }}>{campo.categoria}</div>
                     </td>
                     <td style={tdStyle}><span style={{ fontWeight: 'bold', color: '#334155' }}>{campo.perfis?.empresa_nome}</span></td>
                     <td style={tdStyle}>
-                      <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#059669' }}>
-                         {campo.turnos?.length || 0} Turnos
-                      </span>
-                      <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold' }}>
-                         a partir de €{campo.preco || 0}
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                        <span style={{ fontSize: '10px', padding: '0.25rem 0.5rem', backgroundColor: statusColor.bg, color: statusColor.text, borderRadius: '0.25rem', fontWeight: 'bold', border: `1px solid ${statusColor.border}` }}>
+                          {campo.status_aprovacao || 'Pendente'}
+                        </span>
+                        <span style={{ fontSize: '10px', padding: '0.25rem 0.5rem', backgroundColor: '#eef2ff', color: '#4f46e5', borderRadius: '0.25rem', fontWeight: 'bold' }}>
+                          {campo.modalidade_reserva === 'link_externo' ? '🔗 Externo' : (campo.modalidade_reserva === 'email' ? '✉️ Consulta' : '🛒 Checkout')}
+                        </span>
+                      </div>
+                      <span style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>
+                        {campo.vagas_totais || 0} Vagas • {campo.pacotes?.length || 0} Pacotes
                       </span>
                     </td>
                     <td style={tdStyle}>
-                      <span style={{ backgroundColor: isCustom ? '#fef3c7' : '#f8fafc', color: isCustom ? '#b45309' : '#0f172a', padding: '0.35rem 0.6rem', borderRadius: '0.5rem', fontSize: '12px', fontWeight: 'bold', border: `1px solid ${isCustom ? '#fde68a' : '#e2e8f0'}` }}>
-                        {taxaVisual}% {isCustom ? '⭐' : ''}
+                      <span style={{ display: 'block', fontSize: '13px', fontWeight: '900', color: '#0f172a', marginBottom: '0.25rem' }}>
+                         a partir de €{campo.precoCalculado}
+                      </span>
+                      <span style={{ backgroundColor: isCustom ? '#fef3c7' : '#f8fafc', color: isCustom ? '#b45309' : '#0f172a', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '10px', fontWeight: 'bold', border: `1px solid ${isCustom ? '#fde68a' : '#e2e8f0'}` }}>
+                        Comissão: {taxaVisual}% {isCustom ? '⭐' : ''}
                       </span>
                     </td>
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <Link href={`/${lang}/campo/${campo.id}`} target="_blank" style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Ver</Link>
-                        <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Editar</Link>
+                        <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Editar HQ</Link>
                         <button onClick={() => { setCampoEmEdicao(campo); setShowModal(true); }} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Comissão</button>
                         <button onClick={() => handleApagarCampo(campo.id, campo.nome)} style={btnActionStyle('#fef2f2', '#dc2626', '#fecaca')}>Apagar</button>
                       </div>
@@ -159,6 +186,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
   );
 }
 
+// ESTILOS GERAIS
 const modalOverlayStyle = { position: 'fixed' as const, inset: 0, backgroundColor: 'rgba(15,23,42,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' };
 const modalContentStyle = { backgroundColor: 'white', width: '100%', maxWidth: '500px', borderRadius: '1.5rem', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' };
 const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '800', color: '#334155', textTransform: 'uppercase' as const, marginBottom: '0.5rem' };
