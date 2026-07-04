@@ -300,6 +300,24 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 )}
               </div>
 
+              {/* MAIS FOTOGRAFIAS / GALERIA */}
+              {campo.galeria && Array.isArray(campo.galeria) && campo.galeria.length > 0 && (
+                <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 relative z-10">
+                  <h2 className="text-lg font-black text-slate-900 mb-5">{isEn ? 'Photo Gallery' : 'Mais Fotografias'}</h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {campo.galeria.map((imgUrl: string, idx: number) => (
+                      <div key={idx} className="aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-100">
+                        <img 
+                          src={imgUrl} 
+                          alt={`${nomeCampo} - Foto ${idx + 1}`} 
+                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" 
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* FORMULÁRIO DE CONTACTO */}
               <div id="duvidas" className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 relative z-10 scroll-mt-24">
                 <h3 className="text-lg font-black text-slate-900 mb-1">{dict.detalhe.duvidas_titulo}</h3>
