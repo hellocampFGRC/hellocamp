@@ -25,7 +25,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const textareaClass = "w-full p-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 outline-none focus:border-gray-800 focus:ring-1 focus:ring-gray-800 transition-all shadow-sm resize-y";
 
   const fetchContratos = async () => {
-    // Agora lemos a tabela PERFIS para ver os Contratos Globais de cada parceiro
     const { data, error } = await supabase
       .from('perfis')
       .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao, base_comissao')
@@ -39,7 +38,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
     setContratos(data || []);
     
-    // Se não existir nenhum contrato pendente, muda o filtro para "Todos"
     if (data && data.length > 0 && !data.some(c => c.status_contrato === 'Pendente de Revisão')) {
       setFiltroStatus('Todos');
     }
@@ -68,18 +66,24 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const handleAcaoContrato = async (id: string, novoStatus: string) => {
     const isApproved = novoStatus === 'Aprovado';
     
-    // 1. Atualizar o Perfil do Parceiro
-    const { error: perfilError } = await supabase
+    // 1. Atualizar o Perfil do Parceiro (usamos o .select() para garantir a resposta)
+    const { data: updatedPerfil, error: perfilError } = await supabase
       .from('perfis')
       .update({ 
         status_contrato: novoStatus,
         parceiro_verificado: isApproved 
       })
-      .eq('id', id);
+      .eq('id', id)
+      .select();
 
     if (perfilError) {
       alert("Erro ao atualizar parceiro: " + perfilError.message);
       return;
+    }
+    
+    if (!updatedPerfil || updatedPerfil.length === 0) {
+       alert("Erro RLS: Não tem permissão de Superadmin para alterar este perfil. Fale com a equipa técnica para ativar as políticas SQL.");
+       return;
     }
 
     // 2. Propagar a decisão em cascata para TODOS os campos deste parceiro
@@ -126,8 +130,8 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       ...editForm,
     };
 
-    // 1. Atualizar no Perfil (Fonte da Verdade Global)
-    const { error: perfilError } = await supabase
+    // 1. Atualizar no Perfil (Fonte da Verdade Global) - com .select()
+    const { data: updatedPerfil, error: perfilError } = await supabase
       .from('perfis')
       .update({
          contrato_dados: novoJsonContrato,
@@ -136,12 +140,19 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
          modalidade_reserva: editForm.modalidadeReserva,
          link_externo_reserva: editForm.modalidadeReserva === 'link_externo' ? editForm.linkExternoReserva : null
       })
-      .eq('id', modalPerfil.id);
+      .eq('id', modalPerfil.id)
+      .select();
 
     if (perfilError) {
       alert("Erro ao guardar edição no parceiro: " + perfilError.message);
       setSavingEdit(false);
       return;
+    }
+    
+    if (!updatedPerfil || updatedPerfil.length === 0) {
+       alert("Erro RLS: Não tem permissão para editar este perfil.");
+       setSavingEdit(false);
+       return;
     }
 
     // 2. Propagar atualizações operacionais (Comissão, Reserva, Pagamento) para os campos do parceiro
