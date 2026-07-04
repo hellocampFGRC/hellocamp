@@ -376,9 +376,9 @@ export default function AssinaturaContratoGlobalPage({ params }: { params: Promi
             <h4 className="font-bold">Artigo 6.º – Acordos Complementares</h4>
             <p className="mb-8">Quaisquer alterações ao presente contrato ou acordos complementares celebrados entre a HelloCamp e o Parceiro deverão ser efetuados por escrito, no anexo 4, para produzirem efeitos.</p>
 
-            <h4 className="font-bold text-[#EBA914]">Artigo 7.º – Validade da Assinatura e Convenção de Prova</h4>
-            <p className="mb-4 text-[#EBA914]">As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos (designadamente a aposição do nome do representante legal e seleção da caixa de aceitação no portal web da HelloCamp).</p>
-            <p className="mb-8 text-[#EBA914]">Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria, a integridade e a aceitação irrevogável das presentes cláusulas operacionais e financeiras, renunciando o Parceiro a invocar a nulidade ou ineficácia do contrato com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada (Chave Móvel Digital / Cartão de Cidadão).</p>
+            <h4 className="font-bold text-[#000000]">Artigo 7.º – Validade da Assinatura e Convenção de Prova</h4>
+            <p className="mb-4 text-[#000000]">As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos (designadamente a aposição do nome do representante legal e seleção da caixa de aceitação no portal web da HelloCamp).</p>
+            <p className="mb-8 text-[#000000]">Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria, a integridade e a aceitação irrevogável das presentes cláusulas operacionais e financeiras, renunciando o Parceiro a invocar a nulidade ou ineficácia do contrato com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada (Chave Móvel Digital / Cartão de Cidadão).</p>
           </div>
 
           <div className="h-px bg-gray-300 w-full my-12"></div>
