@@ -55,6 +55,20 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
     console.log("🚀 [INÍCIO] A iniciar submissão do contrato global...");
 
     // ==========================================
+    // CAPTURA DO IP (PARA PROVA JURÍDICA - ARTIGO 7)
+    // ==========================================
+    let userIP = "Desconhecido";
+    try {
+      const res = await fetch("https://api.ipify.org?format=json");
+      if (res.ok) {
+        const ipData = await res.json();
+        userIP = ipData.ip;
+      }
+    } catch (err) {
+      console.error("Não foi possível capturar o IP.", err);
+    }
+
+    // ==========================================
     // PASSO 1: CRIAR UTILIZADOR (Auth)
     // ==========================================
     console.log("⏳ [PASSO 1] A criar utilizador no Supabase Auth...");
@@ -109,7 +123,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
       empresaNome: form.nomeEmpresa,
       nif: form.nif,
       dataSubmissao: new Date().toISOString(),
-      ipAssinatura: isEn ? "Captured via Unified Registration" : "Capturado via Registo Unificado"
+      ipAssinatura: userIP // IP GUARDADO AQUI PARA PROVA LEGAL
     };
 
     // Upsert com as novas colunas mapeadas diretamente para fácil acesso na Base de Dados
@@ -308,13 +322,13 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
             <h4 className="font-bold">{isEn ? 'Article 1 – Commission' : 'Artigo 1.º – Comissão'}</h4>
             <p className="mb-4">
               {isEn 
-                ? 'The Partner commits to paying HelloCamp a 12% commission (VAT included) on each booking made through the platform, under the terms defined in this contract or a supplementary agreement.' 
-                : 'O Parceiro compromete-se a pagar à HelloCamp uma comissão de 12% (IVA incluído) sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes.'}
+                ? 'The Partner commits to paying HelloCamp a commission (VAT included) on each booking made through the platform, under the terms defined in this contract or a supplementary agreement.' 
+                : 'O Parceiro compromete-se a pagar à HelloCamp uma comissão (IVA incluído) sobre cada reserva efetuada através da plataforma, cujos termos e incidência encontram-se definidos no presente contrato e seus anexos.'}
             </p>
             <p className="mb-4">
               {isEn 
                 ? 'The commission is calculated on the amount actually paid by the client for the booked activity, including additional services contracted through the platform.' 
-                : 'A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados através da plataforma.'}
+                : 'A comissão é calculada sobre o valor efetivamente faturado pelo Parceiro ao cliente relativamente à atividade reservada, incluindo serviços adicionais contratados através da plataforma ou através de leads geradas.'}
             </p>
             <p className="mb-4">
               {isEn 
@@ -334,7 +348,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
             <p className="mb-8">
               {isEn 
                 ? 'In case of cancellation by the client, the conditions set out in Annex 3 – Booking Cancellation will apply.' 
-                : 'Em caso de cancelamento por iniciativa do cliente, aplicar-se-ão as condições previstas no Anexo 3 – Cancelamento de Reservas.'}
+                : 'Em caso de cancelamento por iniciativa do cliente ou desistência, aplicar-se-ão as condições previstas no Anexo 3 – Cancelamento de Reservas.'}
             </p>
 
             <h4 className="font-bold">{isEn ? 'Article 2 – Payment Conditions' : 'Artigo 2.º – Condições de Pagamento'}</h4>
@@ -358,19 +372,28 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
             <h4 className="font-bold">{isEn ? 'Article 5 – Severability Clause' : 'Artigo 5.º – Cláusula de Separabilidade'}</h4>
             <p className="mb-8">{isEn ? 'The invalidity of any provision of this contract shall not affect the validity of the remaining clauses.' : 'A eventual invalidade, nulidade ou inaplicabilidade de qualquer disposição do presente contrato não prejudica a validade das restantes cláusulas, que permanecerão plenamente em vigor.'}</p>
 
-            <h4 className="font-bold">{isEn ? 'Article 6 – Amendments' : 'Artigo 6.º – Alterações e Acordos Complementares'}</h4>
-            <p className="mb-8">{isEn ? 'Any amendments to this contract must be made in writing in Annex 4 to be effective.' : 'Quaisquer alterações ao presente contrato ou acordos complementares celebrados entre a HelloCamp e o Parceiro deverão ser efetuados por escrito, no anexo 4, para produzirem efeitos.'}</p>
-
-            <h4 className="font-bold">{isEn ? 'Article 7 – Limitation of Liability and Insurance' : 'Artigo 7.º – Limitação de Responsabilidade e Seguros'}</h4>
+            <h4 className="font-bold">{isEn ? 'Article 6 – Limitation of Liability and Insurance' : 'Artigo 6.º – Limitação de Responsabilidade e Seguros'}</h4>
             <p className="mb-4">
               {isEn 
                 ? 'HelloCamp acts exclusively as an intermediary booking platform. HelloCamp assumes no civil, criminal, or contractual liability for any accidents, damages, incidents, or disputes that may occur during the activities, involving participants, monitors, or third parties.' 
-                : 'A HelloCamp atua exclusivamente como plataforma intermediária de reservas. A HelloCamp não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos, incidentes ou disputas que ocorram durante a realização das atividades, envolvendo os participantes, monitores ou terceiros.'}
+                : 'A HelloCamp atua exclusivamente como plataforma intermediária e motor de busca. A HelloCamp não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos, incidentes ou disputas que ocorram durante a realização das atividades, envolvendo os participantes, monitores ou terceiros.'}
             </p>
             <p className="mb-8">
               {isEn 
                 ? 'The Partner is solely and exclusively responsible for the provision of services and the safety of the participants, guaranteeing that they hold all legally mandatory insurance (including civil liability and personal accident), licenses, and certifications required to carry out their activity.' 
                 : 'O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças e certificações exigidas para o exercício da sua atividade.'}
+            </p>
+
+            <h4 className="font-bold text-[#EBA914]">{isEn ? 'Article 7 – Digital Signature and Evidence Agreement' : 'Artigo 7.º – Validade da Assinatura e Convenção de Prova'}</h4>
+            <p className="mb-4 text-[#EBA914]">
+              {isEn 
+                ? 'The parties expressly acknowledge the validity and binding force of the acceptance of this contract through electronic means (namely by typing the legal representative\'s name and checking the acceptance box on the web portal).' 
+                : 'As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos (designadamente a aposição do nome do representante legal e seleção da caixa de aceitação no portal web da HelloCamp).'}
+            </p>
+            <p className="mb-8 text-[#EBA914]">
+              {isEn 
+                ? 'Under the freedom of probatory stipulation, the parties agree that the computer records collected by HelloCamp (including IP address, session data, typed name, and timestamp) constitute fully valid and sufficient evidence to attest to the authorship, integrity, and irrevocable acceptance of these clauses. The Partner waives the right to invoke the nullity of the contract based on the absence of a handwritten signature or qualified electronic signature.' 
+                : 'Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria, a integridade e a aceitação irrevogável das presentes cláusulas operacionais e financeiras, renunciando o Parceiro a invocar a nulidade ou ineficácia do contrato com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada (Chave Móvel Digital / Cartão de Cidadão).'}
             </p>
 
           </div>
@@ -383,7 +406,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
             {/* ANEXO 1 - PROCEDIMENTO DE RESERVA */}
             <div className="bg-gray-50 p-5 md:p-6 rounded-xl border border-gray-200">
               <h3 className="font-black text-base sm:text-lg mb-4 text-black uppercase border-l-4 border-[#EBA914] pl-3">
-                {isEn ? 'Annex 1 – Booking Procedure' : 'Anexo 1 – Procedimento de Reserva'}
+                {isEn ? 'Annex 1 – Booking Procedure' : 'Anexo 1 – Procedimento de Reserva e Operação'}
               </h3>
               <p className="mb-6">{isEn ? 'Select the booking management modality applicable to your partnership.' : 'Selecione a modalidade de gestão de reservas aplicável à sua parceria com a HelloCamp.'}</p>
               
@@ -391,7 +414,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
                 <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.modalidadeReserva === 'direta' ? 'bg-white border-black shadow-sm' : 'border-transparent hover:bg-gray-100'}`}>
                   <input type="radio" name="anexo1" required value="direta" checked={form.modalidadeReserva === 'direta'} onChange={e => setForm({...form, modalidadeReserva: e.target.value})} className="mt-1 w-4 h-4 accent-black flex-shrink-0" />
                   <div>
-                    <strong className="block text-black mb-1">{isEn ? 'Direct Booking with Automatic Payment (Recommended)' : 'Reserva Direta com Pagamento Automático (Recomendado)'}</strong>
+                    <strong className="block text-black mb-1">{isEn ? 'Direct Booking with Automatic Payment (Recommended)' : 'Reserva Direta no Checkout (Recomendado)'}</strong>
                     <span className="text-gray-600 leading-relaxed block">{isEn ? 'Bookings made through HelloCamp will be registered directly in the Partner\'s system. HelloCamp is entitled to the agreed commission on each completed booking.' : 'As reservas efetuadas através da plataforma HelloCamp serão registadas diretamente no sistema de reservas do Parceiro. Nesta modalidade, a HelloCamp terá direito à comissão acordada sobre cada reserva concluída. O formulário de reserva será configurado de acordo com as necessidades do Parceiro, recolhendo as informações necessárias para a correta gestão das inscrições. O Parceiro compromete-se a manter atualizadas as disponibilidades, preços e demais informações relevantes das atividades disponibilizadas através da plataforma.'}</span>
                   </div>
                 </label>
@@ -411,7 +434,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
                     <span className="text-gray-600 leading-relaxed block mb-4">
                       {isEn 
                         ? 'Clients register their interest on HelloCamp and are redirected to the external link below to complete the booking. HelloCamp records the customer\'s name, email, and phone number (the lead) and emails this data to the Partner, with HelloCamp in CC to ensure transparency. The Partner commits to being truthful in reporting which leads successfully completed the booking, avoiding omissions for commission purposes.' 
-                        : 'O tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência e evitar omissões, antes de reencaminhar o cliente, a HelloCamp recolhe a intenção de reserva (Nome, Email e Telefone do potencial cliente). Estes dados da "Lead" são enviados automaticamente para o Parceiro com conhecimento (em CC) à HelloCamp. O Parceiro compromete-se sob compromisso de honra a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.'}
+                        : 'O tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência e evitar omissões, antes de reencaminhar o cliente, a HelloCamp recolhe a intenção de reserva (Lead: Nome, Email e Telefone do potencial cliente). Estes dados da "Lead" são enviados automaticamente para o Parceiro com conhecimento (em CC) à HelloCamp. O Parceiro compromete-se sob compromisso de honra a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.'}
                     </span>
                     
                     {form.modalidadeReserva === 'link_externo' && (
@@ -423,7 +446,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
                           type="url" 
                           required 
                           placeholder="https://forms.gle/..." 
-                          className="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-black"
+                          className="w-full border border-gray-300 rounded p-3 text-sm font-bold outline-none focus:border-black"
                           value={form.linkExternoReserva}
                           onChange={e => setForm({...form, linkExternoReserva: e.target.value})}
                         />
@@ -434,75 +457,78 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
               </div>
             </div>
 
-            {/* ANEXO 2 - PAGAMENTOS E FATURAÇÃO */}
-            <div className="bg-blue-50 p-5 md:p-6 rounded-xl border border-blue-100">
-              <h3 className="font-black text-base sm:text-lg mb-4 text-blue-950 uppercase border-l-4 border-blue-600 pl-3">
-                {isEn ? 'Annex 2 – Payment and Commission' : 'Anexo 2 – Pagamento e Comissão'}
-              </h3>
-              <p className="mb-6 text-blue-900 leading-relaxed">
-                {isEn ? 'The Partner authorizes HelloCamp to collect a deposit during the booking process via Stripe. The deposit generally corresponds to HelloCamp’s commission plus VAT. The remaining balance is paid directly to the Partner.' : 'O Parceiro autoriza a HelloCamp a receber um depósito durante o processo de reserva efetuado através da plataforma Stripe. O valor do depósito corresponde, regra geral, à comissão devida à HelloCamp pela reserva efetuada, acrescida de IVA à taxa legal em vigor. Quaisquer condições específicas ou montantes adicionais deverão constar de acordo complementar entre as partes. Após a confirmação da reserva, o cliente efetua o pagamento do depósito à HelloCamp, sendo o valor remanescente pago diretamente ao Parceiro, de acordo com as condições definidas para a atividade. O Parceiro é responsável pelo envio ao cliente da confirmação da reserva, da respetiva fatura, dos documentos informativos legalmente exigidos e de quaisquer elementos necessários à participação na atividade. No final de cada período de faturação acordado, a HelloCamp emitirá a fatura correspondente às comissões devidas, deduzindo os montantes já recebidos a título de depósito.'}
-              </p>
-              
-              <div className="space-y-3">
-                <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.tipo_pagamento === '100_total' ? 'bg-white border-blue-600 shadow-sm' : 'border-transparent hover:bg-blue-100/50'}`}>
-                  <input type="radio" name="anexo2" required value="100_total" checked={form.tipo_pagamento === '100_total'} onChange={e => setForm({...form, tipo_pagamento: e.target.value})} className="mt-1 w-4 h-4 accent-blue-600 flex-shrink-0" />
-                  <div>
-                    <strong className="block text-blue-950 mb-1">{isEn ? '100% Paid at Booking (Immediate Payment)' : '100% Pago no Ato da Reserva (Pagamento Imediato)'}</strong>
-                    <span className="text-blue-800 leading-relaxed block">{isEn ? 'The client pays the full program amount immediately.' : 'O cliente liquida a totalidade do valor do programa para assegurar a vaga de imediato.'}</span>
-                  </div>
-                </label>
+            {/* ANEXOS 2 E 3 - CONDICIONAIS */}
+            {form.modalidadeReserva !== 'link_externo' && (
+              <>
+                <div className="bg-blue-50 p-5 md:p-6 rounded-xl border border-blue-100">
+                  <h3 className="font-black text-base sm:text-lg mb-4 text-blue-950 uppercase border-l-4 border-blue-600 pl-3">
+                    {isEn ? 'Annex 2 – Payment and Commission' : 'Anexo 2 – Pagamento e Comissão'}
+                  </h3>
+                  <p className="mb-6 text-blue-900 leading-relaxed">
+                    {isEn ? 'The Partner authorizes HelloCamp to collect a deposit during the booking process via Stripe. The deposit generally corresponds to HelloCamp’s commission plus VAT. The remaining balance is paid directly to the Partner.' : 'O Parceiro autoriza a HelloCamp a receber um depósito durante o processo de reserva efetuado através da plataforma segura Stripe. O valor do depósito corresponde, regra geral, à comissão devida à HelloCamp pela reserva efetuada. Quaisquer condições específicas ou montantes adicionais deverão constar de acordo complementar entre as partes. Após a confirmação da reserva, o cliente efetua o pagamento do depósito à HelloCamp, sendo o valor remanescente pago diretamente ao Parceiro. No final de cada período de faturação acordado, a HelloCamp emitirá a fatura correspondente às comissões devidas, deduzindo os montantes já recebidos a título de depósito.'}
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.tipo_pagamento === '100_total' ? 'bg-white border-blue-600 shadow-sm' : 'border-transparent hover:bg-blue-100/50'}`}>
+                      <input type="radio" name="anexo2" required value="100_total" checked={form.tipo_pagamento === '100_total'} onChange={e => setForm({...form, tipo_pagamento: e.target.value})} className="mt-1 w-4 h-4 accent-blue-600 flex-shrink-0" />
+                      <div>
+                        <strong className="block text-blue-950 mb-1">{isEn ? '100% Paid at Booking (Immediate Payment)' : '100% Pago no Ato da Reserva (Pagamento Imediato)'}</strong>
+                        <span className="text-blue-800 leading-relaxed block">{isEn ? 'The client pays the full program amount immediately.' : 'O cliente liquida a totalidade do valor do programa para assegurar a vaga de imediato.'}</span>
+                      </div>
+                    </label>
 
-                <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.tipo_pagamento === '50_sinal' ? 'bg-white border-blue-600 shadow-sm' : 'border-transparent hover:bg-blue-100/50'}`}>
-                  <input type="radio" name="anexo2" required value="50_sinal" checked={form.tipo_pagamento === '50_sinal'} onChange={e => setForm({...form, tipo_pagamento: e.target.value})} className="mt-1 w-4 h-4 accent-blue-600 flex-shrink-0" />
-                  <div>
-                    <strong className="block text-blue-950 mb-1">{isEn ? '50% Deposit Now + 50% One Week Before' : 'Sinal de 50% Agora + 50% 1 Semana Antes'}</strong>
-                    <span className="text-blue-800 leading-relaxed block">{isEn ? 'The platform automatically charges the second half 7 days prior.' : 'A plataforma debitará automaticamente a segunda metade do cartão do cliente 7 dias antes do início do programa.'}</span>
+                    <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.tipo_pagamento === '50_sinal' ? 'bg-white border-blue-600 shadow-sm' : 'border-transparent hover:bg-blue-100/50'}`}>
+                      <input type="radio" name="anexo2" required value="50_sinal" checked={form.tipo_pagamento === '50_sinal'} onChange={e => setForm({...form, tipo_pagamento: e.target.value})} className="mt-1 w-4 h-4 accent-blue-600 flex-shrink-0" />
+                      <div>
+                        <strong className="block text-blue-950 mb-1">{isEn ? '50% Deposit Now + 50% One Week Before' : 'Sinal de 50% Agora + 50% 1 Semana Antes'}</strong>
+                        <span className="text-blue-800 leading-relaxed block">{isEn ? 'The platform automatically charges the second half 7 days prior.' : 'A plataforma debitará automaticamente a segunda metade do cartão do cliente 7 dias antes do início do programa.'}</span>
+                      </div>
+                    </label>
                   </div>
-                </label>
-              </div>
-            </div>
+                </div>
 
-            {/* ANEXO 3 - POLÍTICA DE CANCELAMENTO */}
-            <div className="bg-amber-50 p-5 md:p-6 rounded-xl border border-amber-100">
-              <h3 className="font-black text-base sm:text-lg mb-4 text-amber-950 uppercase border-l-4 border-amber-500 pl-3">
-                {isEn ? 'Annex 3 – Cancellation and Refund Policy' : 'Anexo 3 – Política de Cancelamento e Reembolso'}
-              </h3>
-              <p className="mb-6 text-amber-900 leading-relaxed">
-                {isEn ? 'The selected option sets refund rules for parents. HelloCamp’s commission adjusts proportionally to the amount retained.' : 'A opção selecionada ditará as regras de reembolso para os pais na plataforma. A comissão devida à HelloCamp será sempre ajustada proporcionalmente ao montante que o Parceiro retiver do cliente em caso de desistência.'}
-              </p>
-              
-              <div className="space-y-3">
-                <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.politica_cancelamento === 'Flexível (Reembolso a 100% até 7 dias antes)' ? 'bg-white border-amber-500 shadow-sm' : 'border-transparent hover:bg-amber-100/50'}`}>
-                  <input type="radio" name="anexo3" required value="Flexível (Reembolso a 100% até 7 dias antes)" checked={form.politica_cancelamento === 'Flexível (Reembolso a 100% até 7 dias antes)'} onChange={e => setForm({...form, politica_cancelamento: e.target.value})} className="mt-1 w-4 h-4 accent-amber-600 flex-shrink-0" />
-                  <div>
-                    <strong className="block text-amber-950 mb-1">{isEn ? 'Flexible (100% refund up to 7 days prior)' : 'Flexível (Reembolso a 100% até 7 dias antes)'}</strong>
-                    <span className="text-amber-800 leading-relaxed block text-xs sm:text-sm">
-                      {isEn ? 'HelloCamp will not charge commission on canceled bookings if canceled 7 days before start.' : 'A HelloCamp não cobrará qualquer comissão sobre reservas canceladas pelo cliente. O Parceiro compromete-se a não aplicar quaisquer custos de cancelamento ao cliente, desde que o pedido seja comunicado até 7 (sete) dias antes do início da atividade. Os montantes pagos deverão ser reembolsados no prazo máximo de 30 dias. Cancelamentos após este prazo não conferem direito a reembolso, sendo a comissão integral devida à HelloCamp.'}
-                    </span>
-                  </div>
-                </label>
+                <div className="bg-amber-50 p-5 md:p-6 rounded-xl border border-amber-100">
+                  <h3 className="font-black text-base sm:text-lg mb-4 text-amber-950 uppercase border-l-4 border-amber-500 pl-3">
+                    {isEn ? 'Annex 3 – Cancellation and Refund Policy' : 'Anexo 3 – Política de Cancelamento e Reembolso'}
+                  </h3>
+                  <p className="mb-6 text-amber-900 leading-relaxed">
+                    {isEn ? 'The selected option sets refund rules for parents. HelloCamp’s commission adjusts proportionally to the amount retained.' : 'A opção selecionada ditará as regras de reembolso para os pais na plataforma. A comissão devida à HelloCamp será sempre ajustada proporcionalmente ao montante que o Parceiro retiver do cliente em caso de desistência.'}
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.politica_cancelamento === 'Flexível (Reembolso a 100% até 7 dias antes)' ? 'bg-white border-amber-500 shadow-sm' : 'border-transparent hover:bg-amber-100/50'}`}>
+                      <input type="radio" name="anexo3" required value="Flexível (Reembolso a 100% até 7 dias antes)" checked={form.politica_cancelamento === 'Flexível (Reembolso a 100% até 7 dias antes)'} onChange={e => setForm({...form, politica_cancelamento: e.target.value})} className="mt-1 w-4 h-4 accent-amber-600 flex-shrink-0" />
+                      <div>
+                        <strong className="block text-amber-950 mb-1">{isEn ? 'Flexible (100% refund up to 7 days prior)' : 'Flexível (Reembolso a 100% até 7 dias antes)'}</strong>
+                        <span className="text-amber-800 leading-relaxed block text-xs sm:text-sm">
+                          {isEn ? 'HelloCamp will not charge commission on canceled bookings if canceled 7 days before start.' : 'A HelloCamp não cobrará qualquer comissão sobre reservas canceladas pelo cliente. O Parceiro compromete-se a não aplicar quaisquer custos de cancelamento ao cliente, desde que o pedido seja comunicado até 7 (sete) dias antes do início da atividade. Os montantes pagos deverão ser reembolsados no prazo máximo de 30 dias. Cancelamentos após este prazo não conferem direito a reembolso, sendo a comissão integral devida à HelloCamp.'}
+                        </span>
+                      </div>
+                    </label>
 
-                <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.politica_cancelamento === 'Moderada (Reembolso a 50% até 15 dias antes)' ? 'bg-white border-amber-500 shadow-sm' : 'border-transparent hover:bg-amber-100/50'}`}>
-                  <input type="radio" name="anexo3" required value="Moderada (Reembolso a 50% até 15 dias antes)" checked={form.politica_cancelamento === 'Moderada (Reembolso a 50% até 15 dias antes)'} onChange={e => setForm({...form, politica_cancelamento: e.target.value})} className="mt-1 w-4 h-4 accent-amber-600 flex-shrink-0" />
-                  <div>
-                    <strong className="block text-amber-950 mb-1">{isEn ? 'Moderate (50% refund up to 15 days prior)' : 'Moderada (Reembolso a 50% até 15 dias antes)'}</strong>
-                    <span className="text-amber-800 leading-relaxed block text-xs sm:text-sm">
-                      {isEn ? 'If canceled 15 days prior, client receives 50% refund. HelloCamp commission is reduced proportionally.' : 'A comissão da HelloCamp é considerada devida após a confirmação. Em caso de cancelamento até 15 dias antes do início, o cliente recebe 50% do valor pago. Nestas situações, a comissão da HelloCamp será reduzida proporcionalmente ao valor efetivamente retido pelo Parceiro a título de cancelamento. Cancelamentos após este prazo não conferem direito a reembolso.'}
-                    </span>
-                  </div>
-                </label>
+                    <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.politica_cancelamento === 'Moderada (Reembolso a 50% até 15 dias antes)' ? 'bg-white border-amber-500 shadow-sm' : 'border-transparent hover:bg-amber-100/50'}`}>
+                      <input type="radio" name="anexo3" required value="Moderada (Reembolso a 50% até 15 dias antes)" checked={form.politica_cancelamento === 'Moderada (Reembolso a 50% até 15 dias antes)'} onChange={e => setForm({...form, politica_cancelamento: e.target.value})} className="mt-1 w-4 h-4 accent-amber-600 flex-shrink-0" />
+                      <div>
+                        <strong className="block text-amber-950 mb-1">{isEn ? 'Moderate (50% refund up to 15 days prior)' : 'Moderada (Reembolso a 50% até 15 dias antes)'}</strong>
+                        <span className="text-amber-800 leading-relaxed block text-xs sm:text-sm">
+                          {isEn ? 'If canceled 15 days prior, client receives 50% refund. HelloCamp commission is reduced proportionally.' : 'A comissão da HelloCamp é considerada devida após a confirmação. Em caso de cancelamento até 15 dias antes do início, o cliente recebe 50% do valor pago. Nestas situações, a comissão da HelloCamp será reduzida proporcionalmente ao valor efetivamente retido pelo Parceiro a título de cancelamento. Cancelamentos após este prazo não conferem direito a reembolso.'}
+                        </span>
+                      </div>
+                    </label>
 
-                <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.politica_cancelamento === 'Estrita (Sem reembolso após reserva)' ? 'bg-white border-amber-500 shadow-sm' : 'border-transparent hover:bg-amber-100/50'}`}>
-                  <input type="radio" name="anexo3" required value="Estrita (Sem reembolso após reserva)" checked={form.politica_cancelamento === 'Estrita (Sem reembolso após reserva)'} onChange={e => setForm({...form, politica_cancelamento: e.target.value})} className="mt-1 w-4 h-4 accent-amber-600 flex-shrink-0" />
-                  <div>
-                    <strong className="block text-amber-950 mb-1">{isEn ? 'Strict (No refunds after booking)' : 'Estrita (Sem reembolso após reserva)'}</strong>
-                    <span className="text-amber-800 leading-relaxed block text-xs sm:text-sm">
-                      {isEn ? 'Bookings are final. HelloCamp commission is due in full as the Partner’s revenue is guaranteed.' : 'As reservas efetuadas são finais e não reembolsáveis em caso de cancelamento por iniciativa do cliente. A comissão da HelloCamp é devida na sua totalidade independentemente de o cliente comparecer ou não à atividade, uma vez que a receita do Parceiro fica inteiramente garantida.'}
-                    </span>
+                    <label className={`flex items-start gap-4 cursor-pointer p-4 rounded-lg border transition-colors ${form.politica_cancelamento === 'Estrita (Sem reembolso após reserva)' ? 'bg-white border-amber-500 shadow-sm' : 'border-transparent hover:bg-amber-100/50'}`}>
+                      <input type="radio" name="anexo3" required value="Estrita (Sem reembolso após reserva)" checked={form.politica_cancelamento === 'Estrita (Sem reembolso após reserva)'} onChange={e => setForm({...form, politica_cancelamento: e.target.value})} className="mt-1 w-4 h-4 accent-amber-600 flex-shrink-0" />
+                      <div>
+                        <strong className="block text-amber-950 mb-1">{isEn ? 'Strict (No refunds after booking)' : 'Estrita (Sem reembolso após reserva)'}</strong>
+                        <span className="text-amber-800 leading-relaxed block text-xs sm:text-sm">
+                          {isEn ? 'Bookings are final. HelloCamp commission is due in full as the Partner’s revenue is guaranteed.' : 'As reservas efetuadas são finais e não reembolsáveis em caso de cancelamento por iniciativa do cliente. A comissão da HelloCamp é devida na sua totalidade independentemente de o cliente comparecer ou não à atividade, uma vez que a receita do Parceiro fica inteiramente garantida.'}
+                        </span>
+                      </div>
+                    </label>
                   </div>
-                </label>
-              </div>
-            </div>
+                </div>
+              </>
+            )}
 
             {/* ANEXO 4 */}
             <div className="bg-white p-5 md:p-6 rounded-xl border border-gray-200">
@@ -536,7 +562,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
               <div className="space-y-4">
                 <div className="flex flex-col">
                   <label className="text-[10px] sm:text-xs font-bold uppercase mb-1 text-gray-500">{isEn ? 'Digital Signature Name *' : 'Nome da Assinatura Digital *'}</label>
-                  <input required type="text" className="border-b-2 border-black bg-transparent outline-none py-2 text-lg sm:text-xl font-serif italic text-base focus:border-[#EBA914] transition-colors" value={form.assinaturaNome} onChange={e => setForm({...form, assinaturaNome: e.target.value})} placeholder={isEn ? "Signatory's name" : "Nome de quem assina"} />
+                  <input required type="text" className="border-b-2 border-black bg-transparent outline-none py-2 text-lg sm:text-xl font-serif italic text-base focus:border-[#EBA914] transition-colors" value={form.assinaturaNome} onChange={e => setForm({...form, assinaturaNome: e.target.value})} placeholder={isEn ? "Signatory's name" : "O seu nome completo"} />
                 </div>
                 <div className="flex flex-col">
                   <label className="text-[10px] sm:text-xs font-bold uppercase mb-1 text-gray-500">{isEn ? 'Role / Position *' : 'Cargo *'}</label>
@@ -551,7 +577,7 @@ export default function ConviteParceiroPage({ params }: { params: Promise<{ lang
                   <span className="text-xs sm:text-sm text-gray-700 font-medium leading-relaxed group-hover:text-black transition-colors">
                     {isEn 
                       ? 'I declare that I have read and accepted the Global Agreement terms. I confirm I have the legal authority to bind the entity identified above through this digital signature.' 
-                      : 'Declaro ter lido e aceite os termos do Contrato Global. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital.'}
+                      : 'Declaro ter lido e aceite os termos do Contrato Global e a convenção de prova do Artigo 7.º. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital.'}
                   </span>
                 </label>
               </div>
