@@ -11,8 +11,14 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
   const [campos, setCampos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Modal Comissão
   const [showModal, setShowModal] = useState(false);
   const [campoEmEdicao, setCampoEmEdicao] = useState<any>(null);
+
+  // Modal Partilha de Contrato
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareData, setShareData] = useState({ url: "", nome: "" });
+  const [copied, setCopied] = useState(false);
 
   const fetchCamposGerais = async () => {
     const { data: camposData } = await supabase.from('campos').select('*').order('created_at', { ascending: false });
@@ -71,13 +77,20 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
   };
 
   // Lógica do Link de Contrato Inteligente
-  const handleGerarContrato = async (campoId: string) => {
+  const handleGerarContrato = (campoId: string, nomeCampo: string) => {
     const url = `${window.location.origin}/${lang}/assinatura-contrato/${campoId}`;
+    setShareData({ url, nome: nomeCampo });
+    setCopied(false);
+    setShowShareModal(true);
+  };
+
+  const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(url);
-      alert(`✅ Link de assinatura gerado e copiado!\n\nEnvie este link ao parceiro:\n${url}\n\nO parceiro poderá rever os dados preenchidos, assinar digitalmente e o PDF será gravado na base de dados.`);
+      await navigator.clipboard.writeText(shareData.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
     } catch (err) {
-      alert(`Erro ao copiar o link. Por favor copie manualmente:\n${url}`);
+      alert("Erro ao copiar o link.");
     }
   };
 
@@ -97,6 +110,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
         <p style={{ color: '#64748b', marginTop: '0.25rem', fontSize: '13px' }}>Controlo absoluto sobre programas, comissões e aprovação de contratos.</p>
       </div>
 
+      {/* MODAL DE AJUSTE DE COMISSÃO */}
       {showModal && campoEmEdicao && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
@@ -124,6 +138,57 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
               </div>
               <button type="submit" style={btnSubmitStyle}>Guardar Alteração</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE PARTILHA DE CONTRATO */}
+      {showShareModal && (
+        <div style={modalOverlayStyle}>
+          <div style={modalContentStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <div>
+                <h2 style={{ margin: 0, fontWeight: '900', fontSize: '1.125rem', color: '#0f172a' }}>Link de Assinatura</h2>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '12px', color: '#64748b' }}>Envie este link ao parceiro para validação.</p>
+              </div>
+              <button onClick={() => setShowShareModal(false)} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '1rem', cursor: 'pointer', color: '#64748b', fontWeight: 'bold' }}>×</button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input 
+                  readOnly 
+                  value={shareData.url} 
+                  style={{ ...inputStyle, flex: 1, backgroundColor: '#f1f5f9', color: '#334155', cursor: 'text' }} 
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <button 
+                  onClick={copyToClipboard}
+                  style={{ padding: '0 1rem', backgroundColor: copied ? '#10b981' : '#0f172a', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s', whiteSpace: 'nowrap' }}
+                >
+                  {copied ? '✓ Copiado' : 'Copiar'}
+                </button>
+              </div>
+
+              <div style={{ borderTop: '1px dashed #e2e8f0', margin: '0.5rem 0' }}></div>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <a 
+                  href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue o link para validação e assinatura digital do contrato do programa "${shareData.nome}" na plataforma HelloCamp:\n\n${shareData.url}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ flex: 1, padding: '0.8rem', backgroundColor: '#25D366', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', textDecoration: 'none', textAlign: 'center', display: 'block' }}
+                >
+                  WhatsApp
+                </a>
+                <a 
+                  href={`mailto:?subject=${encodeURIComponent(`Assinatura de Contrato HelloCamp - ${shareData.nome}`)}&body=${encodeURIComponent(`Olá,\n\nSegue o link para validação e assinatura digital do contrato referente ao programa "${shareData.nome}".\n\nAceda através deste link seguro:\n${shareData.url}\n\nObrigado,\nEquipa HelloCamp`)}`}
+                  style={{ flex: 1, padding: '0.8rem', backgroundColor: '#3b82f6', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', textDecoration: 'none', textAlign: 'center', display: 'block' }}
+                >
+                  E-mail
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -199,7 +264,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
                         {campo.contrato_parceiro_url ? (
                           <a href={campo.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" style={btnActionStyle('#ecfdf5', '#059669', '#a7f3d0')}>Ver Contrato</a>
                         ) : (
-                          <button onClick={() => handleGerarContrato(campo.id)} style={btnActionStyle('#eff6ff', '#2563eb', '#bfdbfe')}>Gerar Contrato</button>
+                          <button onClick={() => handleGerarContrato(campo.id, campo.nome)} style={btnActionStyle('#eff6ff', '#2563eb', '#bfdbfe')}>Gerar Contrato</button>
                         )}
 
                         <button onClick={() => handleApagarCampo(campo.id, campo.nome)} style={btnActionStyle('#fef2f2', '#dc2626', '#fecaca')}>Apagar</button>
@@ -218,7 +283,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
 }
 
 // ESTILOS GERAIS
-const modalOverlayStyle = { position: 'fixed' as const, inset: 0, backgroundColor: 'rgba(15,23,42,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' };
+const modalOverlayStyle = { position: 'fixed' as const, inset: 0, backgroundColor: 'rgba(15,23,42,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: '1rem' };
 const modalContentStyle = { backgroundColor: 'white', width: '100%', maxWidth: '400px', borderRadius: '1rem', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' };
 const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#334155', textTransform: 'uppercase' as const, marginBottom: '0.3rem' };
 const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '13px', color: '#0f172a', outline: 'none' };
