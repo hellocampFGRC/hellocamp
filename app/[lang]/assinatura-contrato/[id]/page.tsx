@@ -423,13 +423,13 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
                   : 'O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças e certificações exigidas para o exercício da sua atividade.'}
               </p>
 
-              <h4 className="font-bold text-[#EBA914]">{isEn ? 'Article 7 – Digital Signature and Evidence Agreement' : 'Artigo 4.º – Validade da Assinatura e Convenção de Prova'}</h4>
-              <p className="mb-4 text-[#EBA914]">
+              <h4 className="font-bold text-[#000000]">{isEn ? 'Article 7 – Digital Signature and Evidence Agreement' : 'Artigo 4.º – Validade da Assinatura e Convenção de Prova'}</h4>
+              <p className="mb-4 text-[#000000]">
                 {isEn 
                   ? 'The parties expressly acknowledge the validity and binding force of the acceptance of this contract through electronic means (namely by typing the legal representative\'s name and checking the acceptance box on the web portal).' 
                   : 'As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos (designadamente a aposição do nome do representante legal e seleção da caixa de aceitação no portal web da HelloCamp).'}
               </p>
-              <p className="mb-8 text-[#EBA914]">
+              <p className="mb-8 text-[#000000]">
                 {isEn 
                   ? 'Under the freedom of probatory stipulation, the parties agree that the computer records collected by HelloCamp (including IP address, session data, typed name, and timestamp) constitute fully valid and sufficient evidence to attest to the authorship, integrity, and irrevocable acceptance of these clauses. The Partner waives the right to invoke the nullity of the contract based on the absence of a handwritten signature or qualified electronic signature.' 
                   : 'Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria, a integridade e a aceitação irrevogável das presentes cláusulas operacionais e financeiras, renunciando o Parceiro a invocar a nulidade ou ineficácia do contrato com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada (Chave Móvel Digital / Cartão de Cidadão).'}
