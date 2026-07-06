@@ -28,7 +28,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     const { data, error } = await supabase
       .from('perfis')
       .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao, base_comissao')
-      .not('contrato_dados', 'is', null)
+      .neq('role', 'pai')
       .order('created_at', { ascending: false });
       
     if (error) {
@@ -36,12 +36,12 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       alert("Erro ao ler a base de dados: " + error.message);
     }
 
-    setContratos(data || []);
+    const parceirosComContrato = (data || []).filter(p => p.status_contrato || p.contrato_dados);
+    setContratos(parceirosComContrato);
     
-    if (data && data.length > 0 && !data.some(c => c.status_contrato === 'Pendente de Revisão')) {
+    if (parceirosComContrato.length > 0 && !parceirosComContrato.some(c => c.status_contrato === 'Pendente de Revisão')) {
       setFiltroStatus('Todos');
     }
-
     setLoading(false);
   };
 
@@ -66,7 +66,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const handleAcaoContrato = async (id: string, novoStatus: string) => {
     const isApproved = novoStatus === 'Aprovado';
     
-    // 1. Atualizar o Perfil do Parceiro (usamos o .select() para garantir a resposta)
     const { data: updatedPerfil, error: perfilError } = await supabase
       .from('perfis')
       .update({ 
@@ -86,7 +85,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
        return;
     }
 
-    // 2. Propagar a decisão em cascata para TODOS os campos deste parceiro
     const { error: camposError } = await supabase
       .from('campos')
       .update({
@@ -99,7 +97,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     if (camposError) {
       alert("Parceiro atualizado, mas erro ao propagar para os campos: " + camposError.message);
     } else {
-      
       try {
         const dados = modalPerfil?.contrato_dados || {};
         await fetch('/api/notificacoes/status-contrato', {
@@ -115,7 +112,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       } catch (err) {
         console.error("Erro ao notificar parceiro da alteração de estado:", err);
       }
-
       alert(`Sucesso! O Parceiro está agora ${novoStatus}. Todos os campos associados foram atualizados.`);
       setModalPerfil((prev: any) => ({ ...prev, status_contrato: novoStatus }));
       fetchContratos();
@@ -124,13 +120,8 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
   const handleGuardarEdicao = async () => {
     setSavingEdit(true);
-    
-    const novoJsonContrato = {
-      ...modalPerfil.contrato_dados,
-      ...editForm,
-    };
+    const novoJsonContrato = { ...modalPerfil.contrato_dados, ...editForm };
 
-    // 1. Atualizar no Perfil (Fonte da Verdade Global) - com .select()
     const { data: updatedPerfil, error: perfilError } = await supabase
       .from('perfis')
       .update({
@@ -155,7 +146,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
        return;
     }
 
-    // 2. Propagar atualizações operacionais (Comissão, Reserva, Pagamento) para os campos do parceiro
     await supabase
       .from('campos')
       .update({ 
@@ -185,7 +175,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     }
 
     alert("Contrato Global editado com sucesso e propagado para os respetivos campos!");
-    
     setModalPerfil({ ...modalPerfil, contrato_dados: novoJsonContrato, taxa_comissao: editComissao, base_comissao: editBaseComissao, modalidade_reserva: editForm.modalidadeReserva, link_externo_reserva: editForm.linkExternoReserva });
     setIsEditing(false);
     setSavingEdit(false);
@@ -211,11 +200,11 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
     let anexo1Text = "";
     if (dados.modalidadeReserva === 'direta') {
-        anexo1Text = "<strong>Reserva Direta com Pagamento Automático (Recomendado):</strong> As reservas efetuadas através da plataforma HelloCamp serão registadas diretamente no sistema de reservas do Parceiro. Nesta modalidade, a HelloCamp terá direito à comissão acordada sobre cada reserva concluída.";
+        anexo1Text = "<strong>Reserva Direta no Checkout (Recomendado):</strong> As reservas efetuadas através da plataforma HelloCamp serão registadas diretamente no sistema de reservas do Parceiro. Nesta modalidade, a HelloCamp terá direito à comissão acordada sobre cada reserva concluída. O formulário de reserva será configurado de acordo com as necessidades do Parceiro, recolhendo as informações necessárias para a correta gestão das inscrições. O Parceiro compromete-se a manter atualizadas as disponibilidades, preços e demais informações relevantes das atividades disponibilizadas através da plataforma.";
     } else if (dados.modalidadeReserva === 'email') {
-        anexo1Text = "<strong>Comunicação por E-mail (Reserva Sob Consulta):</strong> A HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias para a gestão da reserva. O Parceiro dispõe de 2 (dois) dias úteis para comunicar à HelloCamp a rejeição. Na ausência de resposta dentro deste prazo, a reserva considerar-se-á aceite.";
+        anexo1Text = "<strong>Comunicação por E-mail (Reserva Sob Consulta):</strong> A HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias para a gestão da reserva, incluindo os dados do participante, os dados do responsável pela reserva e os detalhes da atividade reservada. O Parceiro dispõe de 2 (dois) dias úteis para comunicar à HelloCamp a rejeição de uma reserva por motivo devidamente justificado. Na ausência de resposta dentro deste prazo, a reserva considerar-se-á aceite, sendo aplicável a comissão prevista no contrato.";
     } else if (dados.modalidadeReserva === 'link_externo') {
-        anexo1Text = `<strong>Formulário ou Link Externo:</strong> O tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência, a HelloCamp recolhe a intenção de reserva (Nome e Email). Estes dados da "Lead" são enviados para o Parceiro. O Parceiro compromete-se a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.<br/><br/>URL Oficial: <span style="font-family: monospace; color: blue;">${dados.linkExternoReserva || 'N/A'}</span>`;
+        anexo1Text = `<strong>Formulário ou Link Externo:</strong> O tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência e evitar omissões, antes de reencaminhar o cliente, a HelloCamp recolhe a intenção de reserva (Lead: Nome, Email e Telefone do potencial cliente). Estes dados da "Lead" são enviados automaticamente para o Parceiro com conhecimento (em CC) à HelloCamp. O Parceiro compromete-se sob compromisso de honra a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.<br/><br/>URL Oficial: <span style="font-family: monospace; color: blue;">${dados.linkExternoReserva || 'N/A'}</span>`;
     }
 
     let anexo2Text = "";
@@ -227,15 +216,15 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
           : "<strong>Sinal de 50% Agora + 50% 1 Semana Antes:</strong> A plataforma debitará automaticamente a segunda metade do cartão do cliente 7 dias antes do início do programa.";
 
         if (dados.politicaCancelamento?.includes('Flexível')) {
-          anexo3Text = "<strong>Flexível (Reembolso a 100% até 7 dias antes):</strong> A HelloCamp não cobrará comissão sobre reservas canceladas pelo cliente até 7 dias antes. Os montantes pagos deverão ser reembolsados a 100%.";
+          anexo3Text = "<strong>Flexível (Reembolso a 100% até 7 dias antes):</strong> A HelloCamp não cobrará qualquer comissão sobre reservas canceladas pelo cliente. O Parceiro compromete-se a não aplicar quaisquer custos de cancelamento ao cliente, desde que o pedido seja comunicado até 7 (sete) dias antes do início da atividade. Os montantes pagos deverão ser reembolsados no prazo máximo de 30 dias. Cancelamentos após este prazo não conferem direito a reembolso, sendo a comissão integral devida à HelloCamp.";
         } else if (dados.politicaCancelamento?.includes('Moderada')) {
-          anexo3Text = "<strong>Moderada (Reembolso a 50% até 15 dias antes):</strong> Em caso de cancelamento até 15 dias antes do início, o cliente recebe 50% do valor pago. Nestas situações, a comissão da HelloCamp será reduzida proporcionalmente.";
+          anexo3Text = "<strong>Moderada (Reembolso a 50% até 15 dias antes):</strong> A comissão da HelloCamp é considerada devida após a confirmação. Em caso de cancelamento até 15 dias antes do início, o cliente recebe 50% do valor pago. Nestas situações, a comissão da HelloCamp será reduzida proporcionalmente ao valor efetivamente retido pelo Parceiro a título de cancelamento. Cancelamentos após este prazo não conferem direito a reembolso.";
         } else {
-          anexo3Text = "<strong>Estrita (Sem reembolso após reserva):</strong> As reservas efetuadas são finais e não reembolsáveis. A comissão da HelloCamp é devida na sua totalidade, uma vez que a receita do Parceiro fica inteiramente garantida.";
+          anexo3Text = "<strong>Estrita (Sem reembolso após reserva):</strong> As reservas efetuadas são finais e não reembolsáveis em caso de cancelamento por iniciativa do cliente. A comissão da HelloCamp é devida na sua totalidade independentemente de o cliente comparecer ou não à atividade, uma vez que a receita do Parceiro fica inteiramente garantida.";
         }
     } else {
-        anexo2Text = "<strong>Gestão Independente:</strong> Sendo uma reserva por link externo, o Parceiro fará a cobrança de forma independente fora da plataforma HelloCamp. A comissão acordada será devida pelas intenções de reserva (leads) convertidas em clientes efetivos pelo Parceiro.";
-        anexo3Text = "<strong>Política Externa:</strong> As políticas de cancelamento e reembolso ficam sujeitas aos Termos e Condições praticados externamente pelo Parceiro no seu formulário de inscrição.";
+        anexo2Text = "<strong>Gestão Independente:</strong> O Parceiro fará a cobrança e faturação de forma independente, fora da plataforma HelloCamp. A comissão acordada será devida pelas intenções de reserva (leads) encaminhadas através da plataforma e convertidas em clientes efetivos pelo Parceiro, conforme apuramento mensal efetuado entre as partes.";
+        anexo3Text = "<strong>Política Externa:</strong> As opções selecionadas ditarão as regras de reembolso para os pais na plataforma externa. A comissão devida à HelloCamp será sempre ajustada proporcionalmente ao montante que o Parceiro retiver do cliente em caso de desistência.";
     }
 
     const html = `
@@ -243,29 +232,33 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       <html lang="pt">
       <head>
         <meta charset="UTF-8">
-        <title>Contrato Global Oficial - ${dados.empresaNome || modalPerfil.empresa_nome}</title>
+        <title>Contrato Global de Intermediação e Serviços - ${dados.empresaNome || modalPerfil.empresa_nome}</title>
         <style>
-          body { font-family: "Times New Roman", Times, serif; color: #000; max-width: 850px; margin: 0 auto; padding: 40px 30px; line-height: 1.5; font-size: 14px; text-align: justify; }
+          body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000; max-width: 850px; margin: 0 auto; padding: 40px 30px; line-height: 1.6; font-size: 13px; text-align: justify; }
           .header { text-align: center; margin-bottom: 40px; }
-          .header h1 { margin: 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; font-family: Arial, sans-serif; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 10px; display: inline-block; }
-          .header p { font-size: 12px; font-family: Arial, sans-serif; color: #555; margin-top: 5px; }
+          .header h1 { margin: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 1px; font-weight: 900; border-bottom: 2px solid #000; padding-bottom: 10px; display: inline-block; }
+          .header p { font-size: 13px; color: #555; margin-top: 10px; font-style: italic; }
           
-          h2 { font-size: 16px; text-align: center; text-transform: uppercase; font-family: Arial, sans-serif; margin-top: 30px; margin-bottom: 15px; }
-          h3 { font-size: 14px; font-weight: bold; margin-top: 25px; margin-bottom: 10px; text-transform: uppercase; }
+          h2 { font-size: 16px; text-transform: uppercase; font-weight: 900; margin-top: 40px; margin-bottom: 15px; border-bottom: 1px solid #000; padding-bottom: 5px; }
+          h3 { font-size: 14px; font-weight: bold; margin-top: 25px; margin-bottom: 10px; }
           
-          .party-block { background-color: #f9f9f9; border: 1px solid #ddd; padding: 20px; margin-bottom: 20px; border-radius: 4px; }
-          .party-block p { margin: 5px 0; }
+          .party-block { display: flex; justify-content: space-between; gap: 20px; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; margin-bottom: 30px; border-radius: 8px; }
+          .party-box { width: 48%; }
+          .party-box p { margin: 5px 0; }
           
-          .clause { margin-bottom: 15px; }
+          .clause { margin-bottom: 20px; }
           .clause-title { font-weight: bold; }
+          
+          .annex-box { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; margin-bottom: 20px; border-radius: 6px; }
+          .annex-title { font-weight: 900; text-transform: uppercase; margin-bottom: 10px; font-size: 13px; border-left: 3px solid #000; padding-left: 10px; }
           
           .signatures { display: flex; justify-content: space-between; margin-top: 50px; border-top: 2px solid #000; padding-top: 30px; }
           .sig-box { width: 45%; }
-          .sig-title { font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
-          .sig-name { font-size: 22px; font-style: italic; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 5px; display: inline-block; min-width: 100%; }
-          .sig-details { font-size: 12px; font-family: Arial, sans-serif; }
+          .sig-title { font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
+          .sig-name { font-size: 20px; font-family: "Times New Roman", Times, serif; font-style: italic; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 5px; display: inline-block; min-width: 100%; }
+          .sig-details { font-size: 12px; }
           
-          .stamp { font-size: 10px; font-family: monospace; color: #666; margin-top: 15px; padding: 10px; border: 1px dashed #ccc; background: #fafafa; }
+          .stamp { font-size: 10px; font-family: monospace; color: #475569; margin-top: 20px; padding: 15px; border: 1px dashed #cbd5e1; background: #f1f5f9; border-radius: 6px; }
           
           @media print { 
             body { padding: 0; max-width: 100%; } 
@@ -276,76 +269,82 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       </head>
       <body>
         <div class="print-btn" style="text-align: center; margin-bottom: 30px;">
-          <button onclick="window.print()" style="padding: 10px 25px; background: #000; color: #fff; font-weight: bold; border: none; cursor: pointer; font-size: 16px;">Imprimir Contrato Global</button>
+          <button onclick="window.print()" style="padding: 12px 30px; background: #0f172a; color: #fff; font-weight: bold; border: none; cursor: pointer; font-size: 16px; border-radius: 8px;">🖨️ Guardar PDF / Imprimir Contrato Completo</button>
         </div>
 
         <div class="header">
           <h1>Contrato Global de Intermediação e Serviços</h1>
-          <p>Plataforma HelloCamp Portugal</p>
+          <p>Este acordo é aplicável a todas as atividades presentes e futuras na plataforma HelloCamp.</p>
         </div>
-
-        <p>Entre a <strong>HelloCamp</strong>, com website em www.hellocamp.pt e contacto via info@hellocamp.pt, doravante designada por "Primeira Outorgante"; e do outro lado:</p>
         
         <div class="party-block">
-          <p><strong>Nome da Empresa (Entidade Organizadora):</strong> ${dados.empresaNome || modalPerfil.empresa_nome}</p>
-          <p><strong>NIF:</strong> ${dados.nif || modalPerfil.nif_empresa}</p>
-          <p><strong>Forma Jurídica:</strong> ${dados.formaJuridica || 'N/A'}</p>
-          <p><strong>Morada Fiscal:</strong> ${dados.morada || 'N/A'}, ${dados.codigoPostal || 'N/A'}</p>
-          <p><strong>Pessoa de Contacto:</strong> ${dados.pessoaContacto || 'N/A'}</p>
-          <p><strong>Telefone:</strong> ${dados.telefone || modalPerfil.telefone}</p>
-          <p><strong>E-mail Comercial:</strong> ${dados.emailContacto || modalPerfil.email}</p>
+          <div class="party-box">
+             <h3 style="margin-top: 0; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Primeira Outorgante</h3>
+             <p><strong>HelloCamp Portugal</strong></p>
+             <p>Website: www.hellocamp.pt</p>
+             <p>E-mail: info@hellocamp.pt</p>
+          </div>
+          <div class="party-box">
+             <h3 style="margin-top: 0; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Segunda Outorgante (Parceiro)</h3>
+             <p><strong>${dados.empresaNome || modalPerfil.empresa_nome}</strong></p>
+             <p><strong>NIF:</strong> ${dados.nif || modalPerfil.nif_empresa}</p>
+             <p><strong>Pessoa de Contacto:</strong> ${dados.pessoaContacto || 'N/A'} (${dados.telefone || modalPerfil.telefone})</p>
+             <p><strong>E-mail:</strong> ${dados.emailContacto || modalPerfil.email}</p>
+          </div>
         </div>
-
-        <p style="text-align: center; font-style: italic;">- doravante designado por "Parceiro" -</p>
-
-        <p>É celebrado o presente contrato global aplicável a <strong>todas as atividades e campos de férias organizados pelo Parceiro na plataforma HelloCamp</strong>.</p>
 
         <h2>Cláusulas Contratuais Gerais</h2>
 
         <div class="clause">
-          <span class="clause-title">Artigo 1.º – Comissão</span><br>
-          O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (IVA incluído)</strong> sobre cada reserva efetuada através da plataforma. Incidência: <strong>${baseComissaoText}</strong>. A comissão é calculada sobre o valor faturado.
+          <span class="clause-title">Artigo 1.º – Comissão:</span> O Parceiro compromete-se a pagar à HelloCamp uma comissão (IVA incluído) sobre cada reserva efetuada através da plataforma, nos termos definidos no Anexo 2 deste documento. A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados através da plataforma ou de leads encaminhadas. Em caso de cancelamento por iniciativa do cliente ou desistência, aplicar-se-ão as condições previstas no Anexo 3.
         </div>
 
         <div class="clause">
-          <span class="clause-title">Artigo 2.º – Obrigações do Parceiro</span><br>
-          O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades. O Parceiro garante que possui todos os direitos necessários sobre os conteúdos. Os preços divulgados na plataforma não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas.
+          <span class="clause-title">Artigo 2.º – Condições de Pagamento e Obrigações do Parceiro:</span> As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades e garante que possui todos os direitos necessários sobre os conteúdos disponibilizados. Os preços divulgados na plataforma HelloCamp não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas da mesma atividade.
         </div>
 
         <div class="clause">
-          <span class="clause-title">Artigo 3.º – Limitação de Responsabilidade e Seguros</span><br>
-          A HelloCamp atua exclusivamente como plataforma intermediária. O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei.
+          <span class="clause-title">Artigo 3.º – Limitação de Responsabilidade e Seguros:</span> A HelloCamp atua exclusivamente como plataforma intermediária e motor de busca. A HelloCamp não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos, incidentes ou disputas que ocorram durante a realização das atividades. O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças e certificações exigidas para o exercício da sua atividade.
+        </div>
+        
+        <div class="clause">
+          <span class="clause-title">Artigo 4.º – Duração e Renovação:</span> O presente contrato produz efeitos a partir da data da sua assinatura por ambas as partes. O contrato mantém-se válido até ao final do respetivo ano civil. O contrato será automaticamente renovado por períodos sucessivos de um ano, salvo denúncia por qualquer das partes.
+        </div>
+
+        <div class="clause">
+          <span class="clause-title">Artigo 5.º – Validade da Assinatura e Convenção de Prova:</span> As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos. Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria, a integridade e a aceitação irrevogável das presentes cláusulas operacionais e financeiras, renunciando o Parceiro a invocar a nulidade ou ineficácia do contrato com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada (Chave Móvel Digital / Cartão de Cidadão).
         </div>
 
         <div class="page-break"></div>
 
-        <h2>Anexos e Condições Operacionais Específicas</h2>
+        <h2>Condições e Anexos Operacionais Específicos</h2>
 
-        <div class="clause">
-          <span class="clause-title">Anexo 1 – Procedimento de Reserva e Operação</span><br>
+        <div class="annex-box">
+          <div class="annex-title">Anexo 1 – Procedimento de Reserva e Operação</div>
           ${anexo1Text}
         </div>
 
-        <div class="clause">
-          <span class="clause-title">Anexo 2 – Faturação e Comissão</span><br>
-          ${anexo2Text}
+        <div class="annex-box">
+          <div class="annex-title">Anexo 2 – Faturação e Comissão</div>
+          <p style="margin-top:0;"><strong>Taxa de Comissão:</strong> ${comissaoText}% (IVA incluído)</p>
+          <p><strong>Base de Incidência:</strong> ${baseComissaoText}</p>
+          <p style="margin-bottom:0;">${anexo2Text}</p>
         </div>
 
-        <div class="clause">
-          <span class="clause-title">Anexo 3 – Política de Cancelamento e Reembolso</span><br>
+        <div class="annex-box">
+          <div class="annex-title">Anexo 3 – Política de Cancelamento e Reembolso</div>
           ${anexo3Text}
         </div>
 
-        <div class="clause">
-          <span class="clause-title">Anexo 4 – Acordos Extraordinários</span><br>
-          Se existirem exceções negociadas a este contrato, estas estão refletidas abaixo:<br>
-          <i>${dados.acordosComplementares || 'Nenhuma cláusula de exceção definida. O contrato-modelo aplica-se na sua totalidade.'}</i>
+        <div class="annex-box">
+          <div class="annex-title">Anexo 4 – Acordos Extraordinários</div>
+          <i>${dados.acordosComplementares || 'Nenhuma cláusula de exceção definida. O contrato-modelo aplica-se na sua totalidade sem alterações complementares pré-acordadas.'}</i>
         </div>
 
         <div class="signatures">
           <div class="sig-box">
             <div class="sig-title">Pela HelloCamp</div>
-            <div class="sig-name" style="font-family: 'Times New Roman', serif;">Administração HelloCamp</div>
+            <div class="sig-name">Administração HelloCamp</div>
             <div class="sig-details">Data: ${dataContrato}</div>
           </div>
           <div class="sig-box">
@@ -355,11 +354,12 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
             <div class="sig-details">Data da Assinatura: ${dataContrato}</div>
             
             <div class="stamp">
-              <strong>Declaração de Vinculação:</strong> "Declaro ter lido e aceite os termos do contrato e anexos. Confirmo possuir poderes legais para vincular a entidade a todas as atividades presentes e futuras."<br><br>
-              <strong>Registo de Assinatura:</strong><br>
-              Plataforma Segura HelloCamp<br>
+              <strong>Registo de Aceitação Legal e Digital</strong><br><br>
+              "Declaro ter lido e aceite os Termos Operacionais apresentados e as Cláusulas do Contrato. Confirmo possuir poderes legais para vincular a entidade parceira identificada a todas as atividades na plataforma através desta assinatura digital legalmente vinculativa."<br><br>
+              <strong>Plataforma Segura HelloCamp</strong><br>
+              Endereço IP de Assinatura: ${dados.ipAssinatura || 'Registado pelo Servidor'}<br>
               Timestamp: ${dados.dataSubmissao || new Date().toISOString()}<br>
-              ID Perfil Sistema: ${modalPerfil.id}
+              ID Perfil: ${modalPerfil.id}
             </div>
           </div>
         </div>
