@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import { supabase } from "@/lib/supabase";
 import React from "react";
 
@@ -12,6 +12,9 @@ export default function SuperAdminBroadcast({ params }: { params: Promise<{ lang
   const [historico, setHistorico] = useState<any[]>([]);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
 
+  const editorRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
   const [form, setForm] = useState({
     publico: "organizadores",
     assunto: "",
@@ -22,7 +25,9 @@ export default function SuperAdminBroadcast({ params }: { params: Promise<{ lang
     emailsManuais: [] as string[]
   });
 
-  // Carregar histórico
+  // ==========================================
+  // CARREGAR HISTÓRICO
+  // ==========================================
   useEffect(() => {
     if (activeTab === 'historico') {
       const fetchHistory = async () => {
@@ -33,6 +38,60 @@ export default function SuperAdminBroadcast({ params }: { params: Promise<{ lang
     }
   }, [activeTab]);
 
+  // Sincronizar o Editor Visual com o Estado ao carregar Campanhas Antigas
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== form.mensagem) {
+      editorRef.current.innerHTML = form.mensagem;
+    }
+  }, [form.mensagem]);
+
+  // ==========================================
+  // LÓGICA DE EDITOR VISUAL (RTE)
+  // ==========================================
+  const formatText = (command: string, value: string | undefined = undefined) => {
+    document.execCommand(command, false, value);
+    editorRef.current?.focus();
+    handleEditorInput();
+  };
+
+  const handleEditorInput = () => {
+    if (editorRef.current) {
+      setForm(prev => ({ ...prev, mensagem: editorRef.current!.innerHTML }));
+    }
+  };
+
+  const addLink = () => {
+    const url = prompt("Insira o link completo (ex: https://hellocamp.pt):");
+    if (url) formatText('createLink', url);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // Faz upload para o bucket (assegure-se que está a usar o bucket correto, ex: campos-imagens ou crie um email-assets)
+      const fileName = `email-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const { error } = await supabase.storage.from('campos-imagens').upload(fileName, file, { upsert: true });
+      
+      if (error) throw error;
+
+      const { data: publicUrlData } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
+      
+      // Insere a imagem no editor onde o cursor estava
+      formatText('insertImage', publicUrlData.publicUrl);
+      
+    } catch (err: any) {
+      alert("Erro ao carregar a imagem. Verifique as permissões de storage.");
+      console.error(err);
+    }
+    // Reset input
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  // ==========================================
+  // LÓGICA DE ENVIO E DADOS
+  // ==========================================
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -53,6 +112,10 @@ export default function SuperAdminBroadcast({ params }: { params: Promise<{ lang
       alert("Anexe um ficheiro válido que contenha e-mails."); return;
     }
 
+    if (!form.mensagem.trim() || form.mensagem === '<br>') {
+      alert("A mensagem do e-mail não pode estar vazia."); return;
+    }
+
     const qtd = form.publico === 'csv' ? form.emailsManuais.length : `todos (${form.publico})`;
     if (!confirm(`Tem a certeza que deseja enviar este e-mail para ${qtd} destinatários?`)) return;
 
@@ -69,6 +132,7 @@ export default function SuperAdminBroadcast({ params }: { params: Promise<{ lang
 
       alert(`✅ Sucesso! E-mail enviado a ${data.totalEnviados} destinatários e guardado no histórico.`);
       setForm({ ...form, assunto: "", tituloDaMensagem: "", mensagem: "", textoBotao: "", linkBotao: "", emailsManuais: [] });
+      if (editorRef.current) editorRef.current.innerHTML = "";
     } catch (err: any) { alert("Erro: " + err.message); } 
     finally { setLoading(false); }
   };
@@ -90,8 +154,8 @@ export default function SuperAdminBroadcast({ params }: { params: Promise<{ lang
     <div className="p-4 md:p-8 max-w-7xl mx-auto font-sans">
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 mb-2">Email Marketing & Logística</h1>
-          <p className="text-slate-500 font-medium">Crie campanhas ou comunique avisos à sua base de dados.</p>
+          <h1 className="text-3xl font-black text-slate-900 mb-2">Email Marketing & Broadcast</h1>
+          <p className="text-slate-500 font-medium">Crie campanhas dinâmicas, insira imagens e comunique com a base de dados.</p>
         </div>
         
         <div className="flex bg-slate-200 p-1 rounded-xl">
@@ -104,6 +168,7 @@ export default function SuperAdminBroadcast({ params }: { params: Promise<{ lang
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           
           <form onSubmit={handleEnviar} className="bg-white border border-slate-200 p-6 md:p-8 rounded-3xl shadow-sm flex flex-col gap-6">
+            
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Público-Alvo</label>
               <select required value={form.publico} onChange={e => setForm({...form, publico: e.target.value, emailsManuais: []})} className="w-full p-4 bg-white border border-slate-300 rounded-xl outline-none focus:border-slate-500 font-bold text-slate-700 cursor-pointer">
@@ -124,61 +189,107 @@ export default function SuperAdminBroadcast({ params }: { params: Promise<{ lang
 
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Assunto do E-mail</label>
-              <input required type="text" value={form.assunto} onChange={e => setForm({...form, assunto: e.target.value})} placeholder="Ex: Prepare o Verão!" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-slate-500" />
+              <input required type="text" value={form.assunto} onChange={e => setForm({...form, assunto: e.target.value})} placeholder="Ex: Prepare o Verão! ☀️" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-slate-500" />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Título Principal (No E-mail)</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Título Principal (H1 - Cabeçalho do Corpo)</label>
               <input required type="text" value={form.tituloDaMensagem} onChange={e => setForm({...form, tituloDaMensagem: e.target.value})} placeholder="Ex: Novas ofertas exclusivas." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-slate-500 font-bold" />
             </div>
 
+            {/* EDITOR WYSIWYG */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Mensagem do Corpo</label>
-              <textarea required rows={8} value={form.mensagem} onChange={e => setForm({...form, mensagem: e.target.value})} placeholder="Escreva a sua mensagem..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-slate-500 resize-y"></textarea>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Mensagem (Corpo do E-mail)</label>
+              <div className="border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm focus-within:border-slate-500 transition-colors">
+                
+                {/* TOOLBAR */}
+                <div className="bg-slate-50 border-b border-slate-300 p-2 flex flex-wrap gap-1 items-center">
+                  <button type="button" onClick={() => formatText('bold')} className="w-8 h-8 flex items-center justify-center font-bold hover:bg-slate-200 rounded text-slate-700" title="Negrito">B</button>
+                  <button type="button" onClick={() => formatText('italic')} className="w-8 h-8 flex items-center justify-center italic hover:bg-slate-200 rounded text-slate-700" title="Itálico">I</button>
+                  <button type="button" onClick={() => formatText('underline')} className="w-8 h-8 flex items-center justify-center underline hover:bg-slate-200 rounded text-slate-700" title="Sublinhado">U</button>
+                  <div className="w-px h-5 bg-slate-300 mx-1"></div>
+                  <button type="button" onClick={() => formatText('justifyLeft')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-200 rounded text-slate-700" title="Alinhar à Esquerda">⫷</button>
+                  <button type="button" onClick={() => formatText('justifyCenter')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-200 rounded text-slate-700" title="Centrar">≡</button>
+                  <button type="button" onClick={() => formatText('justifyRight')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-200 rounded text-slate-700" title="Alinhar à Direita">⫸</button>
+                  <button type="button" onClick={() => formatText('justifyFull')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-200 rounded text-slate-700" title="Justificar">▤</button>
+                  <div className="w-px h-5 bg-slate-300 mx-1"></div>
+                  <button type="button" onClick={() => formatText('insertUnorderedList')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-200 rounded text-slate-700" title="Lista">•</button>
+                  <button type="button" onClick={() => formatText('insertOrderedList')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-200 rounded text-slate-700" title="Lista Numerada">1.</button>
+                  <div className="w-px h-5 bg-slate-300 mx-1"></div>
+                  <button type="button" onClick={addLink} className="px-2 h-8 flex items-center justify-center font-bold text-xs hover:bg-slate-200 rounded text-blue-600" title="Inserir Link">🔗 Link</button>
+                  <button type="button" onClick={() => imageInputRef.current?.click()} className="px-2 h-8 flex items-center justify-center font-bold text-xs hover:bg-slate-200 rounded text-emerald-600" title="Inserir Imagem">📸 Foto</button>
+                  <input type="file" accept="image/*" ref={imageInputRef} onChange={handleImageUpload} className="hidden" />
+                </div>
+                
+                {/* ÁREA EDITÁVEL */}
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  onInput={handleEditorInput}
+                  onBlur={handleEditorInput}
+                  className="p-4 min-h-[250px] max-h-[400px] overflow-y-auto outline-none text-slate-700 leading-relaxed text-sm [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-2 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                  style={{ whiteSpace: 'pre-wrap' }}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Texto do Botão</label>
-                <input type="text" value={form.textoBotao} onChange={e => setForm({...form, textoBotao: e.target.value})} className="w-full p-3 border border-slate-300 rounded-lg outline-none" />
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Botão Final (Call to Action)</label>
+                <input type="text" value={form.textoBotao} onChange={e => setForm({...form, textoBotao: e.target.value})} placeholder="Texto do Botão" className="w-full p-3 border border-slate-300 rounded-lg outline-none" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Link do Botão</label>
-                <input type="url" value={form.linkBotao} onChange={e => setForm({...form, linkBotao: e.target.value})} placeholder="https://" className="w-full p-3 border border-slate-300 rounded-lg outline-none" />
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Link de Destino</label>
+                <input type="url" value={form.linkBotao} onChange={e => setForm({...form, linkBotao: e.target.value})} placeholder="https://hellocamp.pt/..." className="w-full p-3 border border-slate-300 rounded-lg outline-none" />
               </div>
             </div>
 
             <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-emerald-600 text-white font-black py-4 rounded-xl transition-colors mt-2 disabled:opacity-50">
-              {loading ? 'A Enviar...' : '🚀 Disparar E-mail Marketing'}
+              {loading ? 'A Criptografar e Enviar...' : '🚀 Disparar E-mail Marketing'}
             </button>
           </form>
 
+          {/* ÁREA DE PRÉ-VISUALIZAÇÃO (REAL HTML) */}
           <div className="flex flex-col h-full">
             <div className="flex justify-between items-center mb-4">
-              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Pré-Visualização em Tempo Real</span>
+              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Live Preview (Caixa de Correio)</span>
               <div className="flex bg-slate-200 rounded-lg p-1">
                 <button onClick={() => setPreviewMode('desktop')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${previewMode === 'desktop' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Computador</button>
                 <button onClick={() => setPreviewMode('mobile')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${previewMode === 'mobile' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Telemóvel</button>
               </div>
             </div>
             
-            <div className={`bg-slate-100 border border-slate-200 rounded-3xl p-4 sm:p-8 flex-1 flex justify-center items-start transition-all overflow-y-auto min-h-[600px]`}>
+            <div className={`bg-slate-100 border border-slate-200 rounded-3xl p-4 sm:p-8 flex-1 flex justify-center items-start transition-all overflow-y-auto min-h-[600px] max-h-[800px]`}>
               <div className={`bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col p-8 md:p-12 text-center border border-slate-200 w-full transition-all duration-300 ${previewMode === 'mobile' ? 'max-w-[375px]' : 'max-w-[600px]'}`}>
+                
+                {/* Logo */}
                 <div className="text-2xl font-black tracking-tighter mb-8 font-sans border-b border-slate-100 pb-6">
                   <span className="text-slate-900">Hello</span><span className="text-[#EBA914]">Camp</span>
                 </div>
+                
+                {/* Cabeçalho */}
                 <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-6 leading-snug">
                   {form.tituloDaMensagem || 'O Título do seu E-mail aparece aqui'}
                 </h2>
-                <p className="text-base text-slate-600 mb-8 leading-relaxed whitespace-pre-wrap text-left min-h-[100px]">
-                  {form.mensagem || 'A sua mensagem será adaptada e enviada a cada contacto da lista.'}
-                </p>
+                
+                {/* Corpo do E-mail com HTML Renderizado */}
+                <div 
+                  className="text-sm md:text-base text-slate-700 mb-8 leading-relaxed text-left min-h-[100px] [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-4 [&_img]:mx-auto [&_img]:block [&_a]:text-blue-600 [&_a]:font-bold [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-4"
+                  dangerouslySetInnerHTML={{ __html: form.mensagem || '<p style="color: #94a3b8; font-style: italic;">A sua mensagem será estruturada e renderizada aqui. Formate texto ou adicione fotos!</p>' }}
+                />
+
+                {/* Botão de Call To Action */}
                 {form.textoBotao && form.linkBotao && (
-                  <div className="bg-slate-900 text-white font-bold px-8 py-4 rounded-xl mx-auto inline-block">
+                  <a href={form.linkBotao} target="_blank" rel="noopener noreferrer" className="bg-slate-900 text-white font-bold px-8 py-4 rounded-xl mx-auto inline-block text-sm transition-transform hover:-translate-y-1 mt-4 decoration-transparent">
                     {form.textoBotao}
-                  </div>
+                  </a>
                 )}
-                <p className="text-xs text-slate-400 mt-12 pt-6 border-t border-slate-100">Este e-mail foi enviado pela HelloCamp.</p>
+
+                {/* Footer Padrão do E-mail */}
+                <div className="text-[10px] text-slate-400 mt-12 pt-6 border-t border-slate-100">
+                  <p>Este e-mail foi-lhe enviado porque está registado na plataforma HelloCamp Portugal.</p>
+                  <p className="mt-1"><a href="#" className="underline">Gerir preferências</a> ou <a href="#" className="underline">Cancelar Subscrição</a></p>
+                </div>
               </div>
             </div>
           </div>
