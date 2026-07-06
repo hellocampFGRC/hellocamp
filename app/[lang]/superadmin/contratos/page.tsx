@@ -25,10 +25,11 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const textareaClass = "w-full p-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 outline-none focus:border-gray-800 focus:ring-1 focus:ring-gray-800 transition-all shadow-sm resize-y";
 
   const fetchContratos = async () => {
+    // ⚠️ ALTERAÇÃO: Lê estritamente os utilizadores com a role 'organizador'
     const { data, error } = await supabase
       .from('perfis')
       .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao, base_comissao')
-      .neq('role', 'pai')
+      .eq('role', 'organizador')
       .order('created_at', { ascending: false });
       
     if (error) {
@@ -36,10 +37,11 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       alert("Erro ao ler a base de dados: " + error.message);
     }
 
-    const parceirosComContrato = (data || []).filter(p => p.status_contrato || p.contrato_dados);
-    setContratos(parceirosComContrato);
+    const organizadores = data || [];
+    setContratos(organizadores);
     
-    if (parceirosComContrato.length > 0 && !parceirosComContrato.some(c => c.status_contrato === 'Pendente de Revisão')) {
+    // Se não existirem parceiros pendentes de aprovação real (que já assinaram), mostra todos
+    if (organizadores.length > 0 && !organizadores.some(c => c.status_contrato === 'Pendente de Revisão' && c.contrato_dados)) {
       setFiltroStatus('Todos');
     }
     setLoading(false);
@@ -99,16 +101,18 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     } else {
       try {
         const dados = modalPerfil?.contrato_dados || {};
-        await fetch('/api/notificacoes/status-contrato', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            parceiroEmail: dados.emailContacto || modalPerfil?.email, 
-            nomeCampo: "Contrato Global B2B",
-            status: novoStatus,
-            lang: lang
-          })
-        });
+        if (dados.emailContacto || modalPerfil?.email) {
+          await fetch('/api/notificacoes/status-contrato', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              parceiroEmail: dados.emailContacto || modalPerfil?.email, 
+              nomeCampo: "Contrato Global B2B",
+              status: novoStatus,
+              lang: lang
+            })
+          });
+        }
       } catch (err) {
         console.error("Erro ao notificar parceiro da alteração de estado:", err);
       }
@@ -160,21 +164,24 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       .eq('organizador_id', modalPerfil.id);
 
     try {
-      await fetch('/api/notificacoes/contrato-editado', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          parceiroEmail: editForm.emailContacto || modalPerfil?.email, 
-          nomeCampo: "Contrato Global B2B",
-          status: 'Editado',
-          lang: lang
-        })
-      });
+      const emailAvisar = editForm.emailContacto || modalPerfil?.email;
+      if (emailAvisar) {
+        await fetch('/api/notificacoes/contrato-editado', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            parceiroEmail: emailAvisar, 
+            nomeCampo: "Contrato Global B2B",
+            status: 'Editado',
+            lang: lang
+          })
+        });
+      }
     } catch (err) {
       console.error("Erro ao notificar parceiro da edição:", err);
     }
 
-    alert("Contrato Global editado com sucesso e propagado para os respetivos campos!");
+    alert("Dados atualizados com sucesso e propagados para os respetivos campos!");
     setModalPerfil({ ...modalPerfil, contrato_dados: novoJsonContrato, taxa_comissao: editComissao, base_comissao: editBaseComissao, modalidade_reserva: editForm.modalidadeReserva, link_externo_reserva: editForm.linkExternoReserva });
     setIsEditing(false);
     setSavingEdit(false);
@@ -182,7 +189,11 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   };
 
   const handleImprimirPDF = () => {
-    if (!modalPerfil || !modalPerfil.contrato_dados) return;
+    if (!modalPerfil || !modalPerfil.contrato_dados) {
+      alert("Este parceiro ainda não preencheu/assinou o contrato, não é possível gerar PDF.");
+      return;
+    }
+    
     const dados = modalPerfil.contrato_dados;
     const comissaoText = modalPerfil.taxa_comissao !== null && modalPerfil.taxa_comissao !== undefined ? modalPerfil.taxa_comissao : 12;
     
@@ -374,11 +385,22 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     }, 500);
   };
 
-  const tabs = ['Pendente de Revisão', 'Aprovado', 'Rejeitado', 'Todos'];
+  // TABS Atualizadas: Em vez de ler 'Pendente de Revisão', vai ler o status visual
+  const tabs = ['Por Assinar', 'Pendentes de Revisão', 'Aprovado', 'Rejeitado', 'Todos'];
   
   const contratosFiltrados = contratos.filter(c => {
+    // Lógica para determinar o status real do parceiro
+    let statusReal = c.status_contrato;
+    if (!c.contrato_dados) {
+      statusReal = 'Por Assinar'; // Se não há contrato preenchido
+    } else if (!statusReal || statusReal === 'Pendente') {
+      statusReal = 'Pendentes de Revisão';
+    }
+
     if (filtroStatus === 'Todos') return true;
-    return c.status_contrato === filtroStatus;
+    if (filtroStatus === 'Por Assinar') return statusReal === 'Por Assinar';
+    if (filtroStatus === 'Pendentes de Revisão') return statusReal === 'Pendente de Revisão' || statusReal === 'Pendentes de Revisão';
+    return c.status_contrato === filtroStatus && c.contrato_dados;
   });
 
   if (loading) return <div className="p-8 text-center text-gray-500 font-bold animate-pulse">A carregar Contratos Globais de Parceiros...</div>;
@@ -396,8 +418,14 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       <div className="flex flex-wrap gap-2 mb-6">
         {tabs.map(tab => {
           const count = contratos.filter(c => {
+            let statusReal = c.status_contrato;
+            if (!c.contrato_dados) statusReal = 'Por Assinar';
+            else if (!statusReal || statusReal === 'Pendente') statusReal = 'Pendentes de Revisão';
+            
             if (tab === 'Todos') return true;
-            return c.status_contrato === tab;
+            if (tab === 'Por Assinar') return statusReal === 'Por Assinar';
+            if (tab === 'Pendentes de Revisão') return statusReal === 'Pendente de Revisão' || statusReal === 'Pendentes de Revisão';
+            return c.status_contrato === tab && c.contrato_dados;
           }).length;
 
           return (
@@ -405,7 +433,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
               key={tab} onClick={() => setFiltroStatus(tab)}
               className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${filtroStatus === tab ? 'bg-gray-900 text-white border-gray-900 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
             >
-              {tab === 'Pendente de Revisão' ? 'Pendentes' : tab} <span className={`ml-1.5 px-2 py-0.5 rounded-md text-[10px] ${filtroStatus === tab ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-500'}`}>{count}</span>
+              {tab} <span className={`ml-1.5 px-2 py-0.5 rounded-md text-[10px] ${filtroStatus === tab ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-500'}`}>{count}</span>
             </button>
           )
         })}
@@ -428,10 +456,17 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
               <tr><td colSpan={5} className="p-8 text-center text-gray-400 font-bold text-sm">Sem contratos encontrados nesta categoria.</td></tr>
             ) : contratosFiltrados.map(c => {
               const dados = c.contrato_dados || {};
-              let statusColor = "bg-gray-100 text-gray-600";
-              if (c.status_contrato === 'Aprovado') statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
-              if (c.status_contrato === 'Rejeitado') statusColor = "bg-red-100 text-red-800 border-red-200";
-              if (c.status_contrato === 'Pendente de Revisão' || !c.status_contrato) statusColor = "bg-amber-100 text-amber-800 border-amber-200";
+              const temContrato = !!c.contrato_dados;
+              
+              let statusColor = "bg-gray-100 text-gray-600 border-gray-200";
+              let statusLabel = "Por Assinar";
+              
+              if (temContrato) {
+                statusLabel = c.status_contrato || 'Pendente de Revisão';
+                if (c.status_contrato === 'Aprovado') statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
+                else if (c.status_contrato === 'Rejeitado') statusColor = "bg-red-100 text-red-800 border-red-200";
+                else statusColor = "bg-amber-100 text-amber-800 border-amber-200";
+              }
 
               return (
                 <tr key={c.id} className="hover:bg-gray-50 transition-colors">
@@ -445,17 +480,17 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                   </td>
                   <td className="px-4 py-3">
                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 uppercase tracking-wider">
-                       {c.modalidade_reserva === 'link_externo' ? 'Externo' : (c.modalidade_reserva === 'email' ? 'Sob Consulta' : 'Checkout')}
+                       {c.modalidade_reserva === 'link_externo' ? 'Externo' : (c.modalidade_reserva === 'email' ? 'Sob Consulta' : (c.modalidade_reserva === 'direta' ? 'Checkout' : 'N/D'))}
                      </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-md border shadow-sm ${statusColor}`}>
-                      {c.status_contrato || 'Pendente'}
+                      {statusLabel}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => abrirModal(c)} className="bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors shadow-sm">
-                      Rever Contrato
+                      {temContrato ? 'Rever Contrato' : 'Ver Dados Base'}
                     </button>
                   </td>
                 </tr>
@@ -480,9 +515,11 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2 m-0">Contrato Global de Parceiro</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={handleImprimirPDF} className="text-xs font-bold text-gray-700 hover:text-black bg-gray-100 px-4 py-2 rounded-lg transition-colors shadow-sm mr-2 hidden sm:block border border-gray-200">
-                  Gerar PDF
-                </button>
+                {modalPerfil.contrato_dados && (
+                  <button onClick={handleImprimirPDF} className="text-xs font-bold text-gray-700 hover:text-black bg-gray-100 px-4 py-2 rounded-lg transition-colors shadow-sm mr-2 hidden sm:block border border-gray-200">
+                    Gerar PDF
+                  </button>
+                )}
                 {!isEditing && (
                   <button onClick={() => setIsEditing(true)} className="text-xs font-bold text-blue-700 hover:text-blue-900 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200 transition-colors">
                     Editar Termos
@@ -494,153 +531,162 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
             
             {/* CORPO DO MODAL */}
             <div className="p-6 overflow-y-auto flex-1 bg-gray-50/50">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* COLUNA ESQUERDA: Dados Entidade */}
-                <div className="space-y-4">
-                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                    <span className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 border-b border-gray-100 pb-2">Dados Fiscais & Contactos</span>
-                    {isEditing ? (
-                      <div className="space-y-3">
-                        <div><label className={labelClass}>Empresa</label><input className={inputClass} value={editForm.empresaNome || ''} onChange={e => setEditForm({...editForm, empresaNome: e.target.value})} /></div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div><label className={labelClass}>NIF</label><input className={inputClass} value={editForm.nif || ''} onChange={e => setEditForm({...editForm, nif: e.target.value})} /></div>
-                          <div><label className={labelClass}>Telefone</label><input className={inputClass} value={editForm.telefone || ''} onChange={e => setEditForm({...editForm, telefone: e.target.value})} /></div>
-                        </div>
-                        <div><label className={labelClass}>E-mail Reservas</label><input className={inputClass} value={editForm.emailReservas || ''} onChange={e => setEditForm({...editForm, emailReservas: e.target.value})} /></div>
-                      </div>
-                    ) : (
-                      <div className="space-y-3 text-xs">
-                        <div className="flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100"><strong className="text-gray-500">Empresa</strong><span className="font-black text-gray-900 text-right ml-4 text-sm">{modalPerfil.contrato_dados?.empresaNome}</span></div>
-                        <div className="flex justify-between items-center"><strong className="text-gray-500">NIF</strong><span className="font-mono font-bold text-gray-800 text-right ml-4">{modalPerfil.contrato_dados?.nif}</span></div>
-                        <div className="flex justify-between items-center"><strong className="text-gray-500">Contacto Pessoal</strong><span className="font-medium text-gray-800 text-right ml-4">{modalPerfil.contrato_dados?.pessoaContacto} <br/><span className="text-gray-400 font-bold">{modalPerfil.contrato_dados?.telefone}</span></span></div>
-                        <div className="flex justify-between items-center"><strong className="text-gray-500">E-mail Operacional</strong><span className="font-bold text-blue-600 text-right ml-4 break-all">{modalPerfil.contrato_dados?.emailReservas || modalPerfil.contrato_dados?.emailContacto || modalPerfil.email}</span></div>
-                      </div>
-                    )}
-                  </div>
+              {!modalPerfil.contrato_dados && !isEditing ? (
+                 <div className="bg-amber-50 border border-amber-200 p-8 rounded-xl text-center">
+                    <h3 className="text-amber-900 font-black text-lg mb-2">Parceiro ainda não assinou o contrato</h3>
+                    <p className="text-amber-800 text-sm">Este parceiro criou conta mas ainda não preencheu o Acordo Global de Intermediação. Pode editar os termos operacionais antecipadamente clicando em "Editar Termos" acima.</p>
+                 </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   
-                  {/* Assinatura */}
-                  <div className="bg-white border-2 border-emerald-100 p-5 rounded-xl shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 text-emerald-50 text-7xl font-serif italic">A</div>
-                    <span className="relative block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Assinatura Digital</span>
-                    <p className="relative font-serif text-2xl font-black italic text-emerald-950 mb-1">{modalPerfil.contrato_dados?.assinaturaNome}</p>
-                    <p className="relative text-xs text-emerald-700 font-bold mb-3">{modalPerfil.contrato_dados?.assinaturaCargo}</p>
-                    <p className="relative text-[9px] text-gray-400 font-mono m-0 uppercase tracking-widest">Registado a: {modalPerfil.contrato_dados?.dataSubmissao ? new Date(modalPerfil.contrato_dados?.dataSubmissao).toLocaleString('pt-PT') : 'N/D'}</p>
-                  </div>
-                </div>
-
-                {/* COLUNA DIREITA: Condições Financeiras */}
-                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                  <span className="block text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4 border-b border-gray-100 pb-2">Condições Operacionais Acordadas</span>
-                  
+                  {/* COLUNA ESQUERDA: Dados Entidade */}
                   <div className="space-y-4">
-                    <div className={`p-4 rounded-lg ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-100 flex justify-between items-center'}`}>
-                      <strong className={`${isEditing ? labelClass : 'text-xs text-gray-600 uppercase tracking-widest'}`}>Taxa de Comissão (%)</strong>
+                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                      <span className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 border-b border-gray-100 pb-2">Dados Fiscais & Contactos</span>
                       {isEditing ? (
-                        <input type="number" step="0.1" className={`${inputClass} font-black text-blue-700 text-lg`} value={editComissao} onChange={e => setEditComissao(Number(e.target.value))} />
+                        <div className="space-y-3">
+                          <div><label className={labelClass}>Empresa</label><input className={inputClass} value={editForm.empresaNome || ''} onChange={e => setEditForm({...editForm, empresaNome: e.target.value})} /></div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div><label className={labelClass}>NIF</label><input className={inputClass} value={editForm.nif || ''} onChange={e => setEditForm({...editForm, nif: e.target.value})} /></div>
+                            <div><label className={labelClass}>Telefone</label><input className={inputClass} value={editForm.telefone || ''} onChange={e => setEditForm({...editForm, telefone: e.target.value})} /></div>
+                          </div>
+                          <div><label className={labelClass}>E-mail Reservas</label><input className={inputClass} value={editForm.emailReservas || ''} onChange={e => setEditForm({...editForm, emailReservas: e.target.value})} /></div>
+                        </div>
                       ) : (
-                        <span className="text-xl font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-md border border-blue-100">{modalPerfil.taxa_comissao !== null && modalPerfil.taxa_comissao !== undefined ? modalPerfil.taxa_comissao : 12}%</span>
+                        <div className="space-y-3 text-xs">
+                          <div className="flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100"><strong className="text-gray-500">Empresa</strong><span className="font-black text-gray-900 text-right ml-4 text-sm">{modalPerfil.contrato_dados?.empresaNome}</span></div>
+                          <div className="flex justify-between items-center"><strong className="text-gray-500">NIF</strong><span className="font-mono font-bold text-gray-800 text-right ml-4">{modalPerfil.contrato_dados?.nif}</span></div>
+                          <div className="flex justify-between items-center"><strong className="text-gray-500">Contacto Pessoal</strong><span className="font-medium text-gray-800 text-right ml-4">{modalPerfil.contrato_dados?.pessoaContacto} <br/><span className="text-gray-400 font-bold">{modalPerfil.contrato_dados?.telefone}</span></span></div>
+                          <div className="flex justify-between items-center"><strong className="text-gray-500">E-mail Operacional</strong><span className="font-bold text-blue-600 text-right ml-4 break-all">{modalPerfil.contrato_dados?.emailReservas || modalPerfil.contrato_dados?.emailContacto || modalPerfil.email}</span></div>
+                        </div>
                       )}
                     </div>
                     
-                    {isEditing && (
-                      <div className="pt-1">
-                         <label className={labelClass}>Base de Incidência</label>
-                         <select className={selectClass} value={editBaseComissao} onChange={e => setEditBaseComissao(e.target.value)}>
-                           <option value="total">Valor Total (Programa + Extras)</option>
-                           <option value="apenas_programa">Apenas sobre o Programa</option>
-                           <option value="sem_comissao">Isento (0%)</option>
-                         </select>
+                    {/* Assinatura */}
+                    {modalPerfil.contrato_dados && (
+                      <div className="bg-white border-2 border-emerald-100 p-5 rounded-xl shadow-sm relative overflow-hidden">
+                        <div className="absolute -right-4 -top-4 text-emerald-50 text-7xl font-serif italic">A</div>
+                        <span className="relative block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Assinatura Digital</span>
+                        <p className="relative font-serif text-2xl font-black italic text-emerald-950 mb-1">{modalPerfil.contrato_dados?.assinaturaNome}</p>
+                        <p className="relative text-xs text-emerald-700 font-bold mb-3">{modalPerfil.contrato_dados?.assinaturaCargo}</p>
+                        <p className="relative text-[9px] text-gray-400 font-mono m-0 uppercase tracking-widest">Registado a: {modalPerfil.contrato_dados?.dataSubmissao ? new Date(modalPerfil.contrato_dados?.dataSubmissao).toLocaleString('pt-PT') : 'N/D'}</p>
                       </div>
                     )}
+                  </div>
 
-                    <div className={`${isEditing ? 'bg-white p-3 rounded-lg border border-blue-200 mt-2 space-y-3' : 'space-y-3 text-xs pt-2'}`}>
-                      {isEditing ? (
-                        <>
-                          <div>
-                            <label className={labelClass}>Modelo de Reserva (Anexo 1)</label>
-                            <select className={selectClass} value={editForm.modalidadeReserva || ''} onChange={e => setEditForm({...editForm, modalidadeReserva: e.target.value})}>
-                              <option value="direta">Direta / Checkout</option>
-                              <option value="email">Sob Consulta (E-mail)</option>
-                              <option value="link_externo">Link Externo</option>
-                            </select>
-                          </div>
-                          {editForm.modalidadeReserva === 'link_externo' && (
-                            <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
-                              <label className="text-[10px] font-bold uppercase tracking-widest text-amber-800 mb-1 block">URL do Parceiro</label>
-                              <input type="url" className="w-full py-1.5 px-3 bg-white border border-amber-300 rounded text-sm outline-none" value={editForm.linkExternoReserva || ''} onChange={e => setEditForm({...editForm, linkExternoReserva: e.target.value})} placeholder="https://..." />
-                            </div>
-                          )}
-                          {editForm.modalidadeReserva !== 'link_externo' && (
-                            <>
-                              <div><label className={labelClass}>Fluxo de Pagamento (Anexo 2)</label><select className={selectClass} value={editForm.tipoPagamento || ''} onChange={e => setEditForm({...editForm, tipoPagamento: e.target.value})}><option value="100_total">100% no Ato da Reserva</option><option value="50_sinal">Sinal 50% Agora + Restante Depois</option></select></div>
-                              <div><label className={labelClass}>Política de Cancelamento (Anexo 3)</label><select className={selectClass} value={editForm.politicaCancelamento || ''} onChange={e => setEditForm({...editForm, politicaCancelamento: e.target.value})}><option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (100% até 7 dias)</option><option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (50% até 15 dias)</option><option value="Estrita (Sem reembolso após reserva)">Estrita (Sem Reembolso)</option></select></div>
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                            <strong className="text-gray-500 uppercase tracking-wider text-[10px]">Modelo</strong>
-                            <span className="font-bold text-gray-900 bg-gray-100 px-2 py-1 rounded text-xs">
-                              {modalPerfil.contrato_dados?.modalidadeReserva === 'direta' ? 'Reserva Direta no Checkout' : 
-                               modalPerfil.contrato_dados?.modalidadeReserva === 'link_externo' ? 'Encaminhamento Link Externo' : 'Comunicação por Email'}
-                            </span>
-                          </div>
-                          
-                          {modalPerfil.contrato_dados?.modalidadeReserva === 'link_externo' ? (
-                            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 mt-2">
-                               <strong className="block text-amber-800 text-[10px] uppercase tracking-widest mb-1">URL Oficial de Inscrição</strong>
-                               <a href={modalPerfil.contrato_dados?.linkExternoReserva || modalPerfil.link_externo_reserva} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline break-all">
-                                  {modalPerfil.contrato_dados?.linkExternoReserva || modalPerfil.link_externo_reserva}
-                               </a>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="flex justify-between items-center border-b border-gray-100 pb-2 mt-2">
-                                <strong className="text-gray-500 uppercase tracking-wider text-[10px]">Pagamento</strong>
-                                <span className="font-bold text-gray-900 text-right">{modalPerfil.contrato_dados?.tipoPagamento === '100_total' ? '100% Imediato' : 'Sinal de 50%'}</span>
-                              </div>
-                              <div className="pt-2">
-                                <strong className="block text-gray-500 uppercase tracking-wider text-[10px] mb-1">Pol. Cancelamento Acordada:</strong>
-                                <p className="text-xs text-gray-700 leading-tight bg-gray-50 p-2 rounded-md border border-gray-100 m-0 font-medium">
-                                  {modalPerfil.contrato_dados?.politicaCancelamento || 'Não definida'}
-                                </p>
-                              </div>
-                            </>
-                          )}
-                        </>
+                  {/* COLUNA DIREITA: Condições Financeiras */}
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                    <span className="block text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4 border-b border-gray-100 pb-2">Condições Operacionais Acordadas</span>
+                    
+                    <div className="space-y-4">
+                      <div className={`p-4 rounded-lg ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-100 flex justify-between items-center'}`}>
+                        <strong className={`${isEditing ? labelClass : 'text-xs text-gray-600 uppercase tracking-widest'}`}>Taxa de Comissão (%)</strong>
+                        {isEditing ? (
+                          <input type="number" step="0.1" className={`${inputClass} font-black text-blue-700 text-lg`} value={editComissao} onChange={e => setEditComissao(Number(e.target.value))} />
+                        ) : (
+                          <span className="text-xl font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-md border border-blue-100">{modalPerfil.taxa_comissao !== null && modalPerfil.taxa_comissao !== undefined ? modalPerfil.taxa_comissao : 12}%</span>
+                        )}
+                      </div>
+                      
+                      {isEditing && (
+                        <div className="pt-1">
+                           <label className={labelClass}>Base de Incidência</label>
+                           <select className={selectClass} value={editBaseComissao} onChange={e => setEditBaseComissao(e.target.value)}>
+                             <option value="total">Valor Total (Programa + Extras)</option>
+                             <option value="apenas_programa">Apenas sobre o Programa</option>
+                             <option value="sem_comissao">Isento (0%)</option>
+                           </select>
+                        </div>
                       )}
+
+                      <div className={`${isEditing ? 'bg-white p-3 rounded-lg border border-blue-200 mt-2 space-y-3' : 'space-y-3 text-xs pt-2'}`}>
+                        {isEditing ? (
+                          <>
+                            <div>
+                              <label className={labelClass}>Modelo de Reserva (Anexo 1)</label>
+                              <select className={selectClass} value={editForm.modalidadeReserva || ''} onChange={e => setEditForm({...editForm, modalidadeReserva: e.target.value})}>
+                                <option value="direta">Direta / Checkout</option>
+                                <option value="email">Sob Consulta (E-mail)</option>
+                                <option value="link_externo">Link Externo</option>
+                              </select>
+                            </div>
+                            {editForm.modalidadeReserva === 'link_externo' && (
+                              <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-amber-800 mb-1 block">URL do Parceiro</label>
+                                <input type="url" className="w-full py-1.5 px-3 bg-white border border-amber-300 rounded text-sm outline-none" value={editForm.linkExternoReserva || ''} onChange={e => setEditForm({...editForm, linkExternoReserva: e.target.value})} placeholder="https://..." />
+                              </div>
+                            )}
+                            {editForm.modalidadeReserva !== 'link_externo' && (
+                              <>
+                                <div><label className={labelClass}>Fluxo de Pagamento (Anexo 2)</label><select className={selectClass} value={editForm.tipoPagamento || ''} onChange={e => setEditForm({...editForm, tipoPagamento: e.target.value})}><option value="100_total">100% no Ato da Reserva</option><option value="50_sinal">Sinal 50% Agora + Restante Depois</option></select></div>
+                                <div><label className={labelClass}>Política de Cancelamento (Anexo 3)</label><select className={selectClass} value={editForm.politicaCancelamento || ''} onChange={e => setEditForm({...editForm, politicaCancelamento: e.target.value})}><option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (100% até 7 dias)</option><option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (50% até 15 dias)</option><option value="Estrita (Sem reembolso após reserva)">Estrita (Sem Reembolso)</option></select></div>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <strong className="text-gray-500 uppercase tracking-wider text-[10px]">Modelo</strong>
+                              <span className="font-bold text-gray-900 bg-gray-100 px-2 py-1 rounded text-xs">
+                                {modalPerfil.contrato_dados?.modalidadeReserva === 'direta' ? 'Reserva Direta no Checkout' : 
+                                 modalPerfil.contrato_dados?.modalidadeReserva === 'link_externo' ? 'Encaminhamento Link Externo' : 'Comunicação por Email'}
+                              </span>
+                            </div>
+                            
+                            {modalPerfil.contrato_dados?.modalidadeReserva === 'link_externo' ? (
+                              <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 mt-2">
+                                 <strong className="block text-amber-800 text-[10px] uppercase tracking-widest mb-1">URL Oficial de Inscrição</strong>
+                                 <a href={modalPerfil.contrato_dados?.linkExternoReserva || modalPerfil.link_externo_reserva} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline break-all">
+                                    {modalPerfil.contrato_dados?.linkExternoReserva || modalPerfil.link_externo_reserva}
+                                 </a>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex justify-between items-center border-b border-gray-100 pb-2 mt-2">
+                                  <strong className="text-gray-500 uppercase tracking-wider text-[10px]">Pagamento</strong>
+                                  <span className="font-bold text-gray-900 text-right">{modalPerfil.contrato_dados?.tipoPagamento === '100_total' ? '100% Imediato' : 'Sinal de 50%'}</span>
+                                </div>
+                                <div className="pt-2">
+                                  <strong className="block text-gray-500 uppercase tracking-wider text-[10px] mb-1">Pol. Cancelamento Acordada:</strong>
+                                  <p className="text-xs text-gray-700 leading-tight bg-gray-50 p-2 rounded-md border border-gray-100 m-0 font-medium">
+                                    {modalPerfil.contrato_dados?.politicaCancelamento || 'Não definida'}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Bloco de Acordos Complementares */}
-                {(isEditing || editForm.acordosComplementares) && (
-                   <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm col-span-1 lg:col-span-2">
-                     <label className={`${labelClass} text-gray-900`}>Acordos Extraordinários (Anexo 4)</label>
-                     {isEditing ? (
-                       <textarea 
-                         className={`${textareaClass} mt-2`} 
-                         rows={3} 
-                         value={editForm.acordosComplementares || ''} 
-                         onChange={e => setEditForm({...editForm, acordosComplementares: e.target.value})}
-                         placeholder="Insira as cláusulas de exceção acordadas com o parceiro."
-                       />
-                     ) : (
-                       <p className="text-sm text-gray-700 italic bg-amber-50 p-3 rounded-lg border border-amber-100 m-0 mt-2">
-                         "{editForm.acordosComplementares}"
-                       </p>
-                     )}
-                   </div>
-                )}
-              </div>
+                  {/* Bloco de Acordos Complementares */}
+                  {(isEditing || editForm.acordosComplementares) && (
+                     <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm col-span-1 lg:col-span-2">
+                       <label className={`${labelClass} text-gray-900`}>Acordos Extraordinários (Anexo 4)</label>
+                       {isEditing ? (
+                         <textarea 
+                           className={`${textareaClass} mt-2`} 
+                           rows={3} 
+                           value={editForm.acordosComplementares || ''} 
+                           onChange={e => setEditForm({...editForm, acordosComplementares: e.target.value})}
+                           placeholder="Insira as cláusulas de exceção acordadas com o parceiro."
+                         />
+                       ) : (
+                         <p className="text-sm text-gray-700 italic bg-amber-50 p-3 rounded-lg border border-amber-100 m-0 mt-2">
+                           "{editForm.acordosComplementares}"
+                         </p>
+                       )}
+                     </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* RODAPÉ E ACÕES */}
             <div className="px-6 py-5 border-t border-gray-200 bg-white flex flex-wrap gap-3 justify-between items-center flex-shrink-0">
               <div>
-                {!isEditing && modalPerfil.status_contrato !== 'Pendente de Revisão' && (
+                {!isEditing && modalPerfil.status_contrato !== 'Pendente de Revisão' && modalPerfil.contrato_dados && (
                   <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Pendente de Revisão')} className="text-xs font-bold text-gray-400 hover:text-gray-800 underline">Desfazer Aprovação (Reverter)</button>
                 )}
               </div>
@@ -653,10 +699,10 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                   </>
                 ) : (
                   <>
-                    {modalPerfil.status_contrato !== 'Rejeitado' && (
+                    {modalPerfil.contrato_dados && modalPerfil.status_contrato !== 'Rejeitado' && (
                       <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Rejeitado')} className="bg-white border border-red-200 text-red-600 font-bold px-5 py-2.5 rounded-xl text-sm hover:bg-red-50 transition-colors">Rejeitar Parceiro</button>
                     )}
-                    {modalPerfil.status_contrato !== 'Aprovado' && (
+                    {modalPerfil.contrato_dados && modalPerfil.status_contrato !== 'Aprovado' && (
                       <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Aprovado')} className="bg-emerald-600 text-white font-black px-6 py-2.5 rounded-xl text-sm shadow-md hover:bg-emerald-700 transition-colors tracking-wide">Validar e Aprovar Parceiro</button>
                     )}
                   </>
