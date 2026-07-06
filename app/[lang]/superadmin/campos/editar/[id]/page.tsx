@@ -45,6 +45,10 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
   const [saving, setSaving] = useState(false);
   const [statusText, setStatusText] = useState("");
   
+  // Perfil Global Tracker
+  const [organizadorId, setOrganizadorId] = useState<string | null>(null);
+  const [statusContratoGlobal, setStatusContratoGlobal] = useState<string | null>(null);
+
   // Imagens & Documentos
   const [images, setImages] = useState<ImagePreview[]>([]);
   const [usarFotoPadrao, setUsarFotoPadrao] = useState(false);
@@ -128,6 +132,15 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
           status_aprovacao: data.status_aprovacao || 'Pendente de Revisão',
         });
         
+        setOrganizadorId(data.organizador_id);
+        
+        if (data.organizador_id) {
+          const { data: perfilData } = await supabase.from('perfis').select('status_contrato').eq('id', data.organizador_id).single();
+          if (perfilData) {
+            setStatusContratoGlobal(perfilData.status_contrato);
+          }
+        }
+
         setPacotes(data.pacotes || []);
         setDescontos(data.descontos || []);
         setPerguntas(data.perguntas_customizadas || []);
@@ -337,7 +350,9 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
       }
 
-      setStatusText("A guardar Quartel General...");
+      setStatusText("A sincronizar com a Base de Dados...");
+
+      // 1. UPDATE AO CAMPO ESPECÍFICO
       const { error } = await supabase.from("campos").update({
         // Dados Base
         nome: formData.nome, nome_en, 
@@ -375,6 +390,20 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       }).eq('id', id);
 
       if (error) throw error;
+
+      // 2. SINCRONIA GLOBAL: Atualizar a tabela perfis SE O STATUS MUDAR e houver um organizador associado.
+      if (organizadorId && formData.status_aprovacao !== 'Pendente de Revisão') {
+         // Nós apenas atualizamos os detalhes operacionais no contrato geral SE não for uma exceção pontual
+         // Exemplo: se o parceiro muda para Aprovado no campo e a comissão for a mesma do geral, ou se formos forçar as configurações deste campo como o novo "padrão" do parceiro
+         // Neste caso, se o SuperAdmin edita AQUI a modalidade de reserva, espalhamos para o parceiro
+         const { error: perfilErr } = await supabase.from('perfis').update({
+             modalidade_reserva: formData.modalidade_reserva,
+             link_externo_reserva: formData.modalidade_reserva === 'link_externo' ? formData.link_externo_reserva : null,
+         }).eq('id', organizadorId);
+         
+         if (perfilErr) console.warn("Aviso Sincronia Perfil: ", perfilErr.message);
+      }
+
       alert("Campo atualizado com sucesso (Sincronizado com Nova Estrutura Partner).");
       router.push(`/${lang}/superadmin/campos`);
     } catch (error: any) { alert("Erro: " + error.message); } finally { setSaving(false); setStatusText(""); }
@@ -382,7 +411,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
 
   if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>A carregar Master HQ...</div>;
 
-  const showContratoWarning = formData.status_aprovacao === 'Aprovado' && !formData.contrato_parceiro_url;
+  const showContratoWarning = formData.status_aprovacao === 'Aprovado' && !formData.contrato_parceiro_url && statusContratoGlobal !== 'Aprovado';
 
   return (
     <main style={{ maxWidth: '850px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
@@ -413,7 +442,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
             </select>
             {showContratoWarning && (
               <p style={{ margin: '0.75rem 0 0 0', fontSize: '12px', color: '#dc2626', fontWeight: 'bold', backgroundColor: '#fee2e2', padding: '0.5rem', borderRadius: '0.5rem' }}>
-                ⚠️ Atenção: Colocou como Aprovado, mas não existe contrato anexado! Um campo deve idealmente ter contrato validado para estar ativo.
+                ⚠️ Atenção: Colocou como Aprovado, mas não existe contrato individual anexado nem contrato global validado!
               </p>
             )}
             <p style={{ margin: '0.5rem 0 0 0', fontSize: '11px', color: '#92400e' }}>
@@ -470,6 +499,11 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
               {formData.contrato_parceiro_url && (
                 <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#fef3c7', borderRadius: '0.5rem', fontSize: '13px', fontWeight: 'bold' }}>
                   ✅ Contrato validado e anexado: <a href={formData.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" style={{ color: '#b45309', textDecoration: 'underline' }}>Ver Documento</a>
+                </div>
+              )}
+              {statusContratoGlobal === 'Aprovado' && !formData.contrato_parceiro_url && (
+                <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#ecfdf5', borderRadius: '0.5rem', fontSize: '13px', fontWeight: 'bold', color: '#065f46' }}>
+                  ✅ Este programa está protegido e coberto por um Contrato Global aprovado do Parceiro.
                 </div>
               )}
               <input type="file" accept=".pdf" onChange={handleContratoSelect} style={{ width: '100%', padding: '0.75rem', backgroundColor: 'white', borderRadius: '0.5rem', border: '1px dashed #fbbf24' }} />

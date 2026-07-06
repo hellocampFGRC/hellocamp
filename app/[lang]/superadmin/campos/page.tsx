@@ -22,7 +22,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
 
   const fetchCamposGerais = async () => {
     const { data: camposData } = await supabase.from('campos').select('*').order('created_at', { ascending: false });
-    const { data: perfisData } = await supabase.from('perfis').select('id, empresa_nome, email, taxa_comissao, base_comissao');
+    const { data: perfisData } = await supabase.from('perfis').select('id, empresa_nome, email, taxa_comissao, base_comissao, status_contrato');
 
     const camposComPerfis = (camposData || []).map(campo => {
       const organizador = perfisData?.find(p => p.id === campo.organizador_id);
@@ -38,7 +38,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
       return {
         ...campo,
         precoCalculado: precoMinimo,
-        perfis: organizador || { empresa_nome: 'Sem Registo', email: '' }
+        perfis: organizador || { empresa_nome: 'Sem Registo', email: '', status_contrato: null }
       };
     });
 
@@ -70,13 +70,12 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
     }).eq('id', campoEmEdicao.id);
 
     if (!error) {
-      alert("Comissão atualizada com sucesso!");
+      alert("Comissão atualizada com sucesso no Programa!");
       setShowModal(false);
       fetchCamposGerais();
     } else alert("Erro: " + error.message);
   };
 
-  // Lógica do Link de Contrato Inteligente
   const handleGerarContrato = (campoId: string, nomeCampo: string) => {
     const url = `${window.location.origin}/${lang}/assinatura-contrato/${campoId}`;
     setShareData({ url, nome: nomeCampo });
@@ -94,10 +93,11 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
     }
   };
 
-  const getStatusColor = (status: string) => {
-    if (status === 'Aprovado') return { bg: '#dcfce7', text: '#059669', border: '#bbf7d0' };
-    if (status === 'Rejeitado') return { bg: '#fee2e2', text: '#dc2626', border: '#fecaca' };
-    return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' }; 
+  const getStatusColor = (status: string, temContrato: boolean) => {
+    if (status === 'Aprovado' && temContrato) return { bg: '#dcfce7', text: '#059669', border: '#bbf7d0', label: 'Aprovado' };
+    if (status === 'Aprovado' && !temContrato) return { bg: '#fef3c7', text: '#b45309', border: '#fde68a', label: 'Aprovado (Sem Contrato)' };
+    if (status === 'Rejeitado') return { bg: '#fee2e2', text: '#dc2626', border: '#fecaca', label: 'Rejeitado' };
+    return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', label: status || 'Pendente' }; 
   };
 
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>A carregar programas do Quartel General...</div>;
@@ -107,7 +107,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
       
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>Gestão de Campos</h1>
-        <p style={{ color: '#64748b', marginTop: '0.25rem', fontSize: '13px' }}>Controlo absoluto sobre programas, comissões e aprovação de contratos.</p>
+        <p style={{ color: '#64748b', marginTop: '0.25rem', fontSize: '13px' }}>Controlo absoluto sobre programas, comissões e listagens de mercado.</p>
       </div>
 
       {/* MODAL DE AJUSTE DE COMISSÃO */}
@@ -136,20 +136,20 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
                   <option value="sem_comissao">Isento (0%)</option>
                 </select>
               </div>
-              <button type="submit" style={btnSubmitStyle}>Guardar Alteração</button>
+              <button type="submit" style={btnSubmitStyle}>Guardar Exceção no Programa</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL DE PARTILHA DE CONTRATO */}
+      {/* MODAL DE PARTILHA DE CONTRATO (QUANDO NECESSÁRIO) */}
       {showShareModal && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <div>
                 <h2 style={{ margin: 0, fontWeight: '900', fontSize: '1.125rem', color: '#0f172a' }}>Link de Assinatura</h2>
-                <p style={{ margin: '0.25rem 0 0 0', fontSize: '12px', color: '#64748b' }}>Envie este link ao parceiro para validação.</p>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '12px', color: '#64748b' }}>O Parceiro deste programa não assinou o contrato global. Envie-lhe este link.</p>
               </div>
               <button onClick={() => setShowShareModal(false)} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '1rem', cursor: 'pointer', color: '#64748b', fontWeight: 'bold' }}>×</button>
             </div>
@@ -169,24 +169,10 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
                   {copied ? '✓ Copiado' : 'Copiar'}
                 </button>
               </div>
-
               <div style={{ borderTop: '1px dashed #e2e8f0', margin: '0.5rem 0' }}></div>
-
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <a 
-                  href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue o link para validação e assinatura digital do contrato do programa "${shareData.nome}" na plataforma HelloCamp:\n\n${shareData.url}`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ flex: 1, padding: '0.8rem', backgroundColor: '#25D366', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', textDecoration: 'none', textAlign: 'center', display: 'block' }}
-                >
-                  WhatsApp
-                </a>
-                <a 
-                  href={`mailto:?subject=${encodeURIComponent(`Assinatura de Contrato HelloCamp - ${shareData.nome}`)}&body=${encodeURIComponent(`Olá,\n\nSegue o link para validação e assinatura digital do contrato referente ao programa "${shareData.nome}".\n\nAceda através deste link seguro:\n${shareData.url}\n\nObrigado,\nEquipa HelloCamp`)}`}
-                  style={{ flex: 1, padding: '0.8rem', backgroundColor: '#3b82f6', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', textDecoration: 'none', textAlign: 'center', display: 'block' }}
-                >
-                  E-mail
-                </a>
+                <a href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue o link para validação e assinatura digital do contrato do programa "${shareData.nome}" na plataforma HelloCamp:\n\n${shareData.url}`)}`} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: '0.8rem', backgroundColor: '#25D366', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', textDecoration: 'none', textAlign: 'center', display: 'block' }}>WhatsApp</a>
+                <a href={`mailto:?subject=${encodeURIComponent(`Assinatura de Contrato HelloCamp - ${shareData.nome}`)}&body=${encodeURIComponent(`Olá,\n\nSegue o link para validação e assinatura digital do contrato referente ao programa "${shareData.nome}".\n\nAceda através deste link seguro:\n${shareData.url}\n\nObrigado,\nEquipa HelloCamp`)}`} style={{ flex: 1, padding: '0.8rem', backgroundColor: '#3b82f6', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', textDecoration: 'none', textAlign: 'center', display: 'block' }}>E-mail</a>
               </div>
             </div>
           </div>
@@ -211,7 +197,10 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
               campos.map((campo) => {
                 const isCustom = campo.taxa_comissao !== null && campo.taxa_comissao !== undefined;
                 const taxaVisual = isCustom ? campo.taxa_comissao : (campo.perfis?.taxa_comissao || 12);
-                const statusColor = getStatusColor(campo.status_aprovacao);
+                
+                // O campo é considerado como tendo contrato se o próprio campo tiver ou se o perfil global do organizador tiver o status Aprovado.
+                const temContrato = !!campo.contrato_parceiro_url || campo.perfis?.status_contrato === 'Aprovado';
+                const statusColor = getStatusColor(campo.status_aprovacao, temContrato);
                 
                 return (
                   <tr key={campo.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -226,13 +215,14 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
                     {/* PARCEIRO */}
                     <td style={{ ...tdStyle, fontSize: '11px' }}>
                       <span style={{ fontWeight: 'bold', color: '#334155' }}>{campo.perfis?.empresa_nome}</span>
+                      <span style={{ display: 'block', color: '#94a3b8', fontSize: '9px', marginTop: '2px' }}>Estado Global: {campo.perfis?.status_contrato || 'N/A'}</span>
                     </td>
                     
                     {/* LOGÍSTICA & STATUS */}
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
                         <span style={{ fontSize: '9px', padding: '0.15rem 0.35rem', backgroundColor: statusColor.bg, color: statusColor.text, borderRadius: '0.25rem', fontWeight: 'bold', border: `1px solid ${statusColor.border}` }}>
-                          {campo.status_aprovacao || 'Pendente'}
+                          {statusColor.label}
                         </span>
                         <span style={{ fontSize: '9px', padding: '0.15rem 0.35rem', backgroundColor: '#eef2ff', color: '#4f46e5', borderRadius: '0.25rem', fontWeight: 'bold' }}>
                           {campo.modalidade_reserva === 'link_externo' ? '🔗 Ext.' : (campo.modalidade_reserva === 'email' ? '✉️ Cons.' : '🛒 Check.')}
@@ -260,12 +250,14 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
                         <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Editar HQ</Link>
                         <button onClick={() => { setCampoEmEdicao(campo); setShowModal(true); }} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Comissão</button>
                         
-                        {/* BOTÃO INTELIGENTE DO CONTRATO */}
+                        {/* Lógica Inteligente de Contrato */}
                         {campo.contrato_parceiro_url ? (
-                          <a href={campo.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" style={btnActionStyle('#ecfdf5', '#059669', '#a7f3d0')}>Ver Contrato</a>
+                          <a href={campo.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" style={btnActionStyle('#ecfdf5', '#059669', '#a7f3d0')}>Contrato Anexo</a>
+                        ) : (campo.perfis?.status_contrato === 'Aprovado' ? (
+                          <span style={{...btnActionStyle('#f0fdfa', '#0369a1', '#ccfbf1'), cursor: 'default'}}>✅ Coberto por Contrato Global</span>
                         ) : (
-                          <button onClick={() => handleGerarContrato(campo.id, campo.nome)} style={btnActionStyle('#eff6ff', '#2563eb', '#bfdbfe')}>Gerar Contrato</button>
-                        )}
+                          <button onClick={() => handleGerarContrato(campo.id, campo.nome)} style={btnActionStyle('#eff6ff', '#2563eb', '#bfdbfe')}>Pedir Assinatura</button>
+                        ))}
 
                         <button onClick={() => handleApagarCampo(campo.id, campo.nome)} style={btnActionStyle('#fef2f2', '#dc2626', '#fecaca')}>Apagar</button>
                       </div>
@@ -302,5 +294,6 @@ const btnActionStyle = (bg: string, color: string, border: string) => ({
   fontSize: '10px', 
   cursor: 'pointer', 
   border: `1px solid ${border}`, 
-  display: 'inline-flex' 
+  display: 'inline-flex',
+  alignItems: 'center'
 });
