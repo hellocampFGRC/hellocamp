@@ -13,11 +13,10 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   // --- ESTADOS GERAIS ---
   const [submitting, setSubmitting] = useState(false);
   
-  // FOTO
+  // FOTO E CV
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoUrl, setFotoUrl] = useState<string>("");
   
-  // CV (NOVO)
   const [uploadingCV, setUploadingCV] = useState(false);
   const [cvUrl, setCvUrl] = useState<string>("");
   const [cvFileName, setCvFileName] = useState<string>("");
@@ -51,7 +50,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   
   const opcoesAtuacao = [
     ...distritosPT,
-    "Em todo o país (Com Alojamento / Deslocação)"
+    isEn ? "Nationwide (With Accommodation)" : "Em todo o país (Com Alojamento / Deslocação)"
   ];
 
   const listaCertificados = [
@@ -71,6 +70,19 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     { id: "Natal", pt: "Férias de Natal", en: "Christmas Break" }
   ];
 
+  // --- MENOR DE IDADE LÓGICA (AVISO) ---
+  const calcularIdade = (dataNascimento: string) => {
+    if (!dataNascimento) return 18; 
+    const hoje = new Date();
+    const nascimento = new Date(dataNascimento);
+    let idade = hoje.getFullYear() - nascimento.getFullYear();
+    const m = hoje.getMonth() - nascimento.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) idade--;
+    return idade;
+  };
+  const eMenor = calcularIdade(formData.data_nascimento) < 18;
+
+  // --- HANDLERS ---
   const handleCheckboxChange = (id: string, tipo: "cert" | "disp" | "zona") => {
     if (tipo === "cert") {
       setCertificacoes(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -84,22 +96,16 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   const handleUploadFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploadingFoto(true);
-      if (!event.target.files || event.target.files.length === 0) {
-        throw new Error('Deve selecionar uma imagem.');
-      }
+      if (!event.target.files || event.target.files.length === 0) throw new Error('Deve selecionar uma imagem.');
 
       const file = event.target.files[0];
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('monitores-fotos')
-        .upload(filePath, file, { upsert: false });
-
+      
+      const { error: uploadError } = await supabase.storage.from('monitores-fotos').upload(fileName, file, { upsert: false });
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('monitores-fotos').getPublicUrl(filePath);
+      const { data: urlData } = supabase.storage.from('monitores-fotos').getPublicUrl(fileName);
       setFotoUrl(urlData.publicUrl);
     } catch (error: any) {
       alert((isEn ? 'Error uploading photo: ' : 'Erro no upload da foto: ') + error.message);
@@ -108,30 +114,21 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     }
   };
 
-  // --- NOVO: HANDLER UPLOAD CV ---
   const handleUploadCV = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploadingCV(true);
-      if (!event.target.files || event.target.files.length === 0) {
-        throw new Error('Nenhum ficheiro selecionado.');
-      }
+      if (!event.target.files || event.target.files.length === 0) throw new Error('Nenhum ficheiro selecionado.');
 
       const file = event.target.files[0];
-      // Verifica extensão
       if (!file.type.includes('pdf') && !file.name.endsWith('.doc') && !file.name.endsWith('.docx')) {
          throw new Error('Apenas ficheiros PDF ou Word são permitidos.');
       }
 
       setCvFileName(file.name);
-      
       const fileExt = file.name.split('.').pop();
       const fileName = `cv_${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
 
-      // Recomenda-se criar um bucket no Supabase chamado 'monitores-cvs'
-      const { error: uploadError } = await supabase.storage
-        .from('monitores-cvs') // Pode usar o mesmo que tem, ou criar um novo
-        .upload(fileName, file, { upsert: false });
-
+      const { error: uploadError } = await supabase.storage.from('monitores-cvs').upload(fileName, file, { upsert: false });
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('monitores-cvs').getPublicUrl(fileName);
@@ -168,7 +165,6 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1;
 
     const dias = [];
-    
     for (let i = 0; i < startDayIndex; i++) {
       dias.push(<div key={`empty-${i}`} className="p-2"></div>);
     }
@@ -182,12 +178,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
       if (estadoDia === 'Ocupado') coresClasses = "bg-red-100 border-red-500 text-red-800 font-black opacity-80 line-through";
 
       dias.push(
-        <button
-          key={dataStr}
-          type="button"
-          onClick={() => toggleDiaCalendario(dataStr)}
-          className={`h-10 w-full rounded-lg border text-sm transition-all duration-200 flex items-center justify-center cursor-pointer ${coresClasses}`}
-        >
+        <button key={dataStr} type="button" onClick={() => toggleDiaCalendario(dataStr)} className={`h-10 w-full rounded-lg border text-sm transition-all duration-200 flex items-center justify-center cursor-pointer ${coresClasses}`}>
           {i}
         </button>
       );
@@ -195,13 +186,10 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     return dias;
   };
 
-  const mesesNomes = isEn 
-    ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-    : ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-  
+  const mesesNomes = isEn ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] : ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const diasDaSemana = isEn ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-  // --- SUBMISSÃO E CRIAÇÃO DE CONTA ---
+  // --- SUBMISSÃO ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -224,6 +212,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
       options: {
         data: {
           nome_completo: formData.nome_completo,
+          telefone: formData.telefone,
           role: 'monitor'
         }
       }
@@ -237,14 +226,13 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
 
     const userId = authData.user.id;
 
-    // 2. Gravar Perfil Base
-    await supabase.from('perfis').upsert({
-      id: userId,
-      email: authEmail,
+    // 2. Garantir sincronia PERFEITA do Perfil Master
+    await supabase.from('perfis').update({
       nome_completo: formData.nome_completo,
       telefone: formData.telefone,
-      role: 'monitor'
-    });
+      role: 'monitor',
+      email: authEmail
+    }).eq('id', userId);
 
     // 3. Gravar na Tabela de Monitores
     const payload = {
@@ -258,11 +246,12 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
       outras_competencias: formData.outras_competencias,
       bio: formData.bio,
       fotografia_url: fotoUrl,
-      cv_url: cvUrl, // Opcional, guarda a string do URL do PDF
+      cv_url: cvUrl,
       certificacoes,
       disponibilidade: disponibilidadeEpocas,
       areas_atuacao: areasAtuacao,
       calendario_disponibilidade: calendario
+      // Nota: o 'autorizacao_pais_url' fica a nulo por agora. Ele submete isto no Perfil depois do registo!
     };
 
     const { error: monitorError } = await supabase.from("monitores").insert([payload]);
@@ -275,7 +264,6 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     }
   };
 
-  // --- CLASSES CSS COMUNS ---
   const labelClass = "text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 block";
   const inputClass = "w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all shadow-sm";
   const selectClass = "w-full py-3 px-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1.25rem_center] bg-no-repeat";
@@ -300,8 +288,21 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
           </p>
         </div>
 
+        {/* ALERTA: MENOR DE IDADE REGISTO */}
+        {eMenor && formData.data_nascimento && (
+          <div className="m-6 md:mx-12 p-6 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-4">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <h4 className="font-black text-amber-900 text-sm">Registo de Menor</h4>
+              <p className="text-amber-800 text-xs font-medium mt-1 leading-relaxed">
+                Reparámos que tens menos de 18 anos. Podes avançar e criar o teu perfil agora, mas para ficares visível aos organizadores de campos, precisarás de imprimir e enviar um documento de autorização dos pais. (Poderás tratar disto mais tarde dentro do teu Perfil!)
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* FORMULÁRIO */}
-        <form onSubmit={handleSubmit} className="p-6 md:p-12 space-y-10">
+        <form onSubmit={handleSubmit} className="p-6 md:p-12 pt-0 space-y-10 mt-6">
           
           {/* SECÇÃO 1: FOTO E CV & IDENTIFICAÇÃO BÁSICA */}
           <div>
@@ -309,7 +310,6 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
               {isEn ? "1. Personal Profile & Resume" : "1. O teu Perfil Pessoal e CV"}
             </h3>
             
-            {/* Box Foto */}
             <div className="mb-6 flex flex-col sm:flex-row items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-200">
               <div className="w-24 h-24 rounded-full bg-white border-4 border-slate-100 shadow-sm overflow-hidden flex items-center justify-center flex-shrink-0 relative">
                 {fotoUrl ? (
@@ -323,13 +323,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                 <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Profile Picture" : "Fotografia"}</label>
                 <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "Camps prefer profiles with clear photos." : "Um perfil com fotografia atrai 3x mais propostas de recrutamento."}</p>
                 <div className="relative inline-block">
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handleUploadFoto} 
-                    disabled={uploadingFoto}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
+                  <input type="file" accept="image/*" onChange={handleUploadFoto} disabled={uploadingFoto} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   <button type="button" className="bg-white border border-slate-300 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 transition-colors pointer-events-none">
                     {uploadingFoto ? (isEn ? "Uploading..." : "A carregar...") : (isEn ? "Choose from device" : "Escolher Imagem")}
                   </button>
@@ -337,7 +331,6 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
               </div>
             </div>
 
-            {/* Box Currículo (CV) */}
             <div className="mb-8 flex flex-col sm:flex-row items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-200">
               <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0 relative">
                 <span className="text-2xl text-slate-400">📄</span>
@@ -347,13 +340,7 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
                 <label className="block text-sm font-black text-slate-900 mb-1">{isEn ? "Upload your Resume (CV)" : "Anexar Currículo (CV)"} <span className="text-slate-400 text-xs ml-1">(Opcional)</span></label>
                 <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "PDF or Word files only. It will only be visible to verified camps." : "Apenas ficheiros PDF ou DOCX. Fica visível apenas para os organizadores."}</p>
                 <div className="relative inline-block">
-                  <input 
-                    type="file" 
-                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
-                    onChange={handleUploadCV} 
-                    disabled={uploadingCV}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
+                  <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleUploadCV} disabled={uploadingCV} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   <button type="button" className="bg-white border border-slate-300 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 transition-colors pointer-events-none">
                     {uploadingCV ? (isEn ? "Uploading..." : "A carregar...") : (cvFileName ? `✔️ ${cvFileName.substring(0, 15)}...` : (isEn ? "Upload Resume" : "Carregar Currículo"))}
                   </button>

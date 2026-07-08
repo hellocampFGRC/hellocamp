@@ -4,6 +4,7 @@ import React, { useState, useEffect, use } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import jsPDF from "jspdf";
 
 export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
@@ -14,12 +15,16 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
-  // --- FOTO E CV ---
+  // --- FOTO E CV E AUTORIZAÇÃO ---
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoUrl, setFotoUrl] = useState<string>("");
   const [uploadingCV, setUploadingCV] = useState(false);
   const [cvUrl, setCvUrl] = useState<string>("");
   const [cvFileName, setCvFileName] = useState<string>("");
+
+  const [uploadingAutorizacao, setUploadingAutorizacao] = useState(false);
+  const [autorizacaoUrl, setAutorizacaoUrl] = useState<string>("");
+  const [autorizacaoFileName, setAutorizacaoFileName] = useState<string>("");
 
   const [email, setEmail] = useState("");
 
@@ -71,15 +76,20 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
         });
         setFotoUrl(data.fotografia_url || "");
         setCvUrl(data.cv_url || "");
+        setAutorizacaoUrl(data.autorizacao_pais_url || ""); // <-- Nova coluna na Base de Dados
         setCertificacoes(data.certificacoes || []);
         setDisponibilidadeEpocas(data.disponibilidade || []);
         setAreasAtuacao(data.areas_atuacao || []);
         setCalendario(data.calendario_disponibilidade || {});
 
-        // Extrair o nome do ficheiro CV do URL se existir
         if (data.cv_url) {
           const urlParts = data.cv_url.split('/');
           setCvFileName(urlParts[urlParts.length - 1]);
+        }
+        
+        if (data.autorizacao_pais_url) {
+          const urlParts = data.autorizacao_pais_url.split('/');
+          setAutorizacaoFileName(urlParts[urlParts.length - 1]);
         }
       }
       setLoadingData(false);
@@ -121,6 +131,56 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
     } else if (tipo === "zona") {
       setAreasAtuacao(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     }
+  };
+
+  // --- LÓGICA MENORES DE IDADE ---
+  const calcularIdade = (dataNascimento: string) => {
+    if (!dataNascimento) return 18; // Default assumes adult if empty
+    const hoje = new Date();
+    const nascimento = new Date(dataNascimento);
+    let idade = hoje.getFullYear() - nascimento.getFullYear();
+    const m = hoje.getMonth() - nascimento.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+      idade--;
+    }
+    return idade;
+  };
+
+  const eMenor = calcularIdade(formData.data_nascimento) < 18;
+
+  const gerarDocumentoAutorizacao = () => {
+    const doc = new jsPDF({ format: 'a4', unit: 'mm' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    const titulo = "AUTORIZAÇÃO DO ENCARREGADO DE EDUCAÇÃO PARA DIVULGAÇÃO";
+    const titulo2 = "DE DADOS E IMAGEM DE MENOR";
+    doc.text(titulo, pageWidth / 2, 25, { align: "center" });
+    doc.text(titulo2, pageWidth / 2, 32, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    
+    const textoBase = `Eu, _____________________________________________________, titular do Cartão de Cidadão n.º __________________________, na qualidade de Encarregado(a) de Educação de ${formData.nome_completo || "________________________________________________"}, nascido(a) em ${formData.data_nascimento ? new Date(formData.data_nascimento).toLocaleDateString('pt-PT') : "___/___/______"}, autorizo a divulgação dos seus dados e da sua imagem na plataforma HelloCamp, para efeitos exclusivos de divulgação do seu perfil e da sua disponibilidade para prestar serviços como monitor(a) em campos de férias e outras atividades de animação juvenil.\n\nA presente autorização abrange a publicação dos seguintes elementos:\n• Nome\n• Fotografia\n• Idade e Localidade\n• Formação e/ou experiência relevante\n• Competências, certificações e restantes informações fornecidas para a criação do perfil.\n\nDeclaro ter conhecimento de que a HelloCamp atua exclusivamente como plataforma de divulgação e aproximação entre candidatos e entidades organizadoras de campos de férias. O regime de isenção laboral para o trabalho de menores rege-se pelos termos definidos na lei portuguesa, cabendo a negociação do vínculo de prestação de serviços exclusivamente à entidade organizadora contratante.\n\nA presente autorização é prestada de forma livre, informada e voluntária, podendo ser revogada a qualquer momento mediante comunicação escrita à HelloCamp (info@hellocamp.pt), sem prejuízo da licitude do tratamento efetuado até à data da revogação.`;
+    
+    const splitTexto = doc.splitTextToSize(textoBase, pageWidth - 40);
+    doc.text(splitTexto, 20, 50);
+
+    const posY = 150;
+    doc.text("Local: ___________________________", 20, posY);
+    doc.text("Data: ____/____/________", 130, posY);
+    
+    doc.text("O(A) Encarregado(a) de Educação", 20, posY + 20);
+    doc.text("Nome: ________________________________________________________", 20, posY + 30);
+    doc.text("Assinatura: ___________________________________________________", 20, posY + 40);
+    
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.text("Nota: Este documento deve ser impresso, assinado pelo Encarregado de Educação e submetido na", 20, posY + 60);
+    doc.text("plataforma no perfil do monitor menor de idade.", 20, posY + 65);
+
+    doc.save(`Autorizacao_Menor_${formData.nome_completo.replace(/\s+/g, '_') || 'HelloCamp'}.pdf`);
   };
 
   // --- UPLOADS ---
@@ -169,6 +229,29 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
       alert((isEn ? 'Error uploading CV: ' : 'Erro no upload do Currículo: ') + error.message);
     } finally {
       setUploadingCV(false);
+    }
+  };
+
+  const handleUploadAutorizacao = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingAutorizacao(true);
+      if (!event.target.files || event.target.files.length === 0) throw new Error('Nenhum ficheiro selecionado.');
+
+      const file = event.target.files[0];
+      setAutorizacaoFileName(file.name);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `auth_${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage.from('monitores-cvs').upload(fileName, file, { upsert: false }); // Usamos a mesma bucket do CV para manter privado
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('monitores-cvs').getPublicUrl(fileName);
+      setAutorizacaoUrl(urlData.publicUrl);
+    } catch (error: any) {
+      setAutorizacaoFileName("");
+      alert('Erro no upload da Autorização: ' + error.message);
+    } finally {
+      setUploadingAutorizacao(false);
     }
   };
 
@@ -239,6 +322,11 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
       return;
     }
 
+    if (eMenor && !autorizacaoUrl) {
+      alert(isEn ? "As you are under 18, you must upload the Parent Authorization Document to save your profile." : "Sendo menor de 18 anos, é obrigatório descarregar, assinar e fazer upload da Declaração de Autorização dos Pais para poder guardar o perfil e candidatar-se.");
+      return;
+    }
+
     setSubmitting(true);
 
     const { data: { session } } = await supabase.auth.getSession();
@@ -256,13 +344,14 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
       bio: formData.bio,
       fotografia_url: fotoUrl,
       cv_url: cvUrl,
+      autorizacao_pais_url: eMenor ? autorizacaoUrl : null,
       certificacoes,
       disponibilidade: disponibilidadeEpocas,
       areas_atuacao: areasAtuacao,
       calendario_disponibilidade: calendario
     };
 
-    // Atualiza a tabela Monitores (Upsert garante que se não houver cria, se houver atualiza)
+    // Atualiza a tabela Monitores
     const { error: monitorError } = await supabase.from("monitores").upsert([payload]);
 
     // Atualiza também os dados na tabela perfis para sincronia
@@ -312,11 +401,45 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
           </p>
         </div>
 
+        {/* ALERTA MENOR DE IDADE */}
+        {eMenor && (
+          <div className="m-6 md:mx-12 p-6 bg-amber-50 border-2 border-amber-200 rounded-2xl flex flex-col items-center text-center">
+            <span className="text-3xl mb-3">⚠️</span>
+            <h3 className="text-lg font-black text-amber-900 mb-2">Monitor Menor de 18 Anos</h3>
+            <p className="text-amber-800 font-medium text-sm max-w-2xl leading-relaxed mb-6">
+              Para ficares visível para as entidades organizadoras, e em conformidade com as regras laborais de isenção aplicáveis a menores, é estritamente obrigatório apresentares uma autorização assinada pelo teu Encarregado de Educação.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg">
+              <button 
+                type="button" 
+                onClick={gerarDocumentoAutorizacao}
+                className="flex-1 bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold px-4 py-3 rounded-xl transition-colors text-xs flex items-center justify-center gap-2"
+              >
+                1. Descarregar PDF
+              </button>
+              
+              <div className="flex-1 relative inline-block">
+                <input type="file" accept=".pdf,.jpeg,.jpg,.png" onChange={handleUploadAutorizacao} disabled={uploadingAutorizacao} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                <button type="button" className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-3 rounded-xl transition-colors text-xs flex items-center justify-center gap-2 pointer-events-none">
+                  {uploadingAutorizacao ? "A carregar..." : (autorizacaoFileName ? `✔️ ${autorizacaoFileName.substring(0, 10)}...` : "2. Anexar Assinado")}
+                </button>
+              </div>
+            </div>
+            
+            {autorizacaoUrl && (
+              <a href={autorizacaoUrl} target="_blank" rel="noopener noreferrer" className="mt-4 text-xs font-bold text-emerald-700 underline">
+                Autorização Validada (Ver Ficheiro)
+              </a>
+            )}
+          </div>
+        )}
+
         {/* FORMULÁRIO */}
-        <form onSubmit={handleSubmit} className="p-6 md:p-12 space-y-10">
+        <form onSubmit={handleSubmit} className="p-6 md:p-12 pt-0 space-y-10">
           
           {/* SECÇÃO 1: FOTO E CV & IDENTIFICAÇÃO BÁSICA */}
-          <div>
+          <div className="mt-8">
             <h3 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6">
               {isEn ? "1. Personal Profile & Resume" : "1. Perfil Pessoal e CV"}
             </h3>
@@ -359,7 +482,6 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
                     </button>
                   </div>
 
-                  {/* NOVO: BOTÃO PARA VISUALIZAR O CV ATUAL (SE EXISTIR) */}
                   {cvUrl && (
                     <a 
                       href={cvUrl} 
@@ -514,7 +636,7 @@ export default function EditarPerfilMonitorPage({ params }: { params: Promise<{ 
           <div className="pt-8 border-t border-slate-200 flex justify-end">
             <button 
               type="submit" 
-              disabled={submitting} 
+              disabled={submitting || (eMenor && !autorizacaoUrl)} 
               className="w-full sm:w-auto bg-blue-600 text-white font-black uppercase tracking-widest text-xs px-10 py-4 rounded-xl shadow-lg hover:bg-blue-700 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none cursor-pointer"
             >
               {submitting ? (isEn ? "Saving Profile..." : "A Guardar...") : (isEn ? "Save Changes" : "Guardar Alterações")}
