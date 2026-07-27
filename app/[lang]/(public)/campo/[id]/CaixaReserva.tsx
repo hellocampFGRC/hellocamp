@@ -27,7 +27,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   const externalLinkUrl = contratoData.linkExternoReserva || campo?.link_externo_reserva || '';
 
   const pacotes: Pacote[] = campo.pacotes || [];
-  const calendario = campo.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [1, 2, 3, 4, 5] };
+  const calendario = campo.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [1, 2, 3, 4, 5], dias_fechados: [] };
 
   const [pacoteSelecionado, setPacoteSelecionado] = useState<Pacote | null>(null);
   const [varianteSelecionada, setVarianteSelecionada] = useState<Variante | null>(null);
@@ -44,22 +44,44 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   const [leadForm, setLeadForm] = useState({ nome: "", email: "", telefone: "" });
   const [submittingLead, setSubmittingLead] = useState(false);
 
+  // Descobre a data local do utilizador em formato ISO (YYYY-MM-DD) para bloquear o passado
+  const getTodayISO = () => {
+    const today = new Date();
+    const tzOffset = today.getTimezoneOffset() * 60000; // offset in milliseconds
+    const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
+    return localISOTime;
+  };
+
+  const todayISO = getTodayISO();
+
   // Inicializar calendário e pacote base
   useEffect(() => {
     if (calendario.data_inicio && calendario.data_fim) {
       const start = new Date(calendario.data_inicio);
       const end = new Date(calendario.data_fim);
       const permitidos = calendario.dias_semana || [1, 2, 3, 4, 5];
+      const fechados = calendario.dias_fechados || [];
       const diasGerados: string[] = [];
       let curr = new Date(start);
+      
       while (curr <= end) {
-        if (permitidos.includes(curr.getDay())) diasGerados.push(curr.toISOString().split('T')[0]);
+        const dateStr = curr.toISOString().split('T')[0];
+        // Adiciona à lista de disponíveis se for um dia da semana permitido, se não estiver fechado e SE NÃO FOR PASSADO.
+        if (permitidos.includes(curr.getDay()) && !fechados.includes(dateStr) && dateStr >= todayISO) {
+           diasGerados.push(dateStr);
+        }
         curr.setDate(curr.getDate() + 1);
       }
       setDatasDisponiveis(diasGerados);
-      if (diasGerados.length > 0) setMesAtual(new Date(diasGerados[0]));
+      
+      // Ajusta o mês inicial do calendário
+      if (diasGerados.length > 0) {
+        setMesAtual(new Date(diasGerados[0]));
+      } else if (calendario.data_inicio > todayISO) {
+         setMesAtual(new Date(calendario.data_inicio));
+      }
     }
-  }, [calendario.data_inicio, calendario.data_fim, calendario.dias_semana]);
+  }, [calendario.data_inicio, calendario.data_fim, calendario.dias_semana, calendario.dias_fechados, todayISO]);
 
   useEffect(() => {
     if (pacotes.length > 0 && !pacoteSelecionado) {
@@ -89,6 +111,9 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
 
   const handleDiaClick = (data: string) => {
     if (!pacoteSelecionado) return;
+    
+    // Dupla verificação de segurança: não permite cliques no passado
+    if (data < todayISO) return;
 
     if (pacoteSelecionado.tipo === 'dia') {
       const limiteDias = pacoteSelecionado.quantidade || 1;
@@ -194,7 +219,6 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     setSubmittingLead(true);
 
     try {
-      // 1. Guardar a Lead na Tabela Supabase para efeitos de Tracking de Comissão (auditoria)
       await supabase.from('leads_externas').insert([{
          campo_id: campo.id,
          organizador_id: campo.organizador_id,
@@ -205,7 +229,6 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
          preco_estimado: precoTotal
       }]);
 
-      // 2. Chamar a API de email para enviar o alerta ao Parceiro (c/ HelloCamp em CC)
       await fetch('/api/notificar-reserva', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -217,13 +240,11 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
         })
       });
 
-      // 3. Redirecionar para o Formulário do Parceiro
-      window.open(externalLinkUrl, '_blank'); // Abre noutra aba
+      window.open(externalLinkUrl, '_blank'); 
       setShowLeadModal(false);
 
     } catch (error) {
       console.error(error);
-      // Mesmo com erro de gravação, deixamos o cliente avançar para o parceiro não perder a venda.
       window.open(externalLinkUrl, '_blank');
       setShowLeadModal(false);
     } finally {
@@ -258,10 +279,14 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
       const d = String(currentDate.getDate()).padStart(2, '0');
       const dateString = `${y}-${m}-${d}`;
       
+      const isPast = dateString < todayISO;
+      const isAvailableDay = datasDisponiveis.includes(dateString);
+      
       currentRow.push({
         dia: i,
         dataCompleta: dateString,
-        disponivel: datasDisponiveis.includes(dateString)
+        isPast: isPast,
+        disponivel: !isPast && isAvailableDay
       });
       
       if (currentRow.length === 7) {
@@ -393,13 +418,15 @@ export function SeletorOpcoes() {
                  {semana.map((diaInfo, colIdx) => {
                    if (!diaInfo) return <div key={colIdx} className="w-full aspect-square"></div>;
                    
-                   const { dia, dataCompleta, disponivel } = diaInfo;
+                   const { dia, dataCompleta, disponivel, isPast } = diaInfo;
                    const isSelected = ctx.diasSelecionados.includes(dataCompleta);
                    
                    let buttonClasses = "w-full aspect-square flex items-center justify-center rounded-lg text-sm font-bold transition-all ";
                    
-                   if (!disponivel) {
-                     buttonClasses += "bg-slate-100/50 text-slate-300 cursor-not-allowed";
+                   if (isPast) {
+                     buttonClasses += "bg-slate-200/50 text-slate-300 cursor-not-allowed opacity-50";
+                   } else if (!disponivel) {
+                     buttonClasses += "bg-red-50/50 text-red-300 cursor-not-allowed line-through";
                    } else if (isSelected) {
                      buttonClasses += "bg-emerald-600 text-white shadow-sm border border-emerald-700";
                    } else {
@@ -410,7 +437,7 @@ export function SeletorOpcoes() {
                      <button 
                        key={colIdx} 
                        type="button" 
-                       disabled={!disponivel}
+                       disabled={!disponivel || isPast}
                        onClick={() => ctx.handleDiaClick(dataCompleta)}
                        className={buttonClasses}
                      >
