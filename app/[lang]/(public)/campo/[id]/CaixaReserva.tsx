@@ -565,14 +565,28 @@ export function CaixaResumo() {
           <div className="text-center text-sm font-bold text-slate-400 py-4">🗓️ {ctx.isEn ? 'No packages available' : 'Nenhum pacote disponível'}</div>
         ) : (
           <div className="flex flex-col gap-4 mb-6">
-            <div className="flex justify-between items-start">
+            
+            {/* 1. PROGRAMA E OPÇÃO */}
+            <div className="flex justify-between items-start border-b border-slate-50 pb-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{ctx.isEn ? 'Package' : 'Programa'}</p>
-                {/* Aqui está a grande alteração para que o Nome seja sempre descritivo! */}
-                <p className="text-sm font-bold text-slate-900 m-0">{ctx.nomeProgramaCompleto || '--'}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{ctx.isEn ? 'Selected Program' : 'Programa Selecionado'}</p>
+                <p className="text-sm font-bold text-slate-900 m-0 leading-tight">
+                  {ctx.pacoteSelecionado?.titulo || '--'}
+                </p>
+                {/* Se existir variante, mostra como badge para clarificar a opção! */}
+                {((ctx.pacoteSelecionado?.variantes?.length || 0) > 1) && (
+                  <p className="text-xs font-black text-emerald-700 mt-1.5 mb-0 bg-emerald-50 border border-emerald-100 inline-block px-2 py-0.5 rounded">
+                    {ctx.varianteSelecionada?.nome}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{ctx.isEn ? 'Base Price' : 'Valor Base'}</p>
+                <span className="text-sm font-black text-slate-900">{baseCalculado > 0 ? `${baseCalculado}€` : '--'}</span>
               </div>
             </div>
-            
+
+            {/* 2. DATAS */}
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{ctx.isEn ? 'Dates' : 'Datas'}</p>
@@ -584,12 +598,6 @@ export function CaixaResumo() {
                     : <span className="text-[#EBA914] text-xs">Aguardando Seleção...</span>}
                 </p>
               </div>
-            </div>
-
-            {/* Removemos o Bloco "Variante" isolado para não ser repetitivo, mas mostramos o preço base */}
-            <div className="flex justify-between items-center border-t border-slate-100 pt-4 mt-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{ctx.isEn ? 'Base Price' : 'Valor Base'}</span>
-              <span className="text-sm font-black text-slate-900">{baseCalculado > 0 ? `${baseCalculado}€` : ''}</span>
             </div>
 
             {(ctx.extraSeguro || ctx.extraTransporte) && (
