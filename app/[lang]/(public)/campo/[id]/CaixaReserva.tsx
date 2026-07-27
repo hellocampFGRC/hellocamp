@@ -187,6 +187,8 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   const bloqueioData = !escolhasCompletas;
   const disabledReserva = !pacoteSelecionado || !varianteSelecionada || precoBase === 0 || isEsgotado || bloqueioData;
 
+  const nomeProgramaCompleto = `${pacoteSelecionado?.titulo || ''} ${((pacoteSelecionado?.variantes?.length || 0) > 1 && varianteSelecionada) ? `(${varianteSelecionada.nome})` : ''}`.trim();
+
   const handleReservar = () => {
     if (disabledReserva) return;
     
@@ -203,7 +205,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     params.set("quantidade_criancas", quantidade.toString());
     params.set("turno", JSON.stringify({
       id: pacoteSelecionado?.id,
-      nome: `${pacoteSelecionado?.titulo} (${varianteSelecionada?.nome})`,
+      nome: nomeProgramaCompleto,
       dias_soltos: diasSelecionados,
       preco: varianteSelecionada?.preco,
       tipo: pacoteSelecionado?.tipo,
@@ -228,7 +230,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
          nome_cliente: leadForm.nome,
          email_cliente: leadForm.email,
          telefone_cliente: leadForm.telefone,
-         turno_interesse: pacoteSelecionado?.titulo || '',
+         turno_interesse: nomeProgramaCompleto,
          preco_estimado: precoTotal
       }]);
 
@@ -320,7 +322,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
       isEmailMode, isExternalLinkMode, externalLinkUrl, capitalize,
       getSemanasSelecionadas, grelhaDias, nomesDiasCurto, escolhasCompletas,
       showLeadModal, setShowLeadModal, leadForm, setLeadForm, submitExternalLead, submittingLead,
-      isDiaAvulsoFlexivel, multiplicadorPrecoBase, isPackDiasFixo, quantPacote
+      isDiaAvulsoFlexivel, multiplicadorPrecoBase, isPackDiasFixo, quantPacote, nomeProgramaCompleto
     }}>
       {children}
     </ReservaContext.Provider>
@@ -566,7 +568,8 @@ export function CaixaResumo() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{ctx.isEn ? 'Package' : 'Programa'}</p>
-                <p className="text-sm font-bold text-slate-900 m-0">{ctx.pacoteSelecionado?.titulo || '--'}</p>
+                {/* Aqui está a grande alteração para que o Nome seja sempre descritivo! */}
+                <p className="text-sm font-bold text-slate-900 m-0">{ctx.nomeProgramaCompleto || '--'}</p>
               </div>
             </div>
             
@@ -583,11 +586,9 @@ export function CaixaResumo() {
               </div>
             </div>
 
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{ctx.isEn ? 'Variant' : 'Variante'}</p>
-                <p className="text-sm font-bold text-slate-900 m-0">{ctx.varianteSelecionada?.nome || '--'}</p>
-              </div>
+            {/* Removemos o Bloco "Variante" isolado para não ser repetitivo, mas mostramos o preço base */}
+            <div className="flex justify-between items-center border-t border-slate-100 pt-4 mt-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{ctx.isEn ? 'Base Price' : 'Valor Base'}</span>
               <span className="text-sm font-black text-slate-900">{baseCalculado > 0 ? `${baseCalculado}€` : ''}</span>
             </div>
 
