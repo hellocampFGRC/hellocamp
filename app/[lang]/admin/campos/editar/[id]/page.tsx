@@ -37,6 +37,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Dropdowns Customizados States
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
@@ -44,13 +45,21 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   const [isSegDropdownOpen, setIsSegDropdownOpen] = useState(false);
   const [isTraDropdownOpen, setIsTraDropdownOpen] = useState(false);
 
+  // Estado temporário para o input de Dias Fechados
+  const [novoDiaFechado, setNovoDiaFechado] = useState("");
+
   // ==========================================
   // 2. ESTADO DO FORMULÁRIO COMPLETO
   // ==========================================
   const [formData, setFormData] = useState({
     nome: "", local: "", idade_min: 6, idade_max: 14, vagas_totais: 50,
     categoria: "", politica_cancelamento: "Flexível (100% até 7 dias)",
-    calendario_funcionamento: { data_inicio: "", data_fim: "", dias_semana: [1, 2, 3, 4, 5] },
+    calendario_funcionamento: { 
+      data_inicio: "", 
+      data_fim: "", 
+      dias_semana: [1, 2, 3, 4, 5],
+      dias_fechados: [] as string[] // NOVO: Guarda os dias bloqueados/fechados
+    },
     pacotes: [] as Pacote[],
     descontos: [] as Desconto[],
     descricao: "", 
@@ -92,7 +101,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         return;
       }
       if (data) {
-        // Preencher formData com os novos campos integrados
         setFormData({
           nome: data.nome || "",
           local: data.local || "",
@@ -101,50 +109,40 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           vagas_totais: data.vagas_totais || 50,
           categoria: data.categoria || "",
           politica_cancelamento: data.politica_cancelamento || "Flexível (100% até 7 dias)",
-          calendario_funcionamento: data.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [1,2,3,4,5] },
+          calendario_funcionamento: {
+            data_inicio: data.calendario_funcionamento?.data_inicio || "",
+            data_fim: data.calendario_funcionamento?.data_fim || "",
+            dias_semana: data.calendario_funcionamento?.dias_semana || [1,2,3,4,5],
+            dias_fechados: data.calendario_funcionamento?.dias_fechados || [] // Inicializa se existir
+          },
           pacotes: data.pacotes || [],
           descontos: data.descontos || [],
           descricao: data.descricao || "",
           perguntas: data.perguntas_customizadas || [],
-
-          // Textos Logísticos
           racio_monitores: data.racio_monitores || "",
           alimentacao: data.alimentacao || "",
           alojamento: data.alojamento || "",
           seguro: data.seguro || "",
-
-          // Valores Financeiros
           extra_seguro: data.extra_seguro || 0,
           tipo_extra_seguro: data.tipo_extra_seguro || "fixo",
           extra_transporte: data.extra_transporte || 0,
           tipo_extra_transporte: data.tipo_extra_transporte || "diario"
         });
 
-        // Galeria (imagem principal + galeria)
         const loadedImages: GaleriaUpload[] = [];
         if (data.imagem) {
-          loadedImages.push({
-            id: Math.random().toString(36).substring(2, 9),
-            previewUrl: data.imagem,
-            isCapa: true
-          });
+          loadedImages.push({ id: Math.random().toString(36).substring(2, 9), previewUrl: data.imagem, isCapa: true });
         }
         if (data.galeria && Array.isArray(data.galeria)) {
           data.galeria.forEach((url: string) => {
-            loadedImages.push({
-              id: Math.random().toString(36).substring(2, 9),
-              previewUrl: url,
-              isCapa: false
-            });
+            loadedImages.push({ id: Math.random().toString(36).substring(2, 9), previewUrl: url, isCapa: false });
           });
         }
-        // Se não houver nenhuma, a primeira fica como capa
         if (loadedImages.length > 0 && !loadedImages.some(img => img.isCapa)) {
           loadedImages[0].isCapa = true;
         }
         setGaleria(loadedImages);
 
-        // Atualizar iframe do mapa
         if (data.local) {
           setMapIframeUrl(`https://maps.google.com/maps?q=${encodeURIComponent(data.local)}&t=&z=13&ie=UTF8&iwloc=&output=embed`);
         }
@@ -157,6 +155,27 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   // ==========================================
   // 4. HANDLERS E FUNÇÕES DE MANIPULAÇÃO
   // ==========================================
+  
+  const handleApagarCampo = async () => {
+    const confirmacao = window.confirm(
+      isEn 
+        ? "ATTENTION: Are you absolutely sure you want to delete this camp? This action is irreversible." 
+        : "ATENÇÃO: Tem a certeza absoluta que pretende apagar este campo? Esta ação é irreversível e o programa deixará de aparecer nas pesquisas."
+    );
+    if (!confirmacao) return;
+
+    setDeleting(true);
+    const { error } = await supabase.from('campos').delete().eq('id', id);
+    
+    if (error) {
+      alert((isEn ? "Error deleting camp. There might be bookings associated with it. Contact support. Details: " : "Erro ao apagar. Podem existir reservas associadas a este campo que impedem a sua eliminação por questões financeiras. Contacte o suporte. Detalhe: ") + error.message);
+      setDeleting(false);
+    } else {
+      alert(isEn ? "Camp deleted successfully." : "Campo apagado com sucesso.");
+      router.push(`/${lang}/admin/campos`);
+    }
+  };
+
   const handleSelectCategoria = (catId: string) => {
     setFormData(prev => {
       let novasPerguntas = [...prev.perguntas];
@@ -174,26 +193,20 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
-    
     const novasImagens: GaleriaUpload[] = files.map((file, index) => ({
       id: Math.random().toString(36).substring(2, 9),
       file,
       previewUrl: URL.createObjectURL(file),
       isCapa: galeria.length === 0 && index === 0
     }));
-
     setGaleria(prev => [...prev, ...novasImagens]);
   };
 
-  const setComoCapa = (id: string) => {
-    setGaleria(galeria.map(img => ({ ...img, isCapa: img.id === id })));
-  };
+  const setComoCapa = (id: string) => setGaleria(galeria.map(img => ({ ...img, isCapa: img.id === id })));
 
   const removerImagem = (id: string) => {
     const novaGaleria = galeria.filter(img => img.id !== id);
-    if (novaGaleria.length > 0 && !novaGaleria.some(img => img.isCapa)) {
-      novaGaleria[0].isCapa = true;
-    }
+    if (novaGaleria.length > 0 && !novaGaleria.some(img => img.isCapa)) novaGaleria[0].isCapa = true;
     setGaleria(novaGaleria);
   };
 
@@ -204,25 +217,41 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, dias_semana: dias } });
   };
 
+  // --- LÓGICA DIAS FECHADOS ---
+  const adicionarDiaFechado = () => {
+    if (!novoDiaFechado) return;
+    const diasAtuais = formData.calendario_funcionamento.dias_fechados || [];
+    if (!diasAtuais.includes(novoDiaFechado)) {
+      setFormData({
+        ...formData,
+        calendario_funcionamento: {
+          ...formData.calendario_funcionamento,
+          dias_fechados: [...diasAtuais, novoDiaFechado].sort()
+        }
+      });
+    }
+    setNovoDiaFechado("");
+  };
+
+  const removerDiaFechado = (diaParaRemover: string) => {
+    const diasAtuais = formData.calendario_funcionamento.dias_fechados || [];
+    setFormData({
+      ...formData,
+      calendario_funcionamento: {
+        ...formData.calendario_funcionamento,
+        dias_fechados: diasAtuais.filter(d => d !== diaParaRemover)
+      }
+    });
+  };
+
   const atualizarVariante = (index: number, campo: 'nome' | 'preco', valor: string | number) => {
     const novasVariantes = [...novoPacote.variantes];
     novasVariantes[index] = { ...novasVariantes[index], [campo]: valor } as Variante;
     setNovoPacote({ ...novoPacote, variantes: novasVariantes });
   };
 
-  const adicionarVariante = () => {
-    setNovoPacote(prev => ({
-      ...prev,
-      variantes: [...prev.variantes, { nome: "", preco: 0 }]
-    }));
-  };
-
-  const removerVariante = (index: number) => {
-    setNovoPacote(prev => ({
-      ...prev,
-      variantes: prev.variantes.filter((_, i) => i !== index)
-    }));
-  };
+  const adicionarVariante = () => setNovoPacote(prev => ({ ...prev, variantes: [...prev.variantes, { nome: "", preco: 0 }] }));
+  const removerVariante = (index: number) => setNovoPacote(prev => ({ ...prev, variantes: prev.variantes.filter((_, i) => i !== index) }));
 
   const guardarPacote = () => {
     if (!novoPacote.titulo || novoPacote.variantes.length === 0) return alert("Preencha o título e pelo menos 1 preço.");
@@ -233,12 +262,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     setNovoPacote({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
   };
 
-  const eliminarPacote = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      pacotes: prev.pacotes.filter(p => p.id !== id)
-    }));
-  };
+  const eliminarPacote = (id: string) => setFormData(prev => ({ ...prev, pacotes: prev.pacotes.filter(p => p.id !== id) }));
 
   const guardarDesconto = () => {
     if (!novoDesconto.nome || novoDesconto.percentagem <= 0) return alert("Preencha o nome e um valor superior a 0.");
@@ -249,17 +273,9 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     setNovoDesconto({ id: "", nome: "", percentagem: 10, acumulavel: false });
   };
 
-  const addPergunta = () => {
-    setFormData(prev => ({ ...prev, perguntas: [...prev.perguntas, ""] }));
-  };
-
-  const removePergunta = (index: number) => {
-    setFormData(prev => ({ ...prev, perguntas: prev.perguntas.filter((_, i) => i !== index) }));
-  };
-
-  const updatePergunta = (index: number, value: string) => {
-    setFormData(prev => ({ ...prev, perguntas: prev.perguntas.map((p, i) => i === index ? value : p) }));
-  };
+  const addPergunta = () => setFormData(prev => ({ ...prev, perguntas: [...prev.perguntas, ""] }));
+  const removePergunta = (index: number) => setFormData(prev => ({ ...prev, perguntas: prev.perguntas.filter((_, i) => i !== index) }));
+  const updatePergunta = (index: number, value: string) => setFormData(prev => ({ ...prev, perguntas: prev.perguntas.map((p, i) => i === index ? value : p) }));
 
   // ==========================================
   // 5. GUARDAR ALTERAÇÕES (UPDATE)
@@ -274,7 +290,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada");
 
-      // 1. Upload de novas imagens (as que têm file)
       const uploadedUrls: string[] = [];
       let capaUrl = "";
 
@@ -283,10 +298,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           const fileExt = img.file.name.split('.').pop();
           const fileName = `${session.user.id}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
           
-          const { error: uploadError } = await supabase.storage
-            .from('campos-imagens')
-            .upload(fileName, img.file);
-
+          const { error: uploadError } = await supabase.storage.from('campos-imagens').upload(fileName, img.file);
           if (uploadError) throw new Error(`Erro ao enviar foto: ${uploadError.message}`);
           
           const { data: { publicUrl } } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
@@ -302,7 +314,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
       const perguntasLimpas = formData.perguntas.filter(p => p.trim() !== "");
 
-      // 2. Atualizar registo com todos os campos unificados
       const { error } = await supabase.from('campos').update({
         nome: formData.nome,
         nome_en: formData.nome,
@@ -322,7 +333,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         descontos: formData.descontos,
         status_aprovacao: 'Pendente',
         
-        // Logística
         racio_monitores: formData.racio_monitores,
         racio_monitores_en: formData.racio_monitores,
         alimentacao: formData.alimentacao,
@@ -332,7 +342,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         seguro: formData.seguro,
         seguro_en: formData.seguro,
 
-        // Extras Financeiros
         extra_seguro: formData.extra_seguro,
         tipo_extra_seguro: formData.tipo_extra_seguro,
         extra_transporte: formData.extra_transporte,
@@ -373,18 +382,29 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     <div className="max-w-[1000px] mx-auto p-4 md:p-8 font-sans pb-24">
       
       {/* HEADER & PROGRESS BAR */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Edit Camp' : 'Editar Campo'}</h1>
-        <div className="flex items-center gap-2 mt-6">
-          {[1, 2, 3].map((num) => (
-            <div key={num} className="flex-1 flex flex-col gap-2">
-              <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
-              <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-indigo-700' : 'text-slate-400'}`}>
-                {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual'}
-              </span>
-            </div>
-          ))}
+      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <div className="w-full sm:w-auto flex-1">
+          <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Edit Camp' : 'Editar Campo'}</h1>
+          <div className="flex items-center gap-2 mt-6 max-w-md">
+            {[1, 2, 3].map((num) => (
+              <div key={num} className="flex-1 flex flex-col gap-2">
+                <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-indigo-700' : 'text-slate-400'}`}>
+                  {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual'}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
+        
+        {/* BOTÃO DE APAGAR CAMPO NO TOPO */}
+        <button 
+          onClick={handleApagarCampo} 
+          disabled={deleting}
+          className="bg-white border-2 border-red-100 text-red-500 hover:bg-red-50 hover:border-red-200 font-bold px-4 py-2 rounded-xl text-xs transition-colors shadow-sm whitespace-nowrap disabled:opacity-50"
+        >
+          {deleting ? 'A apagar...' : '🗑️ Apagar Campo'}
+        </button>
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 md:p-10 mb-8 relative overflow-hidden transition-all duration-300">
@@ -507,7 +527,8 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                   <input type="date" value={formData.calendario_funcionamento.data_fim} onChange={e => setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, data_fim: e.target.value}})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-indigo-500 focus:bg-white" />
                 </div>
               </div>
-              <div>
+              
+              <div className="mb-6">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Dias da Semana Ativos</label>
                 <div className="flex flex-wrap gap-2">
                   {DIAS_SEMANA.map(dia => {
@@ -519,6 +540,41 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                     )
                   })}
                 </div>
+              </div>
+
+              {/* NOVO: SECÇÃO DE DIAS DE ENCERRAMENTO (EXCEÇÕES) */}
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
+                <label className="block text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">
+                  Dias de Encerramento (Exceções / Esgotado)
+                </label>
+                <p className="text-xs text-amber-700 mb-4">Adicione datas específicas (ex: feriados) em que o campo estará fechado. Estes dias não aparecerão disponíveis para reserva nas pesquisas.</p>
+                
+                <div className="flex gap-2 mb-4">
+                  <input 
+                    type="date" 
+                    value={novoDiaFechado} 
+                    onChange={e => setNovoDiaFechado(e.target.value)} 
+                    className="flex-1 p-3 bg-white border border-amber-300 rounded-lg text-sm outline-none focus:border-amber-500" 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={adicionarDiaFechado} 
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 rounded-lg transition-colors text-xs"
+                  >
+                    Bloquear Dia
+                  </button>
+                </div>
+
+                {formData.calendario_funcionamento.dias_fechados?.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {formData.calendario_funcionamento.dias_fechados.map(dia => (
+                      <div key={dia} className="flex items-center gap-2 bg-white border border-amber-300 text-amber-900 px-3 py-1.5 rounded-lg text-xs font-bold">
+                        <span className="line-through opacity-80">{new Date(dia).toLocaleDateString('pt-PT')}</span>
+                        <button type="button" onClick={() => removerDiaFechado(dia)} className="text-amber-500 hover:text-red-500 text-sm leading-none ml-1">×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
