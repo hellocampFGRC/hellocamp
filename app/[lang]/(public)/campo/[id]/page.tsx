@@ -322,7 +322,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
               <div id="duvidas" className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 relative z-10 scroll-mt-24">
                 <h3 className="text-lg font-black text-slate-900 mb-1">{dict.detalhe.duvidas_titulo}</h3>
                 <p className="text-xs text-slate-500 font-medium mb-5">{dict.detalhe.duvidas_sub}</p>
-
+                
                 <FormContactoCampo
                   campoId={campo.id}
                   organizadorId={campo.organizador_id}
