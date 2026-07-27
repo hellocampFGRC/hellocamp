@@ -44,17 +44,15 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   const [leadForm, setLeadForm] = useState({ nome: "", email: "", telefone: "" });
   const [submittingLead, setSubmittingLead] = useState(false);
 
-  // Descobre a data local do utilizador em formato ISO (YYYY-MM-DD) para bloquear o passado
+  // Descobre a data local em formato ISO (YYYY-MM-DD) para bloquear o passado
   const getTodayISO = () => {
     const today = new Date();
-    const tzOffset = today.getTimezoneOffset() * 60000; // offset in milliseconds
-    const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
-    return localISOTime;
+    const tzOffset = today.getTimezoneOffset() * 60000;
+    return (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
   };
-
   const todayISO = getTodayISO();
 
-  // Inicializar calendário e pacote base
+  // Inicializar calendário
   useEffect(() => {
     if (calendario.data_inicio && calendario.data_fim) {
       const start = new Date(calendario.data_inicio);
@@ -66,7 +64,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
       
       while (curr <= end) {
         const dateStr = curr.toISOString().split('T')[0];
-        // Adiciona à lista de disponíveis se for um dia da semana permitido, se não estiver fechado e SE NÃO FOR PASSADO.
+        // Bloqueia feriados/fechados e dias passados
         if (permitidos.includes(curr.getDay()) && !fechados.includes(dateStr) && dateStr >= todayISO) {
            diasGerados.push(dateStr);
         }
@@ -74,7 +72,6 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
       }
       setDatasDisponiveis(diasGerados);
       
-      // Ajusta o mês inicial do calendário
       if (diasGerados.length > 0) {
         setMesAtual(new Date(diasGerados[0]));
       } else if (calendario.data_inicio > todayISO) {
@@ -91,12 +88,8 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     }
   }, [pacotes, pacoteSelecionado]);
 
-  // ==========================================
-  // LÓGICA DE CALENDÁRIO (SEMANAS INTERCALADAS)
-  // ==========================================
   const getSemanasSelecionadas = () => {
     if (!pacoteSelecionado || pacoteSelecionado.tipo !== 'semana') return [];
-    
     const semanas = new Set<string>();
     diasSelecionados.forEach(dataStr => {
       const dateObj = new Date(dataStr);
@@ -109,22 +102,27 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     return Array.from(semanas);
   };
 
+  // IDENTIFICADORES DE TIPO DE PACOTE (Para permitir Múltiplos Dias Avulsos)
+  const quantPacote = pacoteSelecionado?.quantidade || 1;
+  const isDiaAvulsoFlexivel = pacoteSelecionado?.tipo === 'dia' && quantPacote === 1;
+  const isPackDiasFixo = pacoteSelecionado?.tipo === 'dia' && quantPacote > 1;
+
   const handleDiaClick = (data: string) => {
     if (!pacoteSelecionado) return;
-    
-    // Dupla verificação de segurança: não permite cliques no passado
-    if (data < todayISO) return;
+    if (data < todayISO) return; // Segurança extra contra dias passados
 
     if (pacoteSelecionado.tipo === 'dia') {
-      const limiteDias = pacoteSelecionado.quantidade || 1;
+      // Se clicou num dia já selecionado, remove
       if (diasSelecionados.includes(data)) {
          setDiasSelecionados(prev => prev.filter(d => d !== data));
       } else {
-         if (diasSelecionados.length >= limiteDias) return;
+         // Se for Pack Fixo (ex: Pack 5 Dias), não deixa passar do limite exato do pacote
+         if (isPackDiasFixo && diasSelecionados.length >= quantPacote) return;
+         // Se for Dia Avulso (Qtd=1), avança livremente
          setDiasSelecionados(prev => [...prev, data]);
       }
-
     } else {
+      // Lógica das semanas completas
       const limiteSemanas = pacoteSelecionado.quantidade || 1;
       const semanasAtuais = getSemanasSelecionadas();
 
@@ -152,11 +150,15 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     }
   };
 
-  // Cálculos Financeiros
+  // CÁLCULOS FINANCEIROS ATUALIZADOS
   const precoBase = varianteSelecionada?.preco || 0;
-  const quantPacote = pacoteSelecionado?.quantidade || 1;
-  const multiplicadorPrecoBase = pacoteSelecionado?.tipo === 'dia' ? (diasSelecionados.length / quantPacote) : (getSemanasSelecionadas().length / quantPacote);
   
+  // Se for "Dia Avulso", o preço multiplica pelos dias. Se for "Pack", o preço é estático.
+  let multiplicadorPrecoBase = 1;
+  if (isDiaAvulsoFlexivel) {
+     multiplicadorPrecoBase = Math.max(1, diasSelecionados.length);
+  }
+
   const totalDiasExtras = diasSelecionados.length;
   
   const valSeguro = campo.extra_seguro || 0;
@@ -171,11 +173,14 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   if (extraSeguro) totalExtras += custoSeguro;
   if (extraTransporte) totalExtras += custoTransporte;
 
-  const escolhasCompletas = pacoteSelecionado?.tipo === 'dia' 
-    ? (diasSelecionados.length === quantPacote) 
-    : (getSemanasSelecionadas().length === quantPacote);
+  // Lógica de "Está Completo?"
+  const escolhasCompletas = isDiaAvulsoFlexivel 
+    ? diasSelecionados.length > 0  // Apenas exige que 1 ou mais dias estejam selecionados
+    : (pacoteSelecionado?.tipo === 'dia' 
+        ? diasSelecionados.length === quantPacote 
+        : getSemanasSelecionadas().length === quantPacote);
 
-  const precoTotal = ((precoBase) + totalExtras) * quantidade;
+  const precoTotal = ((precoBase * (diasSelecionados.length === 0 ? 1 : multiplicadorPrecoBase)) + totalExtras) * quantidade;
 
   const vagasTotais = campo.vagas_totais;
   const isEsgotado = vagasTotais !== null && vagasTotais <= 0;
@@ -185,7 +190,6 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   const handleReservar = () => {
     if (disabledReserva) return;
     
-    // Se a opção for ir para o Link Externo, abrimos o Modal da Lead em vez de ir para o Checkout
     if (isExternalLinkMode) {
       if (!externalLinkUrl) {
          alert(isEn ? "The partner hasn't set up the external link yet." : "O parceiro ainda não configurou o link externo. Tente mais tarde.");
@@ -203,7 +207,8 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
       dias_soltos: diasSelecionados,
       preco: varianteSelecionada?.preco,
       tipo: pacoteSelecionado?.tipo,
-      quantidade: totalDiasExtras
+      quantidade: totalDiasExtras,
+      multiplicador: isDiaAvulsoFlexivel ? diasSelecionados.length : 1
     }));
     if (extraSeguro) params.set("ext_seguro", "true");
     if (extraTransporte) params.set("ext_transporte", "true");
@@ -211,11 +216,9 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     router.push(`/${lang}/checkout/${campo.id}?${params.toString()}`);
   };
 
-  // Envio do formulário da Lead (Quando vai para link externo)
   const submitExternalLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!leadForm.nome || !leadForm.email || !leadForm.telefone) return;
-    
     setSubmittingLead(true);
 
     try {
@@ -242,7 +245,6 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
 
       window.open(externalLinkUrl, '_blank'); 
       setShowLeadModal(false);
-
     } catch (error) {
       console.error(error);
       window.open(externalLinkUrl, '_blank');
@@ -301,7 +303,6 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
       }
       grelha.push(currentRow);
     }
-    
     return grelha;
   };
 
@@ -318,7 +319,8 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
       precoTotal, precoBase, isEsgotado, disabledReserva, handleReservar, 
       isEmailMode, isExternalLinkMode, externalLinkUrl, capitalize,
       getSemanasSelecionadas, grelhaDias, nomesDiasCurto, escolhasCompletas,
-      showLeadModal, setShowLeadModal, leadForm, setLeadForm, submitExternalLead, submittingLead
+      showLeadModal, setShowLeadModal, leadForm, setLeadForm, submitExternalLead, submittingLead,
+      isDiaAvulsoFlexivel, multiplicadorPrecoBase, isPackDiasFixo, quantPacote
     }}>
       {children}
     </ReservaContext.Provider>
@@ -332,19 +334,27 @@ export function SeletorOpcoes() {
   const ctx = useContext(ReservaContext);
   if (!ctx || ctx.pacotes.length === 0) return null;
 
-  const limiteExigido = ctx.pacoteSelecionado?.quantidade || 1;
   const escolhasFeitas = ctx.pacoteSelecionado?.tipo === 'dia' 
     ? ctx.diasSelecionados.length 
     : ctx.getSemanasSelecionadas().length;
 
   const getSubtituloCalendario = () => {
     if (!ctx.pacoteSelecionado) return '';
-    if (escolhasFeitas === limiteExigido) {
+    
+    // Subtítulo Inteligente exclusivo para Dias Avulsos
+    if (ctx.isDiaAvulsoFlexivel) {
+       if (ctx.diasSelecionados.length > 0) {
+          return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded">{ctx.diasSelecionados.length} {ctx.isEn ? 'Days selected' : 'Dia(s) selecionado(s)'}</span>;
+       }
+       return <span className="text-[#EBA914] font-bold bg-amber-50 px-2 py-1 rounded">{ctx.isEn ? 'Select your dates' : 'Selecione os dias'}</span>;
+    }
+
+    if (escolhasFeitas === ctx.quantPacote) {
       return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded">✓ {ctx.isEn ? 'All selected!' : 'Completo!'}</span>;
     }
     return (
       <span className="text-[#EBA914] font-bold bg-amber-50 px-2 py-1 rounded">
-         {ctx.isEn ? `Select ${limiteExigido - escolhasFeitas} more ${ctx.pacoteSelecionado?.tipo}(s)` : `Falta selecionar ${limiteExigido - escolhasFeitas} ${ctx.pacoteSelecionado?.tipo}(s)`}
+         {ctx.isEn ? `Select ${ctx.quantPacote - escolhasFeitas} more ${ctx.pacoteSelecionado?.tipo}(s)` : `Falta selecionar ${ctx.quantPacote - escolhasFeitas} ${ctx.pacoteSelecionado?.tipo}(s)`}
       </span>
     );
   };
@@ -424,7 +434,7 @@ export function SeletorOpcoes() {
                    let buttonClasses = "w-full aspect-square flex items-center justify-center rounded-lg text-sm font-bold transition-all ";
                    
                    if (isPast) {
-                     buttonClasses += "bg-slate-200/50 text-slate-300 cursor-not-allowed opacity-50";
+                     buttonClasses += "bg-slate-200/40 text-slate-300 cursor-not-allowed opacity-40";
                    } else if (!disponivel) {
                      buttonClasses += "bg-red-50/50 text-red-300 cursor-not-allowed line-through";
                    } else if (isSelected) {
@@ -536,10 +546,11 @@ export function CaixaResumo() {
   const ctx = useContext(ReservaContext);
   if (!ctx) return null;
 
-  // Lógica para decidir o texto do botão consoante o tipo de contrato
-  let textoBotao = ctx.isEn ? 'Book & Pay Now' : 'Reservar Vaga Agora'; // Padrão: Direta
+  let textoBotao = ctx.isEn ? 'Book & Pay Now' : 'Reservar Vaga Agora'; 
   if (ctx.isEmailMode) textoBotao = ctx.isEn ? 'Request Booking' : 'Reservar c/ Entidade';
   if (ctx.isExternalLinkMode) textoBotao = ctx.isEn ? 'Go to Official Form' : 'Ir para Formulário Oficial';
+
+  const baseCalculado = ctx.precoBase * (ctx.diasSelecionados.length === 0 ? 1 : ctx.multiplicadorPrecoBase);
 
   return (
     <>
@@ -564,7 +575,9 @@ export function CaixaResumo() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{ctx.isEn ? 'Dates' : 'Datas'}</p>
                 <p className="text-sm font-bold text-slate-900 m-0">
                   {ctx.escolhasCompletas 
-                    ? `${ctx.pacoteSelecionado?.quantidade} ${ctx.pacoteSelecionado?.tipo}(s) Selecionadas` 
+                    ? (ctx.isDiaAvulsoFlexivel 
+                        ? `${ctx.diasSelecionados.length} Dia(s) Solto(s)`
+                        : `${ctx.pacoteSelecionado?.quantidade} ${ctx.pacoteSelecionado?.tipo}(s) Selecionadas`) 
                     : <span className="text-[#EBA914] text-xs">Aguardando Seleção...</span>}
                 </p>
               </div>
@@ -575,7 +588,7 @@ export function CaixaResumo() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{ctx.isEn ? 'Variant' : 'Variante'}</p>
                 <p className="text-sm font-bold text-slate-900 m-0">{ctx.varianteSelecionada?.nome || '--'}</p>
               </div>
-              <span className="text-sm font-black text-slate-900">{ctx.precoBase > 0 ? `${ctx.precoBase}€` : ''}</span>
+              <span className="text-sm font-black text-slate-900">{baseCalculado > 0 ? `${baseCalculado}€` : ''}</span>
             </div>
 
             {(ctx.extraSeguro || ctx.extraTransporte) && (
