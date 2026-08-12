@@ -21,9 +21,7 @@ export default function LoginUnificado({ params }: { params: Promise<{ lang: str
     setLoading(true);
     setError(null);
 
-    // FORÇAR LIMPEZA DE SESSÕES (Prevenção de Loop de Redirecionamento)
     await supabase.auth.signOut();
-
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (authError || !authData.user) {
@@ -32,18 +30,10 @@ export default function LoginUnificado({ params }: { params: Promise<{ lang: str
       return;
     }
 
-    // Identificar de forma inteligente a role para onde devemos enviar
     const { data: perfil } = await supabase.from('perfis').select('role, is_superadmin').eq('id', authData.user.id).single();
     
-    if (perfil?.is_superadmin) {
-        router.push(`/${lang}/superadmin/parceiros`);
-        return;
-    }
-
-    if (perfil?.role === 'organizador') {
-        router.push(`/${lang}/admin/dashboard`);
-        return;
-    }
+    if (perfil?.is_superadmin) return router.push(`/${lang}/superadmin/parceiros`);
+    if (perfil?.role === 'organizador') return router.push(`/${lang}/admin/dashboard`);
 
     const redirectUrl = sessionStorage.getItem('redirect_after_login');
     if (redirectUrl) {
@@ -55,45 +45,44 @@ export default function LoginUnificado({ params }: { params: Promise<{ lang: str
   };
 
   return (
-    <main className="min-h-[85vh] bg-slate-50 flex items-center justify-center p-4 md:p-8 font-sans">
-      <div className="w-full max-w-[420px] bg-white p-8 md:p-10 rounded-3xl shadow-xl border border-slate-200">
+    <main className="min-h-[85vh] flex items-center justify-center p-4 font-sans bg-white">
+      <div className="w-full max-w-[400px]">
         
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-black text-slate-900 mb-2">
-            {isEn ? 'Welcome back' : 'Bem-vindo de volta'}
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">
+            {isEn ? 'Welcome to HelloCamp' : 'Bem-vindo à HelloCamp'}
           </h1>
-          <p className="text-sm font-medium text-slate-500">
-            {isEn ? 'Log in to manage your account.' : 'Entre para gerir a sua conta.'}
+          <p className="text-sm text-slate-500 font-medium">
+            {isEn ? 'Please log in to continue.' : 'Inicie sessão para continuar.'}
           </p>
         </div>
 
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          
-          {error && <div className="text-red-600 bg-red-50 p-4 rounded-xl text-xs font-bold text-center border border-red-100">{error}</div>}
+        <form onSubmit={handleLogin} className="flex flex-col gap-5">
+          {error && <div className="text-red-600 bg-red-50 p-3 rounded-lg text-xs font-bold text-center">{error}</div>}
 
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail</label>
-            <input type="email" required onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors" />
+            <input type="email" placeholder="E-mail" required onChange={e => setEmail(e.target.value)} className="w-full p-4 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-400" />
           </div>
 
           <div>
-            <div className="flex justify-between items-center mb-2 ml-1">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">Password</label>
-              <Link href={`/${lang}/recuperar-password`} className="text-[10px] font-bold text-emerald-600 hover:underline">
-                {isEn ? 'Forgot password?' : 'Esqueceu-se?'}
+            <input type="password" placeholder="Password" required onChange={e => setPassword(e.target.value)} className="w-full p-4 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-400" />
+            <div className="text-right mt-2">
+              <Link href={`/${lang}/recuperar-password`} className="text-xs font-bold text-slate-900 hover:underline">
+                {isEn ? 'Forgot password?' : 'Esqueceu-se da password?'}
               </Link>
             </div>
-            <input type="password" required onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors" />
           </div>
 
-          <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-colors mt-2">
-            {loading ? '...' : (isEn ? 'Log In' : 'Entrar na Conta')}
+          <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-xl font-bold text-sm transition-colors mt-2">
+            {loading ? '...' : (isEn ? 'Continue' : 'Continuar')}
           </button>
         </form>
 
-        <p className="text-center mt-6 text-sm font-medium text-slate-500">
-          {isEn ? "Don't have an account?" : "Ainda não tem conta?"} <Link href={`/${lang}/registo`} className="text-emerald-600 font-bold hover:underline">{isEn ? 'Sign up' : 'Criar Conta'}</Link>
-        </p>
+        <div className="text-center mt-8 pt-6 border-t border-slate-100">
+          <p className="text-sm font-medium text-slate-600">
+            {isEn ? "Don't have an account?" : "Ainda não tem conta?"} <Link href={`/${lang}/registo`} className="text-slate-900 font-black hover:underline ml-1">{isEn ? 'Sign up' : 'Registar-se'}</Link>
+          </p>
+        </div>
 
       </div>
     </main>

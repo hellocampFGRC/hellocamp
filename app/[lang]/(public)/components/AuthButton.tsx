@@ -37,44 +37,25 @@ export default function AuthButton({ lang }: { lang: string; dict: any }) {
   }, []);
 
   if (loading) {
-    return <div className="w-24 h-10 bg-gray-50 rounded-lg animate-pulse"></div>;
+    return <div className="w-20 h-8 bg-slate-50 rounded-lg animate-pulse"></div>;
   }
 
-  // CASE 1: Utilizador é um PARCEIRO / ORGANIZADOR (Dashboard Cinza/Escuro)
-  if (user && role === 'organizador') {
-    return (
-      <Link href={`/${lang}/admin/dashboard`} className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
-        {isEn ? 'Partner Dashboard' : 'Painel de Parceiro'}
-      </Link>
-    );
-  }
-
-  // CASE 2: Utilizador é um MONITOR (Portal Azul)
-  if (user && role === 'monitor') {
-    return (
-      <Link href={`/${lang}/monitores/portal/perfil`} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
-        {isEn ? 'Monitor Portal' : 'Portal do Monitor'}
-      </Link>
-    );
-  }
-
-  // CASE 3: Utilizador é um PAI / CLIENTE (Portal dos Pais Verde)
   if (user) {
+    const dashboardLink = role === 'organizador' ? 'admin/dashboard' : (role === 'monitor' ? 'monitores/portal/perfil' : 'cliente/dashboard');
     return (
-      <Link href={`/${lang}/cliente/dashboard`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
-        {isEn ? 'Parent Dashboard' : 'Portal dos Pais'}
+      <Link href={`/${lang}/${dashboardLink}`} className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-full font-bold text-sm transition-colors">
+        {isEn ? 'Dashboard' : 'Painel'}
       </Link>
     );
   }
 
-  // CASE 4: Sem Sessão -> Botões de Entrada Clean
   return (
-    <div className="flex items-center gap-4">
-      <Link href={`/${lang}/login`} className="text-sm font-bold text-slate-700 hover:text-emerald-700 no-underline transition whitespace-nowrap hidden sm:block">
+    <div className="flex items-center gap-2">
+      <Link href={`/${lang}/login`} className="text-sm font-bold text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-full transition-colors hidden sm:block">
         {isEn ? 'Log in' : 'Entrar'}
       </Link>
-      <Link href={`/${lang}/registo`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
-        {isEn ? 'Sign Up' : 'Registar'}
+      <Link href={`/${lang}/registo`} className="bg-[#EBA914] hover:bg-amber-500 text-white px-5 py-2.5 rounded-full font-bold text-sm transition-colors shadow-sm">
+        {isEn ? 'Sign up' : 'Registar'}
       </Link>
     </div>
   );
