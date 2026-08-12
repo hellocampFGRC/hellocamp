@@ -42,10 +42,11 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             <span className="text-[#EBA914]">Camp</span>
           </Link>
 
-          {/* 2. NAVEGAÇÃO CENTRALIZADA (DESKTOP) */}
-          <nav className="hidden md:flex items-center justify-center gap-6 lg:gap-8 flex-1">
+          {/* 2. NAVEGAÇÃO CENTRALIZADA (DESKTOP) - AJUSTADA À IMAGEM */}
+          <nav className="hidden lg:flex items-center justify-center gap-8 flex-1 ml-4">
+            
             <div className="relative group py-2">
-              <button className="flex items-center gap-1 text-[15px] font-bold text-gray-700 hover:text-emerald-600 bg-transparent border-none cursor-pointer">
+              <button className="flex items-center gap-1 text-[13px] font-bold text-gray-800 hover:text-emerald-600 bg-transparent border-none cursor-pointer">
                 {isEn ? 'Camps' : 'Campos'}
                 <span className="text-[9px] text-gray-400 transition-transform duration-200 group-hover:rotate-180">▼</span>
               </button>
@@ -62,7 +63,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             </div>
 
             <div className="relative group py-2">
-              <button className="flex items-center gap-1 text-[15px] font-bold text-gray-700 hover:text-emerald-600 bg-transparent border-none cursor-pointer">
+              <button className="flex items-center gap-1 text-[13px] font-bold text-gray-800 hover:text-emerald-600 bg-transparent border-none cursor-pointer">
                 {isEn ? 'Locations' : 'Locais'}
                 <span className="text-[9px] text-gray-400 transition-transform duration-200 group-hover:rotate-180">▼</span>
               </button>
@@ -75,23 +76,29 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
               </div>
             </div>
 
-            {/* NOVO LINK INSTITUCIONAL NO HEADER */}
-            <Link href={`#institucional`} className="text-[15px] font-bold text-emerald-600 hover:text-emerald-800 no-underline py-2 flex items-center gap-1.5">
-              <span>🏛️</span>
-              {isEn ? 'Public Camps' : 'Câmaras e Juntas'}
+            <Link href={`/${lang}/institucional`} className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-800 no-underline py-2">
+              <span className="text-lg">🏛️</span>
+              <div className="flex flex-col leading-[1.2] text-[13px] font-bold">
+                <span>{isEn ? 'Public' : 'Câmaras e'}</span>
+                <span>{isEn ? 'Camps' : 'Juntas'}</span>
+              </div>
             </Link>
 
-            <Link href={`/${lang}/guia-pais`} className="text-[15px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
-              {isEn ? 'Parents Guide' : 'Guia Pais'}
+            <Link href={`/${lang}/guia-pais`} className="flex flex-col leading-[1.2] text-[13px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
+              <span>{isEn ? 'Parents' : 'Guia'}</span>
+              <span>{isEn ? 'Guide' : 'Pais'}</span>
             </Link>
 
-            <Link href={`/${lang}/parceiro`} className="text-[15px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
+            <Link href={`/${lang}/parceiro`} className="text-[13px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
               {isEn ? 'Partners' : 'Parceiros'}
             </Link>
 
-            <Link href={`/${lang}/monitores`} className="text-[15px] font-bold text-blue-600 hover:text-blue-800 no-underline py-2 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-              {isEn ? 'Monitors' : 'Sou Monitor'}
+            <Link href={`/${lang}/monitores`} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 no-underline py-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+              <div className="flex flex-col leading-[1.2] text-[13px] font-bold">
+                <span>{isEn ? 'Staff /' : 'Sou'}</span>
+                <span>{isEn ? 'Monitors' : 'Monitor'}</span>
+              </div>
             </Link>
           </nav>
 
@@ -113,7 +120,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
           </div>
 
           {/* 4. BOTÃO HAMBURGER INTERATIVO (MOBILE) */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-2 lg:hidden">
             <LanguageSwitcher lang={lang} />
             {session && (
               <button onClick={handleLogout} className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1.5 rounded-lg border border-red-100 uppercase transition-colors">
@@ -132,7 +139,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
 
         {/* MENU LATERAL EXPANSÍVEL (MOBILE) */}
         {isMobileMenuOpen && (
-          <div className="w-full flex flex-col bg-white border-t border-slate-100 mt-2 pt-1 pb-2 gap-0.5 md:hidden">
+          <div className="w-full flex flex-col bg-white border-t border-slate-100 mt-2 pt-1 pb-2 gap-0.5 lg:hidden">
             <div className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">{isEn ? 'Categories' : 'Categorias'}</div>
             <Link href={`/${lang}/pesquisa?categoria=Aventura %26 Natureza`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🌲 Aventura & Natureza</Link>
             <Link href={`/${lang}/pesquisa?categoria=Desporto`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">⚽ Desporto</Link>
@@ -140,8 +147,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             
             <div className="h-px bg-slate-100 my-1 mx-3"></div>
             
-            {/* NOVO LINK INSTITUCIONAL (MOBILE) */}
-            <Link href={`#institucional`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-emerald-600 no-underline hover:bg-emerald-50">🏛️ {isEn ? 'Public Camps' : 'Câmaras e Juntas'}</Link>
+            <Link href={`/${lang}/institucional`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-emerald-600 no-underline hover:bg-emerald-50">🏛️ {isEn ? 'Public Camps' : 'Câmaras e Juntas'}</Link>
             <Link href={`/${lang}/guia-pais`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Pais</Link>
             <Link href={`/${lang}/parceiro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Parceiros</Link>
             <Link href={`/${lang}/monitores`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-blue-600 no-underline hover:bg-blue-50 bg-blue-50/30">Sou Monitor</Link>
