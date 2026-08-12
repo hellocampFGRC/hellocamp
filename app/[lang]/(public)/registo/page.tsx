@@ -6,14 +6,18 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import React from "react";
 
-export default function RegistoCliente({ params }: { params: Promise<{ lang: string }> }) {
+export default function RegistoUnificado({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const isEn = lang === 'en';
   const router = useRouter();
 
+  // Tipo de conta escolhida: "cliente" (Pais) ou "organizador" (Campos de Férias)
+  const [role, setRole] = useState<'cliente' | 'organizador'>('cliente');
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [nome, setNome] = useState("");
+  const [nome, setNome] = useState(""); // Nome Completo ou Nome Empresa
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,16 +26,15 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
     setLoading(true);
     setError(null);
 
-    // 1. Criar Auth com role cliente
+    // 1. Criar Auth com a role escolhida
+    const payloadMetadata = role === 'cliente' 
+        ? { nome_completo: nome, role: 'cliente' } 
+        : { empresa_nome: nome, role: 'organizador' };
+
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email, 
       password,
-      options: {
-        data: { 
-          nome_completo: nome, 
-          role: 'cliente' 
-        }
-      }
+      options: { data: payloadMetadata }
     });
 
     if (authError || !authData.user) {
@@ -40,60 +43,94 @@ export default function RegistoCliente({ params }: { params: Promise<{ lang: str
       return;
     }
 
-    // 2. Gravar no perfil público
-    const { error: perfilError } = await supabase.from('perfis').upsert({
-      id: authData.user.id,
-      email: email,
-      nome_completo: nome,
-      role: 'cliente'
-    });
+    // 2. Gravar no perfil público com estrutura consistente para o TypeScript
+    const perfilData = { 
+      id: authData.user.id, 
+      email: email, 
+      role: role,
+      nome_completo: role === 'cliente' ? nome : null,
+      empresa_nome: role === 'organizador' ? nome : null,
+      parceiro_verificado: role === 'organizador' ? false : null 
+    };
 
-    if (perfilError) {
-      console.error("Aviso: Falha ao guardar perfil público:", perfilError);
-    }
+    const { error: perfilError } = await supabase.from('perfis').upsert(perfilData);
+    if (perfilError) console.error("Falha ao guardar perfil:", perfilError);
 
-    // 3. Disparar o Email de Boas-Vindas
+    // 3. Disparar o Email de Boas-Vindas adequado à Role
     fetch('/api/notificacoes/boas-vindas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        email: email, 
-        nome: nome, 
-        role: 'cliente', 
-        lang: lang 
-      })
-    }).catch(err => console.error("Falha ao enviar e-mail de boas-vindas:", err));
+      body: JSON.stringify({ email, nome, role, lang })
+    }).catch(err => console.error("Email falhou:", err));
     
-    // 4. Redirecionar Imediatamente para a Homepage
-    router.push(`/${lang}`);
+    // 4. Redirecionar
+    if (role === 'organizador') {
+        router.push(`/${lang}/admin/dashboard`);
+    } else {
+        router.push(`/${lang}`);
+    }
   };
 
   return (
-    <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', fontFamily: 'sans-serif' }}>
-      <div style={{ width: '100%', maxWidth: '400px', backgroundColor: 'white', padding: '2.5rem', borderRadius: '1rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: '900', textAlign: 'center', marginBottom: '2rem', color: '#0f172a' }}>
-          {isEn ? 'Create Parent Account' : 'Criar Conta de Encarregado'}
-        </h1>
+    <main className="min-h-[85vh] bg-slate-50 flex items-center justify-center p-4 md:p-8 font-sans">
+      <div className="w-full max-w-[480px] bg-white p-8 md:p-10 rounded-3xl shadow-xl border border-slate-200">
+        
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-black text-slate-900 mb-2">
+            {isEn ? 'Create your account' : 'Criar uma conta'}
+          </h1>
+          <p className="text-sm font-medium text-slate-500">
+            {isEn ? 'Select what best describes you' : 'Selecione a opção que melhor o descreve'}
+          </p>
+        </div>
 
-        <form onSubmit={handleRegisto} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {error && <div style={{ color: '#dc2626', backgroundColor: '#fef2f2', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '13px', fontWeight: 'bold' }}>{error}</div>}
+        {/* TOGGLE AIRBNB STYLE */}
+        <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-8">
+          <button 
+            type="button" 
+            onClick={() => setRole('cliente')} 
+            className={`flex-1 py-3 rounded-xl text-xs font-black tracking-widest uppercase transition-all ${role === 'cliente' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            {isEn ? 'I am a Parent' : 'Sou um Pai / Encarregado'}
+          </button>
+          <button 
+            type="button" 
+            onClick={() => setRole('organizador')} 
+            className={`flex-1 py-3 rounded-xl text-xs font-black tracking-widest uppercase transition-all ${role === 'organizador' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            {isEn ? 'I am a Partner' : 'Sou Entidade Parceira'}
+          </button>
+        </div>
+
+        <form onSubmit={handleRegisto} className="flex flex-col gap-4">
+          {error && <div className="text-red-600 bg-red-50 p-4 rounded-xl text-xs font-bold text-center border border-red-100">{error}</div>}
           
-          <input type="text" placeholder={isEn ? 'Full Name' : 'Nome Completo'} required onChange={e => setNome(e.target.value)} style={inputStyle} />
-          <input type="email" placeholder="E-mail" required onChange={e => setEmail(e.target.value)} style={inputStyle} />
-          <input type="password" placeholder="Password" minLength={6} required onChange={e => setPassword(e.target.value)} style={inputStyle} />
+          <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  {role === 'cliente' ? (isEn ? 'Full Name' : 'O Seu Nome Completo') : (isEn ? 'Company / Camp Name' : 'Nome da Entidade / Empresa')}
+              </label>
+              <input type="text" required onChange={e => setNome(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors" />
+          </div>
+
+          <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail</label>
+              <input type="email" required onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors" />
+          </div>
+
+          <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Password</label>
+              <input type="password" minLength={6} required onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors" />
+          </div>
           
-          <button type="submit" disabled={loading} style={btnStyle}>
-            {loading ? '...' : (isEn ? 'Register' : 'Registar')}
+          <button type="submit" disabled={loading} className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-colors mt-2 text-white ${role === 'cliente' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-900 hover:bg-slate-800'}`}>
+            {loading ? '...' : (isEn ? 'Create Account' : 'Registar Conta')}
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '14px', color: '#64748b' }}>
-          {isEn ? 'Already have an account?' : 'Já tem conta?'} <Link href={`/${lang}/login`} style={{ color: '#059669', fontWeight: 'bold', textDecoration: 'none' }}>Login</Link>
+        <p className="text-center mt-6 text-sm font-medium text-slate-500">
+          {isEn ? 'Already have an account?' : 'Já tem uma conta?'} <Link href={`/${lang}/login`} className="text-emerald-600 font-bold hover:underline">{isEn ? 'Log in' : 'Entrar'}</Link>
         </p>
       </div>
     </main>
   );
 }
-
-const inputStyle = { width: '100%', padding: '0.875rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', boxSizing: 'border-box' as const, outline: 'none', color: '#0f172a' };
-const btnStyle = { width: '100%', padding: '1rem', backgroundColor: '#0f172a', color: 'white', fontWeight: 'bold', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' };

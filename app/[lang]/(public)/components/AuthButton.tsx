@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
-export default function AuthButton({ lang, dict }: { lang: string; dict: any }) {
+export default function AuthButton({ lang }: { lang: string; dict: any }) {
   const isEn = lang === 'en';
   
   const [user, setUser] = useState<any>(null);
@@ -37,13 +37,13 @@ export default function AuthButton({ lang, dict }: { lang: string; dict: any }) 
   }, []);
 
   if (loading) {
-    return <div className="w-32 h-10 bg-gray-50 rounded-lg animate-pulse"></div>;
+    return <div className="w-24 h-10 bg-gray-50 rounded-lg animate-pulse"></div>;
   }
 
-  // CASE 1: Utilizador é um PARCEIRO / ORGANIZADOR (Dashboard Verde)
+  // CASE 1: Utilizador é um PARCEIRO / ORGANIZADOR (Dashboard Cinza/Escuro)
   if (user && role === 'organizador') {
     return (
-      <Link href={`/${lang}/admin/dashboard`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
+      <Link href={`/${lang}/admin/dashboard`} className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
         {isEn ? 'Partner Dashboard' : 'Painel de Parceiro'}
       </Link>
     );
@@ -62,25 +62,18 @@ export default function AuthButton({ lang, dict }: { lang: string; dict: any }) 
   if (user) {
     return (
       <Link href={`/${lang}/cliente/dashboard`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
-        {isEn ? 'Parent Portal' : 'Portal dos Pais'}
+        {isEn ? 'Parent Dashboard' : 'Portal dos Pais'}
       </Link>
     );
   }
 
-  // CASE 4: Ninguém tem sessão iniciada (Fluxo de Registo/Login padrão)
+  // CASE 4: Sem Sessão -> Botões de Entrada Clean
   return (
-    <div className="flex items-center gap-6">
-      <Link href={`/${lang}/admin/registo`} className="text-sm font-bold text-gray-600 hover:text-emerald-700 transition whitespace-nowrap no-underline">
-        {dict?.footer?.info_parceiro || (isEn ? 'Become a Partner' : 'Seja Parceiro')}
-      </Link>
-      
-      <div className="h-5 w-px bg-gray-200 hidden sm:block"></div>
-      
-      <Link href={`/${lang}/login`} className="text-sm font-bold text-slate-600 hover:text-emerald-700 no-underline transition whitespace-nowrap">
+    <div className="flex items-center gap-4">
+      <Link href={`/${lang}/login`} className="text-sm font-bold text-slate-700 hover:text-emerald-700 no-underline transition whitespace-nowrap hidden sm:block">
         {isEn ? 'Log in' : 'Entrar'}
       </Link>
-      
-      <Link href={`/${lang}/registo`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap hidden sm:inline-block">
+      <Link href={`/${lang}/registo`} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm no-underline transition whitespace-nowrap">
         {isEn ? 'Sign Up' : 'Registar'}
       </Link>
     </div>

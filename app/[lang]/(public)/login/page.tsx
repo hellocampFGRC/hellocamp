@@ -4,8 +4,9 @@ import { useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import React from "react";
 
-export default function LoginCliente({ params }: { params: Promise<{ lang: string }> }) {
+export default function LoginUnificado({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const isEn = lang === 'en';
   const router = useRouter();
@@ -23,15 +24,25 @@ export default function LoginCliente({ params }: { params: Promise<{ lang: strin
     // FORÇAR LIMPEZA DE SESSÕES (Prevenção de Loop de Redirecionamento)
     await supabase.auth.signOut();
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (authError) {
+    if (authError || !authData.user) {
       setError(isEn ? "Invalid email or password." : "E-mail ou password incorretos.");
       setLoading(false);
       return;
+    }
+
+    // Identificar de forma inteligente a role para onde devemos enviar
+    const { data: perfil } = await supabase.from('perfis').select('role, is_superadmin').eq('id', authData.user.id).single();
+    
+    if (perfil?.is_superadmin) {
+        router.push(`/${lang}/superadmin/parceiros`);
+        return;
+    }
+
+    if (perfil?.role === 'organizador') {
+        router.push(`/${lang}/admin/dashboard`);
+        return;
     }
 
     const redirectUrl = sessionStorage.getItem('redirect_after_login');
@@ -44,60 +55,47 @@ export default function LoginCliente({ params }: { params: Promise<{ lang: strin
   };
 
   return (
-    <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', fontFamily: 'sans-serif', backgroundColor: '#f8fafc' }}>
-      <div style={{ width: '100%', maxWidth: '420px', backgroundColor: 'white', padding: '3rem 2.5rem', borderRadius: '1.5rem', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)' }}>
+    <main className="min-h-[85vh] bg-slate-50 flex items-center justify-center p-4 md:p-8 font-sans">
+      <div className="w-full max-w-[420px] bg-white p-8 md:p-10 rounded-3xl shadow-xl border border-slate-200">
         
-        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: '#0f172a', margin: '0 0 0.5rem 0' }}>
-            {isEn ? 'Parent Portal' : 'Portal dos Pais'}
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-black text-slate-900 mb-2">
+            {isEn ? 'Welcome back' : 'Bem-vindo de volta'}
           </h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
-            {isEn ? 'Welcome back! Log in to manage your bookings.' : 'Bem-vindo! Entre para gerir as reservas dos seus filhos.'}
+          <p className="text-sm font-medium text-slate-500">
+            {isEn ? 'Log in to manage your account.' : 'Entre para gerir a sua conta.'}
           </p>
         </div>
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <form onSubmit={handleLogin} className="flex flex-col gap-4">
           
-          {error && (
-            <div style={{ padding: '0.875rem', backgroundColor: '#fef2f2', color: '#dc2626', borderRadius: '0.5rem', fontSize: '13px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fecaca' }}>
-              {error}
-            </div>
-          )}
+          {error && <div className="text-red-600 bg-red-50 p-4 rounded-xl text-xs font-bold text-center border border-red-100">{error}</div>}
 
           <div>
-            <label style={labelStyle}>E-mail</label>
-            <input type="email" required onChange={e => setEmail(e.target.value)} style={inputStyle} placeholder="exemplo@email.com" />
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail</label>
+            <input type="email" required onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors" />
           </div>
 
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <label style={{ ...labelStyle, marginBottom: 0 }}>Password</label>
-              <Link href={`/${lang}/recuperar-password`} style={{ fontSize: '12px', color: '#059669', fontWeight: 'bold', textDecoration: 'none' }}>
-                {isEn ? 'Forgot password?' : 'Esqueceu-se da password?'}
+            <div className="flex justify-between items-center mb-2 ml-1">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">Password</label>
+              <Link href={`/${lang}/recuperar-password`} className="text-[10px] font-bold text-emerald-600 hover:underline">
+                {isEn ? 'Forgot password?' : 'Esqueceu-se?'}
               </Link>
             </div>
-            <input type="password" required onChange={e => setPassword(e.target.value)} style={inputStyle} placeholder="••••••••" />
+            <input type="password" required onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors" />
           </div>
 
-          <button type="submit" disabled={loading} style={btnStyle}>
+          <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-colors mt-2">
             {loading ? '...' : (isEn ? 'Log In' : 'Entrar na Conta')}
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', marginTop: '2rem', fontSize: '14px', color: '#64748b' }}>
-          {isEn ? 'Don\'t have an account?' : 'Ainda não tem conta?'} <Link href={`/${lang}/registo`} style={{ color: '#059669', fontWeight: 'bold', textDecoration: 'none' }}>{isEn ? 'Register here' : 'Registe-se aqui'}</Link>
+        <p className="text-center mt-6 text-sm font-medium text-slate-500">
+          {isEn ? "Don't have an account?" : "Ainda não tem conta?"} <Link href={`/${lang}/registo`} className="text-emerald-600 font-bold hover:underline">{isEn ? 'Sign up' : 'Criar Conta'}</Link>
         </p>
 
-        <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-          <Link href={`/${lang}/admin/login`} style={{ fontSize: '12px', color: '#cbd5e1', textDecoration: 'none' }}>
-            {isEn ? 'I am a Camp Organizer' : 'Sou Organizador de Campos'}
-          </Link>
-        </div>
       </div>
     </main>
   );
 }
-
-const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
-const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '15px', outline: 'none', boxSizing: 'border-box' as const, transition: 'border-color 0.2s' };
-const btnStyle = { width: '100%', padding: '1rem', backgroundColor: '#0f172a', color: 'white', fontSize: '1rem', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: 'pointer', transition: 'transform 0.1s', marginTop: '0.5rem' };
