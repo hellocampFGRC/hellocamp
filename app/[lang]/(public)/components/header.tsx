@@ -43,7 +43,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
           </Link>
 
           {/* 2. NAVEGAÇÃO CENTRALIZADA (DESKTOP) */}
-          <nav className="hidden md:flex items-center justify-center gap-8 flex-1">
+          <nav className="hidden md:flex items-center justify-center gap-6 lg:gap-8 flex-1">
             <div className="relative group py-2">
               <button className="flex items-center gap-1 text-[15px] font-bold text-gray-700 hover:text-emerald-600 bg-transparent border-none cursor-pointer">
                 {isEn ? 'Camps' : 'Campos'}
@@ -75,6 +75,12 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
               </div>
             </div>
 
+            {/* NOVO LINK INSTITUCIONAL NO HEADER */}
+            <Link href={`#institucional`} className="text-[15px] font-bold text-emerald-600 hover:text-emerald-800 no-underline py-2 flex items-center gap-1.5">
+              <span>🏛️</span>
+              {isEn ? 'Public Camps' : 'Câmaras e Juntas'}
+            </Link>
+
             <Link href={`/${lang}/guia-pais`} className="text-[15px] font-bold text-gray-700 hover:text-emerald-600 no-underline py-2">
               {isEn ? 'Parents Guide' : 'Guia Pais'}
             </Link>
@@ -85,7 +91,7 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
 
             <Link href={`/${lang}/monitores`} className="text-[15px] font-bold text-blue-600 hover:text-blue-800 no-underline py-2 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-              {isEn ? 'Staff / Monitors' : 'Sou Monitor'}
+              {isEn ? 'Monitors' : 'Sou Monitor'}
             </Link>
           </nav>
 
@@ -94,7 +100,6 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             <LanguageSwitcher lang={lang} />
             <div className="w-px h-5 bg-gray-200"></div>
             <div className="flex items-center gap-3">
-              {/* O AuthButton agora toma conta de todas as decisões com base na sessão real */}
               <AuthButton lang={lang} dict={dict} />
               {session && (
                 <button 
@@ -131,12 +136,12 @@ export default function Header({ dict, lang }: { dict: any, lang: string }) {
             <div className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">{isEn ? 'Categories' : 'Categorias'}</div>
             <Link href={`/${lang}/pesquisa?categoria=Aventura %26 Natureza`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🌲 Aventura & Natureza</Link>
             <Link href={`/${lang}/pesquisa?categoria=Desporto`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">⚽ Desporto</Link>
-            <Link href={`/${lang}/pesquisa?categoria=Desportos Náuticos`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🏄‍♂️ Desportos Náuticos</Link>
             <Link href={`/${lang}/pesquisa?categoria=Artes %26 Criatividade`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">🎨 Artes & Criatividade</Link>
-            <Link href={`/${lang}/pesquisa?categoria=Tecnologia %26 Robótica`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">💻 Tecnologia & Robótica</Link>
             
             <div className="h-px bg-slate-100 my-1 mx-3"></div>
             
+            {/* NOVO LINK INSTITUCIONAL (MOBILE) */}
+            <Link href={`#institucional`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-emerald-600 no-underline hover:bg-emerald-50">🏛️ {isEn ? 'Public Camps' : 'Câmaras e Juntas'}</Link>
             <Link href={`/${lang}/guia-pais`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Guia Pais</Link>
             <Link href={`/${lang}/parceiro`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Parceiros</Link>
             <Link href={`/${lang}/monitores`} onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-1.5 text-sm font-bold text-blue-600 no-underline hover:bg-blue-50 bg-blue-50/30">Sou Monitor</Link>

@@ -43,8 +43,12 @@ export default async function Home({
   const dict = await getDictionary(lang as "pt" | "en");
   const isEn = lang === 'en';
 
+  // Buscar os Campos Regulares
   const { data: camposDeFerias } = await supabase.from('campos').select('*').not('contrato_parceiro_url', 'is', null).limit(3).order('created_at', { ascending: false });
   
+  // Buscar os Campos Institucionais (Câmaras e Juntas)
+  const { data: camposInstitucionais } = await supabase.from('programas_institucionais').select('*').eq('is_active', true).limit(3).order('created_at', { ascending: false });
+
   const { data: camposFiltros } = await supabase.from('campos').select('categoria, categoria_en, idade, idade_en, Distrito, Distrito_en, pais, pais_en').not('contrato_parceiro_url', 'is', null);
   
   const categoriasMap = new Map();
@@ -96,7 +100,7 @@ export default async function Home({
             
             <form action={`/${lang}/pesquisa`} method="GET" className="relative pb-10 md:pb-4 mt-2">
               
-              {/* TOPO DA CAIXA: TEXTO E BOTÃO MAPA (BEM POSICIONADO) */}
+              {/* TOPO DA CAIXA: TEXTO E BOTÃO MAPA */}
               <div className="flex justify-between items-end mb-4">
                 <span className="text-sm font-bold text-slate-700 hidden sm:block">
                   {isEn ? 'Find the perfect program' : 'Encontre o programa ideal'}
@@ -185,6 +189,58 @@ export default async function Home({
         </div>
       </section>
 
+      {/* NOVA SECÇÃO: PROGRAMAS INSTITUCIONAIS (Câmaras e Juntas) */}
+      {camposInstitucionais && camposInstitucionais.length > 0 && (
+        <section id="institucional" className="bg-emerald-50/50 py-20 border-t border-emerald-100 scroll-mt-24">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+              <div>
+                <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+                  {isEn ? 'Public Programs & Municipalities' : 'Programas de Câmaras e Juntas'}
+                </h2>
+                <p className="mt-3 text-base text-slate-600 font-medium">
+                  {isEn ? 'Official initiatives supported by local government.' : 'Iniciativas oficiais promovidas por Juntas de Freguesia e Municípios.'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {camposInstitucionais.map((campo: any) => (
+                <div key={campo.id} className="group relative flex flex-col bg-white overflow-hidden border-2 border-emerald-100 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  
+                  <Link href={`/${lang}/institucional/${campo.id}`} className="absolute inset-0 z-10">
+                    <span className="sr-only">Explorar {campo.nome}</span>
+                  </Link>
+
+                  <div className="relative h-56 w-full overflow-hidden bg-emerald-900">
+                    <img src={campo.imagem_capa_url || '/og-image.jpg'} alt={campo.nome} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80" />
+                    <div className="absolute top-4 left-4 bg-emerald-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white rounded-full z-0 flex items-center gap-1.5">
+                      <span>🏛️</span> {isEn ? 'Public Entity' : 'Entidade Pública'}
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col p-6 flex-1 pointer-events-none">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">📍 {campo.localizacao}</span>
+                    <h3 className="text-xl font-black text-slate-900 leading-tight mb-2">{campo.nome}</h3>
+                    <p className="text-sm font-bold text-emerald-700 mb-6">{campo.entidade_organizadora}</p>
+                    
+                    <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'Status' : 'Estado'}</p>
+                        <p className="text-sm font-black text-slate-900 m-0">{isEn ? 'Registrations Open' : 'Inscrições Abertas'}</p>
+                      </div>
+                      <span className="text-sm font-black uppercase tracking-wider text-emerald-600 transition-transform group-hover:translate-x-1">
+                        {dict.home.explorar} &rarr;
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* SECÇÃO DISTRITOS */}
       {distritosAtivosCards.length > 0 && (
         <section className="max-w-7xl mx-auto py-20 px-4 md:px-6">
@@ -243,7 +299,7 @@ export default async function Home({
         </section>
       )}
 
-      {/* DESTAQUES GERAIS */}
+      {/* DESTAQUES GERAIS (CAMPOS PRIVADOS) */}
       {camposDeFerias && camposDeFerias.length > 0 && (
         <section className="bg-white py-20 border-t border-slate-100">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
@@ -260,7 +316,6 @@ export default async function Home({
                 const localCampo = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
                 const idadeCampo = isEn && campo.idade_en ? campo.idade_en : campo.idade;
                 
-                // Lógica Inteligente para encontrar o preço mais baixo da nova estrutura (pacotes)
                 let precoVisivel = campo.preco || 0;
                 if (!precoVisivel && campo.pacotes && campo.pacotes.length > 0) {
                   const todosPrecos = campo.pacotes.flatMap((p: any) => 
@@ -284,20 +339,20 @@ export default async function Home({
 
                     <div className="relative h-56 w-full overflow-hidden bg-slate-100">
                       <img src={campo.imagem} alt={nomeCampo} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                      <div className="absolute top-4 left-4 bg-emerald-600 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white rounded-full z-0">
+                      <div className="absolute top-4 left-4 bg-slate-900 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white rounded-full z-0">
                         {catCampo}
                       </div>
                     </div>
                     
                     <div className="flex flex-col p-6 flex-1 pointer-events-none">
-                      <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-2">📍 {localCampo}</span>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">📍 {localCampo}</span>
                       <h3 className="text-xl font-black text-slate-900 leading-tight mb-2">{nomeCampo}</h3>
                       <p className="text-sm text-slate-500 font-medium mb-6">{dict.home.faixa_etaria_label} {idadeCampo}</p>
                       
                       <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
-                          <p className="text-2xl font-black text-emerald-600 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                          <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                         </div>
                         <span className="text-sm font-black uppercase tracking-wider text-[#EBA914] transition-transform group-hover:translate-x-1">
                           {dict.home.explorar} &rarr;
