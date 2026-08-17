@@ -36,6 +36,7 @@ export default function DetalheIniciativaPage({ params }: { params: Promise<{ la
 
   useEffect(() => {
     const fetchDetalhes = async () => {
+      setLoading(true);
       // OTIMIZAÇÃO MAXIMA: Foreign Key Joins diretos + Campos Exatos. 1 Único Request.
       const { data, error } = await supabase
         .from('institucional_iniciativas')
