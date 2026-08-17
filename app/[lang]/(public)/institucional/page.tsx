@@ -16,22 +16,27 @@ export default function InstitucionalIndexPage({ params }: { params: Promise<{ l
   useEffect(() => {
     const fetchIniciativas = async () => {
       setLoading(true);
-      // OTIMIZAÇÃO EGRESS: Pedir apenas os campos que vão ser desenhados no ecrã!
+      
+      // Carregamos os dados sem ordenação por data para não falhar a importação manual
       const { data, error } = await supabase
         .from('institucional_iniciativas')
-        .select('id, titulo, entidade_organizadora, imagem_capa_url, logotipo_url, distrito, concelho, idade_min_global, idade_max_global')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .select('id, titulo, entidade_organizadora, imagem_capa_url, logotipo_url, distrito, concelho, idade_min_global, idade_max_global, is_active')
+        .eq('is_active', true);
       
-      if (data) setIniciativas(data);
-      if (error) console.error("Erro ao carregar iniciativas:", error);
+      if (data) {
+        setIniciativas(data);
+      }
+      if (error) {
+        console.error("Erro ao carregar iniciativas:", error);
+      }
       setLoading(false);
     };
     fetchIniciativas();
   }, []);
 
   const programasFiltrados = iniciativas.filter(p => {
-    const matchPesquisa = p.titulo?.toLowerCase().includes(pesquisa.toLowerCase()) || p.entidade_organizadora?.toLowerCase().includes(pesquisa.toLowerCase());
+    const matchPesquisa = p.titulo?.toLowerCase().includes(pesquisa.toLowerCase()) || 
+                          p.entidade_organizadora?.toLowerCase().includes(pesquisa.toLowerCase());
     const matchDistrito = distrito === '' || p.distrito?.toLowerCase() === distrito.toLowerCase();
     return matchPesquisa && matchDistrito;
   });
@@ -73,7 +78,8 @@ export default function InstitucionalIndexPage({ params }: { params: Promise<{ l
               <option value="">{isEn ? 'All Districts' : 'Todos os Distritos'}</option>
               <option value="Lisboa">Lisboa</option>
               <option value="Porto">Porto</option>
-              <option value="Faro">Faro</option>
+              <option value="Évora">Évora</option>
+              <option value="Aveiro">Aveiro</option>
               <option value="Setúbal">Setúbal</option>
               <option value="Braga">Braga</option>
             </select>
@@ -96,7 +102,6 @@ export default function InstitucionalIndexPage({ params }: { params: Promise<{ l
                <Link key={iniciativa.id} href={`/${lang}/institucional/${iniciativa.id}`} className="group flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl hover:border-emerald-200 transition-all duration-300 overflow-hidden">
                   
                   <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
-                    {/* OTIMIZAÇÃO: Tag <img> nativa com loading="lazy" para poupar o plano gratuito do Vercel */}
                     <img loading="lazy" src={iniciativa.imagem_capa_url || '/og-image.jpg'} alt={iniciativa.titulo} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                     <div className="absolute top-3 left-3 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">
                       {isEn ? 'Public Entity' : 'Entidade Pública'}
@@ -122,7 +127,7 @@ export default function InstitucionalIndexPage({ params }: { params: Promise<{ l
                         <span className="text-slate-400">👶</span> {iniciativa.idade_min_global || 6} - {iniciativa.idade_max_global || 16} anos
                       </div>
                       <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-                        <span className="text-slate-400">📍</span> <span className="line-clamp-1">{iniciativa.concelho}, {iniciativa.distrito}</span>
+                        <span className="text-slate-400">📍</span> <span className="line-clamp-1">{iniciativa.concelho || 'Portugal'}, {iniciativa.distrito}</span>
                       </div>
                     </div>
                     
