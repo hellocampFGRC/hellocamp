@@ -29,14 +29,14 @@ export default function DetalheIniciativaPage({ params }: { params: Promise<{ la
   const [loading, setLoading] = useState(true);
   const [iniciativa, setIniciativa] = useState<any>(null);
 
-  // Estados do Formulário (O form é genérico e envia e-mail para a HelloCamp/Câmara)
+  // Estados do Formulário
   const [form, setForm] = useState({ nomePai: "", emailPai: "", telefonePai: "", subprogramaId: "", mensagem: "" });
   const [submitting, setSubmitting] = useState(false);
   const [sucesso, setSucesso] = useState(false);
 
   useEffect(() => {
     const fetchDetalhes = async () => {
-      // OTIMIZAÇÃO MAXIMA: Foreign Key Joins diretos + Campos Exatos. 1 Único Request.
+      setLoading(true);
       const { data, error } = await supabase
         .from('institucional_iniciativas')
         .select(`
@@ -58,19 +58,17 @@ export default function DetalheIniciativaPage({ params }: { params: Promise<{ la
     e.preventDefault();
     setSubmitting(true);
     try {
-      // O teu tracking original
       const { error: dbError } = await supabase.from('leads_externas').insert([{
         campo_id: iniciativa.id,
         nome_cliente: form.nomePai,
         email_cliente: form.emailPai,
         telefone_cliente: form.telefonePai,
-        turno_interesse: form.subprogramaId, // Gravamos o ID do Subprograma que escolheu
+        turno_interesse: form.subprogramaId,
         preco_estimado: 0,
         detalhes_extra: `INSTITUCIONAL | Obs: ${form.mensagem}`
       }]);
       if (dbError) throw dbError;
 
-      // Chama a tua API para envio de emails
       await fetch('/api/notificar-reserva', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -144,7 +142,7 @@ export default function DetalheIniciativaPage({ params }: { params: Promise<{ la
           {/* COLUNA ESQUERDA: CONTEÚDO */}
           <div className="flex-1 w-full flex flex-col gap-12">
             
-            {/* Secção: Sobre o Programa (Descrição + Destaques) */}
+            {/* Secção: Sobre o Programa */}
             <section>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl md:text-3xl font-black text-slate-900 m-0">{isEn ? 'About the Program' : 'Sobre o Programa'}</h2>
@@ -154,29 +152,9 @@ export default function DetalheIniciativaPage({ params }: { params: Promise<{ la
                 className="text-slate-600 leading-relaxed text-base [&_p]:mb-4"
                 dangerouslySetInnerHTML={{ __html: iniciativa.descricao_html || '<p>Informação oficial detalhada será disponibilizada em breve.</p>' }}
               />
-              
-              {/* Destaques visuais tipo "Cascais" */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-                 <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center shadow-sm hover:border-emerald-200 transition-colors">
-                   <span className="text-4xl block mb-3 text-emerald-500">🏃</span>
-                   <p className="text-sm font-bold text-slate-700 leading-tight">Diversão & Aprendizagem</p>
-                 </div>
-                 <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center shadow-sm hover:border-emerald-200 transition-colors">
-                   <span className="text-4xl block mb-3 text-emerald-500">🌳</span>
-                   <p className="text-sm font-bold text-slate-700 leading-tight">Atividades ao Ar Livre</p>
-                 </div>
-                 <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center shadow-sm hover:border-emerald-200 transition-colors">
-                   <span className="text-4xl block mb-3 text-emerald-500">🛡️</span>
-                   <p className="text-sm font-bold text-slate-700 leading-tight">Segurança Total</p>
-                 </div>
-                 <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center shadow-sm hover:border-emerald-200 transition-colors">
-                   <span className="text-4xl block mb-3 text-emerald-500">🤝</span>
-                   <p className="text-sm font-bold text-slate-700 leading-tight">Inclusão & Bem-estar</p>
-                 </div>
-              </div>
             </section>
 
-            {/* Secção: Subprogramas (A grelha de cartões internos) */}
+            {/* Secção: Subprogramas */}
             {iniciativa.subprogramas && iniciativa.subprogramas.length > 0 && (
               <section>
                 <h2 className="text-2xl md:text-3xl font-black text-slate-900 mb-6">{isEn ? 'Available Subprograms' : 'Programas Disponíveis'}</h2>
@@ -218,12 +196,11 @@ export default function DetalheIniciativaPage({ params }: { params: Promise<{ la
               </section>
             )}
 
-            {/* Secção: Locais (Pavilhões, Escolas) */}
+            {/* Secção: Locais */}
             {iniciativa.locais && iniciativa.locais.length > 0 && (
               <section>
                 <div className="flex justify-between items-end mb-6">
                   <h2 className="text-2xl md:text-3xl font-black text-slate-900 m-0">{isEn ? 'Locations' : 'Locais de Realização'}</h2>
-                  <span className="text-sm font-bold text-emerald-600 cursor-pointer hover:underline">{isEn ? 'View all' : 'Ver todos os locais'}</span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {iniciativa.locais.map((local: any) => (
@@ -241,22 +218,6 @@ export default function DetalheIniciativaPage({ params }: { params: Promise<{ la
               </section>
             )}
 
-            {/* Informação Legal */}
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 flex items-start gap-4">
-              <span className="text-2xl text-blue-500 mt-1">ℹ️</span>
-              <div>
-                <h4 className="font-black text-blue-900 mb-1">Inscrição Oficial</h4>
-                <p className="text-sm font-medium text-blue-800 leading-relaxed">
-                  A inscrição nestes programas da {iniciativa.entidade_organizadora} é da total responsabilidade do Município/Junta. Utilize o formulário para registar interesse ou aceda ao link oficial para validar todas as normas de participação.
-                </p>
-                {iniciativa.link_oficial && (
-                  <a href={iniciativa.link_oficial} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-sm font-bold text-blue-700 hover:text-blue-900 underline underline-offset-2">
-                    Aceder ao Portal Oficial do Município &rarr;
-                  </a>
-                )}
-              </div>
-            </div>
-
           </div>
 
           {/* COLUNA DIREITA: STICKY BOX & FORMULÁRIO */}
@@ -266,8 +227,8 @@ export default function DetalheIniciativaPage({ params }: { params: Promise<{ la
               <h3 className="font-black text-lg text-slate-900 mb-5">Destaques Oficiais</h3>
               <ul className="space-y-4 text-sm font-medium text-slate-700">
                 <li className="flex gap-3 items-start"><span className="text-emerald-500 text-lg leading-none">✓</span> Atividades desportivas, culturais e ambientais</li>
-                <li className="flex gap-3 items-start"><span className="text-emerald-500 text-lg leading-none">✓</span> Monitores qualificados pelo IPDJ</li>
-                <li className="flex gap-3 items-start"><span className="text-emerald-500 text-lg leading-none">✓</span> Seguro de acidentes pessoais incluído</li>
+                <li className="flex gap-3 items-start"><span className="text-emerald-500 text-lg leading-none">✓</span> Monitores qualificados</li>
+                <li className="flex gap-3 items-start"><span className="text-emerald-500 text-lg leading-none">✓</span> Seguro de acidentes pessoais</li>
                 <li className="flex gap-3 items-start"><span className="text-emerald-500 text-lg leading-none">✓</span> Transporte em alguns programas</li>
               </ul>
             </div>
@@ -306,7 +267,6 @@ export default function DetalheIniciativaPage({ params }: { params: Promise<{ la
                   <button type="submit" disabled={submitting} className="w-full bg-white text-emerald-900 hover:bg-slate-100 font-black px-6 py-4 rounded-xl transition-transform shadow-md mt-4 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
                     {submitting ? 'A Processar...' : 'Quero Inscrever o Meu Filho'}
                   </button>
-                  <p className="text-center text-[10px] text-emerald-200 mt-3 font-medium">Saiba mais sobre o processo de inscrição &rarr;</p>
                 </form>
               )}
             </div>
