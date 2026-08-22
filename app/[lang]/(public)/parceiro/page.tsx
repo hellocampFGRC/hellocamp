@@ -11,22 +11,22 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
   return (
     <main className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900 pb-20">
       
-      {/* SEÇÃO HERO B2B - Foco na dor do organizador e no valor tecnológico */}
-      <section className="bg-slate-900 text-white py-24 md:py-32 text-center relative overflow-hidden border-b-8 border-[#EBA914]">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      {/* SEÇÃO HERO B2B - Verde da Marca para Organizadores */}
+      <section className="bg-[#167524] text-white py-24 md:py-32 text-center relative overflow-hidden border-b-8 border-[#e2a41d]">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-black/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="max-w-4xl mx-auto px-4 relative z-10">
-          <span className="text-xs font-bold text-[#EBA914] bg-[#EBA914]/10 px-4 py-2 rounded-full border border-[#EBA914]/20 uppercase tracking-widest shadow-sm">
+          <span className="text-xs font-bold text-[#167524] bg-[#e2a41d] px-4 py-2 rounded-full border border-[#e2a41d] uppercase tracking-widest shadow-sm">
             {isEn ? 'HelloCamp B2B Platform' : 'HelloCamp para Organizadores'}
           </span>
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight mt-8 mb-6 leading-tight">
             {isEn ? 'Maximize Bookings. Simplify Operations.' : 'Aumente as Inscrições. Otimize a Sua Operação.'}
           </h1>
-          <p className="text-lg md:text-xl text-slate-300 font-medium max-w-3xl mx-auto leading-relaxed mb-10">
+          <p className="text-lg md:text-xl text-green-50 font-medium max-w-3xl mx-auto leading-relaxed mb-10">
             {isEn 
               ? 'The ultimate technological solution for camp organizers. No fixed costs. Absolute control.' 
               : 'A solução tecnológica definitiva para promotores de campos de férias. Simplifique a tesouraria e a gestão de clientes sem custos fixos e com controlo total.'}
           </p>
-          <Link href={`/${lang}/admin/registo`} className="inline-block bg-[#EBA914] text-white font-bold px-10 py-4 rounded-xl no-underline hover:bg-amber-500 transition-all transform hover:-translate-y-1 shadow-xl shadow-amber-500/20 text-lg">
+          <Link href={`/${lang}/admin/registo`} className="inline-block bg-[#e2a41d] text-[#167524] font-black px-10 py-4 rounded-xl no-underline hover:bg-[#d4991b] transition-all transform hover:-translate-y-1 shadow-xl shadow-[#e2a41d]/20 text-lg">
             {isEn ? 'Create Partner Account' : 'Registar Conta Parceiro'}
           </Link>
         </div>
@@ -48,8 +48,8 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           
           {/* PILAR 1: STRIPE CONNECT / FATURAÇÃO */}
-          <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/30 flex flex-col hover:border-emerald-200 transition-colors">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-3xl mb-8 shadow-inner border border-emerald-100">💳</div>
+          <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/30 flex flex-col hover:border-[#167524] transition-colors">
+            <div className="w-16 h-16 rounded-2xl bg-[#167524]/10 text-[#167524] flex items-center justify-center text-3xl mb-8 shadow-inner border border-[#167524]/20">💳</div>
             <h3 className="text-xl font-black text-slate-900 tracking-tight mb-4">
               {isEn ? 'Automated Payouts' : 'Faturação e Pagamentos Automatizados'}
             </h3>
@@ -61,8 +61,8 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
           </div>
 
           {/* PILAR 2: CENTRAL LOGÍSTICA */}
-          <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/30 flex flex-col hover:border-blue-200 transition-colors">
-            <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-3xl mb-8 shadow-inner border border-blue-100">📊</div>
+          <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/30 flex flex-col hover:border-[#124072] transition-colors">
+            <div className="w-16 h-16 rounded-2xl bg-[#124072]/10 text-[#124072] flex items-center justify-center text-3xl mb-8 shadow-inner border border-[#124072]/20">📊</div>
             <h3 className="text-xl font-black text-slate-900 tracking-tight mb-4">
               {isEn ? 'Nominal Rosters & Export' : 'Gestão Logística e Dados Nominais'}
             </h3>
@@ -74,8 +74,8 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
           </div>
 
           {/* PILAR 3: CUSTO ZERO DE RISCO */}
-          <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/30 flex flex-col hover:border-purple-200 transition-colors">
-            <div className="w-16 h-16 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-3xl mb-8 shadow-inner border border-purple-100">⚖️</div>
+          <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/30 flex flex-col hover:border-[#e2a41d] transition-colors">
+            <div className="w-16 h-16 rounded-2xl bg-[#e2a41d]/10 text-[#e2a41d] flex items-center justify-center text-3xl mb-8 shadow-inner border border-[#e2a41d]/20">⚖️</div>
             <h3 className="text-xl font-black text-slate-900 tracking-tight mb-4">
               {isEn ? 'Zero Risk. Success-Based Model.' : 'Risco Zero. Modelo Baseado no Sucesso'}
             </h3>
@@ -111,7 +111,7 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
             ? 'It takes less than 5 minutes to set up your profile. Start receiving automated enrollments for your programs today.' 
             : 'O processo de configuração do perfil demora menos de 5 minutos. Inscreva a sua entidade e comece a receber reservas estruturadas para os seus programas de férias ao longo de todo o ano.'}
         </p>
-        <Link href={`/${lang}/admin/registo`} className="inline-block bg-slate-900 hover:bg-slate-800 text-white font-bold px-10 py-4 rounded-xl no-underline transition-colors shadow-lg shadow-slate-900/20 text-lg">
+        <Link href={`/${lang}/admin/registo`} className="inline-block bg-[#167524] hover:bg-[#115a1b] text-white font-bold px-10 py-4 rounded-xl no-underline transition-colors shadow-lg shadow-[#167524]/20 text-lg">
           {isEn ? 'Start Registration' : 'Iniciar Registo da Entidade'}
         </Link>
       </section>
