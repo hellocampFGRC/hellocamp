@@ -231,7 +231,7 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
           </p>
         </div>
         
-        <Link href={`/${lang}/admin/campos/novo`} className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl font-bold text-sm text-center transition-colors shadow-sm no-underline">
+        <Link href={`/${lang}/admin/campos/novo`} className="w-full sm:w-auto bg-[#167524] hover:bg-[#115a1b] text-white px-5 py-3 rounded-xl font-bold text-sm text-center transition-colors shadow-sm no-underline">
           + {isEn ? 'Add New Camp' : 'Adicionar Novo'}
         </Link>
       </div>
@@ -241,7 +241,7 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
       ) : campos.length === 0 ? (
         <div className="text-center py-16 px-4 bg-white border-2 border-dashed border-slate-300 rounded-2xl">
           <p className="text-slate-500 mb-4 text-base md:text-lg">{isEn ? 'You haven\'t added any camps yet.' : 'Ainda não tem nenhum campo registado.'}</p>
-          <Link href={`/${lang}/admin/campos/novo`} className="text-emerald-600 font-bold no-underline text-base hover:text-emerald-700">
+          <Link href={`/${lang}/admin/campos/novo`} className="text-[#167524] font-bold no-underline text-base hover:text-[#115a1b]">
             {isEn ? 'Create your first camp →' : 'Crie o seu primeiro campo →'}
           </Link>
         </div>
@@ -284,7 +284,7 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
                     </span>
                     
                     {campo.status_aprovacao === 'Aprovado' && (
-                      <span className="text-xs font-bold px-3 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                      <span className="text-xs font-bold px-3 py-1 rounded-full border bg-[#167524]/10 text-[#167524] border-[#167524]/20">
                         ✅ {isEn ? 'Verified' : 'Validado'}
                       </span>
                     )}
@@ -302,14 +302,15 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
                       {isEn ? 'Preview' : 'Ver Online'}
                   </a>
 
-                  {/* NOVO BOTÃO DE PDF (Apenas se houver contrato assinado) */}
+                  {/* NOVO BOTÃO DE PDF (Apenas se houver contrato assinado) - Adaptado para o Amarelo da Marca */}
                   {campo.contrato_dados && (
-                    <button onClick={() => handleImprimirPDF(campo)} className="flex items-center justify-center px-4 py-2.5 bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 rounded-lg font-bold text-sm no-underline transition-colors cursor-pointer">
+                    <button onClick={() => handleImprimirPDF(campo)} className="flex items-center justify-center px-4 py-2.5 bg-[#e2a41d]/10 text-[#b58010] hover:bg-[#e2a41d]/20 border border-[#e2a41d]/30 rounded-lg font-bold text-sm no-underline transition-colors cursor-pointer">
                       {isEn ? 'Download Contract' : '📥 Contrato PDF'}
                     </button>
                   )}
                   
-                  <Link href={`/${lang}/admin/campos/editar/${campo.id}`} className="flex items-center justify-center px-6 py-2.5 bg-slate-900 text-white hover:bg-slate-800 rounded-lg font-bold text-sm no-underline transition-colors">
+                  {/* Botão de Edição com a cor corporativa principal */}
+                  <Link href={`/${lang}/admin/campos/editar/${campo.id}`} className="flex items-center justify-center px-6 py-2.5 bg-[#167524] text-white hover:bg-[#115a1b] rounded-lg font-bold text-sm no-underline transition-colors">
                     {isEn ? 'Edit Camp' : 'Editar Campo'}
                   </Link>
                 </div>

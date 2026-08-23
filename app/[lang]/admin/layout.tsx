@@ -52,14 +52,18 @@ export default function AdminLayout({
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 font-sans">
       
-      {/* SIDEBAR PARCEIROS (Tema Escuro) */}
-      <aside className="w-full md:w-[260px] bg-slate-900 text-white flex flex-col flex-shrink-0 shadow-md md:shadow-none z-10">
+      {/* SIDEBAR PARCEIROS (Tema Verde Corporativo B2B) */}
+      <aside className="w-full md:w-[260px] bg-[#167524] text-white flex flex-col flex-shrink-0 shadow-md md:shadow-none z-10">
         
         {/* Título: Oculto no mobile para poupar espaço */}
-        <div className="p-5 md:p-6 border-b border-slate-800 hidden md:block">
-          <h2 className="text-xl font-black m-0">
-            HelloCamp <span className="text-emerald-500">Parceiros</span>
+        <div className="p-5 md:p-6 border-b border-white/10 hidden md:block">
+          <h2 className="text-2xl font-black m-0 tracking-tight flex items-center gap-1">
+            <span className="text-white">Hello</span>
+            <span className="text-[#e2a41d]">Camp</span>
           </h2>
+          <span className="block text-xs font-bold text-green-100/80 mt-1 uppercase tracking-widest">
+            Parceiros B2B
+          </span>
         </div>
         
         {/* Navegação: Scroll horizontal no mobile, vertical no PC */}
@@ -74,17 +78,17 @@ export default function AdminLayout({
           <NavLink href={`/${lang}/admin/recrutamento`} active={pathname.includes('/recrutamento')} text={isEn ? 'Staff Recruitment' : 'Recrutamento'} />
           
           {/* Botão de Sair de volta ao scroll no mobile! */}
-          <button onClick={handleLogout} className="md:hidden flex-shrink-0 flex items-center justify-center px-5 py-2.5 rounded-full text-sm font-bold text-red-400 bg-slate-800 border border-slate-700 hover:bg-slate-700 ml-2 transition-colors">
+          <button onClick={handleLogout} className="md:hidden flex-shrink-0 flex items-center justify-center px-5 py-2.5 rounded-full text-sm font-bold text-red-100 bg-red-900/30 border border-red-900/50 hover:bg-red-900/50 ml-2 transition-colors">
             {isEn ? 'Logout' : 'Sair'}
           </button>
         </nav>
 
         {/* Rodapé da Sidebar: Email e Logout exclusivo para PC */}
-        <div className="p-6 border-t border-slate-800 hidden md:block mt-auto">
-          <p className="text-xs text-slate-400 mb-4 break-all">
+        <div className="p-6 border-t border-white/10 hidden md:block mt-auto">
+          <p className="text-xs text-green-100/70 mb-4 break-all">
             {user?.email}
           </p>
-          <button onClick={handleLogout} className="w-full p-3 bg-transparent border border-slate-700 text-white rounded-lg cursor-pointer font-bold text-sm hover:bg-slate-800 transition-colors">
+          <button onClick={handleLogout} className="w-full p-3 bg-transparent border border-white/20 text-white rounded-lg cursor-pointer font-bold text-sm hover:bg-white/10 transition-colors">
             {isEn ? 'Logout' : 'Terminar Sessão'}
           </button>
         </div>
@@ -101,7 +105,7 @@ export default function AdminLayout({
               <span className="text-slate-200">|</span>
               <Link href={getLangUrl('en')} className={`${lang === 'en' ? 'text-slate-900' : 'text-slate-400'} no-underline`}>EN</Link>
             </div>
-            <Link href={`/${lang}`} target="_blank" className="text-sm font-bold text-emerald-600 no-underline hover:text-emerald-700">
+            <Link href={`/${lang}`} target="_blank" className="text-sm font-bold text-[#167524] no-underline hover:text-[#115a1b]">
               {isEn ? 'View Live Site ↗' : 'Ver Site ↗'}
             </Link>
           </div>
@@ -124,7 +128,7 @@ function NavLink({ href, active, text }: { href: string, active: boolean, text: 
       href={href} 
       className={`
         px-5 py-2.5 md:py-3 rounded-full md:rounded-lg text-sm whitespace-nowrap transition-colors flex-shrink-0
-        ${active ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 font-medium hover:bg-slate-800 hover:text-white'}
+        ${active ? 'bg-white/20 text-white font-bold shadow-sm' : 'text-green-50/80 font-medium hover:bg-white/10 hover:text-white'}
       `}
     >
       {text}
