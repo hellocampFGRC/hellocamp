@@ -49,11 +49,17 @@ export default function FormContactoCampo({
 
       setSucesso(true);
       
-      // Se ele já tiver sessão iniciada, reencaminha para a Inbox (Chat)
+      // VERIFICAÇÃO DE SESSÃO: Só reencaminha se o utilizador estiver autenticado
       const { data: { session } } = await supabase.auth.getSession();
+      
       if (session) {
-        setTimeout(() => router.push(`/${lang}/chat`), 2500);
+        // Encaminha para a nova rota correta da área de cliente
+        setTimeout(() => {
+          router.push(`/${lang}/cliente/mensagens`);
+        }, 2500);
       }
+      // Se não tiver sessão (session for nulo), o código não faz nada 
+      // e o utilizador fica simplesmente a ver a mensagem de sucesso.
 
     } catch (err) {
       console.error(err);
@@ -67,8 +73,14 @@ export default function FormContactoCampo({
     return (
       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
         <span className="text-5xl mb-4 block">✅</span>
-        <h4 className="text-xl font-black text-emerald-800 mb-2">{isEn ? 'Message Sent Successfully!' : 'Mensagem Enviada com Sucesso!'}</h4>
-        <p className="text-emerald-700 font-medium">{isEn ? 'The camp organizer will review your question. You can follow the conversation in your Dashboard.' : 'A sua mensagem foi enviada diretamente para o Organizador. Responderão o mais breve possível.'}</p>
+        <h4 className="text-xl font-black text-emerald-800 mb-2">
+          {isEn ? 'Message Sent Successfully!' : 'Mensagem Enviada com Sucesso!'}
+        </h4>
+        <p className="text-emerald-700 font-medium">
+          {isEn 
+            ? 'The camp organizer will review your question. They will reply to your email shortly.' 
+            : 'A sua mensagem foi enviada diretamente para o Organizador. Responderão para o seu e-mail o mais breve possível.'}
+        </p>
       </div>
     );
   }
