@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function FormContactoCampo({ 
   campoId, 
@@ -25,73 +25,42 @@ export default function FormContactoCampo({
     setLoading(true);
 
     try {
-      const nomeCompleto = `${form.nome} ${form.apelido}`.trim();
-      let userIdFinal = null;
+      // Usamos FormData para corresponder ao que a tua API espera
+      const formData = new FormData();
+      formData.append('First_Name', form.nome);
+      formData.append('Last_Name', form.apelido);
+      formData.append('Email', form.email);
+      formData.append('Phone', form.telefone);
+      formData.append('Age', form.idade);
+      formData.append('Message', form.mensagem);
+      formData.append('campo_id', campoId);
+      formData.append('organizador_id', organizadorId || '');
+      formData.append('_subject', `Nova Questão: ${nomeCampo}`);
+      formData.append('lang', lang);
 
-      // 1. Verificar se o Pai/Cliente já existe na Plataforma
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        userIdFinal = session.user.id;
-      } else {
-        // Tentar encontrar/criar o user em background
-        const { data: existingUser } = await supabase.from('perfis').select('id').eq('email', form.email).single();
-        
-        if (existingUser) {
-          userIdFinal = existingUser.id;
-        } else {
-          // Geração de conta "silenciosa" (Pai vai receber email de boas-vindas)
-          const randomPassword = Math.random().toString(36).slice(-10) + 'A1!';
-          const { data: newUser } = await supabase.auth.signUp({
-            email: form.email,
-            password: randomPassword,
-            options: { data: { nome_completo: nomeCompleto, role: 'cliente' } }
-          });
-          
-          if (newUser.user) {
-            userIdFinal = newUser.user.id;
-            await supabase.from('perfis').upsert({
-              id: userIdFinal, email: form.email, nome_completo: nomeCompleto, telefone: form.telefone, role: 'cliente'
-            });
+      const response = await fetch('/api/enviar-duvida', {
+        method: 'POST',
+        body: formData,
+      });
 
-            // Dispara email de boas-vindas da conta criada passivamente
-            fetch('/api/notificacoes/boas-vindas', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: form.email, nome: nomeCompleto, role: 'cliente', lang })
-            }).catch(() => {});
-          }
-        }
+      if (!response.ok) {
+        throw new Error("Erro no servidor");
       }
-
-      if (!userIdFinal) throw new Error("Erro ao identificar o utilizador.");
-
-      // 2. Injetar a mensagem na Inbox Universal
-      const prefixoIdade = form.idade ? `(Interessado para ${form.idade} anos) ` : '';
-      const textoFinal = `📢 [Nova Questão] ${prefixoIdade}\n\n${form.mensagem}`;
-
-      await supabase.from('mensagens').insert([{
-        campo_id: campoId,
-        sender_id: userIdFinal,
-        receiver_id: organizadorId,
-        texto: textoFinal
-      }]);
-
-      // 3. (Opcional) Poderia disparar aqui um email direto via API para o parceiro 
-      // a avisar "Tem uma nova mensagem na HelloCamp", mas a notificação visual na Inbox já funciona.
 
       setSucesso(true);
       
-      // Se ele já estiver autenticado, reencaminha diretamente para a Inbox dele!
+      // Se ele já tiver sessão iniciada, reencaminha para a Inbox (Chat)
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        setTimeout(() => router.push(`/${lang}/chat`), 2000);
+        setTimeout(() => router.push(`/${lang}/chat`), 2500);
       }
 
     } catch (err) {
       console.error(err);
-      alert("Houve um erro técnico. Tente novamente mais tarde.");
+      alert(isEn ? "Technical error. Try again later." : "Houve um erro técnico. Tente novamente mais tarde.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   if (sucesso) {
@@ -99,7 +68,7 @@ export default function FormContactoCampo({
       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
         <span className="text-5xl mb-4 block">✅</span>
         <h4 className="text-xl font-black text-emerald-800 mb-2">{isEn ? 'Message Sent Successfully!' : 'Mensagem Enviada com Sucesso!'}</h4>
-        <p className="text-emerald-700 font-medium">{isEn ? 'The camp organizer will review your question. You can follow the conversation in your Dashboard.' : 'A sua mensagem foi diretamente para a Caixa de Entrada do Organizador. Se já tem sessão iniciada, será reencaminhado para o Chat.'}</p>
+        <p className="text-emerald-700 font-medium">{isEn ? 'The camp organizer will review your question. You can follow the conversation in your Dashboard.' : 'A sua mensagem foi enviada diretamente para o Organizador. Responderão o mais breve possível.'}</p>
       </div>
     );
   }

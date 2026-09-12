@@ -1,0 +1,866 @@
+[
+    {
+        "Nome": "Campos de Férias",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESYQHrOzAVbad4Wyvg_M_5Vy9-hHIHcdS9ckd6uaU3xWcCqkaSEUDylipTOc8oedE2gIY8UKwoRoouHY39zgO0WRGAyfdIgmmbiuXblteilYwcMfGnfXj4l4CFexK8DKHEIJo",
+        "Email": "hello@theinventors.io",
+        "Telefone": "+351 916 805 246",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campo de Férias de Robótica em Oeiras! - Lisboa",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAEScwHrOzAVhZmRvCCMXocxwH-d_yMoxkf3tFt1g8nx9qftyiJDXonaqr0i0sH6-P6KZFPizU1J1oBO1IEcb3nZv5iSkmw6vd1cW8DqkOy7SbpyXjW0dsqcAmBBnDDSrsEL59wzV5wjfd89pF_uQGtFlwL8af8",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "SHARKCODERS | Inteligência Artificial e tecnologia para ...",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESUwHrOzAV2F4Bw0_KHlaQqkWDGFhT5u6QxYHjC-zwRuliqdzJnwqHX5JFFnvjd0Nb4fj8-1SgbSHdm8o20aWs7USg-HtyohPMAg1_89XtBN1sbcH-",
+        "Email": "info@sharkcoders.pt",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Férias de Verão com Tecnologia - Assembly",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESdgHrOzAVnKRu92ksqJuggHSsYEeHMD-DrnHn2Q7mOFx9Y2-gePSEBFZFZEVfG8Y9Q8FfWCpsrnsnNE3IEopabkRyQN08i3cynHT9T_LVB4iD5WgG89aYPFFDCuogSl5ZQUXfAAS16gUaVnfrHA0Skqhb6TjXcHA",
+        "Email": "geral@assembly.pt",
+        "Telefone": "+351 211119918",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Home | RoboThink Portugal",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESTQHrOzAVP1kgCtTxx9zlsOQy__Ozz1nNlUYVmS-3MDzcOrIxuErYhsxHVBETN5UY72HriFh5Z41qHjGXhZn7C2K6IyU69DJRJ2h_QTSy",
+        "Email": "geral@robothink.pt",
+        "Telefone": "+351 914 040 001",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Bootcamps de Férias - Happy Code",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESbgHrOzAV8wRo-Ck0n1gtwDo8SQvnRTzW67dIBsaPEctrtzmCbWUDIzvd64ca1Bf345r6VEhdt-IE_o93eu79nMVebjqmyVQJmuAISaddR5SfZFmAL139DdR1o7OOxiY_6ig4ZpIRikkdW_ZEpj6l",
+        "Email": "info@happycode.pt",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Rob9-16 | Férias de Verão – Projeto X - Técnico ULisboa",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESgAEB6zswFSlHgnKdSQqCTfl-IVPjyyxRoIBi7vwdZJsI8bgKIun8ePuAizrziBA5RVIqqwTL4eQ12PMk3yoipTt55ItRU7hayZZAXRWRYLjWy7ApR6jk7mVODSYz4m1w3a6CH2DHWcVX5hBUbEY8Gc1D3HYw4C_8-ZKSQyYoC3efEg",
+        "Email": "rob916@tecnico.ulisboa.pt",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campo de Férias de Robótica em Oeiras no Verão",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAEShQEB6zswFWBVMzEcujRvyPG2IMDrhyLXqNlsv7n1mbpzUCSQoV6iF7Py83b-ElyHvf622VZJ9OWzDv1I_F9lhfvu-SXDx98nyvH5qmaolrxtDDzc-WjVMobd0348H6-9D2RUSbT0olEfJ6kyOKxBH-626FgaiknuueapgeJszK7ChVEf9fQU",
+        "Email": "info@coloniasdeferias.pt",
+        "Telefone": "917 845 862",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Ocupação Científica dos Jovens nas Férias 2026",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESsAEB6zswFdAIideSc7XDDhW5_RiLkd8hrTI8Lns7VKv40xuXdU4BhSzGsC9OT_E0VltP1SIP--HWdUNaxkLxByCTLnjZNyfjqz_r7oYvAWO3uX-jfKACwLo5H5nhy_uI1ZVNPIpVDz06RDDQ2UqyZK5f4jxoKZa3jNj0j8Egh3IXbeBgmE7KLihQiE_lZM8R5iNRjWZDSZUJxm8mgpMPiBUQOfX2-_ZiinSBOX2ZV5oN1Q",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campos de Férias 2026 · The Inventors × Science4you · 8 ...",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESUQHrOzAViyWiWzzU2mxxVafE4O95hdr98xsqdfr7U5vwC8HJt9OLOXzOawq5CYnOyfrqMFLT5pB3aRXruuewWf2hFKf8E1ml08zeyQByH8HCPw",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Robótica e Modelação 3D - Salesianos de Lisboa",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESkwEB6zswFYs_zhsnoVFb-a2oOGDQpwbVW8LYHYUdyN7NKLIdCrR-CGDIulG5qDqphvLHVUYsL4HqS5BY3plsUzNAww818lblSUt6098b-BIB9ciNw-zumwfZMhXjz_A8sEYr2T1IaW3j0pRyL7Ir7IY82IEyOLZ2kHd00K6vFfcsuoIz6RB0QXJL0PcCwRB42OwcV3Y",
+        "Email": "lisboa@salesianos.pt",
+        "Telefone": "210 900 500",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Férias com Ciência - Pavilhão do ...",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESaQHrOzAV1l4O4N6WQgx32Ro8WhJOHY4MwbqzzEzCg0Vk0Bo9DXPNie4zUx4fYmXdVxHnDi_Y4wsHPXsrzjl-ZhdixdZL3DuADFLqvR8QADeaK1nIseeTyhY3aNGUCjca8Cx0KJ73NcIuLw",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Os melhores programas de férias para crianças este Verão",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESkAEB6zswFax6q9scE-6xlIzVkeIQLldIX26CIRTNSMMOpyUxMIpwQNa1ST4x8y0cG_AFFtWDgMffHV3ru_Hnv-NFWOPR84TPXpoDiP3KWICb6oM9Sir9X_-QLefn5C4KSrK-uXIncAKeJZKP3BEcC8xGt-6yzxiUnka8eNYbzuZUinFIA4Qtu3RXGoWshhzOik8",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campos de Férias The Inventors 2025 em todo o País",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAEScQHrOzAVpdyAGk31XftJbyjfkxTyqmCh-nvtpUnrRvHIZsTjN8mV3nCanoeFqcU5feb9-4K-Fxv7IW0KuIBwaLW_-Anxyx9V5fIYj_vlkbmDraB5V3lb5LMrwZrx-aKUzKloNE69G3POeEHBMLlrflK7",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Férias em Movimento",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESXwHrOzAVf82HCCUXgR8oVrHaPtWoTVr9RZ3-agE6VfGioz5XDCFOmxs7VtD-G7Wq8TadRunS7lusFfZKYZtUNNEIjKVNaPUPYEMQ6OFBXpFZvxOHvY62JMjYfw7UsXrK",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "SUMMERCAMP",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESXQHrOzAV7JD_95bs2WGAo9b8cBVfUpuOfgvDeyMSz3pLqLfHFDq6weY60IQ_Lg_uJEdYTF-lh1hXnxNShwJY8c_vGSEmG1pArSLYjOuSPWEnib8hEBf5Ut5dhFqNTA",
+        "Email": "info@sharkcoders.pt",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campos de férias para as crianças - Estrelas & Ouriços - SAPO",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESaQHrOzAVNpNH8bLzhs_S2JZpHA1bOGH-YPKtTYkVWx5XCtZ_pn16pMQewsA85uS7J3qnDM_8j1HvmAOySNM08lS1P9k6umoYYHXlUl-cjOAU3f5fvMwEsMr69SE5P3QKSKoH_DW8zqqT3g",
+        "Email": "info@bowgym.pt",
+        "Telefone": "229 392 410",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Cursos de Programação jovens 2026 - Juvigo",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESdwHrOzAVhwRBlylTJsLg2pVXXZpd00-odtwQBS25yJysDVUnnntj9t6xTi-U6ERNi5GFhrw81Bc87Adu3CAda3nxVrABvjikzXVNKSWKUZ15xB6z9o5A557IVu4pBpSwOtWdgmN2UWALTgi9-u9pjb9GswRoeo9r",
+        "Email": "contacto@juvigo.pt",
+        "Telefone": "210 204 945",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "LISBOA - dos 9 aos 12",
+        "Categoria": "Tecnologia e Robótica",
+        "Website": "https://www.google.pt/goto?url=CAESfwHrOzAVzdW5vzNIPCrFmOjQoIcRA6jPe9QzyGtUWD6G449AR6LEAiCFnx25-PFE4I1A3EwbuHan7EqWLEXYd3qR9VrDENq6ueB4VLebXrC3MDav-Bee8WFsJGUovcaaWLcONE6UDYgMEyvTE0n9PEYRNAjZLMEqfaPYHmK1dPM",
+        "Email": "hello@theinventors.io",
+        "Telefone": "916805246",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Escolas de surf em Lisboa para umas férias de Verão ...",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESqAEB6zswFRc5tO8WPP8QvXPjFTsJz4QKpRZB8svMa7wergdOr1r9_D2aaiF9O6ESX43-kLmvGOs4WvQY_5QU4bcePipEqdUKcphQcSjD2tdKRJz0yxkO8Knn5CgOu6E3G9ojwqE-KTN9h_REHuPDMGSVlEnJTDBVWdmL9A0F207Ako290v9Q4LqeR0sf5YjCAw0gMUyz7cWqLRx512S973G7fNE-BpTjNfU",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campos de férias Surf 2026 - Juvigo",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAEScAHrOzAVgobQs3z24ScQLrT7t34d7c6Rv2e348QOeeAFVhdrRk_aWzyAnDpTqD2cBxfScTBSeIM5SO-0pdwK-j2OL8pwlyuLn4NalpJm3vOuna8Gbyb0rOWbHdlP_Y2mg3MzVokzkPg6sNmFCJLxH6c",
+        "Email": "contacto@juvigo.pt",
+        "Telefone": "210 204 945",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "ATL Surf in Carcavelos, Portugal",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESZQHrOzAVAwHkO971iBmRI9c8OUuKN15V2f_mWgHHTWf1_uKG3-jr0qOfXL2zcpPshl3xrhj9N0o_xW85IuNHg7x-lucrohv3XdiTzPTayKqRJDuC5NnPmzg6-DN3XQd8m1y6GT4S",
+        "Email": "info@carcavelossurfschool.com",
+        "Telefone": "+351962850497",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "GREEN COAST :: CAMPO DE FÉRIAS :: summer camp - Surf",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESYgHrOzAVet68vTZ7qVTx6Vfd8gfvpfzKNpK3EqcWHx4jZuya0LyDQdA9C5Y-enAA9giKF2f0q9MzZCtyvqn7zGO0w91rJlZ3ruxZVgViQ2rDzMGT3czMLuGVD21TOKTO685J",
+        "Email": "surfgreencoast@gmail.com",
+        "Telefone": "+351 912 973 799",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campos de férias Surf Carcavelos 2026 - Juvigo",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESewHrOzAV4US3KZU3Fmv02MyIUkAnOM3Rr_pvBNuw3w3RUdDLIbInwk6FMOuFJFHpcKKLIHrxOUrB9tKI9SorBIhXH7LRWQD0uYluq7Bt3BNix9znLjO3lMQQOhrxe0X3n1F9FZj5PixUSEMWJbhSLydKI_2RkWGgYdGklg",
+        "Email": "contacto@juvigo.pt",
+        "Telefone": "210 204 945",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "ATL / CAMPO DE FÉRIAS",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESZwHrOzAVyD8y8rXUQ2NfLAgLuvS8nvAdiy2QG2wXhxgADQTDoG7LLCIKG5eqN1T16CCUYJWFWywHnlBPc1eSJnqYuu218phusSHls-3lbrRCoSJVe1YEMY8HxTF20W4q7hB0GLM0jcc",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campo de Férias",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESYgHrOzAVzBKoP7MFhyIdM6C_Iq_ON5dOmoDPJnCHEToK7aQT83HY0D2zmtQdwyXCkDnvItEoGtHBALLEpkz5CocnRR_ukCS09r2GRk1-LprF1UyLdhE1Dx3ttnahQ1oifjNU",
+        "Email": "info@fishsurfschool.com",
+        "Telefone": "+351 916 082 218",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Nas ondas no Campo de Férias Surf em Carcavelos",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAEShQEB6zswFTjiuWn5fszn1CjfkR5pJxIErILQ9QnfieKypinyDvBHFUWvij1ogR3mhAlRtBNbNiMEmHPZaeRqUxkwuUdS_o0fGjdRDlWfqI8jx-3IJkzuwhRh8XUJg9VT58_44gkVRahOCAlsj8nqhztzx53gubhjC6bZSgGJW_k9sUTf7Jei",
+        "Email": "info@coloniasdeferias.pt",
+        "Telefone": "912 774 345",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Way2Surf - Aulas de Surf, Surf trips, Surf camps da Costa da ...",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESTAHrOzAVYcwBJc4zPPqNLnjIJ2U5b2PMQrZ2L00PsE47MFS4v4lcoufXt9ajGaFOisVc3hajQ6Zx7rDyR0b65zJUHy4M8-SkCMu2w9w",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Surfaventura - Campos de Férias",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESaQHrOzAVyHdHdtX4ihuQGXatWCQWRHeMe7DTk11ApOLnJzeZVCyF4YNHoHWanLiAtko2SSakNlHLhC0pVfXK0BPtpaLVdk5YxHLuEhxqgL__-neuwVQr4DHlLa2qLnCUKleZJatj4O7Xiw",
+        "Email": "surfaventura@gmail.com",
+        "Telefone": "967786333",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Portugal Surf School | Escola de Surf na Costa da Caparica",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESWgHrOzAVmL5YTZQ-XGrfUsZIbb-hbt6I2le-2F9X9BI7K23WWSTA2X7XRLhbCePjL3aXNbeA2KMFUIS_nfPGfbRrR1cFnPopKbRdSD0O3XjL-_pYzPIBVbKI7A",
+        "Email": "info@portugalsurfschool.pt",
+        "Telefone": "936 408 182",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Surf School Portugal | Surfe Lisboa com a gente!",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAEScAHrOzAV0bSHKNf-Axuy1rHMhldeoE24SqLdS6NGdc5EYem_Nsp2Z2qjtEoWBNR3xab8xUhV4S_SGyMvUIBKPiuw8JjqrbJNI-Z54Vxr47QU82U1_7K5ubsETBfJixM_nhUZPC5xlPErG24BIaa9rBg",
+        "Email": "info@gotadaguasurf.com",
+        "Telefone": "939 591 707",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Surf4Kids - Duckdive Surf Portugal",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESVQHrOzAVqkGKogDNsQm5N2qELHKNzFIfIeY7cb0Sho01SA1ZOSnQDsNDLByv_D7JM_ZbFdWPA5J7_H6yKbNZvdF57OJWWc1x1cLO5Ihi2SQEE4ylgpc",
+        "Email": "info@duckdive.pt",
+        "Telefone": "967102127",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Nomad Surf Camps para adolescentes",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESZwHrOzAVO2gEh6TmS_wI_mmvn-iEsBBB5or_HoPQb-p4Ucwtm_qlmWoBPrwihMY0s6VZ0QL5EJmywMBMW0ckCIY4rXitHJ_6O0jBge0qMjuYbT-qhi0VMLNBUEmk0ud3-1oXNIOZKho",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Secret Surf School | Aperfeiçoa o teu Surf em Portugal",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESTgHrOzAV-DxT2ieHVRNBNqUSi7NdyGX8cUniaaqzn7G-jW4A-5mo6HJlpSR1nz_9pwMSco9Y7FHQCkPU0owXm1lls4F3Dxkau6VQv04dBQ",
+        "Email": "info@secretsurf.pt",
+        "Telefone": "+351 915 480 890",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Onda Pura",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESUQHrOzAVXYDqGntpPMAVuY4DZ9WC-rEeFMvT0RMRUz44Bd1C33xn1ikgk_t165yazyuJNlJj_hzxrE7I12Si5a0BrzpiPSX3UkDM5JYL2fjqgg",
+        "Email": "info@ondapura.com",
+        "Telefone": "+351 967 347 697",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campo de Férias de Surf para Crianças em Cascais",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESgAEB6zswFYR4ARLfpSPFl-Rt1BFlhiH3l0WvQmCnkp4X9ztcpvQVNcsofGuq5QzfDbFNWjEM70AXbOgH-dClQsEZPt-ge_hVpvbC1HXSA9rTBLf2-AzgM3fVHNhaIQ4poxY2epZjddu-WXToccrPzyOkjJdZuC9u_lJeo8Wssm4PRQ",
+        "Email": "",
+        "Telefone": "+351 964 449 436",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campo de Férias - I surf Portugal - Póvoa de Varzim e Vila ...",
+        "Categoria": "Surf e Mar",
+        "Website": "https://www.google.pt/goto?url=CAESZQHrOzAV3y99mOuPGKyIJ9GgV_teHYRbFbSRRbA5GcxhjYqweDgkd2BxeFf-YfMpBvBMMPdyYXWuogcimHpG068nf0nOpZylLxidx_PlQqXOx4dq2ZH0_jKIZXfcmbgnmBHVLFbh",
+        "Email": "info@isurfportugal.com",
+        "Telefone": "933 740 932",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Colónias de férias em Inglês 2026 - Juvigo",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESdAHrOzAVOfweH26o3-XvmyPBV8zqghzQgFm4x0dPpNbXGanbtja6pfhxBEMtM5EUMplngWT5Rfygl4my9a1M1MAQ1PkhK8l7v8LVhnc6trkQuO_RFPQ3SPXQ8oazCN45yj0WElR3ciyqpQM4p2Pc_uzwpJJk",
+        "Email": "contacto@juvigo.pt",
+        "Telefone": "210 204 945",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Acampamentos de verão em inglês ara crianças e jovens",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESdgHrOzAV9yqdPhe0aK4xxN70AkoAx0L3jeprRdAlprOIXb2NqhHGvJJzCxVs0M5yaC-vf0--7ETErs7a_KbSPYHpkbFm9ZlqD6mDNOW3wYGSTPF0q5Q40NeLEKlcNxprGzomXu2V5uJ94KEVnPVj2CBfNk9GdC0",
+        "Email": "",
+        "Telefone": "234567891",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Acampamentos de verão em inglês para jovens",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESbgHrOzAV2ie0jz3tdQ9E9NDL62Lw-GziaQCQBEu1K9JNyOmhScBerEbUg1CgqhdsD1WlZmi4Y_3QDli7xvD-YW84sHxsmUKOrNDhFUCrv70c4g5jRauD132EeB5v50yX8L3HIYvALR_GQ4hXjhzZ",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Cursos de Verão em Portugal",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAEScwHrOzAV2cTjtAPnkD5Oyznsq531WeANTUMoY54KFexCho4PhMPvrvrqE75mDKqbMKIyH0AbIBvPx7JTYroA8R7wUfBqeT6oEZdLkYEFuNxN-Us0UBIKDMX__ykLwooVCnAvkyC9wwfyD8jXfogqu-hLQlo",
+        "Email": "direcao@funlanguages.pt",
+        "Telefone": "966 757 720",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Os melhores acampamentos de idiomas do mundo",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESYgHrOzAVH4xVcIwlgKgFHXIU1rSLhKo0V8FCEDB5Ru4dKKLm22lpfqQ8XOqZeMfBAeyX1-bgmzcka6HyUivH4nvdIhHdFexewPWDslUTmveVzEod1YbxUWbVryAdqaMbEPMK",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Juvigo - Campos de férias e Cursos de Línguas",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESSgHrOzAV1labbdTyzctmr_7ICtgVCzQXLPV8_Yo_VRFcLgk1LXt5iiA_kitdtPYIyHTAPPs5wmSsS_CXrM9pc5gKOF98SYxgQSI8",
+        "Email": "",
+        "Telefone": "210 204 945",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Cursos de Línguas (@juvigo_pt)",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESXAHrOzAViWfRmwvVsanFZcKeDz1AS_yRwVhJXTfEREnfAhnAqGVvylaGnhQ5YblByf3Aj4g6U_pSsdbdXNAjWKr3nOhR4lhGJxhsdR5uc0_cs7SfVJ-iUJhTfi1k",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "English Summer Camps Portugal",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESbAHrOzAVv76wN3StQs0M2T5MS05xUrmkrv5BjoFH_vYOemgscRcSG0jf3jfib-Mf2LxVn8Imx-pIEh6dhKyRNwZQGKoEtoimBMZ-HNNGVlcUtgdFHCxfmJN8feoJo5ikI4M141JOghXUPHAQPQ",
+        "Email": "geral@stpeters.pt",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Summer Camps in Portugal | English Courses Children & ...",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESfwHrOzAVeWO5-l6ydujhT_PhZd2DmDWaGHN62X4K1X4MzPJw63hhaBPylZx83wkaehw7GAso4t73MfmBBHMXXNzsekGcPa5orKAl2F32uqk2hk4J-TjDogCYJH_fy-bmefQ2SdSPlVf4SGbgg0eqxPA_Z8jGkDPlKyXy3T4znFY",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Acampamentos de Verão",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESZgHrOzAVZGX6wcrKt-BTZvwFm-xbJVzxf4aU2JLsxxbnqkmZ-BTOR1ZU4AaS5vLC4RYuC3JazbKLgky6D0sP0MmzU_nRKte_10GgJ3mtzl-i4mBji81d5U52eb4TEHTeLhIJkEFObA",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Acampamentos de verão em inglês na Europa para juniores",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESeAHrOzAVgv5fDQH2zplnBg2WquoXrZNFwaj3ie7bbYoiCo-5grUr2Zdql5WDdPv7O4kfA9mhPRYH3IxHFWkTHYZbMJgnck210liF3Q2PTr6YQAvN1_65o4Uru1ha84nNX2hAhGLfKSDDsZkVouwbe2OIb5B5ftyLhA",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Portugal - EnglishqQuestCamp",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESbgHrOzAVPGbaRUwuBzwfoLh2M_Tl7G_SOVYKtJMj2LBq_cknv02cKAOCBsDiV4B0aovqtX_qLh9-rjkW_V7PAZNLoJkQvTx8DfHOnxdByuNII4dLEWXSg-bu6VRMEyfNlq6P1uhQdHo_QywoEpU8",
+        "Email": "info@englishquestcamp.com",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Acampamento de Verão em Inglês",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAEScQHrOzAV_0qWp5U3ZW2BI04DlX7SMlamBZ-qEKXb3vf0pGkDr8NGCSMRyDjxPAd7vFhEQeI-uxzXRtAYfUN66yYmpGv1o2Z2jJDY7TEwZ6S0lUi-tE2TV8FYq8VTM6hAjGZ0_RSFwYnSPSLYusNRrkAt",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Portugal - English Camps",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESdQHrOzAVWD4tIR8SsFYGpStxPTDSuvqCDEwRrYLE9nErZMzJJEBJTHskRaOO-WvagM4CGrTlLRkyvjxhzNubzoxmw1bOSpUbLaKIoZgYkY1qufBX_qofu-ZSUXQ14KYThA3TIce7PnMr1PTxKEp_Akg5TlOx3w",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Cursos de verão no Estrangeiro",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESXgHrOzAVcnfJWiDYfP-102O79g1ExQfuRaj04qMZIILWDUzJ_KiOsJT36oaEM5djwu3J2Li7KMbklsDhHeQdoWrEeaqPseRNImPI4yykdV7XpjPnmMi662TTdNB-bXA",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "in Portugal in English Camps 2026",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESeAHrOzAVDoHTre3mu8yicBZ95k0kWzud2xoDvjJSEG_xeCGvD0Bo1jgRIsiLDXejqYpnAKtyXqKv2vPNdsFLmVkEkHdrXQM_kiZqKBBGVP8EYjwAeYbwTTgVm2A3sDdRZa7WsSD2-1bMCJW24NZm3qXgrioBuWNttA",
+        "Email": "info@solocampamentos.com",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Top 7 summer camps in Portugal",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESfwHrOzAVWyVzjPYSYxPv3j-wlALdgk5oYInmZvnRoyI6wnQaN_PLhvEUabLsl_y0eKVas9UzK6NTz9BWTN_qoebf-9RM5aPO1QxgLxvr6ACTMqWaeBidZXiQttdCl7QdZvDvd5X_Pk1v_8XlG86tM2wFuSdIzmMjvFOo0hsI1ns",
+        "Email": "mail@smapse.com",
+        "Telefone": "204 577 264",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campos de férias para aprender Inglês 2026 - Juvigo",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESgAEB6zswFcN8TPPehJfulJ7GbLxkVGu5s6Jy3X5--u0dWS7AMIJONwqCrc3CmEalV08hzjdbXD9aU1aOPTMcWeS88qBMSDTqmxaEEtiBEe7oNnV4QcsDGqX4Wghi4lHhr5bqZoNzzMsTk84rU8ld4B3dnLdBnffSASHuuNqYeUO4jQ",
+        "Email": "contacto@juvigo.pt",
+        "Telefone": "210 204 945",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "SURVIVAL SUMMER CAMP in Portugal promises a unique ...",
+        "Categoria": "Línguas",
+        "Website": "https://www.google.pt/goto?url=CAESlgEB6zswFaipGLwuYlZ8hRrhjdQBzwFk0vY2YQiRUwCm2DfrE3s23Bn2y7LELCj4sbBU56DnA-41rUq7Q1NnXC-Zx04uUuw91PQi50k3ghlXZOEnQNJNsrjlGp1Bh0xFbUVo9eVWJcMmj-yoBaqbuuZt0XYPlM1qdFTcEt44tPEFqM_UHQSPRO8waso6L9YDrLLhAszhNSQ",
+        "Email": "info@primeschool.pt",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campos de férias em Lisboa 2026 para crianças e jovens",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESawHrOzAVP_j8A6gWMw_HSyTQLhWY7gsjETvqWsVbvRq6jdVcAgmr_Rk86TFozaWf4b295td230AMs0os1ZKTQC5qca6zN6LLjeshKhiX9MfFkViVjk5GUrNWzbYhscLe2Lz9wiM0aLAaB2M8",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Férias Artísticas 2026 para Crianças e Jovens",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESYQHrOzAV7THfaP2vIMaziqiOXn9HgOwCHicO6tvQ79GZsY1x8iY9PtoIhmp6au55Mhh-RR_ymmUOfF3dzM0qjvzzPtkoGSvx7fZHxqd2_CMymuykZHIf-Q1V57Z8yALBFfw",
+        "Email": "servico.educativo@foriente.pt",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campos de férias Criativos 2026 - Juvigo",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESdQHrOzAVW_XAGr75CSKd7LphuGb9KIsSncIXxS4DK1SESNRri1-VU21U5lze3TCZYmbIR1YFB5P8_yi2s4OIImI1ekhbFhfc-c1QA17Xmb5qqHcVj15tUom6t8hu7ix0OJlAAvnlJNyfLmIDAdT5QvET3ODR5w",
+        "Email": "servico.educativo@foriente.pt",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "FÉRIAS DE VERÃO WORKSHOP ARTES ...",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESiQEB6zswFXd5siCtLaJ2R5TjaiHi5zI5eftOI3k5xdimf256NSW8gsWpxxyZxIXLAr6LnS7n4mxgGp76PXqs8n7kYkKzLoRFKpTehThOwk7tEjgI6GjIpF1mGG3Fwk_2pDEtiWuWTG72vSU-3gNBBRF_qsSNQRipXuWMi33Vv6_ZJA_UzkGSu1xarA",
+        "Email": "geral@oficinasteatrolisboa.com",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "O ARTS Summer School é um campo de férias de verão ...",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESYAHrOzAVApzzCZGit923qR7hT85O35dYm4SCo5GCEWoBJKtsOjeaHd_6C2jRnI8CUeYvtkQ0v4anK40ics2e8tfF6ZJHRfdtJACQnu3a7TJdFhWiYWT12-4nGgkuH1uOdg",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Summer Art Camp",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESaAHrOzAVto_dDZbDpA5XQkWnl-VgUNvr8I7ihtPbxmbCPtd_IF2Ml9vHjiy7o-24gm8IWH8D1Z5rDANHLE49ahGRONwoB4glmP7Lqptdo4TTL5kTQnHFPZG_H0HBB3ya96r7m3wesQgR",
+        "Email": "startwithartclub@gmail.com",
+        "Telefone": "916 948 080",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "WORKSHOPS",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESWgHrOzAVac91dgSTY04xf9GeKvUVg2erJiUIeZcm7hPUyRRntITiH_QiwXrJMNHqEzQO_MbJzf_EYYUYbAj-tVS98qKeYWznL-xR8pB6dFUpvJO4Ybs4w30mEg",
+        "Email": "artemove@artemove.com",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campo de Férias Criativo em Lisboa para crianças até 12 anos",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAEShQEB6zswFRnAJoRa23qyBDj-vdDsJY2Vr9x77Lfk9i4a-7wanWicCjQ61r7ZvnnYtgLZNYVP4xWJ9curvg6OgBXAAPcN39011AuKcWnxr3N_m-AgibHoiqshZI5N4ChZ8GQPVaudfUbcJsFKymtFF5-P-3XB_D4bgEatKAfHdxt4LZGlj4IC",
+        "Email": "info@coloniasdeferias.pt",
+        "Telefone": "917 845 862",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Oficinas Criativas - Arteviva",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESYQHrOzAVz-MXkE9ozbl1pPOsAfDLeNVi8Bes_r9JQIAJEjIsRUbOYGcQCrk9fmbAvzc3eCV0DmRLObrRnQPqAxond8V2DHmUFh7svhp6pV3Rp32R5TiyuhB9UkF286Jp4UI",
+        "Email": "",
+        "Telefone": "910 093 886",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campos de Férias Criativos",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESgAEB6zswFSOnH4sjW7mfJJYcHs3SKtTb_rZn76RSGT3-T-CuACXM-XA8rm9Vvhc5K7Shd7rhD_7URZUekVuHgqBaT7PVmArk98ECOI-eMHOT9xhpcAujD8do8rmaTyQtMKBHmDv6l3ORfFScauop_BPDgK5UDeZIWcSQX3KETMaBpg",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "crianças num atl, atividades de tempos livre ...",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESdAHrOzAVamSelPokxLfirwa-N-y_zgYHGSMCk6q_VkOnarioWhT8WHb0vZG4axenHC6bPTY7LPvk6DVBvKiqaWPC2w6f4WZfch-yrlZBWGvmdshmkPcfrVbHXxPtAGdy2GeyQrzon6oABjYLrPny2KzSQFBC",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campos de férias e ATL para artistas",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESjgEB6zswFYVgYnKM6u8mnqizVFR5wsIzCbVyX82dPvb0m51Y0tRnPPS6lreC5CAM0rCKeJccVlRfh47-Uo_mjqSTOauEP7csQ26XBTSYFBI5BeyAk9fKooAcQLnlPn6jasczj-5rua_yb1x_YglhuPpEV3Ylhq5qVu8ya0Rqgf-0QhiQ9WM1nw7dYNU5YYwG",
+        "Email": "",
+        "Telefone": "915 521 115",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Artes, Ateliers & Teatro para Crianças em Cascais",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESdAHrOzAVhhQXeDiYwJmAv2PjUePUe9RdBL1o9juqGd91v1ZZpmQJ_2-dUEUfx4XLGMbEL1lJMYOjQfzwXLV79z8h7EuQmwJHeIhMDF7l71gJC5tUp_PtJ-NZdPvDSswy1__x10gelhqJ6D7GT4W37FZEyHmv",
+        "Email": "info@thekidsagenda.pt",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Porto e Lisboa: Campos de férias e oficinas de verão para ...",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESpwEB6zswFaofeQEcnmVOIwn8UgtjpDRxj4bR7PvOOCgaq7457XW13Ybz-tN91MLjEaTavBs0MJ9GSmE-RmtS1NKeNDBdr600iv28sZ2KHIpI6rleBy0KClOESug7DW9JVtq9jDAKQbH477NpvG0bNwwJ-WyDw9TJv4HJ-c76A7Cdmrg_tByWqIEknm0Jl7T1h-s50Bi7XkIHe23HWo30TdO_nsxWRZcAsg",
+        "Email": "academia@academiadegenios.pt",
+        "Telefone": "213 612 800",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "FÉRIAS CRIATIVAS",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESnwEB6zswFazjDBi_lIja_HXKrOKSUYLt5W4Y1R7uTCN1NB-Ml386ZvFltk7sLd1-WGEDoNM6Wtz8Al1cLxxvrbry-tiLBHTmMF_4YPeJUiaIDh9mkUX-pJe-fs-N6CuDMXAbawl1gcvtYMF_fn6uz421-cE1v9nfj3qdMibqwApzl41YmN9NLQTTYeEzHBi9CMNjkb3sW9Xg0FdabccDCrc",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campo de Férias Criativo em Lisboa na Penha de França",
+        "Categoria": "Artes e Criatividade",
+        "Website": "https://www.google.pt/goto?url=CAESgwEB6zswFc7JIQsvGnUKnlaHPAC6CiMYjn5LDl1qHw8GFlBGq90BwAUsxKvqhr511X19AOqr8FZxQz3pgzIflqGbDxU_Ewvr6lV-7t43wMwux2UuVsC1uadi3bA72g1Xor0KOLOEfacD32KIK2gFJNT36WHuvJ70Llm1MIhCpb9wC_le7g",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campos de férias",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESZgHrOzAVqOROHHeWkWoDpldjHSBQDGhfWZTma2x1EaGLPBl6LGctI-e40rXuIzBl79nI_pHxGWWV5MKyQAOlzJJH6vPPQbG6IRm_OJW6N5BppJssKZfSzXXqHFdcEsJ6uxFgyD1UHQ",
+        "Email": "sportsclubcascais@gmail.com",
+        "Telefone": "+351 917 113 028",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campos de Férias de Futebol no Benfica",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESegHrOzAVFOrGi1wqvHncEMjRGjBH-G3c3O3neWNL_NbUuUhBPFRiOU4pPeIcZ12sx74ipnfzeT9-9OMwJZsh2MeUAvmH_JduzfH3UZIXnV0ue9orCcIwFDd2p4tWgsAEXn5k0l4dC_cBZe38TFfIm2udaiBTxGHIM0Zs",
+        "Email": "escoladefutebol@slbenfica.pt",
+        "Telefone": "932 401 904",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campos de férias Futebol Lisboa 2026 - Juvigo",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESegHrOzAVMX4zXE_6kkI4H2E6417bwhcQAuM3YgzfxDQjLBDGVunDPB0qof7_rKjkGC4Dvym2uhDKHeDmBCJckyAYzCIEKbAI6ys8QwEjsiUSfCvWjvnDo9bIJgtGmewlupdN5cS2DUr5QI-lVaiPXyHLy7E42MLnsDwP",
+        "Email": "escoladefutebol@slbenfica.pt",
+        "Telefone": "932 401 904",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Paris Saint-Germain Academy Portugal - Escolas e Estágios ...",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESWAHrOzAVetSTwhKXLmAjoJ7HuvHo5L5Cf6Cjri6eFLW1Rs1WSHSxLa-_wWbasBp4IcLf6lYPNCWqJnYpniGao7HkmqK6YSO8JoJxzUYVVpS1fsQG_MfrCoM",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Acampamentos de Futebol - Ertheo - Educação e Desporto",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESWQHrOzAVWXHLM9uF_sLvPgxalCbhEhupBGFTp6YBbN1PEX_gyYdwllMjdRqcq7lwN3mEUcsLFy_3SGbkep4PqUrI4kQ2rVUJmpk_mvAnMPVuPvH7ef5RI9Tk",
+        "Email": "info@ertheo.com",
+        "Telefone": "204 061\n080",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "campodeferias | A Escolinha do Figo",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESaQHrOzAV_uSc_R2G9iHJud8-l0Z3OcisgzHaaHz9fYjwkzS7heXVxS2rBa3TAQddD8DHuvXd-xe0WqmDNH6e6rATtAvT7dl7qBiBz2-FtJXCCcwFys9axbby-bD70Geeo_ZzRkR0OrA5mg",
+        "Email": "geral@aescolinhadofigo.com",
+        "Telefone": "+351 927163726",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "VERÃO É NO GCP 2026",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESaAHrOzAVSR421wQNQUNGt8FJ1QhPKXOrBD92bzcxM0b05pwzsqCXKSR5EX-ASdBmD9mZf7H3LmEkD5uz-MRea-27oVS7D-6HPzOJhSmpPZ1pxLm9wzMfkFgbCVZWCT8RfR8nnFNlgSrY",
+        "Email": "",
+        "Telefone": "213 841 580",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "CAMPOS DE FÉRIAS DE VERÃO PSG ACADEMY",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESeQHrOzAVB8gFw6H-C4YjlpRwLSgziYyuJ7MgBGNKEiNzRd9VEjP6app37CP5YPcu8fUNeaRdzMFIRQwc-pSxIkQE6w0C65OyMzkNOL3diUHeIJpwGk_ONIb5xSWos-M3CdWy0J-kzCxwMtoFvO4STniiDTQuU64ftzs",
+        "Email": "contacto@urbansoccer.pt",
+        "Telefone": "932 168 065",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "As tuas férias desportivas são aqui, no Sports club cascais. ...",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESYAHrOzAVyegQonqaVnOQlpa00yPOnjDHbhbX8hBlIvGB41WfC7o9r1yHacFdkdONLR40SYvOUcqAiXPfWS0RFBEQ2gbus-oLJEpVnuR8JZ0lCNvEj5AjWeUgca_Yd2T5IA",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Elite Sport Camp",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESUgHrOzAV6p4uc6QDAJItQAVv2NFu_hBPeJarSRBCSp12BNgHDzuEcbPW9x6vovgAgN70r5Jm63wsfnK1z8HubOWiF53GxP_ldHsLAaJSBfqSUcY",
+        "Email": "geral@elitesportcamp.pt",
+        "Telefone": "+351 919 780 708",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Férias Desportivas - Estádio Universitário de Lisboa",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESbgHrOzAVKSGKNfSbbh2_PoaTd-89tEYxJhFuoIP5vJv4CKkQswRdZf2otafTNnqxp6Eyv0XiVfw62lc6KqLDVQxth1XWXjX0pPU4LdzDF4w-RnBDWcN9kN4AzdRi3qvz3bfhhodYvpuRbw0ErGe9",
+        "Email": "desporto.ajuda@estadio.ulisboa.pt",
+        "Telefone": "+351 210 493 559",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Jamor para Todos - Centro Desportivo Nacional do Jamor - IPDJ",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESfgHrOzAVSMwR3LCYqJE4NPXGQ_AtAhq6tuvNtnpVfYAZpfflugTEBfoGU4nbzvO6cDmvXtWiyIXeTLRq12hf16b53GfhnSgwi7b4m-5QQ46xjILdsBL7zQNaF7p2wEQEFCkN3YaLuMCu1wtskXduKV0FJFKCDe_34VJOTCwf2A",
+        "Email": "reservas.jamor@ipdj.pt",
+        "Telefone": "+351 210 540 312",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Lisboa Ginásio Clube – Férias Desportivas da Primavera ...",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESkwEB6zswFfflh93PvmJspZl1jMoEwmOEnI_EzKY-G5Uw6ehdbroOqxhWRgRuZeLgcWC7yo45-wFUBtl6lyhtqasU76zSU3XBwaomQ5aH6AsVLw56jtztZvQxrBGf75cnXNR2YJoRk0_qI4gjk6tnac1WN0S3h4EbDkhcsXRU65MpP1K4mwjfPHa2iFiBuhwZtL2oGBM",
+        "Email": "hello@lisboa.events",
+        "Telefone": "",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "O Melhor Football Camp em Lisboa no Verão!",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESaAHrOzAV8Vr5dLjJhSQMWpL4sNKrQe0OMrWmaVgpbleTPtA7Yzzk1G65OK-okdtPBaDpQW9RDQwJ_Rybu--sGjbbPhmHtBZDhDoCGpJqVVXKTL2AwRItGb-tCI1hNDihGeL0bHh_MPRG",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "GAUDIUM SPORTS - Campos de férias",
+        "Categoria": "Desporto Geral",
+        "Website": "https://sites.google.com/view/gaudiumsports/campos-de-f%C3%A9rias",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campos de Férias Benfica: Futebol",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAEScgHrOzAVhqiyR4IAyGztg26H5L3BaSEuRb1flj4jLfGsiwDk3DrS9B_ZLF4MErkspmFcx29jUMIXsVRla0kcGC9WsF84IVFDd7DxvNQ526q-6EL6xZG0HPmxq_eznzp_BJ2ARv_ZoJthuFhjFfpHV5JLUA",
+        "Email": "",
+        "Telefone": "217 219 500",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "As inscrições para as tuas Férias de Verão com o Sporting CP ...",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESnQEB6zswFU5M-yWKf3E7dUjwghXIDfbTIkOPeC0U4906aYmb0zYR-DIeOTKkrlTVYKjuM-LDeIYKvAkmG4sPDyKiMXEG1rMYeoEnrUSvccbva6bhD_A1fYqPVl98low3i_jI7kledQFq-ZfhbV1Pv3KYLO1WAlnN9Cnr-ZAUO4ZaiTZKCjxluU_LVdRrQjCQO32E7FXgU6w7VkwGrd1B",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Campo de férias - WorldFootball",
+        "Categoria": "Desporto Geral",
+        "Website": "https://www.google.pt/goto?url=CAESZAHrOzAVvapbEoWWRpGzHa1PaRFXSjxKxhF7l-i0iB6r5wSmX-aOmZuD8YfRTJBUSZu-LJvP3BVbotEwgAJ1_gV1Wee9duVbFQggl0LN4ToJdr-Q2Mwuj53iqg9EV5oDirLNSL4",
+        "Email": "geral@wordfootball.pt",
+        "Telefone": "+351 910 227 650",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Atividades Outdoor - Adventure Park é o local ideal!",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESgwEB6zswFYDp_pk-2sqsbzQLXLCRLp9ennHhZQYI2R89BQvlorkXEGNSL_Tt2QkABpH9tgmKsYTV3rdspcychy53D34ORNE3s5Vr2AioYbEfz8tc_6TWmO9hLRsBtmqnMIxhyES8t2FSiNshT1aaql9XWSYlpFyA3pbTyLVlya76cwUZLQ",
+        "Email": "comercial@adventurepark.pt",
+        "Telefone": "211 519 400",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campo Jovem Campos de Férias Programas Escolares Nº1 ...",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESUwHrOzAVQC_h3T6mWhLLNKjgbMk-NrKxpuXTL73Ib1uTxY0llNMIGgZ-1RY1kr9d_66uI7VjeFCsQYLErSeNPQWndHsFMlb5mEcNSzekuU7TIsaX",
+        "Email": "geral@campojovem.com",
+        "Telefone": "925 026 052",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campos de férias Natureza 2026 - Juvigo",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESdAHrOzAV5w3VWjt9MM0v4LTVtMp9Ob0UHx8jxpA5-lzlzz3eiYPfztZy_tJEy8AGSuHRBUmAcYF4F-_6JX7sGL86QqhtzAL_z8Oq2rBd6hDRzL-6ylwTg9eklp4Rv70VixEjWKAguoBxRnMnUYJkaSZYnzza",
+        "Email": "contacto@juvigo.pt",
+        "Telefone": "210 204 945",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Quais os Melhores Campos de Férias em Portugal?",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESbQHrOzAVkxaSBVOswRAh8LqbCOgjhyxCZXSRpCY4T4RbcijzYes2ThF6K556aF6bebcebIidWrL7ahWzG0LjH3JjKyDCiUQn_3R6aU2YZBU5gLsivKFNQi-mjqVEPfAypxAt-HAdhJlmcCDHFwI",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Férias de Verão na Natureza - Lisboa",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESeQHrOzAVAp8UXEuADv2Njrt53Ae2A1FuUcjdYkYfHgSxK4O7P124kW6qz3_ZZovrIiRThacgHeSdpOvqoHBDb1R196WktNqIu0N6VM16RAY5Bbc3BJIkOECs-tZQxHlfoCCHwNmPORVeHl-Jh25dHvg8zOxtAp0HPU8",
+        "Email": "info@lisboacamping.com",
+        "Telefone": "+351 217 628 200",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "O teu campo de verão na floresta em Setembro de 2026",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESYAHrOzAVjwpkaa99f5KNY33RaIRu9oTLoWl0UWBaKaP6hw7h0g3TJ-IU39LItKJ4_NASqBaPZJ1n_Q3ysYOZSPVfd2dg56CndzScgzr03oQ6YsdrNzIwHj9LWWHQiRl2rg",
+        "Email": "info@escoladomato.com",
+        "Telefone": "914 820 585",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campo Aventura",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESVQHrOzAVos9XLfKCSS-Byy5Xcthla3ijbnbY4_tdbVR3OueCQZYlZJEApVxH6PVTZiXn-m5VgbM1XTk9WkHpYYxMDQyK9PycjloEnBeB0787HaAwaHw",
+        "Email": "geral@campoaventura.pt",
+        "Telefone": "+351 919 352 998",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Tempo de Aventura: Campo de Férias de Verão Cadaval",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESVwHrOzAV2SIT1Ke9mfQrbLUowuPkeIUdOitQupH3GmW0IwLJjSQGyKiRO3lehELz6KVcOhdt69PoMDYl_FwdFuRMGoGHz5VP3CZrxHzQsp3zuZeAQUgkwg",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Os melhores Campos de Férias para as crianças",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESgAEB6zswFXDhVewNz7ttInUzTkdhNE4mTZpvvZoYhTLUpNib88-B33sYB1MTWtJwnwCFqnUV7n3pdKnL-ptnjrLG8rhqbSH8GCQhjK8lsAw80KJdWfrDIvpvTtnlBDD0fRVXJOuzMwRRR-Fyd2Bxc7gTJM1zrPmJBhQDcxQ6DE7jPg",
+        "Email": "info@moneylab.pt",
+        "Telefone": "965 517 611",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Atividades",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESYgHrOzAVdFYxtyx7_Mv2oMQieK-Dp7GtwGgsebFuYmG7XCBo8OMVXja4c7I41WGnqnLrI3JTJZwWNa7hgtP2NNBmFlRoP0ERFu_XclXGaZJbcocqFldUN-dbkjBStGhsaM6T",
+        "Email": "geral@escolalafora.pt",
+        "Telefone": "+351 913 795 220",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Parques e atividades ao ar livre - Estrelas & Ouriços - SAPO",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESdAHrOzAVeT-dO1Tc_CGWMAVlaoWCCwmXb7GMtxC2YG1xavEjuI-fmw2KD3XfJbmr_AzO7nCw2Z7Bht8Zpybi97gJwv82hPKY_BMPagub1gqy0f4_oYNB2BJPGrI7RjSwUs4UKpchcMwgVq_vl7R3FQWYCdKj",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "8 quintas pedagógicas para entreter as crianças no verão",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESrgEB6zswFVorwCB6OPAWsTKcyPJPPzA1iRU3fnQV6O8MBVxnWkNp2auiNmrGpicwSTZD-4u4aprA7FJNj1QceaPPxoB_FYUTIc3y2nJv4X8DUOOQiXDKXLR0uWaHFPr1qk66ho7Td6VXvnibvJ-goagbGu3_sj_XI758lq1V2m0d9Tvd-R3XlhWvXVSSfswVaTbvp8IKbxp2Uj4LUuOgLfXk0uisLzbDSHmp3hlFQa0",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "Quinta da Escola",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESUwHrOzAVJR0hnJjMKeAuQOHpu3q6oudlBQV0mmDkHwBUgFbn9SYCZSLrhxG7Dki3dG-jZwkU-2aTg65pQ1DB-ccSdFt1MYjunf7l1eL6obkLgJA2",
+        "Email": "info@quintadaescola.com",
+        "Telefone": "919 206 693",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Bem vindo a Natura",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESWAHrOzAVyf7B_6K3bGxsRD2KOPzvil9H_hRc-OOOAo_LxIN0X3BjEBqCViWhs4omG8aV9HmdESY4__iEN8RExmYKIqTuVX4kblGWHF_TulqBvbDKDHw5PMk",
+        "Email": "",
+        "Telefone": "934 288 805",
+        "Status": "FALHOU_SITE"
+    },
+    {
+        "Nome": "10 CAMPOS DE FÉRIAS DE VERÃO - Happy Kids",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESdAHrOzAVDzljIiBgyjTKhQvB5_FMLBr_oH5EAuOsT0bcJVUVHXK8vHXBIsw7r2Fc7CV-YCdgXUhPB0SyuVi7UmgwqipVqd81uPlQ5Z5_IhX36s9IWP5ienNwsEJlf9I3cS5kE9SrGgVXS2JGC0Bqmkd1eERq",
+        "Email": "geral@happykids.pt",
+        "Telefone": "219456514",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Atividades ao Ar Livre",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESagHrOzAVfN_sqA7twqyiY9ktq65qTK4L8Qc8q4Y5W0fiiUK2xr_5OnML0miABHkk6DwByegHNBdSonp46x3parX4fCHDHEjb3R630sd1A3Fn3ld-_WUvCyVAppFfld4OxxFHjTMzLtBGDdM",
+        "Email": "comunicacao@turismodocentro.pt",
+        "Telefone": "+351 234 420 760",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Alojamento para Férias na Natureza e em Conforto",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAESYAHrOzAVEFtaAAjUjybufcdG3AYiqk8JYAV04cmf-CUD1QTpCofaVUT15-FgOPPwzE1EDIG9niLLlrZtb5bRFGU9nRT9lB8XjIQQAVJmpTnUMUFuGtKISlhpvbhavCdolQ",
+        "Email": "azevim.nature@gmail.com",
+        "Telefone": "+351 251 034 621",
+        "Status": "COMPLETO"
+    },
+    {
+        "Nome": "Campo de Férias em Tomar na Floresta com Arte e Natureza",
+        "Categoria": "Aventura e Natureza",
+        "Website": "https://www.google.pt/goto?url=CAEScgHrOzAVUBiPD5ALeml8Y9o8_PqPLJYDJ6BCJ3kO-jprebH4jbkpVdgXKQ3QQL4wEB8l2Q-jT9SFBof_Ebl_1aJhYcvrlYz7V63e_NiVUoDcHrvrSrhy3b3553gAzryiY-ioyEVPACaarRDMX0oNaoWtvg",
+        "Email": "",
+        "Telefone": "",
+        "Status": "FALHOU_SITE"
+    }
+]
