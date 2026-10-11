@@ -3,7 +3,6 @@ import Link from "next/link";
 import { getDictionary } from "../../../lib/getDictionary";
 import BotaoFavorito from "./components/BotaoFavorito";
 
-// ARRAY DE PAÍSES
 const PAISES_DESTAQUE = [
   { nome: "Portugal", nome_en: "Portugal", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=1000", desc: "Aventura e Sol", desc_en: "Adventure and Sun" },
   { nome: "Espanha", nome_en: "Spain", imagem: "https://images.unsplash.com/photo-1543783207-ec64e4d95325?auto=format&fit=crop&q=80&w=1000", desc: "Cultura e Diversão", desc_en: "Culture and Fun" },
@@ -16,7 +15,6 @@ const PAISES_DESTAQUE = [
   { nome: "Suíça", nome_en: "Switzerland", imagem: "https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&q=80&w=1000", desc: "Montanhas e Lagos", desc_en: "Mountains and Lakes" }
 ];
 
-// ARRAY DE DISTRITOS
 const DISTRITOS_DESTAQUE = [
   { nome: "Lisboa", nome_en: "Lisbon", imagem: "https://images.unsplash.com/photo-1585208798174-6cedd86e019a?auto=format&fit=crop&q=80&w=1000", desc: "Capital Vibrante", desc_en: "Vibrant Capital" },
   { nome: "Porto", nome_en: "Porto", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=1000", desc: "A Magia do Norte", desc_en: "Northern Magic" },
@@ -34,34 +32,29 @@ const TRADUCOES_PAISES: Record<string, string> = {
   "Suíça": "Switzerland", "Brasil": "Brazil"
 };
 
-export default async function Home({
-  params,
-}: {
-  params: Promise<{ lang: string }>;
-}) {
+export default async function Home({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params;
   const dict = await getDictionary(lang as "pt" | "en");
   const isEn = lang === 'en';
 
-  // Buscar os Campos Regulares
-  const { data: camposDeFerias } = await supabase.from('campos').select('*').not('contrato_parceiro_url', 'is', null).limit(3).order('created_at', { ascending: false });
-  
-  // Buscar os Campos Institucionais (Câmaras e Juntas)
-  const { data: camposInstitucionais } = await supabase.from('programas_institucionais').select('*').eq('is_active', true).limit(3).order('created_at', { ascending: false });
+  // Data mínima (hoje) para o filtro de data
+  const todayISO = new Date().toISOString().split('T')[0];
 
+  const { data: camposDeFerias } = await supabase.from('campos').select('*').not('contrato_parceiro_url', 'is', null).limit(3).order('created_at', { ascending: false });
+  const { data: camposInstitucionais } = await supabase.from('programas_institucionais').select('*').eq('is_active', true).limit(3).order('created_at', { ascending: false });
   const { data: camposFiltros } = await supabase.from('campos').select('categoria, categoria_en, idade, idade_en, Distrito, Distrito_en, pais, pais_en').not('contrato_parceiro_url', 'is', null);
-  
-  const categoriasMap = new Map();
-  const idadesMap = new Map();
-  const distritosMap = new Map();
-  const paisesMap = new Map();
+
+  const categoriasMap = new Map<string, string>();
+  const idadesMap = new Map<string, string>();
+  const distritosMap = new Map<string, string>();
+  const paisesMap = new Map<string, string>();
 
   if (camposFiltros) {
     camposFiltros.forEach(c => {
-      if (c.categoria && c.categoria.trim()) categoriasMap.set(c.categoria.trim(), c.categoria_en?.trim() || c.categoria.trim());
-      if (c.idade && c.idade.trim()) idadesMap.set(c.idade.trim(), c.idade_en?.trim() || c.idade.trim());
-      if (c.Distrito && c.Distrito.trim()) distritosMap.set(c.Distrito.trim(), c.Distrito_en?.trim() || c.Distrito.trim());
-      if (c.pais && c.pais.trim()) paisesMap.set(c.pais.trim(), c.pais_en?.trim() || c.pais.trim());
+      if (c.categoria?.trim()) categoriasMap.set(c.categoria.trim(), c.categoria_en?.trim() || c.categoria.trim());
+      if (c.idade?.trim()) idadesMap.set(c.idade.trim(), c.idade_en?.trim() || c.idade.trim());
+      if (c.Distrito?.trim()) distritosMap.set(c.Distrito.trim(), c.Distrito_en?.trim() || c.Distrito.trim());
+      if (c.pais?.trim()) paisesMap.set(c.pais.trim(), c.pais_en?.trim() || c.pais.trim());
     });
   }
 
@@ -70,22 +63,19 @@ export default async function Home({
   const distritosOpcoes = Array.from(distritosMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const paisesOpcoes = Array.from(paisesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? (en || TRADUCOES_PAISES[pt] || pt) : pt }));
 
-  const distritosAtivosCards = DISTRITOS_DESTAQUE.filter(distrito => distritosMap.has(distrito.nome));
-  const paisesAtivosCards = PAISES_DESTAQUE.filter(pais => paisesMap.has(pais.nome));
+  const distritosAtivosCards = DISTRITOS_DESTAQUE.filter(d => distritosMap.has(d.nome));
+  const paisesAtivosCards = PAISES_DESTAQUE.filter(p => paisesMap.has(p.nome));
 
   return (
     <main className="min-h-screen bg-white font-sans text-slate-900">
-      
-      {/* HERO SECTION COM CAIXA DE FILTROS EMBUTIDA */}
+      {/* HERO SECTION */}
       <section className="relative min-h-[85vh] w-full flex flex-col items-center justify-center overflow-visible pt-16 pb-32">
         <div className="absolute inset-0 z-0 overflow-hidden">
           <img src="https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&q=80&w=2000" alt="Crianças no campo" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"></div>
         </div>
-        
+
         <div className="relative z-10 w-full max-w-6xl mx-auto px-4 md:px-6 flex flex-col items-center mt-8">
-          
-          {/* TÍTULOS HERO */}
           <div className="text-center mb-10 md:mb-14 w-full">
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight drop-shadow-md">
               {dict.home.titulo}
@@ -95,49 +85,41 @@ export default async function Home({
             </p>
           </div>
 
-          {/* CAIXA DE FILTROS SOBRE A FOTOGRAFIA */}
           <div id="pesquisa" className="relative w-full bg-white rounded-3xl shadow-2xl p-6 md:p-10 border border-white/20 scroll-mt-24">
-            
             <form action={`/${lang}/pesquisa`} method="GET" className="relative pb-10 md:pb-4 mt-2">
-              
-              {/* TOPO DA CAIXA: TEXTO E BOTÃO MAPA */}
               <div className="flex justify-between items-end mb-4">
                 <span className="text-sm font-bold text-slate-700 hidden sm:block">
                   {isEn ? 'Find the perfect program' : 'Encontre o programa ideal'}
                 </span>
-                
                 <Link href={`/${lang}/mapa`} className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-full text-xs font-bold no-underline border border-emerald-100 hover:bg-emerald-100 transition-colors shadow-sm ml-auto">
                   <span>📍</span> {dict.home.ver_mapa}
                 </Link>
               </div>
 
-              {/* 1. BARRA DE TEXTO LIVRE */}
               <div className="mb-6 relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <span className="text-slate-400 text-lg">🔍</span>
                 </div>
-                <input 
-                  type="text" 
-                  name="q" 
-                  placeholder={isEn ? "What are you looking for? (e.g. Tennis in Porto, Surf...)" : "O que procura? (ex: Ténis no Porto, Surf na Caparica...)"} 
+                <input
+                  type="text"
+                  name="q"
+                  placeholder={isEn ? "What are you looking for? (e.g. Tennis in Porto, Surf...)" : "O que procura? (ex: Ténis no Porto, Surf na Caparica...)"}
                   className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-base font-medium outline-none focus:border-emerald-500 focus:bg-white transition-all placeholder:text-slate-400"
                 />
               </div>
 
-              {/* 2. SEPARADOR "BUSCA AVANÇADA" */}
               <div className="flex items-center gap-4 w-full mb-6">
                 <div className="h-px bg-slate-100 flex-1"></div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isEn ? 'Advanced Search' : 'Busca Avançada'}</span>
                 <div className="h-px bg-slate-100 flex-1"></div>
               </div>
 
-              {/* 3. DROPDOWNS E DATA */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-2 ml-1">{isEn ? 'Country' : 'País'}</label>
                   <select name="pais" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500 cursor-pointer">
                     <option value="">{isEn ? 'All Countries' : 'Todos os Países'}</option>
-                    {paisesOpcoes.map((p: any) => <option key={p.valor} value={p.valor}>{p.label}</option>)}
+                    {paisesOpcoes.map((p) => <option key={p.valor} value={p.valor}>{p.label}</option>)}
                   </select>
                 </div>
 
@@ -145,7 +127,7 @@ export default async function Home({
                   <label className="block text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-2 ml-1">{dict.home.distrito}</label>
                   <select name="distrito" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500 cursor-pointer">
                     <option value="">{dict.home.todos_distritos}</option>
-                    {distritosOpcoes.map((d: any) => <option key={d.valor} value={d.valor}>{d.label}</option>)}
+                    {distritosOpcoes.map((d) => <option key={d.valor} value={d.valor}>{d.label}</option>)}
                   </select>
                 </div>
 
@@ -153,7 +135,7 @@ export default async function Home({
                   <label className="block text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-2 ml-1">{dict.home.categoria}</label>
                   <select name="categoria" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500 cursor-pointer">
                     <option value="">{dict.home.todas_categorias}</option>
-                    {categoriasOpcoes.map((cat: any) => <option key={cat.valor} value={cat.valor}>{cat.label}</option>)}
+                    {categoriasOpcoes.map((cat) => <option key={cat.valor} value={cat.valor}>{cat.label}</option>)}
                   </select>
                 </div>
 
@@ -161,35 +143,33 @@ export default async function Home({
                   <label className="block text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-2 ml-1">{dict.home.faixa_etaria}</label>
                   <select name="idade" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500 cursor-pointer">
                     <option value="">{dict.home.todas_idades}</option>
-                    {idadesOpcoes.map((faixa: any) => <option key={faixa.valor} value={faixa.valor}>{faixa.label}</option>)}
+                    {idadesOpcoes.map((faixa) => <option key={faixa.valor} value={faixa.valor}>{faixa.label}</option>)}
                   </select>
                 </div>
 
-                {/* FILTRO DE DATAS */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-2 ml-1">{isEn ? 'Starting From' : 'A Partir De'}</label>
-                  <input 
-                    type="date" 
-                    name="data" 
+                  <input
+                    type="date"
+                    name="data"
+                    min={todayISO}
                     className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-medium outline-none border border-slate-200 focus:border-emerald-500 cursor-pointer"
                   />
                 </div>
               </div>
 
-              {/* 4. BOTÃO REDONDO AMARELO */}
               <div className="flex justify-center mt-8 md:absolute md:-bottom-[4.5rem] md:left-1/2 md:-translate-x-1/2">
                 <button type="submit" className="group w-full md:w-24 md:h-24 bg-[#EBA914] hover:bg-amber-500 rounded-xl md:rounded-full flex flex-row md:flex-col items-center justify-center gap-2 py-4 shadow-xl shadow-amber-500/40 md:border-[6px] md:border-white transition-transform hover:scale-105 z-20 cursor-pointer">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                   <span className="text-white text-sm md:text-[10px] font-black uppercase tracking-wider">{dict.home.pesquisar}</span>
                 </button>
               </div>
-
             </form>
           </div>
         </div>
       </section>
 
-      {/* NOVA SECÇÃO: PROGRAMAS INSTITUCIONAIS (Câmaras e Juntas) */}
+      {/* PROGRAMAS INSTITUCIONAIS */}
       {camposInstitucionais && camposInstitucionais.length > 0 && (
         <section id="institucional" className="bg-emerald-50/50 py-20 border-t border-emerald-100 scroll-mt-24">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
@@ -203,27 +183,23 @@ export default async function Home({
                 </p>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {camposInstitucionais.map((campo: any) => (
+              {camposInstitucionais.map((campo) => (
                 <div key={campo.id} className="group relative flex flex-col bg-white overflow-hidden border-2 border-emerald-100 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-                  
                   <Link href={`/${lang}/institucional/${campo.id}`} className="absolute inset-0 z-10">
                     <span className="sr-only">Explorar {campo.nome}</span>
                   </Link>
-
                   <div className="relative h-56 w-full overflow-hidden bg-emerald-900">
-                    <img src={campo.imagem_capa_url || '/og-image.jpg'} alt={campo.nome} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80" />
+                    <img src={campo.imagem_capa_url || '/og-image.jpg'} alt={campo.nome} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80" />
                     <div className="absolute top-4 left-4 bg-emerald-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white rounded-full z-0 flex items-center gap-1.5">
                       <span>🏛️</span> {isEn ? 'Public Entity' : 'Entidade Pública'}
                     </div>
                   </div>
-                  
                   <div className="flex flex-col p-6 flex-1 pointer-events-none">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">📍 {campo.localizacao}</span>
                     <h3 className="text-xl font-black text-slate-900 leading-tight mb-2">{campo.nome}</h3>
                     <p className="text-sm font-bold text-emerald-700 mb-6">{campo.entidade_organizadora}</p>
-                    
                     <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'Status' : 'Estado'}</p>
@@ -241,22 +217,20 @@ export default async function Home({
         </section>
       )}
 
-      {/* SECÇÃO DISTRITOS */}
+      {/* DISTRITOS */}
       {distritosAtivosCards.length > 0 && (
         <section className="max-w-7xl mx-auto py-20 px-4 md:px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">{dict.home.descubra_regiao_titulo}</h2>
             <p className="mt-4 text-base text-slate-500">{dict.home.descubra_regiao_sub}</p>
           </div>
-          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {distritosAtivosCards.map((distrito) => {
               const nomeDistrito = isEn ? distrito.nome_en : distrito.nome;
               const descDistrito = isEn ? distrito.desc_en : distrito.desc;
-
               return (
                 <Link href={`/${lang}/distrito/${encodeURIComponent(distrito.nome)}`} key={distrito.nome} className="group relative block h-[280px] w-full overflow-hidden rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-slate-900">
-                  <img src={distrito.imagem} alt={nomeDistrito} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+                  <img src={distrito.imagem} alt={nomeDistrito} loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                   <div className="absolute bottom-0 left-0 p-6">
                     <h3 className="text-2xl font-black text-white tracking-tight">{nomeDistrito}</h3>
@@ -269,7 +243,7 @@ export default async function Home({
         </section>
       )}
 
-      {/* SECÇÃO PAÍSES */}
+      {/* PAÍSES */}
       {paisesAtivosCards.length > 0 && (
         <section className="bg-slate-50 py-20 border-t border-slate-100">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
@@ -277,15 +251,13 @@ export default async function Home({
               <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">{isEn ? 'Discover by Country' : 'Descubra por País'}</h2>
               <p className="mt-4 text-base text-slate-500">{isEn ? 'International camps and global experiences' : 'Campos internacionais e experiências globais'}</p>
             </div>
-            
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {paisesAtivosCards.map((pais) => {
                 const nomePais = isEn ? pais.nome_en : pais.nome;
                 const descPais = isEn ? pais.desc_en : pais.desc;
-                
                 return (
                   <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(pais.nome)}`} key={pais.nome} className="group relative block h-[280px] w-full overflow-hidden rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-slate-900">
-                    <img src={pais.imagem} alt={nomePais} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+                    <img src={pais.imagem} alt={nomePais} loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                     <div className="absolute bottom-0 left-0 p-6">
                       <h3 className="text-2xl font-black text-white tracking-tight">{nomePais}</h3>
@@ -299,7 +271,7 @@ export default async function Home({
         </section>
       )}
 
-      {/* DESTAQUES GERAIS (CAMPOS PRIVADOS) */}
+      {/* DESTAQUES GERAIS */}
       {camposDeFerias && camposDeFerias.length > 0 && (
         <section className="bg-white py-20 border-t border-slate-100">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
@@ -307,48 +279,38 @@ export default async function Home({
               <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">{dict.home.destaques_titulo}</h2>
               <p className="mt-4 text-base text-slate-500">{dict.home.destaques_subtitulo}</p>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {camposDeFerias.map((campo: any, index: number) => {
-                const campoId = campo.id !== undefined && campo.id !== null ? campo.id : index + 1;
+              {camposDeFerias.map((campo, index) => {
+                const campoId = campo.id ?? index + 1;
                 const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
                 const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
                 const localCampo = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
                 const idadeCampo = isEn && campo.idade_en ? campo.idade_en : campo.idade;
-                
+
                 let precoVisivel = campo.preco || 0;
-                if (!precoVisivel && campo.pacotes && campo.pacotes.length > 0) {
-                  const todosPrecos = campo.pacotes.flatMap((p: any) => 
-                    p.variantes ? p.variantes.map((v: any) => v.preco) : []
-                  );
-                  if (todosPrecos.length > 0) {
-                    precoVisivel = Math.min(...todosPrecos);
-                  }
+                if (!precoVisivel && campo.pacotes?.length > 0) {
+                  const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes?.map((v: any) => v.preco) || []);
+                  if (todosPrecos.length > 0) precoVisivel = Math.min(...todosPrecos);
                 }
 
                 return (
                   <div key={campoId} className="group relative flex flex-col bg-white overflow-hidden border border-slate-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-                    
                     <Link href={`/${lang}/campo/${campoId}`} className="absolute inset-0 z-10">
                       <span className="sr-only">{dict.home.explorar} {nomeCampo}</span>
                     </Link>
-
                     <div className="absolute top-4 right-4 z-20">
                       <BotaoFavorito campoId={campoId} />
                     </div>
-
                     <div className="relative h-56 w-full overflow-hidden bg-slate-100">
-                      <img src={campo.imagem} alt={nomeCampo} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                      <img src={campo.imagem} alt={nomeCampo} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                       <div className="absolute top-4 left-4 bg-slate-900 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white rounded-full z-0">
                         {catCampo}
                       </div>
                     </div>
-                    
                     <div className="flex flex-col p-6 flex-1 pointer-events-none">
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">📍 {localCampo}</span>
                       <h3 className="text-xl font-black text-slate-900 leading-tight mb-2">{nomeCampo}</h3>
                       <p className="text-sm text-slate-500 font-medium mb-6">{dict.home.faixa_etaria_label} {idadeCampo}</p>
-                      
                       <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
@@ -366,7 +328,6 @@ export default async function Home({
           </div>
         </section>
       )}
-
     </main>
   );
 }
