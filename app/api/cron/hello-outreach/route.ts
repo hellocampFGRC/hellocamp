@@ -17,6 +17,11 @@ const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 const SENDER_EMAIL = 'info@hellocamp.pt';
 const SENDER_NAME = 'HelloCamp';
 
+// ═══════════════════════════════════════════
+// URL ÚNICO DE REGISTO — usado em todos os emails B2B
+// ═══════════════════════════════════════════
+const LINK_REGISTO = 'https://www.hellocamp.pt/pt/registo';
+
 console.log('🔧 [BREVO] API Key presente:', !!BREVO_API_KEY, '| Sender:', SENDER_EMAIL);
 
 // ==========================================
@@ -231,7 +236,7 @@ export async function GET(request: Request) {
     const resultado = await enviarViaBrevo({
       to: { email: testEmail, name: 'Equipa de Teste' },
       subject: '[TESTE] ' + tpl.assunto,
-      html: getTemplateHTML(tpl.titulo, tpl.gerarMensagem('Equipa de Teste'), tpl.textoCta, 'https://www.hellocamp.pt'),
+      html: getTemplateHTML(tpl.titulo, tpl.gerarMensagem('Equipa de Teste'), tpl.textoCta, LINK_REGISTO),
     });
 
     return NextResponse.json({
@@ -240,6 +245,7 @@ export async function GET(request: Request) {
       config: {
         sender_email: SENDER_EMAIL,
         sender_name: SENDER_NAME,
+        link_enviado: LINK_REGISTO,
         api_key_inicio: BREVO_API_KEY.substring(0, 10) + '...',
       },
     }, { status: resultado.success ? 200 : 500 });
@@ -295,6 +301,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         debug: true,
         brevo_ok: true,
+        link_enviado: LINK_REGISTO,
         leads_prontas_count: leadsProntas.length,
         leads_amostra: leadsProntas.slice(0, 10).map(l => ({
           id: l.id, nome: l.nome_cliente, email: l.email_cliente, fase: l.fase_funil,
@@ -303,9 +310,7 @@ export async function GET(request: Request) {
     }
 
     // ==========================================
-    // ENVIAR (sequencial para respeitar rate limit do Brevo)
-    // Brevo free = 300/dia, paid = 20k+/mês. 75 emails é seguro, mas em paralelo
-    // pode bater em rate limit por segundo. Limitamos a 10 em paralelo.
+    // ENVIAR — em batches de 10 para respeitar rate limit do Brevo
     // ==========================================
     const BATCH_SIZE = 10;
     const resultados: any[] = [];
@@ -323,12 +328,10 @@ export async function GET(request: Request) {
           const tpl = COLD_TEMPLATES[faseAtual];
           if (!tpl) return { status: 'skipped', id: lead.id, email, reason: 'fase fora do range' };
 
-          const linkFinal = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.hellocamp.pt'}/registar?lang=pt&utm_source=cold_email&utm_campaign=fase${faseAtual}`;
-
           const r = await enviarViaBrevo({
             to: { email, name: lead.nome_cliente || 'Organizador' },
             subject: tpl.assunto,
-            html: getTemplateHTML(tpl.titulo, tpl.gerarMensagem(lead.nome_cliente || 'Organizador'), tpl.textoCta, linkFinal),
+            html: getTemplateHTML(tpl.titulo, tpl.gerarMensagem(lead.nome_cliente || 'Organizador'), tpl.textoCta, LINK_REGISTO),
           });
 
           if (r.success) {
@@ -386,6 +389,7 @@ export async function GET(request: Request) {
       falhas: falhas.length,
       skipped: skipped.length,
       tentados: leadsProntas.length,
+      link_enviado: LINK_REGISTO,
       amostra_falhas: falhas.slice(0, 3).map((f: any) => ({ email: f.email, erro: f.erro })),
     });
 
