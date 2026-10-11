@@ -13,7 +13,7 @@ interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidad
 const ReservaContext = createContext<any>(null);
 
 // ==========================================
-// 2. PROVEDOR DE ESTADO (MANTÉM TUDO SINCRONIZADO)
+// 2. PROVEDOR DE ESTADO
 // ==========================================
 export function ReservaProvider({ children, campo, lang }: { children: React.ReactNode, campo: any, lang: string }) {
   const router = useRouter();
@@ -44,7 +44,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   const [leadForm, setLeadForm] = useState({ nome: "", email: "", telefone: "" });
   const [submittingLead, setSubmittingLead] = useState(false);
 
-  // Descobre a data local em formato ISO (YYYY-MM-DD) para bloquear o passado
+  // Data local ISO (YYYY-MM-DD) para bloquear o passado
   const getTodayISO = () => {
     const today = new Date();
     const tzOffset = today.getTimezoneOffset() * 60000;
@@ -61,21 +61,20 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
       const fechados = calendario.dias_fechados || [];
       const diasGerados: string[] = [];
       let curr = new Date(start);
-      
+
       while (curr <= end) {
         const dateStr = curr.toISOString().split('T')[0];
-        // Bloqueia feriados/fechados e dias passados
         if (permitidos.includes(curr.getDay()) && !fechados.includes(dateStr) && dateStr >= todayISO) {
-           diasGerados.push(dateStr);
+          diasGerados.push(dateStr);
         }
         curr.setDate(curr.getDate() + 1);
       }
       setDatasDisponiveis(diasGerados);
-      
+
       if (diasGerados.length > 0) {
         setMesAtual(new Date(diasGerados[0]));
       } else if (calendario.data_inicio > todayISO) {
-         setMesAtual(new Date(calendario.data_inicio));
+        setMesAtual(new Date(calendario.data_inicio));
       }
     }
   }, [calendario.data_inicio, calendario.data_fim, calendario.dias_semana, calendario.dias_fechados, todayISO]);
@@ -102,27 +101,22 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     return Array.from(semanas);
   };
 
-  // IDENTIFICADORES DE TIPO DE PACOTE (Para permitir Múltiplos Dias Avulsos)
   const quantPacote = pacoteSelecionado?.quantidade || 1;
   const isDiaAvulsoFlexivel = pacoteSelecionado?.tipo === 'dia' && quantPacote === 1;
   const isPackDiasFixo = pacoteSelecionado?.tipo === 'dia' && quantPacote > 1;
 
   const handleDiaClick = (data: string) => {
     if (!pacoteSelecionado) return;
-    if (data < todayISO) return; // Segurança extra contra dias passados
+    if (data < todayISO) return;
 
     if (pacoteSelecionado.tipo === 'dia') {
-      // Se clicou num dia já selecionado, remove
       if (diasSelecionados.includes(data)) {
-         setDiasSelecionados(prev => prev.filter(d => d !== data));
+        setDiasSelecionados(prev => prev.filter(d => d !== data));
       } else {
-         // Se for Pack Fixo (ex: Pack 5 Dias), não deixa passar do limite exato do pacote
-         if (isPackDiasFixo && diasSelecionados.length >= quantPacote) return;
-         // Se for Dia Avulso (Qtd=1), avança livremente
-         setDiasSelecionados(prev => [...prev, data]);
+        if (isPackDiasFixo && diasSelecionados.length >= quantPacote) return;
+        setDiasSelecionados(prev => [...prev, data]);
       }
     } else {
-      // Lógica das semanas completas
       const limiteSemanas = pacoteSelecionado.quantidade || 1;
       const semanasAtuais = getSemanasSelecionadas();
 
@@ -131,40 +125,51 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
       const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       const startMonday = new Date(dateObj);
       startMonday.setDate(dateObj.getDate() - diffToMonday);
-      
+
       const startMondayStr = startMonday.toISOString().split('T')[0];
       const endSunday = new Date(startMonday);
       endSunday.setDate(startMonday.getDate() + 6);
 
       const diasDestaSemana = datasDisponiveis.filter(d => {
-         const dDate = new Date(d);
-         return dDate >= startMonday && dDate <= endSunday;
+        const dDate = new Date(d);
+        return dDate >= startMonday && dDate <= endSunday;
       });
 
+      // Se a semana não tem NENHUM dia disponível, não faz nada
+      if (diasDestaSemana.length === 0) return;
+
       if (semanasAtuais.includes(startMondayStr)) {
-         setDiasSelecionados(prev => prev.filter(d => !diasDestaSemana.includes(d)));
+        setDiasSelecionados(prev => prev.filter(d => !diasDestaSemana.includes(d)));
       } else {
-         if (semanasAtuais.length >= limiteSemanas) return;
-         setDiasSelecionados(prev => [...prev, ...diasDestaSemana]);
+        if (semanasAtuais.length >= limiteSemanas) return;
+        setDiasSelecionados(prev => [...prev, ...diasDestaSemana]);
       }
     }
   };
 
-  // CÁLCULOS FINANCEIROS ATUALIZADOS
+  // Reset de extras ao trocar de pacote (evita inconsistências)
+  const trocarPacote = (pac: Pacote) => {
+    setPacoteSelecionado(pac);
+    setDiasSelecionados([]);
+    setExtraSeguro(false);
+    setExtraTransporte(false);
+    if (pac.variantes && pac.variantes.length > 0) setVarianteSelecionada(pac.variantes[0]);
+  };
+
+  // CÁLCULOS FINANCEIROS
   const precoBase = varianteSelecionada?.preco || 0;
-  
-  // Se for "Dia Avulso", o preço multiplica pelos dias. Se for "Pack", o preço é estático.
+
   let multiplicadorPrecoBase = 1;
   if (isDiaAvulsoFlexivel) {
-     multiplicadorPrecoBase = Math.max(1, diasSelecionados.length);
+    multiplicadorPrecoBase = Math.max(1, diasSelecionados.length);
   }
 
   const totalDiasExtras = diasSelecionados.length;
-  
+
   const valSeguro = campo.extra_seguro || 0;
   const tipoSeguro = campo.tipo_extra_seguro || 'fixo';
   let custoSeguro = valSeguro > 0 ? (tipoSeguro === 'diario' ? (valSeguro * totalDiasExtras) : valSeguro) : 0;
-  
+
   const valTransporte = campo.extra_transporte || 0;
   const tipoTransporte = campo.tipo_extra_transporte || 'diario';
   let custoTransporte = valTransporte > 0 ? (tipoTransporte === 'diario' ? (valTransporte * totalDiasExtras) : valTransporte) : 0;
@@ -173,14 +178,15 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   if (extraSeguro) totalExtras += custoSeguro;
   if (extraTransporte) totalExtras += custoTransporte;
 
-  // Lógica de "Está Completo?"
-  const escolhasCompletas = isDiaAvulsoFlexivel 
-    ? diasSelecionados.length > 0  // Apenas exige que 1 ou mais dias estejam selecionados
-    : (pacoteSelecionado?.tipo === 'dia' 
-        ? diasSelecionados.length === quantPacote 
+  // Está completo?
+  const escolhasCompletas = isDiaAvulsoFlexivel
+    ? diasSelecionados.length > 0
+    : (pacoteSelecionado?.tipo === 'dia'
+        ? diasSelecionados.length === quantPacote
         : getSemanasSelecionadas().length === quantPacote);
 
-  const precoTotal = ((precoBase * (diasSelecionados.length === 0 ? 1 : multiplicadorPrecoBase)) + totalExtras) * quantidade;
+  // Preço total: base * qtd + extras (extras calculados por reserva)
+  const precoTotal = (precoBase * (diasSelecionados.length === 0 ? 1 : multiplicadorPrecoBase)) * quantidade + totalExtras;
 
   const vagasTotais = campo.vagas_totais;
   const isEsgotado = vagasTotais !== null && vagasTotais <= 0;
@@ -191,11 +197,11 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
 
   const handleReservar = () => {
     if (disabledReserva) return;
-    
+
     if (isExternalLinkMode) {
       if (!externalLinkUrl) {
-         alert(isEn ? "The partner hasn't set up the external link yet." : "O parceiro ainda não configurou o link externo. Tente mais tarde.");
-         return;
+        alert(isEn ? "The partner hasn't set up the external link yet." : "O parceiro ainda não configurou o link externo. Tente mais tarde.");
+        return;
       }
       setShowLeadModal(true);
       return;
@@ -218,38 +224,51 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     router.push(`/${lang}/checkout/${campo.id}?${params.toString()}`);
   };
 
+  // IMPORTANTE: window.open SÍNCRONO antes do await (evita popup blocker)
   const submitExternalLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!leadForm.nome || !leadForm.email || !leadForm.telefone) return;
+    if (!externalLinkUrl) return;
+
     setSubmittingLead(true);
+
+    // Abre já a janela (sincronamente) — evita popup blocker do browser
+    const newWindow = window.open('about:blank', '_blank');
 
     try {
       await supabase.from('leads_externas').insert([{
-         campo_id: campo.id,
-         organizador_id: campo.organizador_id,
-         nome_cliente: leadForm.nome,
-         email_cliente: leadForm.email,
-         telefone_cliente: leadForm.telefone,
-         turno_interesse: nomeProgramaCompleto,
-         preco_estimado: precoTotal
+        campo_id: campo.id,
+        organizador_id: campo.organizador_id,
+        nome_cliente: leadForm.nome,
+        email_cliente: leadForm.email,
+        telefone_cliente: leadForm.telefone,
+        turno_interesse: nomeProgramaCompleto,
+        preco_estimado: precoTotal
       }]);
 
-      await fetch('/api/notificar-reserva', {
+      // Notificação por email (best-effort; não bloqueia o redirect)
+      fetch('/api/notificar-reserva', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           lead: leadForm,
           campoNome: campo.nome,
           parceiroEmail: contratoData.emailReservas || 'info@hellocamp.pt',
           lang
         })
-      });
+      }).catch(err => console.error('Erro a notificar parceiro:', err));
 
-      window.open(externalLinkUrl, '_blank'); 
+      // Redireciona a janela pré-aberta
+      if (newWindow) {
+        newWindow.location.href = externalLinkUrl;
+      } else {
+        window.location.href = externalLinkUrl;
+      }
       setShowLeadModal(false);
     } catch (error) {
       console.error(error);
-      window.open(externalLinkUrl, '_blank');
+      if (newWindow) newWindow.close();
+      window.location.href = externalLinkUrl;
       setShowLeadModal(false);
     } finally {
       setSubmittingLead(false);
@@ -259,46 +278,46 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
   const nextMonth = () => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1, 1));
   const prevMonth = () => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() - 1, 1));
-  
+
   const gerarGrelhaMes = () => {
     const year = mesAtual.getFullYear();
     const month = mesAtual.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    
+
     const startingDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
     const daysInMonth = lastDay.getDate();
-    
-    const grelha = [];
-    let currentRow = [];
-    
+
+    const grelha: any[][] = [];
+    let currentRow: any[] = [];
+
     for (let i = 0; i < startingDayOfWeek; i++) {
       currentRow.push(null);
     }
-    
+
     for (let i = 1; i <= daysInMonth; i++) {
       const currentDate = new Date(year, month, i);
       const y = currentDate.getFullYear();
       const m = String(currentDate.getMonth() + 1).padStart(2, '0');
       const d = String(currentDate.getDate()).padStart(2, '0');
       const dateString = `${y}-${m}-${d}`;
-      
+
       const isPast = dateString < todayISO;
       const isAvailableDay = datasDisponiveis.includes(dateString);
-      
+
       currentRow.push({
         dia: i,
         dataCompleta: dateString,
         isPast: isPast,
         disponivel: !isPast && isAvailableDay
       });
-      
+
       if (currentRow.length === 7) {
         grelha.push(currentRow);
         currentRow = [];
       }
     }
-    
+
     if (currentRow.length > 0) {
       while (currentRow.length < 7) {
         currentRow.push(null);
@@ -313,12 +332,12 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
 
   return (
     <ReservaContext.Provider value={{
-      isEn, campo, pacotes, pacoteSelecionado, setPacoteSelecionado,
+      isEn, campo, pacotes, pacoteSelecionado, setPacoteSelecionado: trocarPacote,
       varianteSelecionada, setVarianteSelecionada, quantidade, setQuantidade,
       diasSelecionados, setDiasSelecionados, mesAtual, nextMonth, prevMonth, handleDiaClick,
       extraSeguro, setExtraSeguro, valSeguro, custoSeguro,
       extraTransporte, setExtraTransporte, valTransporte, custoTransporte,
-      precoTotal, precoBase, isEsgotado, disabledReserva, handleReservar, 
+      precoTotal, precoBase, isEsgotado, disabledReserva, handleReservar,
       isEmailMode, isExternalLinkMode, externalLinkUrl, capitalize,
       getSemanasSelecionadas, grelhaDias, nomesDiasCurto, escolhasCompletas,
       showLeadModal, setShowLeadModal, leadForm, setLeadForm, submitExternalLead, submittingLead,
@@ -336,19 +355,18 @@ export function SeletorOpcoes() {
   const ctx = useContext(ReservaContext);
   if (!ctx || ctx.pacotes.length === 0) return null;
 
-  const escolhasFeitas = ctx.pacoteSelecionado?.tipo === 'dia' 
-    ? ctx.diasSelecionados.length 
+  const escolhasFeitas = ctx.pacoteSelecionado?.tipo === 'dia'
+    ? ctx.diasSelecionados.length
     : ctx.getSemanasSelecionadas().length;
 
   const getSubtituloCalendario = () => {
     if (!ctx.pacoteSelecionado) return '';
-    
-    // Subtítulo Inteligente exclusivo para Dias Avulsos
+
     if (ctx.isDiaAvulsoFlexivel) {
-       if (ctx.diasSelecionados.length > 0) {
-          return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded">{ctx.diasSelecionados.length} {ctx.isEn ? 'Days selected' : 'Dia(s) selecionado(s)'}</span>;
-       }
-       return <span className="text-[#EBA914] font-bold bg-amber-50 px-2 py-1 rounded">{ctx.isEn ? 'Select your dates' : 'Selecione os dias'}</span>;
+      if (ctx.diasSelecionados.length > 0) {
+        return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded">{ctx.diasSelecionados.length} {ctx.isEn ? 'Days selected' : 'Dia(s) selecionado(s)'}</span>;
+      }
+      return <span className="text-[#EBA914] font-bold bg-amber-50 px-2 py-1 rounded">{ctx.isEn ? 'Select your dates' : 'Selecione os dias'}</span>;
     }
 
     if (escolhasFeitas === ctx.quantPacote) {
@@ -356,7 +374,7 @@ export function SeletorOpcoes() {
     }
     return (
       <span className="text-[#EBA914] font-bold bg-amber-50 px-2 py-1 rounded">
-         {ctx.isEn ? `Select ${ctx.quantPacote - escolhasFeitas} more ${ctx.pacoteSelecionado?.tipo}(s)` : `Falta selecionar ${ctx.quantPacote - escolhasFeitas} ${ctx.pacoteSelecionado?.tipo}(s)`}
+        {ctx.isEn ? `Select ${ctx.quantPacote - escolhasFeitas} more ${ctx.pacoteSelecionado?.tipo}(s)` : `Falta selecionar ${ctx.quantPacote - escolhasFeitas} ${ctx.pacoteSelecionado?.tipo}(s)`}
       </span>
     );
   };
@@ -377,11 +395,7 @@ export function SeletorOpcoes() {
           {ctx.pacotes.map((pac: any) => {
             const isActive = ctx.pacoteSelecionado?.id === pac.id;
             return (
-              <div key={pac.id} onClick={() => { 
-                  ctx.setPacoteSelecionado(pac); 
-                  ctx.setDiasSelecionados([]);
-                  if (pac.variantes && pac.variantes.length > 0) ctx.setVarianteSelecionada(pac.variantes[0]);
-                }}
+              <div key={pac.id} onClick={() => ctx.setPacoteSelecionado(pac)}
                 className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${isActive ? 'bg-emerald-50 border-emerald-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'}`}
               >
                 <div>
@@ -399,7 +413,7 @@ export function SeletorOpcoes() {
         </div>
       </div>
 
-      {/* 2. CALENDÁRIO EM GRELHA REAL */}
+      {/* 2. CALENDÁRIO */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <label className="flex items-center gap-2 text-[11px] font-black text-slate-900 uppercase tracking-widest m-0">
@@ -417,46 +431,46 @@ export function SeletorOpcoes() {
             </span>
             <button type="button" onClick={ctx.nextMonth} className="p-2 w-8 h-8 flex items-center justify-center rounded-lg bg-white text-slate-400 hover:text-emerald-600 font-bold border border-slate-200 shadow-sm">&rarr;</button>
           </div>
-          
+
           <div className="grid grid-cols-7 gap-1 mb-2">
-             {ctx.nomesDiasCurto.map((dia: string, idx: number) => (
-               <div key={idx} className="text-center text-[9px] font-black uppercase tracking-widest text-slate-400">{dia}</div>
-             ))}
+            {ctx.nomesDiasCurto.map((dia: string, idx: number) => (
+              <div key={idx} className="text-center text-[9px] font-black uppercase tracking-widest text-slate-400">{dia}</div>
+            ))}
           </div>
 
           <div className="flex flex-col gap-1">
             {ctx.grelhaDias.map((semana: any[], rowIdx: number) => (
               <div key={rowIdx} className="grid grid-cols-7 gap-1">
-                 {semana.map((diaInfo, colIdx) => {
-                   if (!diaInfo) return <div key={colIdx} className="w-full aspect-square"></div>;
-                   
-                   const { dia, dataCompleta, disponivel, isPast } = diaInfo;
-                   const isSelected = ctx.diasSelecionados.includes(dataCompleta);
-                   
-                   let buttonClasses = "w-full aspect-square flex items-center justify-center rounded-lg text-sm font-bold transition-all ";
-                   
-                   if (isPast) {
-                     buttonClasses += "bg-slate-200/40 text-slate-300 cursor-not-allowed opacity-40";
-                   } else if (!disponivel) {
-                     buttonClasses += "bg-red-50/50 text-red-300 cursor-not-allowed line-through";
-                   } else if (isSelected) {
-                     buttonClasses += "bg-emerald-600 text-white shadow-sm border border-emerald-700";
-                   } else {
-                     buttonClasses += "bg-white text-slate-700 border border-slate-200 hover:border-emerald-400 cursor-pointer hover:bg-emerald-50";
-                   }
+                {semana.map((diaInfo, colIdx) => {
+                  if (!diaInfo) return <div key={colIdx} className="w-full aspect-square"></div>;
 
-                   return (
-                     <button 
-                       key={colIdx} 
-                       type="button" 
-                       disabled={!disponivel || isPast}
-                       onClick={() => ctx.handleDiaClick(dataCompleta)}
-                       className={buttonClasses}
-                     >
-                       {dia}
-                     </button>
-                   );
-                 })}
+                  const { dia, dataCompleta, disponivel, isPast } = diaInfo;
+                  const isSelected = ctx.diasSelecionados.includes(dataCompleta);
+
+                  let buttonClasses = "w-full aspect-square flex items-center justify-center rounded-lg text-sm font-bold transition-all ";
+
+                  if (isPast) {
+                    buttonClasses += "bg-slate-200/40 text-slate-300 cursor-not-allowed opacity-40";
+                  } else if (!disponivel) {
+                    buttonClasses += "bg-red-50/50 text-red-300 cursor-not-allowed line-through";
+                  } else if (isSelected) {
+                    buttonClasses += "bg-emerald-600 text-white shadow-sm border border-emerald-700";
+                  } else {
+                    buttonClasses += "bg-white text-slate-700 border border-slate-200 hover:border-emerald-400 cursor-pointer hover:bg-emerald-50";
+                  }
+
+                  return (
+                    <button
+                      key={colIdx}
+                      type="button"
+                      disabled={!disponivel || isPast}
+                      onClick={() => ctx.handleDiaClick(dataCompleta)}
+                      className={buttonClasses}
+                    >
+                      {dia}
+                    </button>
+                  );
+                })}
               </div>
             ))}
           </div>
@@ -472,7 +486,7 @@ export function SeletorOpcoes() {
           </label>
           <div className="flex flex-wrap gap-2">
             {ctx.pacoteSelecionado.variantes.map((varia: Variante) => (
-              <button key={varia.nome} onClick={() => ctx.setVarianteSelecionada(varia)} 
+              <button key={varia.nome} onClick={() => ctx.setVarianteSelecionada(varia)}
                 className={`flex-1 px-4 py-3 rounded-xl text-xs font-black border-2 transition-all flex justify-between items-center ${ctx.varianteSelecionada?.nome === varia.nome ? 'bg-emerald-50 border-emerald-500 text-emerald-900 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'}`}>
                 <span>{varia.nome}</span>
                 <span className={ctx.varianteSelecionada?.nome === varia.nome ? 'text-emerald-600' : 'text-slate-400'}>{varia.preco}€</span>
@@ -491,32 +505,32 @@ export function SeletorOpcoes() {
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {ctx.valSeguro > 0 && (
-               <div onClick={() => ctx.setExtraSeguro(!ctx.extraSeguro)} className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraSeguro ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
-                 <div className="flex items-center gap-2">
-                   <span className="text-lg">🛡️</span>
-                   <div>
-                     <span className={`block text-xs font-black ${ctx.extraSeguro ? 'text-emerald-900' : 'text-slate-700'}`}>{ctx.isEn ? 'Insurance' : 'Seguro Extra'}</span>
-                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoSeguro}€</span>
-                   </div>
-                 </div>
-                 <div className={`w-4 h-4 rounded-md border-2 flex items-center justify-center ${ctx.extraSeguro ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`}>
-                    {ctx.extraSeguro && <span className="text-white text-[8px]">✓</span>}
-                 </div>
-               </div>
+              <div onClick={() => ctx.setExtraSeguro(!ctx.extraSeguro)} className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraSeguro ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🛡️</span>
+                  <div>
+                    <span className={`block text-xs font-black ${ctx.extraSeguro ? 'text-emerald-900' : 'text-slate-700'}`}>{ctx.isEn ? 'Insurance' : 'Seguro Extra'}</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoSeguro}€</span>
+                  </div>
+                </div>
+                <div className={`w-4 h-4 rounded-md border-2 flex items-center justify-center ${ctx.extraSeguro ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`}>
+                  {ctx.extraSeguro && <span className="text-white text-[8px]">✓</span>}
+                </div>
+              </div>
             )}
             {ctx.valTransporte > 0 && (
-               <div onClick={() => ctx.setExtraTransporte(!ctx.extraTransporte)} className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraTransporte ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
-                 <div className="flex items-center gap-2">
-                   <span className="text-lg">🚌</span>
-                   <div>
-                     <span className={`block text-xs font-black ${ctx.extraTransporte ? 'text-emerald-900' : 'text-slate-700'}`}>{ctx.isEn ? 'Transport' : 'Transporte'}</span>
-                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoTransporte}€</span>
-                   </div>
-                 </div>
-                 <div className={`w-4 h-4 rounded-md border-2 flex items-center justify-center ${ctx.extraTransporte ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`}>
-                    {ctx.extraTransporte && <span className="text-white text-[8px]">✓</span>}
-                 </div>
-               </div>
+              <div onClick={() => ctx.setExtraTransporte(!ctx.extraTransporte)} className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraTransporte ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🚌</span>
+                  <div>
+                    <span className={`block text-xs font-black ${ctx.extraTransporte ? 'text-emerald-900' : 'text-slate-700'}`}>{ctx.isEn ? 'Transport' : 'Transporte'}</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoTransporte}€</span>
+                  </div>
+                </div>
+                <div className={`w-4 h-4 rounded-md border-2 flex items-center justify-center ${ctx.extraTransporte ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`}>
+                  {ctx.extraTransporte && <span className="text-white text-[8px]">✓</span>}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -548,7 +562,7 @@ export function CaixaResumo() {
   const ctx = useContext(ReservaContext);
   if (!ctx) return null;
 
-  let textoBotao = ctx.isEn ? 'Book & Pay Now' : 'Reservar Vaga Agora'; 
+  let textoBotao = ctx.isEn ? 'Book & Pay Now' : 'Reservar Vaga Agora';
   if (ctx.isEmailMode) textoBotao = ctx.isEn ? 'Request Booking' : 'Reservar c/ Entidade';
   if (ctx.isExternalLinkMode) textoBotao = ctx.isEn ? 'Go to Official Form' : 'Ir para Formulário Oficial';
 
@@ -565,7 +579,7 @@ export function CaixaResumo() {
           <div className="text-center text-sm font-bold text-slate-400 py-4">🗓️ {ctx.isEn ? 'No packages available' : 'Nenhum pacote disponível'}</div>
         ) : (
           <div className="flex flex-col gap-4 mb-6">
-            
+
             {/* 1. PROGRAMA E OPÇÃO */}
             <div className="flex justify-between items-start border-b border-slate-50 pb-4">
               <div>
@@ -573,7 +587,6 @@ export function CaixaResumo() {
                 <p className="text-sm font-bold text-slate-900 m-0 leading-tight">
                   {ctx.pacoteSelecionado?.titulo || '--'}
                 </p>
-                {/* Se existir variante, mostra como badge para clarificar a opção! */}
                 {((ctx.pacoteSelecionado?.variantes?.length || 0) > 1) && (
                   <p className="text-xs font-black text-emerald-700 mt-1.5 mb-0 bg-emerald-50 border border-emerald-100 inline-block px-2 py-0.5 rounded">
                     {ctx.varianteSelecionada?.nome}
@@ -591,31 +604,31 @@ export function CaixaResumo() {
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{ctx.isEn ? 'Dates' : 'Datas'}</p>
                 <p className="text-sm font-bold text-slate-900 m-0">
-                  {ctx.escolhasCompletas 
-                    ? (ctx.isDiaAvulsoFlexivel 
+                  {ctx.escolhasCompletas
+                    ? (ctx.isDiaAvulsoFlexivel
                         ? `${ctx.diasSelecionados.length} Dia(s) Solto(s)`
-                        : `${ctx.pacoteSelecionado?.quantidade} ${ctx.pacoteSelecionado?.tipo}(s) Selecionadas`) 
+                        : `${ctx.pacoteSelecionado?.quantidade} ${ctx.pacoteSelecionado?.tipo}(s) Selecionadas`)
                     : <span className="text-[#EBA914] text-xs">Aguardando Seleção...</span>}
                 </p>
               </div>
             </div>
 
             {(ctx.extraSeguro || ctx.extraTransporte) && (
-               <div className="border-t border-slate-100 pt-4 mt-2">
-                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{ctx.isEn ? 'Extras' : 'Suplementos Extras'}</p>
-                 {ctx.extraSeguro && (
-                   <div className="flex justify-between items-center mb-1">
-                     <span className="text-xs font-bold text-slate-600">🛡️ Seguro</span>
-                     <span className="text-xs font-black text-slate-900">+{ctx.custoSeguro}€</span>
-                   </div>
-                 )}
-                 {ctx.extraTransporte && (
-                   <div className="flex justify-between items-center">
-                     <span className="text-xs font-bold text-slate-600">🚌 Transporte</span>
-                     <span className="text-xs font-black text-slate-900">+{ctx.custoTransporte}€</span>
-                   </div>
-                 )}
-               </div>
+              <div className="border-t border-slate-100 pt-4 mt-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{ctx.isEn ? 'Extras' : 'Suplementos Extras'}</p>
+                {ctx.extraSeguro && (
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-bold text-slate-600">🛡️ Seguro</span>
+                    <span className="text-xs font-black text-slate-900">+{ctx.custoSeguro}€</span>
+                  </div>
+                )}
+                {ctx.extraTransporte && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-600">🚌 Transporte</span>
+                    <span className="text-xs font-black text-slate-900">+{ctx.custoTransporte}€</span>
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="flex justify-between items-center border-t border-slate-100 pt-4 mt-2">
@@ -629,7 +642,7 @@ export function CaixaResumo() {
         <div className="bg-slate-50 p-5 rounded-2xl mb-6 flex justify-between items-center border border-slate-200 border-dashed">
           <span className="text-sm font-black text-slate-900 uppercase tracking-wider">Total</span>
           <span className="text-3xl font-black text-emerald-600">
-             {ctx.escolhasCompletas ? `${ctx.precoTotal}€` : '--'}
+            {ctx.escolhasCompletas ? `${ctx.precoTotal}€` : '--'}
           </span>
         </div>
 
@@ -664,13 +677,13 @@ export function CaixaResumo() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden relative">
             <button onClick={() => ctx.setShowLeadModal(false)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 font-black">&times;</button>
-            
+
             <div className="p-8">
               <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-xl mb-4">🚀</div>
               <h2 className="text-2xl font-black text-slate-900 mb-2">Quase lá!</h2>
               <p className="text-sm font-medium text-slate-500 leading-relaxed mb-6">
-                {ctx.isEn 
-                  ? "You will be redirected to the partner's official form. Please leave your contact details so the organizer knows you came from HelloCamp." 
+                {ctx.isEn
+                  ? "You will be redirected to the partner's official form. Please leave your contact details so the organizer knows you came from HelloCamp."
                   : "Vai ser reencaminhado para o formulário oficial do parceiro. Indique o seu contacto rápido para que a organização saiba que vem através da HelloCamp e lhe possa dar seguimento."}
               </p>
 

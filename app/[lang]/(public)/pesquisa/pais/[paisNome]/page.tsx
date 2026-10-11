@@ -3,15 +3,17 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import BotaoFavorito from "../../../components/BotaoFavorito";
 
-// 1. O CHEF DO SEO
-export async function generateMetadata({ 
-  params 
-}: { 
-  params: Promise<{ lang: string; paisNome: string }> 
+// ==========================================
+// 1. SEO METADATA
+// ==========================================
+export async function generateMetadata({
+  params
+}: {
+  params: Promise<{ lang: string; paisNome: string }>
 }): Promise<Metadata> {
   const { lang, paisNome } = await params;
   const isEn = lang === 'en';
-  const nomeLimpo = decodeURIComponent(paisNome);
+  const nomeLimpo = decodeURIComponent(paisNome).replace(/[%_]/g, '');
 
   const { data: pais } = await supabase
     .from('paises')
@@ -23,10 +25,10 @@ export async function generateMetadata({
     return { title: isEn ? `Camps in ${nomeLimpo} | HelloCamp` : `Campos em ${nomeLimpo} | HelloCamp` };
   }
 
-  const title = isEn 
-    ? (pais.seo_titulo_en || `Summer Camps in ${pais.nome_en || pais.nome} | HelloCamp`) 
+  const title = isEn
+    ? (pais.seo_titulo_en || `Summer Camps in ${pais.nome_en || pais.nome} | HelloCamp`)
     : (pais.seo_titulo || `Campos de Férias em ${pais.nome} | HelloCamp`);
-    
+
   const description = isEn ? pais.seo_descricao_en : pais.seo_descricao;
 
   return {
@@ -39,28 +41,32 @@ export async function generateMetadata({
   };
 }
 
-// 2. O COMPONENTE PRINCIPAL DA PÁGINA
-export default async function PesquisaPorPais({ 
+// ==========================================
+// 2. COMPONENTE PRINCIPAL
+// ==========================================
+export default async function PesquisaPorPais({
   params,
   searchParams
-}: { 
+}: {
   params: Promise<{ lang: string; paisNome: string }>;
-  searchParams?: Promise<{ [key: string]: string | undefined }> 
+  searchParams?: Promise<{ [key: string]: string | undefined }>
 }) {
   const { lang, paisNome } = await params;
   const sp = await searchParams;
   const isEn = lang === 'en';
-  
-  const nomePaisInicial = decodeURIComponent(paisNome);
+
+  // Sanitização do parâmetro do URL (evita wildcards maliciosos)
+  const nomePaisInicial = decodeURIComponent(paisNome).replace(/[%_]/g, '');
 
   // Captura os filtros do URL
   const categoriaParam = sp?.categoria || "";
   const distritoParam = sp?.distrito || "";
   const idadeParam = sp?.idade || "";
+  const dataParam = sp?.data || "";
 
   const mostrarDistritos = nomePaisInicial === "Portugal";
 
-  // Busca os dados editoriais
+  // Busca os dados editoriais do país
   const { data: dadosPais } = await supabase
     .from('paises')
     .select('*')
@@ -71,22 +77,23 @@ export default async function PesquisaPorPais({
   let query = supabase.from("campos").select("*").not('contrato_parceiro_url', 'is', null);
 
   query = query.or(`pais.ilike.%${nomePaisInicial}%,pais_en.ilike.%${nomePaisInicial}%`);
-  
+
   if (categoriaParam) query = query.eq("categoria", categoriaParam);
   if (distritoParam && mostrarDistritos) query = query.ilike("Distrito", `%${distritoParam}%`);
   if (idadeParam) query = query.eq("idade", idadeParam);
+  if (dataParam) query = query.gte("data_inicio", dataParam);
 
   const { data: campos } = await query.order('id', { ascending: false });
 
   // Preparação dos textos
   const nomePaisApresentar = isEn && dadosPais?.nome_en ? dadosPais.nome_en : nomePaisInicial;
-  
-  const descricaoPadrao = isEn 
-    ? `Explore premium holiday camps in ${nomePaisApresentar}. From thrilling outdoor adventures and intensive sports clubs to creative arts and language classes, discover handpicked programs.` 
+
+  const descricaoPadrao = isEn
+    ? `Explore premium holiday camps in ${nomePaisApresentar}. From thrilling outdoor adventures and intensive sports clubs to creative arts and language classes, discover handpicked programs.`
     : `Explore os melhores campos de férias em ${nomePaisApresentar}. Desde aventuras ao ar livre e atividades desportivas até programas de artes e línguas, descubra opções premium desenhadas para experiências inesquecíveis.`;
-    
-  const descPaisFinal = isEn 
-    ? (dadosPais?.seo_descricao_en || descricaoPadrao) 
+
+  const descPaisFinal = isEn
+    ? (dadosPais?.seo_descricao_en || descricaoPadrao)
     : (dadosPais?.seo_descricao || descricaoPadrao);
 
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
@@ -105,14 +112,14 @@ export default async function PesquisaPorPais({
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
-      
+
       {/* SCRIPT SEO INVISÍVEL */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
 
       {/* 1. CABEÇALHO EDITORIAL */}
       <section className="bg-white pt-8 pb-8 px-4 md:px-6">
         <div className="max-w-[1100px] mx-auto">
-          
+
           {/* BREADCRUMBS VISUAIS */}
           <nav className="flex items-center gap-2 text-xs font-bold text-slate-400 mb-4 tracking-wider uppercase">
             <Link href={`/${lang}`} className="hover:text-emerald-600 transition-colors">{isEn ? 'Home' : 'Início'}</Link>
@@ -142,7 +149,7 @@ export default async function PesquisaPorPais({
       <section className="bg-white border-y border-slate-200 py-4 px-4 md:px-6 sticky top-[72px] md:top-[80px] z-30 shadow-sm">
         <div className="max-w-[1100px] mx-auto">
           <form action={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}`} method="GET" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 items-center">
-            
+
             <select name="categoria" defaultValue={categoriaParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer focus:border-emerald-500 focus:bg-white transition-colors" style={{ backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' }}>
               <option value="">{isEn ? 'All Categories' : 'Todas as Categorias'}</option>
               <option value="Desporto">{isEn ? 'Sports' : 'Desporto'}</option>
@@ -166,12 +173,20 @@ export default async function PesquisaPorPais({
               <option value="14-17 anos">14-17 {isEn ? 'years' : 'anos'}</option>
             </select>
 
+            <input
+              type="date"
+              name="data"
+              defaultValue={dataParam}
+              min={new Date().toISOString().split('T')[0]}
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none cursor-pointer focus:border-emerald-500 focus:bg-white transition-colors"
+            />
+
             <button type="submit" className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-bold transition-colors shadow-sm">
               {isEn ? 'Update' : 'Atualizar'}
             </button>
 
-            {(categoriaParam || distritoParam || idadeParam) && (
-              <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}`} className="text-sm font-bold text-red-500 hover:text-red-600 text-center sm:text-left transition-colors">
+            {(categoriaParam || distritoParam || idadeParam || dataParam) && (
+              <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}`} className="text-sm font-bold text-red-500 hover:text-red-600 text-center sm:text-left transition-colors lg:col-span-5">
                 {isEn ? 'Clear filters' : 'Limpar filtros'}
               </Link>
             )}
@@ -194,11 +209,10 @@ export default async function PesquisaPorPais({
               {campos.map((campo) => {
                 const nomeVisivel = isEn && campo.nome_en ? campo.nome_en : campo.nome;
                 const localVisivel = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
-                
-                // Lógica Inteligente para encontrar o preço mais baixo da nova estrutura (pacotes)
+
                 let precoVisivel = campo.preco || 0;
                 if (!precoVisivel && campo.pacotes && campo.pacotes.length > 0) {
-                  const todosPrecos = campo.pacotes.flatMap((p: any) => 
+                  const todosPrecos = campo.pacotes.flatMap((p: any) =>
                     p.variantes ? p.variantes.map((v: any) => v.preco) : []
                   );
                   if (todosPrecos.length > 0) {
@@ -212,7 +226,7 @@ export default async function PesquisaPorPais({
                     <div className="absolute top-3 right-3 z-20"><BotaoFavorito campoId={campo.id} /></div>
 
                     <div className="relative h-56 w-full overflow-hidden bg-slate-100">
-                      <img src={campo.imagem} alt={nomeVisivel} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                      <img src={campo.imagem} alt={nomeVisivel} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                       <div className="absolute top-3 left-3 bg-emerald-600 px-3 py-1 text-xs font-bold uppercase text-white rounded-full z-0">
                         {campo.categoria}
                       </div>
@@ -243,20 +257,20 @@ export default async function PesquisaPorPais({
 
       {/* 4. CROSS-LINKING (REDE DE LINKS SEO) */}
       <section className="bg-white border-t border-slate-200 py-16 px-4 md:px-6">
-         <div className="max-w-[1100px] mx-auto">
-            <h3 className="text-xl font-black text-slate-900 mb-6">{isEn ? `Explore more in ${nomePaisApresentar}` : `Explore mais em ${nomePaisApresentar}`}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Desporto`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors text-sm font-bold text-slate-700 no-underline flex items-center gap-2 shadow-sm hover:shadow-md">
-                ⚽ {isEn ? `Sports Camps in ${nomePaisApresentar}` : `Campos de Desporto em ${nomePaisApresentar}`}
-              </Link>
-              <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Línguas`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors text-sm font-bold text-slate-700 no-underline flex items-center gap-2 shadow-sm hover:shadow-md">
-                🗣️ {isEn ? `Language Camps in ${nomePaisApresentar}` : `Campos de Línguas em ${nomePaisApresentar}`}
-              </Link>
-              <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Aventura & Natureza`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors text-sm font-bold text-slate-700 no-underline flex items-center gap-2 shadow-sm hover:shadow-md">
-                🏕️ {isEn ? `Adventure Camps in ${nomePaisApresentar}` : `Campos de Aventura em ${nomePaisApresentar}`}
-              </Link>
-            </div>
-         </div>
+        <div className="max-w-[1100px] mx-auto">
+          <h3 className="text-xl font-black text-slate-900 mb-6">{isEn ? `Explore more in ${nomePaisApresentar}` : `Explore mais em ${nomePaisApresentar}`}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Desporto`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors text-sm font-bold text-slate-700 no-underline flex items-center gap-2 shadow-sm hover:shadow-md">
+              ⚽ {isEn ? `Sports Camps in ${nomePaisApresentar}` : `Campos de Desporto em ${nomePaisApresentar}`}
+            </Link>
+            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Línguas`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors text-sm font-bold text-slate-700 no-underline flex items-center gap-2 shadow-sm hover:shadow-md">
+              🗣️ {isEn ? `Language Camps in ${nomePaisApresentar}` : `Campos de Línguas em ${nomePaisApresentar}`}
+            </Link>
+            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Aventura & Natureza`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors text-sm font-bold text-slate-700 no-underline flex items-center gap-2 shadow-sm hover:shadow-md">
+              🏕️ {isEn ? `Adventure Camps in ${nomePaisApresentar}` : `Campos de Aventura em ${nomePaisApresentar}`}
+            </Link>
+          </div>
+        </div>
       </section>
 
     </main>

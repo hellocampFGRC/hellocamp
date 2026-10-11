@@ -1,7 +1,6 @@
 import { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-// Importamos o Provedor, o Seletor e a Caixa de Resumo!
 import { ReservaProvider, SeletorOpcoes, CaixaResumo } from "./CaixaReserva";
 import BotaoFavorito from "../../components/BotaoFavorito";
 import BotaoPartilha from "../../components/BotaoPartilha";
@@ -76,13 +75,15 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
   const baseUrl = "https://www.hellocamp.pt";
   const campoUrlCompleto = `${baseUrl}/${lang}/campo/${campo.id}`;
 
+  // Calendário e data inicial (fallback robusto — evita datas hardcoded no passado/futuro)
   const calendario = campo.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [] };
-  const dataMaisCedo = calendario.data_inicio || "2026-07-01";
+  const todayISO = new Date().toISOString().split('T')[0];
+  const dataMaisCedo = calendario.data_inicio || campo.data_inicio || todayISO;
 
   // Lógica inteligente para JSON-LD SEO Price
   let precoMinimo = campo.preco || 0;
   if (campo.pacotes && campo.pacotes.length > 0 && !precoMinimo) {
-    const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes.map((v: any) => v.preco));
+    const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes ? p.variantes.map((v: any) => v.preco) : []);
     if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
   }
 
@@ -96,6 +97,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
     "description": descCampo ? descCampo.substring(0, 155) : '',
     "image": campo.imagem,
     "startDate": dataMaisCedo,
+    ...(calendario.data_fim && { "endDate": calendario.data_fim }),
     "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
     "eventStatus": "https://schema.org/EventScheduled",
     "location": {
@@ -108,7 +110,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
       "price": precoMinimo,
       "priceCurrency": "EUR",
       "availability": "https://schema.org/InStock",
-      "validFrom": new Date().toISOString().split('T')[0]
+      "validFrom": todayISO
     },
     ...(totalAvaliacoes > 0 && {
       "aggregateRating": {
@@ -164,14 +166,12 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
       </div>
 
       <div className="max-w-[1100px] mx-auto pt-8 pb-10 px-4 md:px-6">
-        
-        {/* ========================================== */}
+
         {/* O ENVOLTÓRIO DA LÓGICA DE RESERVA */}
-        {/* ========================================== */}
         <ReservaProvider campo={campo} lang={lang}>
           <div className="flex flex-col lg:flex-row gap-8 items-start w-full">
 
-            {/* COLUNA ESQUERDA: INFORMAÇÃO E ZONA INTERATIVA */}
+            {/* COLUNA ESQUERDA */}
             <div className="flex-1 w-full flex flex-col gap-6">
 
               {/* CABEÇALHO DO CAMPO */}
@@ -253,9 +253,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 </div>
               </div>
 
-              {/* ========================================== */}
-              {/* O NOVO MOTOR DE RESERVA INTERATIVO AQUI */}
-              {/* ========================================== */}
+              {/* MOTOR DE RESERVA INTERATIVO */}
               <SeletorOpcoes />
 
               {/* REGRAS E TERMOS ESPECÍFICOS */}
@@ -300,17 +298,18 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 )}
               </div>
 
-              {/* MAIS FOTOGRAFIAS / GALERIA */}
+              {/* GALERIA */}
               {campo.galeria && Array.isArray(campo.galeria) && campo.galeria.length > 0 && (
                 <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 relative z-10">
                   <h2 className="text-lg font-black text-slate-900 mb-5">{isEn ? 'Photo Gallery' : 'Mais Fotografias'}</h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {campo.galeria.map((imgUrl: string, idx: number) => (
                       <div key={idx} className="aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-100">
-                        <img 
-                          src={imgUrl} 
-                          alt={`${nomeCampo} - Foto ${idx + 1}`} 
-                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" 
+                        <img
+                          src={imgUrl}
+                          alt={`${nomeCampo} - Foto ${idx + 1}`}
+                          loading="lazy"
+                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
                         />
                       </div>
                     ))}
@@ -322,7 +321,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
               <div id="duvidas" className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 relative z-10 scroll-mt-24">
                 <h3 className="text-lg font-black text-slate-900 mb-1">{dict.detalhe.duvidas_titulo}</h3>
                 <p className="text-xs text-slate-500 font-medium mb-5">{dict.detalhe.duvidas_sub}</p>
-                
+
                 <FormContactoCampo
                   campoId={campo.id}
                   organizadorId={campo.organizador_id}
@@ -335,9 +334,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
 
             </div>
 
-            {/* ========================================== */}
             {/* BARRA LATERAL COM O RESUMO FIXO */}
-            {/* ========================================== */}
             <div className="w-full lg:w-[380px] flex-shrink-0 lg:sticky lg:top-8 relative z-30">
               <CaixaResumo />
             </div>
