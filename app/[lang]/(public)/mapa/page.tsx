@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import MapaWrapper from "../../../../components/mapa/MapaWrapper";
+import MapaWrapper from "./MapaWrapper";
 import { getDictionary } from "@/lib/getDictionary";
 
 export const metadata = {
