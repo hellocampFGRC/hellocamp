@@ -4,6 +4,18 @@ import { useEffect, useRef, useMemo } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
+// ═══════════════════════════════════════════════════════════
+// 🔧 FIX CRÍTICO: Worker URL do MapLibre
+// O Next.js serve o worker como HTML (404) por defeito.
+// Apontamos para o CDN antes de criar qualquer mapa.
+// (Este bloco corre em module-load, antes de qualquer useEffect)
+// ═══════════════════════════════════════════════════════════
+if (typeof window !== "undefined") {
+  // @ts-ignore — workerUrl é válido na MapLibre v3/v4
+  maplibregl.workerUrl =
+    "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl-csp-worker.js";
+}
+
 interface Campo {
   id: string | number;
   nome: string;
@@ -21,37 +33,6 @@ interface MapaMapLibreProps {
 
 const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23e2e8f0' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
-
-// ═══════════════════════════════════════════
-// Estilos vector (OpenFreeMap) com fallback raster (OSM)
-// ═══════════════════════════════════════════
-const VECTOR_STYLE = "https://tiles.openfreemap.org/styles/liberty";
-
-const RASTER_FALLBACK_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    osm: {
-      type: "raster",
-      tiles: [
-        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    },
-  },
-  layers: [
-    {
-      id: "osm",
-      type: "raster",
-      source: "osm",
-      minzoom: 0,
-      maxzoom: 19,
-    },
-  ],
-};
 
 export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
@@ -93,14 +74,14 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   }, [campos, isEn]);
 
   // ─────────────────────────────────────────
-  // Criar mapa
+  // Criar mapa — uma vez só
   // ─────────────────────────────────────────
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      style: VECTOR_STYLE,
+      style: "https://tiles.openfreemap.org/styles/liberty",
       center: [-8.2245, 39.3999],
       zoom: 6,
       minZoom: 4,
@@ -119,43 +100,19 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       "top-right"
     );
 
-    // ─── Log de erros ───
     instance.on("error", (e: any) => {
       console.error("[MAPA ERRO]", e?.error?.message || e);
     });
 
-    // ─── Forçar resize quando o container ganha dimensões ───
-    // Isto resolve o bug "container com 0 de altura no mount"
-    const resizeObserver = new ResizeObserver(() => {
-      instance.resize();
-    });
-    if (mapContainer.current) {
-      resizeObserver.observe(mapContainer.current);
-    }
+    // Resize quando o container muda de tamanho (bug comum do SSR)
+    const resizeObserver = new ResizeObserver(() => instance.resize());
+    if (mapContainer.current) resizeObserver.observe(mapContainer.current);
 
-    // ─── Fallback: se em 4s não houver tiles, troca para raster OSM ───
-    const fallbackTimer = setTimeout(() => {
-      const hasSource = instance.getSource("openmaptiles");
-      if (!hasSource) {
-        console.warn(
-          "[MAPA] Estilo vector não carregou em 4s. A mudar para raster OSM..."
-        );
-        try {
-          instance.setStyle(RASTER_FALLBACK_STYLE);
-        } catch (e) {
-          console.error("[MAPA] Falha no fallback raster:", e);
-        }
-      }
-    }, 4000);
-
-    // ─── Resize logo após o primeiro paint ───
-    const initialResize = requestAnimationFrame(() => {
-      instance.resize();
-    });
+    // Resize imediato após o primeiro paint
+    const raf = requestAnimationFrame(() => instance.resize());
 
     return () => {
-      clearTimeout(fallbackTimer);
-      cancelAnimationFrame(initialResize);
+      cancelAnimationFrame(raf);
       resizeObserver.disconnect();
       instance.remove();
       map.current = null;
@@ -163,14 +120,18 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   }, []);
 
   // ─────────────────────────────────────────
-  // Pins (custom HTML teardrop)
+  // Adicionar pins — NÃO esperar pelo `load`
+  // ═════════════════════════════════════════
+  // ⚡ CORREÇÃO: markers são DOM puro e podem ser adicionados
+  // imediatamente, mesmo antes do style carregar.
+  // Esperar pelo `load` é o que está a impedir os pins de aparecer.
   // ─────────────────────────────────────────
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
 
     const setupMarkers = () => {
-      // Limpar antigos
+      // Limpar markers antigos
       const existing = (instance as any)._hcMarkers as
         | maplibregl.Marker[]
         | undefined;
@@ -189,7 +150,6 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       const newMarkers: maplibregl.Marker[] = [];
 
       camposValidos.forEach((c) => {
-        // Pin DOM
         const el = document.createElement("div");
         el.className = "hc-marker";
         el.setAttribute("aria-label", c.nome);
@@ -226,8 +186,8 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
             <div class="hc-popup-body">
               <h3 class="hc-popup-title">${escapeHtml(c.nome)}</h3>
               ${
-                c.preco != null && c.preco > 0
-                  ? `<p class="hc-popup-price">${c.preco}€</p>`
+                (c.preco ?? 0) > 0
+                  ? `<p class="hc-popup-price">${c.preco ?? 0}€</p>`
                   : ""
               }
               <a href="/${lang}/campo/${c.id}" class="hc-popup-cta">
@@ -275,17 +235,17 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       }
     };
 
-    if (instance.isStyleLoaded()) {
-      setupMarkers();
-    } else {
-      instance.once("load", setupMarkers);
-    }
+    // ⚡ CORREÇÃO: chamar IMEDIATAMENTE, sem esperar pelo `load`
+    setupMarkers();
+
+    // Se por acaso o style ainda não carregou e o load dispara mais tarde,
+    // volta a chamar (idempotente — limpa os antigos primeiro)
+    instance.once("load", setupMarkers);
   }, [camposValidos, lang, isEn]);
 
   return (
     <>
       <style>{`
-        /* PIN CUSTOM */
         .hc-marker {
           width: 32px; height: 32px; cursor: pointer;
           box-sizing: content-box; line-height: 0; font-size: 0;
@@ -306,7 +266,6 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           box-shadow: 0 8px 20px rgba(5, 150, 105, 0.55), 0 3px 6px rgba(0, 0, 0, 0.2);
         }
 
-        /* POPUP */
         .hc-popup .maplibregl-popup-content {
           padding: 0; border-radius: 16px; overflow: hidden;
           box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25);
@@ -356,7 +315,6 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
         .hc-popup-cta:hover { background: #059669; }
       `}</style>
 
-      {/* Container: w-full h-full (não absolute) para o MapLibre calcular bem */}
       <div
         ref={mapContainer}
         className="w-full h-full"
