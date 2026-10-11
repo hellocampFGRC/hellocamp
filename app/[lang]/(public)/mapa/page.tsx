@@ -26,16 +26,14 @@ export default async function PaginaMapa({
   const lingua = sp?.lingua || "";
 
   // ═══════════════════════════════════════════
-  // Query dos campos filtrados
+  // QUERY — IGUAL À VERSÃO ORIGINAL (antes do Leaflet)
+  // Traz TODOS os campos com contrato ativo.
+  // O filtro por latitude/longitude é feito no cliente.
   // ═══════════════════════════════════════════
   let query = supabase
     .from("campos")
-    .select(
-      "id, nome, nome_en, imagem, categoria, categoria_en, preco, latitude, longitude"
-    )
-    .not("contrato_parceiro_url", "is", null)
-    .not("latitude", "is", null)
-    .not("longitude", "is", null);
+    .select("*")
+    .not("contrato_parceiro_url", "is", null);
 
   if (categoria) query = query.eq("categoria", categoria);
   if (idade) query = query.eq("idade", idade);
@@ -44,7 +42,7 @@ export default async function PaginaMapa({
   const { data: campos } = await query;
 
   // ═══════════════════════════════════════════
-  // Opções de filtros (dinâmicas)
+  // Opções de filtros (dinâmicas) — IGUAL À ORIGINAL
   // ═══════════════════════════════════════════
   const { data: todosFiltros } = await supabase
     .from("campos")
@@ -80,12 +78,22 @@ export default async function PaginaMapa({
 
   const temFiltrosAtivos = !!(categoria || idade || lingua);
 
+  // ═══════════════════════════════════════════
+  // DEBUG (temporário) — ver no terminal do Vercel
+  // ═══════════════════════════════════════════
+  console.log("[MAPA] campos recebidos:", campos?.length || 0);
+  if (campos && campos.length > 0) {
+    console.log("[MAPA] amostra do primeiro campo:", {
+      id: campos[0].id,
+      nome: campos[0].nome,
+      latitude: campos[0].latitude,
+      longitude: campos[0].longitude,
+    });
+  }
+
   return (
     <main className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-50 font-sans overflow-hidden">
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* SIDEBAR DE FILTROS                          */}
-      {/* ═══════════════════════════════════════════ */}
       <aside className="w-full md:w-[340px] bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-5 md:p-6 flex flex-col flex-shrink-0 shadow-sm z-10 max-h-[45vh] md:max-h-full">
 
         <Link
@@ -183,7 +191,6 @@ export default async function PaginaMapa({
           </div>
         </form>
 
-        {/* Nota útil no fundo da sidebar (desktop) */}
         <div className="mt-6 pt-5 border-t border-slate-100 hidden md:block">
           <p className="text-[11px] font-medium text-slate-400 leading-relaxed">
             {isEn
@@ -193,9 +200,6 @@ export default async function PaginaMapa({
         </div>
       </aside>
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* MAPA                                        */}
-      {/* ═══════════════════════════════════════════ */}
       <section className="flex-1 relative min-h-[55vh] md:min-h-0">
         <MapaWrapper campos={campos || []} lang={lang} />
       </section>
