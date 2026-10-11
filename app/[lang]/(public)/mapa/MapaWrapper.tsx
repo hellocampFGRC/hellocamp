@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 /**
  * Wrapper que garante que o mapa só é carregado no cliente.
  * MapLibre GL usa `window` e WebGL — não pode correr no servidor.
- * `ssr: false` + dynamic import = 0 erros de hidratação.
  */
 const MapaMapLibre = dynamic(() => import("./MapaMapLibre"), {
   ssr: false,

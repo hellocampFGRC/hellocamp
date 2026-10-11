@@ -25,11 +25,6 @@ export default async function PaginaMapa({
   const idade = sp?.idade || "";
   const lingua = sp?.lingua || "";
 
-  // ═══════════════════════════════════════════
-  // QUERY — IGUAL À VERSÃO ORIGINAL (antes do Leaflet)
-  // Traz TODOS os campos com contrato ativo.
-  // O filtro por latitude/longitude é feito no cliente.
-  // ═══════════════════════════════════════════
   let query = supabase
     .from("campos")
     .select("*")
@@ -41,9 +36,6 @@ export default async function PaginaMapa({
 
   const { data: campos } = await query;
 
-  // ═══════════════════════════════════════════
-  // Opções de filtros (dinâmicas) — IGUAL À ORIGINAL
-  // ═══════════════════════════════════════════
   const { data: todosFiltros } = await supabase
     .from("campos")
     .select("categoria, categoria_en, idade, idade_en, linguas_faladas")
@@ -78,22 +70,12 @@ export default async function PaginaMapa({
 
   const temFiltrosAtivos = !!(categoria || idade || lingua);
 
-  // ═══════════════════════════════════════════
-  // DEBUG (temporário) — ver no terminal do Vercel
-  // ═══════════════════════════════════════════
-  console.log("[MAPA] campos recebidos:", campos?.length || 0);
-  if (campos && campos.length > 0) {
-    console.log("[MAPA] amostra do primeiro campo:", {
-      id: campos[0].id,
-      nome: campos[0].nome,
-      latitude: campos[0].latitude,
-      longitude: campos[0].longitude,
-    });
-  }
-
   return (
     <main className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-50 font-sans overflow-hidden">
 
+      {/* ═══════════════════════════════════════════ */}
+      {/* SIDEBAR                                      */}
+      {/* ═══════════════════════════════════════════ */}
       <aside className="w-full md:w-[340px] bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-5 md:p-6 flex flex-col flex-shrink-0 shadow-sm z-10 max-h-[45vh] md:max-h-full">
 
         <Link
@@ -191,15 +173,52 @@ export default async function PaginaMapa({
           </div>
         </form>
 
-        <div className="mt-6 pt-5 border-t border-slate-100 hidden md:block">
-          <p className="text-[11px] font-medium text-slate-400 leading-relaxed">
-            {isEn
-              ? "Click on any pin to see the camp details and start your booking."
-              : "Clique num pin para ver os detalhes do campo e iniciar a sua reserva."}
-          </p>
-        </div>
+        {/* ═══════════════════════════════════════════ */}
+        {/* LISTA DE CAMPOS (preenche o lado vazio)    */}
+        {/* ═══════════════════════════════════════════ */}
+        {campos && campos.length > 0 && (
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+              {isEn ? "Camps on map" : "Campos no mapa"}
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {campos.map((c: any) => {
+                const nome = isEn && c.nome_en ? c.nome_en : c.nome;
+                const cat = isEn && c.categoria_en ? c.categoria_en : c.categoria;
+                const temCoords =
+                  c.latitude != null && c.longitude != null;
+                return (
+                  <Link
+                    key={c.id}
+                    href={`/${lang}/campo/${c.id}`}
+                    className="group flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-slate-50 transition-colors no-underline"
+                  >
+                    <span
+                      className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
+                        temCoords ? "bg-emerald-500" : "bg-slate-300"
+                      }`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-800 leading-tight truncate group-hover:text-emerald-600 transition-colors">
+                        {nome}
+                      </p>
+                      {cat && (
+                        <p className="text-[10px] font-medium text-slate-400 mt-0.5 truncate">
+                          {cat}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </aside>
 
+      {/* ═══════════════════════════════════════════ */}
+      {/* MAPA                                         */}
+      {/* ═══════════════════════════════════════════ */}
       <section className="flex-1 relative min-h-[55vh] md:min-h-0">
         <MapaWrapper campos={campos || []} lang={lang} />
       </section>
