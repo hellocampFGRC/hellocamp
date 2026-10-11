@@ -1,5 +1,7 @@
+"use client";
+
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import React from "react";
 import { supabase } from "@/lib/supabase";
 
 // ==========================================
@@ -29,26 +31,45 @@ const IconTent = ({ className = "w-10 h-10" }: { className?: string }) => (
 const FALLBACK_BLOG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 600'%3E%3Crect fill='%23e2e8f0' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='40' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
-export default async function GuiaPaisPage({ params }: { params: Promise<{ lang: string }> }) {
-  const { lang } = await params;
+export default function GuiaPaisPage({ params }: { params: Promise<{ lang: string }> }) {
+  const { lang } = use(params);
   const isEn = lang === 'en';
 
-  // Buscar 7 artigos (1 destaque + 6 na grelha)
-  const { data: posts } = await supabase
-    .from('blog_posts')
-    .select('id, titulo, titulo_en, resumo, resumo_en, imagem_url, categoria, categoria_en, slug, created_at')
-    .in('destinatario', ['pais', 'ambos'])
-    .eq('publicado', true)
-    .order('created_at', { ascending: false })
-    .limit(7);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Carregar os posts do blog
+  useEffect(() => {
+    const fetchPosts = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('blog_posts')
+        .select('id, titulo, titulo_en, resumo, resumo_en, imagem_url, categoria, categoria_en, slug, created_at')
+        .in('destinatario', ['pais', 'ambos'])
+        .eq('publicado', true)
+        .order('created_at', { ascending: false })
+        .limit(7);
+
+      if (error) {
+        console.error("Erro ao carregar artigos:", error);
+        setPosts([]);
+      } else {
+        setPosts(data || []);
+      }
+      setLoading(false);
+    };
+    fetchPosts();
+  }, []);
 
   const formatarData = (dStr: string) => {
     if (!dStr) return '';
-    return new Date(dStr).toLocaleDateString(isEn ? 'en-US' : 'pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
+    return new Date(dStr).toLocaleDateString(isEn ? 'en-US' : 'pt-PT', {
+      day: 'numeric', month: 'long', year: 'numeric'
+    });
   };
 
-  const featuredPost = posts && posts.length > 0 ? posts[0] : null;
-  const regularPosts = posts && posts.length > 1 ? posts.slice(1) : [];
+  const featuredPost = posts.length > 0 ? posts[0] : null;
+  const regularPosts = posts.length > 1 ? posts.slice(1) : [];
 
   return (
     <main className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900 pb-20">
@@ -75,8 +96,40 @@ export default async function GuiaPaisPage({ params }: { params: Promise<{ lang:
       {/* BLOG */}
       <section className="max-w-6xl mx-auto px-4 md:px-8 py-12 relative z-20 -mt-12">
 
+        {/* LOADING */}
+        {loading && (
+          <div className="mb-16">
+            <div className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden animate-pulse">
+              <div className="flex flex-col md:flex-row">
+                <div className="w-full md:w-3/5 h-72 md:h-[420px] bg-slate-200" />
+                <div className="w-full md:w-2/5 p-8 md:p-12 space-y-4">
+                  <div className="h-3 bg-slate-200 rounded w-1/3" />
+                  <div className="h-8 bg-slate-200 rounded w-full" />
+                  <div className="h-4 bg-slate-200 rounded w-full" />
+                  <div className="h-4 bg-slate-200 rounded w-2/3" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SEM POSTS */}
+        {!loading && posts.length === 0 && (
+          <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+              <IconBook className="w-8 h-8" />
+            </div>
+            <p className="text-slate-500 font-bold text-lg">
+              {isEn ? 'No articles available yet.' : 'Ainda não há artigos disponíveis.'}
+            </p>
+            <p className="text-slate-400 font-medium text-sm mt-2">
+              {isEn ? 'Come back soon.' : 'Volte em breve.'}
+            </p>
+          </div>
+        )}
+
         {/* ARTIGO EM DESTAQUE */}
-        {featuredPost && (
+        {!loading && featuredPost && (
           <div className="mb-16">
             <Link
               href={`/${lang}/blog/${featuredPost.slug}`}
@@ -108,7 +161,9 @@ export default async function GuiaPaisPage({ params }: { params: Promise<{ lang:
                   </p>
                   <div className="mt-auto flex items-center gap-3 text-emerald-600 font-black text-sm uppercase tracking-widest">
                     <span>{isEn ? 'Read Featured Article' : 'Ler Artigo de Destaque'}</span>
-                    <span className="group-hover:translate-x-2 transition-transform"><IconArrowRight /></span>
+                    <span className="group-hover:translate-x-2 transition-transform">
+                      <IconArrowRight />
+                    </span>
                   </div>
                 </div>
               </div>
@@ -117,7 +172,7 @@ export default async function GuiaPaisPage({ params }: { params: Promise<{ lang:
         )}
 
         {/* GRELHA DE ARTIGOS */}
-        {regularPosts.length > 0 && (
+        {!loading && regularPosts.length > 0 && (
           <>
             <div className="flex items-center justify-between mb-8 border-b border-slate-200 pb-4">
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -166,7 +221,9 @@ export default async function GuiaPaisPage({ params }: { params: Promise<{ lang:
                       </p>
                       <div className="mt-auto pt-4 border-t border-slate-100 flex items-center gap-2 text-emerald-600 font-bold text-xs uppercase tracking-widest">
                         <span>{isEn ? 'Read article' : 'Ler artigo'}</span>
-                        <span className="group-hover:translate-x-1 transition-transform"><IconArrowRight className="w-3.5 h-3.5" /></span>
+                        <span className="group-hover:translate-x-1 transition-transform">
+                          <IconArrowRight className="w-3.5 h-3.5" />
+                        </span>
                       </div>
                     </div>
                   </Link>
