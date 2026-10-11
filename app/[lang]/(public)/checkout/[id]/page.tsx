@@ -6,6 +6,31 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import React from "react";
 
+const IconCreditCard = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+    <line x1="1" y1="10" x2="23" y2="10" />
+  </svg>
+);
+
+const IconShield = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
+const IconBus = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 6v6" />
+    <path d="M15 6v6" />
+    <path d="M2 12h19.6" />
+    <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3" />
+    <circle cx="7" cy="18" r="2" />
+    <path d="M9 18h5" />
+    <circle cx="16" cy="18" r="2" />
+  </svg>
+);
+
 const calcularIdade = (dataNasc: string) => {
   if (!dataNasc) return 0;
   const hoje = new Date();
@@ -32,41 +57,50 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const [user, setUser] = useState<any>(null);
   const [processingStripe, setProcessingStripe] = useState(false);
 
-  // Parâmetros do URL
+  // ==========================================
+  // PARÂMETROS DO URL (ALINHADOS COM CaixaReserva)
+  // ==========================================
   const quantidade = parseInt(searchParams.get("quantidade_criancas") || "1");
-  const extAlimentacao = searchParams.get("ext_alimentacao") === "true";
-  const extAlojamento = searchParams.get("ext_alojamento") === "true";
-  const extProlongamento = searchParams.get("ext_prolongamento") === "true";
+
+  // A CaixaReserva envia apenas estes dois extras:
+  const extSeguro = searchParams.get("ext_seguro") === "true";
   const extTransporte = searchParams.get("ext_transporte") === "true";
-  
+
   // Extrair informações dinâmicas enviadas pela CaixaReserva
   let turnoSelecionado: any = null;
   try {
     const turnoParam = searchParams.get("turno");
     if (turnoParam) turnoSelecionado = JSON.parse(turnoParam);
-  } catch (e) { 
-    console.error(e); 
+  } catch (e) {
+    console.error("Erro a parsear turno:", e);
   }
 
   // ==========================================
-  // CÁLCULOS DINÂMICOS
+  // CÁLCULOS DINÂMICOS (IGUAIS AOS DA CaixaReserva)
   // ==========================================
   const isDiaSolto = turnoSelecionado?.tipo === 'dia';
   const numDiasSoltos = turnoSelecionado?.dias_soltos?.length || 1;
-  const multiplicadorBase = isDiaSolto ? numDiasSoltos : 1;
-  
+  const multiplicador = Number(turnoSelecionado?.multiplicador) || (isDiaSolto ? numDiasSoltos : 1);
   const precoBaseTurno = Number(turnoSelecionado?.preco) || Number(campo?.preco) || 0;
-  const precoBaseUnitario = precoBaseTurno * multiplicadorBase;
 
+  // Total de dias para cálculo dos extras (diário)
   const totalDiasExtras = Number(turnoSelecionado?.quantidade) || 1;
-  const noites = Math.max(1, totalDiasExtras - 1);
 
-  const valAlimentacao = extAlimentacao ? (Number(campo?.extra_alimentacao) || 0) * totalDiasExtras : 0;
-  const valAlojamento = extAlojamento ? (Number(campo?.extra_alojamento) || 0) * noites : 0;
-  const valProlongamento = extProlongamento ? (Number(campo?.extra_prolongamento) || 0) * totalDiasExtras : 0;
-  const valTransporte = extTransporte ? (Number(campo?.extra_transporte) || 0) * totalDiasExtras : 0;
+  // Cálculo dos extras — MESMA LÓGICA da CaixaReserva
+  const valSeguroUnit = Number(campo?.extra_seguro) || 0;
+  const tipoSeguro = campo?.tipo_extra_seguro || 'fixo';
+  const custoSeguroUnit = extSeguro
+    ? (tipoSeguro === 'diario' ? valSeguroUnit * totalDiasExtras : valSeguroUnit)
+    : 0;
 
-  const totalExtrasPorCrianca = valAlimentacao + valAlojamento + valProlongamento + valTransporte;
+  const valTransporteUnit = Number(campo?.extra_transporte) || 0;
+  const tipoTransporte = campo?.tipo_extra_transporte || 'diario';
+  const custoTransporteUnit = extTransporte
+    ? (tipoTransporte === 'diario' ? valTransporteUnit * totalDiasExtras : valTransporteUnit)
+    : 0;
+
+  const totalExtrasPorCrianca = custoSeguroUnit + custoTransporteUnit;
+  const precoBaseUnitario = precoBaseTurno * multiplicador;
   const precoFinalTotal = (precoBaseUnitario + totalExtrasPorCrianca) * quantidade;
 
   const isPagamentoFracionado = campo?.tipo_pagamento === '50_sinal';
@@ -78,8 +112,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   // ==========================================
   const [selecoesCriancas, setSelecoesCriancas] = useState<string[]>(Array(quantidade).fill(""));
   const [respostasCustomizadas, setRespostasCustomizadas] = useState<Record<number, Record<string, string>>>({});
-  
-  // GUEST CHECKOUT STATE
+
   const [isGuest, setIsGuest] = useState(false);
   const [guestData, setGuestData] = useState({ nome: "", email: "", telefone: "" });
   const [concordaTermos, setConcordaTermos] = useState(false);
@@ -87,22 +120,22 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const [showModal, setShowModal] = useState(false);
   const [indexToAssign, setIndexToAssign] = useState<number | null>(null);
   const [savingChild, setSavingChild] = useState(false);
-  
-  const [newChild, setNewChild] = useState({ 
-    nome: '', nif: '', data_nascimento: '', sexo: '', 
-    restricoes_alimentares: '', tipo_sanguineo: '', doencas_cronicas: '', 
-    medicacao_regular: '', limitacoes_fisicas: '', sabe_nadar: '', 
-    sabe_andar_bicicleta: '', tamanho_tshirt: '' 
+
+  const [newChild, setNewChild] = useState({
+    nome: '', nif: '', data_nascimento: '', sexo: '',
+    restricoes_alimentares: '', tipo_sanguineo: '', doencas_cronicas: '',
+    medicacao_regular: '', limitacoes_fisicas: '', sabe_nadar: '',
+    sabe_andar_bicicleta: '', tamanho_tshirt: ''
   });
 
   useEffect(() => {
     const fetchDados = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       const { data: campoData } = await supabase.from("campos").select("*").eq("id", id).single();
-      if (!campoData) { 
-        router.push(`/${lang}`); 
-        return; 
+      if (!campoData) {
+        router.push(`/${lang}`);
+        return;
       }
       setCampo(campoData);
 
@@ -111,28 +144,35 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
       if (session) {
         setUser(session.user);
-        const { data: criancasData } = await supabase.from("criancas").select("*").eq("cliente_id", session.user.id).order('created_at', { ascending: false });
+        const { data: criancasData } = await supabase
+          .from("criancas")
+          .select("*")
+          .eq("cliente_id", session.user.id)
+          .order('created_at', { ascending: false });
         setCriancas(criancasData || []);
-        
-        const { data: reservasData } = await supabase.from("reservas").select("crianca_id, turno_nome").eq("cliente_id", session.user.id).eq("campo_id", id);
+
+        const { data: reservasData } = await supabase
+          .from("reservas")
+          .select("crianca_id, turno_nome")
+          .eq("cliente_id", session.user.id)
+          .eq("campo_id", id);
         setReservasExistentes(reservasData || []);
       } else {
-        // MODO CONVIDADO ATIVO
         setIsGuest(true);
       }
 
       setLoading(false);
     };
-    
+
     fetchDados();
   }, [id, lang, router]);
 
   const openNewChildModal = (index: number) => {
-    setNewChild({ 
-      nome: '', nif: '', data_nascimento: '', sexo: '', 
-      restricoes_alimentares: '', tipo_sanguineo: '', doencas_cronicas: '', 
-      medicacao_regular: '', limitacoes_fisicas: '', sabe_nadar: '', 
-      sabe_andar_bicicleta: '', tamanho_tshirt: '' 
+    setNewChild({
+      nome: '', nif: '', data_nascimento: '', sexo: '',
+      restricoes_alimentares: '', tipo_sanguineo: '', doencas_cronicas: '',
+      medicacao_regular: '', limitacoes_fisicas: '', sabe_nadar: '',
+      sabe_andar_bicicleta: '', tamanho_tshirt: ''
     });
     setIndexToAssign(index);
     setShowModal(true);
@@ -141,13 +181,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const handleSaveNewChild = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingChild(true);
-    
+
     if (isGuest) {
-      // Em modo convidado, guardamos na memória local (não no Supabase ainda)
       const fakeId = "guest_" + Date.now();
       const novoMembro = { id: fakeId, ...newChild, isGuestChild: true };
       setCriancas(prev => [novoMembro, ...prev]);
-      
+
       const novasSelecoes = [...selecoesCriancas];
       novasSelecoes[indexToAssign as number] = fakeId;
       setSelecoesCriancas(novasSelecoes);
@@ -156,14 +195,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
       return;
     }
 
-    // Modo Utilizador Autenticado
     const { data, error } = await supabase.from('criancas').insert({
       cliente_id: user.id,
       ...newChild
     }).select().single();
 
     if (error) {
-      alert("Erro ao adicionar: " + error.message);
+      alert((isEn ? "Error adding: " : "Erro ao adicionar: ") + error.message);
     } else if (data && indexToAssign !== null) {
       setCriancas(prev => [data, ...prev]);
       const novasSelecoes = [...selecoesCriancas];
@@ -179,7 +217,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   };
 
   const handleSaveDBCrianca = async (idDaCrianca: string, campoTabela: string, valor: string) => {
-    if (isGuest) return; // Se for convidado, gravamos tudo no fim, não faz onBlur
+    if (isGuest) return;
+    if (idDaCrianca.startsWith("guest_")) return;
     await supabase.from('criancas').update({ [campoTabela]: valor }).eq('id', idDaCrianca);
   };
 
@@ -195,14 +234,14 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!concordaTermos) {
       alert(isEn ? "You must accept the Terms and Conditions to proceed." : "Tem de aceitar os Termos e Condições para avançar.");
       return;
     }
 
     if (selecoesCriancas.some(c => c === "")) {
-      alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione um participante válido para todas as vagas."); 
+      alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione um participante válido para todas as vagas.");
       return;
     }
 
@@ -214,9 +253,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     setProcessingStripe(true);
 
     try {
-      // PREPARAR PAYLOAD DE RESERVA
       const criancasParaEnviar = selecoesCriancas.map(id => criancas.find(c => c.id === id));
-      
+
       const payloadCheckout = {
         totalAmount: precoFinalTotal,
         userEmail: isGuest ? guestData.email : user.email,
@@ -225,20 +263,16 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         stripeAccountId: organizador?.stripe_account_id,
         tipoPagamento: campo?.tipo_pagamento,
         campoId: campo.id,
-        
-        // Dados para a API processar no backend
+
         isGuest: isGuest,
         guestData: isGuest ? guestData : null,
         criancas: criancasParaEnviar,
-        
-        // Detalhes da Reserva
+
         reservaSpecs: {
           turno_nome: turnoSelecionado?.nome || 'Programa Base',
-          extras_escolhidos: { 
-            extAlimentacao, 
-            extAlojamento, 
-            extProlongamento, 
-            extTransporte, 
+          extras_escolhidos: {
+            ext_seguro: extSeguro,
+            ext_transporte: extTransporte,
             dias_inscritos: totalDiasExtras,
             dias_soltos: turnoSelecionado?.dias_soltos || []
           },
@@ -248,7 +282,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         }
       };
 
-      // Na API /api/stripe-checkout, terá de lidar com o registo silencioso do Guest e criação das crianças antes de devolver a URL de pagamento.
       const res = await fetch('/api/stripe-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -257,62 +290,81 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
       if (!res.ok) {
         const textError = await res.text();
-        throw new Error("Erro Servidor (HTTP " + res.status + "): " + textError);
+        throw new Error((isEn ? "Server error " : "Erro Servidor ") + "(HTTP " + res.status + "): " + textError);
       }
 
       const data = await res.json();
-      
+
       if (data.url) {
-        window.location.href = data.url; 
+        window.location.href = data.url;
       } else {
-        throw new Error("Erro na Stripe: A resposta não continha um link de pagamento válido.");
+        throw new Error(isEn ? "Stripe error: no valid payment link in response." : "Erro na Stripe: A resposta não continha um link de pagamento válido.");
       }
 
-    } catch (error: any) { 
-      alert(error.message); 
-      setProcessingStripe(false); 
+    } catch (error: any) {
+      alert(error.message);
+      setProcessingStripe(false);
     }
   };
 
-  if (loading || !campo) return <div style={{ padding: '4rem', textAlign: 'center', fontWeight: 'bold', color: '#64748b' }}>{isEn ? 'Preparing secure checkout...' : 'A preparar a sua reserva de forma segura...'}</div>;
+  if (loading || !campo) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full border-4 border-slate-200 border-t-emerald-600 animate-spin" />
+          <span className="font-bold text-slate-500 text-sm">
+            {isEn ? 'Preparing secure checkout...' : 'A preparar a sua reserva de forma segura...'}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const temPerguntasCustomizadas = campo?.perguntas_customizadas && campo.perguntas_customizadas.length > 0;
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f3f4f6', fontFamily: 'sans-serif', paddingBottom: '5rem', paddingTop: '3rem', position: 'relative' }}>
-      
+    <main className="min-h-screen bg-slate-100 font-sans text-slate-900 pb-20 pt-12 relative">
+
       {processingStripe && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="spinner" style={{ width: '50px', height: '50px', border: '5px solid #e2e8f0', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }}></div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0f172a' }}>{isEn ? 'Securing your spot...' : 'A garantir a sua vaga e iniciar pagamento seguro...'}</h2>
-          <p style={{ color: '#64748b' }}>{isEn ? 'Please wait.' : 'Por favor, aguarde.'}</p>
-          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        <div className="fixed inset-0 bg-white/95 z-[100] flex flex-col items-center justify-center">
+          <div className="w-12 h-12 border-4 border-slate-200 border-t-emerald-600 rounded-full animate-spin mb-6" />
+          <h2 className="text-2xl font-black text-slate-900 mb-2">
+            {isEn ? 'Securing your spot...' : 'A garantir a sua vaga...'}
+          </h2>
+          <p className="text-slate-500">{isEn ? 'Please wait.' : 'Por favor, aguarde.'}</p>
         </div>
       )}
 
-      {/* MODAL ADICIONAR NOVO PARTICIPANTE */}
+      {/* MODAL NOVO PARTICIPANTE */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.7)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
-          <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '650px', borderRadius: '1.5rem', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
-            <button onClick={() => setShowModal(false)} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748b' }}>×</button>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0f172a', marginBottom: '1.5rem' }}>{isEn ? 'Add New Participant' : 'Adicionar Novo Participante'}</h3>
-            
-            <form onSubmit={handleSaveNewChild} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-[650px] rounded-3xl p-10 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 text-xl font-black cursor-pointer"
+            >
+              ×
+            </button>
+            <h3 className="text-2xl font-black text-slate-900 mb-6">
+              {isEn ? 'Add New Participant' : 'Adicionar Novo Participante'}
+            </h3>
+
+            <form onSubmit={handleSaveNewChild} className="flex flex-col gap-5">
               <div>
-                <label style={labelStyle}>{isEn ? 'Full Name' : 'Nome Completo'} *</label>
-                <input type="text" required value={newChild.nome} onChange={e => setNewChild({...newChild, nome: e.target.value})} style={inputStyle} />
+                <label className={labelClass}>{isEn ? 'Full Name' : 'Nome Completo'} *</label>
+                <input type="text" required value={newChild.nome} onChange={e => setNewChild({ ...newChild, nome: e.target.value })} className={inputClass} />
               </div>
-              
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 200px' }}>
-                  <label style={labelStyle}>{isEn ? 'Date of Birth' : 'Data Nasc.'} *</label>
-                  <input type="date" required value={newChild.data_nascimento} onChange={e => setNewChild({...newChild, data_nascimento: e.target.value})} style={inputStyle} />
+
+              <div className="flex gap-4 flex-wrap">
+                <div className="flex-1 min-w-[200px]">
+                  <label className={labelClass}>{isEn ? 'Date of Birth' : 'Data Nasc.'} *</label>
+                  <input type="date" required value={newChild.data_nascimento} onChange={e => setNewChild({ ...newChild, data_nascimento: e.target.value })} className={inputClass} />
                 </div>
-                
-                <div style={{ flex: '1 1 200px' }}>
-                  <label style={labelStyle}>{isEn ? 'Gender' : 'Sexo'} *</label>
-                  <select required value={newChild.sexo} onChange={e => setNewChild({...newChild, sexo: e.target.value})} style={selectStyle}>
-                    <option value="">Selecione...</option>
+                <div className="flex-1 min-w-[200px]">
+                  <label className={labelClass}>{isEn ? 'Gender' : 'Sexo'} *</label>
+                  <select required value={newChild.sexo} onChange={e => setNewChild({ ...newChild, sexo: e.target.value })} className={selectClass}>
+                    <option value="">{isEn ? 'Select...' : 'Selecione...'}</option>
                     <option value="Masculino">{isEn ? 'Male' : 'Masculino'}</option>
                     <option value="Feminino">{isEn ? 'Female' : 'Feminino'}</option>
                     <option value="Prefiro não dizer">{isEn ? 'Prefer not to say' : 'Prefiro não dizer'}</option>
@@ -321,93 +373,118 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
               </div>
 
               <div>
-                <label style={labelStyle}>{isEn ? 'Allergies / Restrictions' : 'Alergias / Restrições'}</label>
-                <textarea rows={2} value={newChild.restricoes_alimentares} onChange={e => setNewChild({...newChild, restricoes_alimentares: e.target.value})} style={{...inputStyle, resize: 'vertical'}} placeholder={isEn ? "None" : "Nenhuma"} />
+                <label className={labelClass}>{isEn ? 'Allergies / Restrictions' : 'Alergias / Restrições'}</label>
+                <textarea rows={2} value={newChild.restricoes_alimentares} onChange={e => setNewChild({ ...newChild, restricoes_alimentares: e.target.value })} className={`${inputClass} resize-y`} placeholder={isEn ? "None" : "Nenhuma"} />
               </div>
-              
-              <button type="submit" disabled={savingChild} style={{ marginTop: '0.5rem', width: '100%', padding: '1rem', backgroundColor: '#059669', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: 'pointer' }}>
-                {savingChild ? 'A guardar...' : (isEn ? 'Save Participant' : 'Guardar Participante')}
+
+              <button
+                type="submit"
+                disabled={savingChild}
+                className="mt-2 w-full p-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl border-none cursor-pointer disabled:opacity-60"
+              >
+                {savingChild ? (isEn ? 'Saving...' : 'A guardar...') : (isEn ? 'Save Participant' : 'Guardar Participante')}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem', display: 'flex', flexWrap: 'wrap', gap: '3rem', alignItems: 'flex-start' }}>
-        
-        <div style={{ flex: '1 1 60%', minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          
-          {/* HEADER SE FOR GUEST */}
+      <div className="max-w-[1200px] mx-auto px-6 flex flex-wrap gap-12 items-start">
+
+        <div className="flex-[1_1_60%] min-w-[320px] flex flex-col gap-8">
+
+          {/* HEADER GUEST */}
           {isGuest && (
-            <div style={{ backgroundColor: '#fffbeb', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200 flex justify-between items-center flex-wrap gap-4">
               <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: '900', color: '#92400e', margin: '0 0 0.25rem 0' }}>{isEn ? 'Checking out as Guest' : 'A reservar como Convidado'}</h3>
-                <p style={{ fontSize: '13px', color: '#b45309', margin: 0 }}>{isEn ? 'Already have an account?' : 'Já tem conta criada?'}</p>
+                <h3 className="text-base font-black text-amber-800 m-0 mb-1">
+                  {isEn ? 'Checking out as Guest' : 'A reservar como Convidado'}
+                </h3>
+                <p className="text-[13px] text-amber-700 m-0">
+                  {isEn ? 'Already have an account?' : 'Já tem conta criada?'}
+                </p>
               </div>
-              <button onClick={() => {
+              <button
+                type="button"
+                onClick={() => {
                   sessionStorage.setItem('redirect_after_login', window.location.href);
                   router.push(`/${lang}/login`);
-                }} 
-                style={{ padding: '0.5rem 1rem', backgroundColor: '#d97706', color: 'white', fontWeight: 'bold', borderRadius: '0.5rem', fontSize: '12px', border: 'none', cursor: 'pointer' }}>
+                }}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs cursor-pointer border-none"
+              >
                 {isEn ? 'Login to speed up' : 'Fazer Login e acelerar'}
               </button>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            
-            {/* 0. DADOS DO PARENTE (Apenas se for Guest) */}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-8">
+
+            {/* DADOS PARENTE (GUEST) */}
             {isGuest && (
-              <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0, marginBottom: '1.5rem' }}>{isEn ? 'Your Details (Parent/Guardian)' : 'Os Seus Dados (Encarregado)'}</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+              <section className="bg-white p-10 rounded-3xl shadow-sm">
+                <h2 className="text-xl font-extrabold m-0 mb-6">
+                  {isEn ? 'Your Details (Parent/Guardian)' : 'Os Seus Dados (Encarregado)'}
+                </h2>
+                <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                   <div>
-                    <label style={labelStyle}>{isEn ? 'Full Name' : 'Nome Completo'} *</label>
-                    <input type="text" required value={guestData.nome} onChange={e => setGuestData({...guestData, nome: e.target.value})} style={inputStyle} placeholder={isEn ? "John Doe" : "Ex: Rui Silva"} />
+                    <label className={labelClass}>{isEn ? 'Full Name' : 'Nome Completo'} *</label>
+                    <input type="text" required value={guestData.nome} onChange={e => setGuestData({ ...guestData, nome: e.target.value })} className={inputClass} placeholder={isEn ? "John Doe" : "Ex: Rui Silva"} />
                   </div>
                   <div>
-                    <label style={labelStyle}>{isEn ? 'Email Address' : 'E-mail'} *</label>
-                    <input type="email" required value={guestData.email} onChange={e => setGuestData({...guestData, email: e.target.value})} style={inputStyle} placeholder="email@exemplo.com" />
+                    <label className={labelClass}>{isEn ? 'Email Address' : 'E-mail'} *</label>
+                    <input type="email" required value={guestData.email} onChange={e => setGuestData({ ...guestData, email: e.target.value })} className={inputClass} placeholder="email@exemplo.com" />
                   </div>
                   <div>
-                    <label style={labelStyle}>{isEn ? 'Phone Number' : 'Telefone'} *</label>
-                    <input type="tel" required value={guestData.telefone} onChange={e => setGuestData({...guestData, telefone: e.target.value})} style={inputStyle} placeholder="912 345 678" />
+                    <label className={labelClass}>{isEn ? 'Phone Number' : 'Telefone'} *</label>
+                    <input type="tel" required value={guestData.telefone} onChange={e => setGuestData({ ...guestData, telefone: e.target.value })} className={inputClass} placeholder="912 345 678" />
                   </div>
                 </div>
               </section>
             )}
 
-            {/* 1. SELEÇÃO DE PARTICIPANTES */}
-            <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0, marginBottom: '1.5rem' }}>{isEn ? 'Participants' : 'Participantes'}</h2>
+            {/* PARTICIPANTES */}
+            <section className="bg-white p-10 rounded-3xl shadow-sm">
+              <h2 className="text-xl font-extrabold m-0 mb-6">
+                {isEn ? 'Participants' : 'Participantes'}
+              </h2>
 
               {Array.from({ length: quantidade }).map((_, i) => {
                 const childId = selecoesCriancas[i];
                 const childInfo = criancas.find(c => c.id === childId);
 
                 return (
-                  <div key={i} style={{ marginBottom: i !== quantidade - 1 ? '2.5rem' : 0, paddingBottom: i !== quantidade - 1 ? '2.5rem' : 0, borderBottom: i !== quantidade - 1 ? '1px dashed #e2e8f0' : 'none' }}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#059669', marginBottom: '0.5rem' }}>PARTICIPANTE {i + 1}</label>
-                    
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                      <select required value={childId} onChange={(e) => {
-                        const novas = [...selecoesCriancas];
-                        novas[i] = e.target.value;
-                        setSelecoesCriancas(novas);
-                      }} style={{ ...selectStyle, flex: 1 }}>
+                  <div
+                    key={i}
+                    className={i !== quantidade - 1 ? "mb-10 pb-10 border-b border-dashed border-slate-200" : ""}
+                  >
+                    <label className="block text-xs font-bold text-emerald-600 mb-2 uppercase">
+                      {isEn ? `Participant ${i + 1}` : `Participante ${i + 1}`}
+                    </label>
+
+                    <div className="flex gap-4 items-center">
+                      <select
+                        required
+                        value={childId}
+                        onChange={(e) => {
+                          const novas = [...selecoesCriancas];
+                          novas[i] = e.target.value;
+                          setSelecoesCriancas(novas);
+                        }}
+                        className={`${selectClass} flex-1`}
+                      >
                         <option value="">{isEn ? 'Choose a child...' : 'Escolha um participante...'}</option>
                         {criancas.map(c => {
                           const idade = calcularIdade(c.data_nascimento);
                           const idadeForaLimite = (campo.idade_min && idade < campo.idade_min) || (campo.idade_max && idade > campo.idade_max);
                           const jaInscritoNesteTurno = reservasExistentes.some(r => r.crianca_id === c.id && r.turno_nome === (turnoSelecionado?.nome || 'Programa Base'));
                           const jaSelecionadoNesteForm = selecoesCriancas.includes(c.id) && selecoesCriancas[i] !== c.id;
-                          
+
                           const isDisabled = idadeForaLimite || jaInscritoNesteTurno || jaSelecionadoNesteForm;
-                          
+
                           let aviso = "";
                           if (idadeForaLimite) aviso = isEn ? `(Age not allowed: ${idade} yrs)` : `(Idade não permitida: ${idade} anos)`;
                           else if (jaInscritoNesteTurno) aviso = isEn ? "(Already registered)" : "(Já inscrito neste turno)";
-                          else if (jaSelecionadoNesteForm) aviso = "(Selecionado nesta compra)";
+                          else if (jaSelecionadoNesteForm) aviso = isEn ? "(Selected in this order)" : "(Selecionado nesta compra)";
 
                           return (
                             <option key={c.id} value={c.id} disabled={isDisabled}>
@@ -416,33 +493,38 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                           );
                         })}
                       </select>
-                      
-                      <button type="button" onClick={() => openNewChildModal(i)} style={{ padding: '0.875rem 1.25rem', backgroundColor: '#f0fdf4', color: '#059669', fontWeight: 'bold', borderRadius: '0.75rem', border: '1px solid #a7f3d0', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+
+                      <button
+                        type="button"
+                        onClick={() => openNewChildModal(i)}
+                        className="px-5 py-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl border border-emerald-200 cursor-pointer whitespace-nowrap"
+                      >
                         + {isEn ? 'New' : 'Novo'}
                       </button>
                     </div>
 
-                    {/* FICHA DETALHADA E CLÍNICA INLINE */}
                     {childInfo && (
-                      <div style={{ marginTop: '1.5rem', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                          <h4 style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>{isEn ? 'Verify Details & Safety' : 'Verificar Detalhes de Segurança'}</h4>
+                      <div className="mt-6 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                        <div className="flex justify-between items-center mb-5">
+                          <h4 className="text-[13px] font-extrabold text-slate-900 uppercase">
+                            {isEn ? 'Verify Details & Safety' : 'Verificar Detalhes de Segurança'}
+                          </h4>
                         </div>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+
+                        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
                           <div style={{ gridColumn: '1 / -1' }}>
-                            <label style={labelStyle}>{isEn ? 'Full Name' : 'Nome Completo'}</label>
-                            <input type="text" required value={childInfo.nome || ''} onChange={e => handleUpdateLocalCrianca(childId, 'nome', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'nome', e.target.value)} style={inputStyle} />
+                            <label className={labelClass}>{isEn ? 'Full Name' : 'Nome Completo'}</label>
+                            <input type="text" required value={childInfo.nome || ''} onChange={e => handleUpdateLocalCrianca(childId, 'nome', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'nome', e.target.value)} className={inputClass} />
                           </div>
-                          
+
                           <div>
-                            <label style={labelStyle}>{isEn ? 'Date of Birth' : 'Data Nascimento'}</label>
-                            <input type="date" required value={childInfo.data_nascimento || ''} onChange={e => handleUpdateLocalCrianca(childId, 'data_nascimento', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'data_nascimento', e.target.value)} style={inputStyle} />
+                            <label className={labelClass}>{isEn ? 'Date of Birth' : 'Data Nascimento'}</label>
+                            <input type="date" required value={childInfo.data_nascimento || ''} onChange={e => handleUpdateLocalCrianca(childId, 'data_nascimento', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'data_nascimento', e.target.value)} className={inputClass} />
                           </div>
-                          
+
                           <div>
-                            <label style={labelStyle}>{isEn ? 'Gender' : 'Sexo'}</label>
-                            <select value={childInfo.sexo || ''} onChange={e => {handleUpdateLocalCrianca(childId, 'sexo', e.target.value); handleSaveDBCrianca(childId, 'sexo', e.target.value);}} style={selectStyle}>
+                            <label className={labelClass}>{isEn ? 'Gender' : 'Sexo'}</label>
+                            <select value={childInfo.sexo || ''} onChange={e => { handleUpdateLocalCrianca(childId, 'sexo', e.target.value); handleSaveDBCrianca(childId, 'sexo', e.target.value); }} className={selectClass}>
                               <option value="Masculino">{isEn ? 'Male' : 'Masculino'}</option>
                               <option value="Feminino">{isEn ? 'Female' : 'Feminino'}</option>
                               <option value="Prefiro não dizer">{isEn ? 'Prefer not to say' : 'Prefiro não dizer'}</option>
@@ -450,43 +532,44 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                           </div>
 
                           <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #cbd5e1', paddingTop: '1rem', marginTop: '0.5rem' }}>
-                            <label style={{...labelStyle, color: '#991b1b'}}>{isEn ? 'Medical Profile' : 'Perfil Médico (Alergias e Condições)'}</label>
+                            <label className={`${labelClass} !text-red-700`}>
+                              {isEn ? 'Medical Profile (Allergies & Conditions)' : 'Perfil Médico (Alergias e Condições)'}
+                            </label>
                           </div>
-                          
+
                           <div style={{ gridColumn: '1 / -1' }}>
-                            <label style={labelStyle}>{isEn ? 'Food Allergies / Restrictions' : 'Alergias Alimentares'}</label>
-                            <input type="text" value={childInfo.restricoes_alimentares || ''} onChange={e => handleUpdateLocalCrianca(childId, 'restricoes_alimentares', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'restricoes_alimentares', e.target.value)} style={inputStyle} placeholder={isEn ? "None" : "Nenhuma"} />
+                            <label className={labelClass}>{isEn ? 'Food Allergies / Restrictions' : 'Alergias Alimentares'}</label>
+                            <input type="text" value={childInfo.restricoes_alimentares || ''} onChange={e => handleUpdateLocalCrianca(childId, 'restricoes_alimentares', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'restricoes_alimentares', e.target.value)} className={inputClass} placeholder={isEn ? "None" : "Nenhuma"} />
                           </div>
-                          
+
                           <div style={{ gridColumn: '1 / -1' }}>
-                            <label style={labelStyle}>{isEn ? 'Chronic Diseases / Medication' : 'Doenças Crónicas ou Medicação Regular'}</label>
-                            <input type="text" value={childInfo.doencas_cronicas || ''} onChange={e => handleUpdateLocalCrianca(childId, 'doencas_cronicas', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'doencas_cronicas', e.target.value)} style={inputStyle} placeholder={isEn ? "None" : "Nenhuma"} />
+                            <label className={labelClass}>{isEn ? 'Chronic Diseases / Medication' : 'Doenças Crónicas ou Medicação Regular'}</label>
+                            <input type="text" value={childInfo.doencas_cronicas || ''} onChange={e => handleUpdateLocalCrianca(childId, 'doencas_cronicas', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'doencas_cronicas', e.target.value)} className={inputClass} placeholder={isEn ? "None" : "Nenhuma"} />
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {/* PERGUNTAS CUSTOMIZADAS DO CAMPO DE FÉRIAS */}
                     {childInfo && temPerguntasCustomizadas && (
-                      <div style={{ marginTop: '1.5rem', backgroundColor: '#eff6ff', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #bfdbfe' }}>
-                        <h4 style={{ fontSize: '13px', fontWeight: '800', color: '#1e40af', textTransform: 'uppercase', marginBottom: '1.25rem' }}>
+                      <div className="mt-6 bg-blue-50 p-6 rounded-2xl border border-blue-200">
+                        <h4 className="text-[13px] font-extrabold text-blue-800 uppercase mb-5">
                           {isEn ? 'Specific Questions for this Camp' : 'Perguntas Específicas do Programa'}
                         </h4>
-                        
-                        <div style={{ display: 'grid', gap: '1.25rem' }}>
+
+                        <div className="grid gap-5">
                           {campo.perguntas_customizadas.map((perguntaOriginal: string, pIdx: number) => {
-                            const perguntaVisivel = isEn && campo.perguntas_customizadas_en && campo.perguntas_customizadas_en[pIdx] 
-                                                    ? campo.perguntas_customizadas_en[pIdx] 
-                                                    : perguntaOriginal;
+                            const perguntaVisivel = isEn && campo.perguntas_customizadas_en && campo.perguntas_customizadas_en[pIdx]
+                              ? campo.perguntas_customizadas_en[pIdx]
+                              : perguntaOriginal;
                             return (
                               <div key={pIdx}>
-                                <label style={{...labelStyle, color: '#1e3a8a'}}>{perguntaVisivel} *</label>
-                                <input 
-                                  type="text" 
+                                <label className={`${labelClass} !text-blue-900`}>{perguntaVisivel} *</label>
+                                <input
+                                  type="text"
                                   required
-                                  value={respostasCustomizadas[i]?.[perguntaOriginal] || ''} 
-                                  onChange={e => handleRespostaCustomizada(i, perguntaOriginal, e.target.value)} 
-                                  style={{...inputStyle, borderColor: '#93c5fd', backgroundColor: 'white'}}
+                                  value={respostasCustomizadas[i]?.[perguntaOriginal] || ''}
+                                  onChange={e => handleRespostaCustomizada(i, perguntaOriginal, e.target.value)}
+                                  className={`${inputClass} !border-blue-300 !bg-white`}
                                   placeholder={isEn ? 'Your answer...' : 'A sua resposta...'}
                                 />
                               </div>
@@ -500,82 +583,126 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
               })}
             </section>
 
-            {/* 2. INFORMAÇÃO DE PAGAMENTO & REGRAS */}
-            <section style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{isEn ? 'Secure Payment & Terms' : 'Pagamento Seguro e Termos'}</h2>
-              
+            {/* PAGAMENTO E TERMOS */}
+            <section className="bg-white p-10 rounded-3xl shadow-sm">
+              <h2 className="text-xl font-extrabold mb-6">
+                {isEn ? 'Secure Payment & Terms' : 'Pagamento Seguro e Termos'}
+              </h2>
+
               {isPagamentoFracionado ? (
-                <div style={{ padding: '1.5rem', backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '1rem', marginBottom: '1.5rem' }}>
-                  <p style={{ fontWeight: '900', color: '#1e3a8a', margin: '0 0 0.5rem 0' }}>{isEn ? 'Payment Plan (50% Deposit)' : 'Facilidade de Pagamento (Sinal de 50%)'}</p>
-                  <p style={{ fontSize: '14px', color: '#1e40af', margin: 0, lineHeight: 1.5 }}>
-                    {isEn 
-                      ? `To secure your spot today, you only pay a deposit of ${valorACobrarAgora.toFixed(2)}€. The remaining balance (${valorPendente.toFixed(2)}€) will be automatically charged 1 week before the camp starts.` 
+                <div className="p-6 bg-blue-50 border border-blue-300 rounded-2xl mb-6">
+                  <p className="font-black text-blue-900 mb-2 m-0">
+                    {isEn ? 'Payment Plan (50% Deposit)' : 'Facilidade de Pagamento (Sinal de 50%)'}
+                  </p>
+                  <p className="text-sm text-blue-800 m-0 leading-relaxed">
+                    {isEn
+                      ? `To secure your spot today, you only pay a deposit of ${valorACobrarAgora.toFixed(2)}€. The remaining balance (${valorPendente.toFixed(2)}€) will be automatically charged 1 week before the camp starts.`
                       : `Para garantir a sua vaga hoje, paga apenas um sinal de ${valorACobrarAgora.toFixed(2)}€. O valor remanescente (${valorPendente.toFixed(2)}€) será cobrado automaticamente 1 semana antes do início do programa.`}
                   </p>
                 </div>
               ) : (
-                <div style={{ padding: '1.5rem', backgroundColor: '#f0fdf4', border: '1px solid #6ee7b7', borderRadius: '1rem', marginBottom: '1.5rem' }}>
-                  <p style={{ fontWeight: '900', color: '#064e3b', margin: '0 0 0.5rem 0' }}>{isEn ? 'Full Payment' : 'Pagamento a Pronto (100%)'}</p>
-                  <p style={{ fontSize: '14px', color: '#065f46', margin: 0, lineHeight: 1.5 }}>
-                    {isEn 
-                      ? `This camp requires full payment upfront to secure your spot. The total amount is ${valorACobrarAgora.toFixed(2)}€.` 
+                <div className="p-6 bg-emerald-50 border border-emerald-300 rounded-2xl mb-6">
+                  <p className="font-black text-emerald-900 mb-2 m-0">
+                    {isEn ? 'Full Payment' : 'Pagamento a Pronto (100%)'}
+                  </p>
+                  <p className="text-sm text-emerald-800 m-0 leading-relaxed">
+                    {isEn
+                      ? `This camp requires full payment upfront to secure your spot. The total amount is ${valorACobrarAgora.toFixed(2)}€.`
                       : `Este programa requer o pagamento da totalidade no ato da reserva. O valor a pagar agora é de ${valorACobrarAgora.toFixed(2)}€.`}
                   </p>
                 </div>
               )}
 
-              <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div>
-                  <p style={{ fontWeight: 'bold', color: '#0f172a', margin: '0 0 0.5rem 0' }}>Stripe Checkout</p>
-                  <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Pague de forma 100% segura através de MB WAY, Cartão de Crédito ou Débito.</p>
+              <div className="p-6 bg-slate-50 border border-slate-300 rounded-2xl flex items-center justify-between flex-wrap gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-slate-900 text-white flex items-center justify-center">
+                    <IconCreditCard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 m-0 mb-0.5">Stripe Checkout</p>
+                    <p className="text-[13px] text-slate-500 m-0">
+                      {isEn ? 'Pay 100% securely via MB WAY, Credit or Debit Card.' : 'Pague de forma 100% segura através de MB WAY, Cartão de Crédito ou Débito.'}
+                    </p>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontWeight: 'bold', color: '#0f172a' }}>
-                  <span style={{ fontStyle: 'italic', color: '#005f8f' }}>MB WAY</span>
-                  <span style={{ fontSize: '24px' }}>💳</span>
+                <div className="flex gap-3 items-center font-bold text-slate-900">
+                  <span className="italic text-blue-800">MB WAY</span>
+                  <span className="italic text-slate-900 font-black">VISA</span>
                 </div>
               </div>
 
-              {/* CHECKBOX DOS TERMOS */}
-              <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#fff', border: '1px dashed #cbd5e1', borderRadius: '0.75rem' }}>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
-                  <input type="checkbox" required checked={concordaTermos} onChange={e => setConcordaTermos(e.target.checked)} style={{ marginTop: '0.25rem', width: '1.25rem', height: '1.25rem', accentColor: '#0f172a' }} />
-                  <span style={{ fontSize: '13px', color: '#475569', lineHeight: 1.5 }}>
-                    {isEn 
-                      ? <>I declare that I am of legal age and have read and accept HelloCamp's <Link href={`/${lang}/termos`} target="_blank" style={{ color: '#059669', fontWeight: 'bold', textDecoration: 'underline' }}>Terms & Conditions</Link>. {isGuest && "By continuing, a secure account will be automatically generated to manage this booking."}</>
-                      : <>Declaro que sou maior de idade, e confirmo ter lido e aceite os <Link href={`/${lang}/termos`} target="_blank" style={{ color: '#059669', fontWeight: 'bold', textDecoration: 'underline' }}>Termos e Condições</Link> da plataforma. {isGuest && "Ao prosseguir, será criada automaticamente uma conta segura associada ao seu email para poder gerir esta reserva."}</>}
+              <div className="mt-8 p-4 border border-dashed border-slate-300 rounded-xl">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={concordaTermos}
+                    onChange={e => setConcordaTermos(e.target.checked)}
+                    className="mt-1 w-5 h-5 accent-slate-900 cursor-pointer"
+                  />
+                  <span className="text-[13px] text-slate-600 leading-relaxed">
+                    {isEn ? (
+                      <>
+                        I declare that I am of legal age and have read and accept HelloCamp's{' '}
+                        <Link href={`/${lang}/termos`} target="_blank" className="text-emerald-600 font-bold underline">
+                          Terms & Conditions
+                        </Link>
+                        . {isGuest && "By continuing, a secure account will be automatically generated to manage this booking."}
+                      </>
+                    ) : (
+                      <>
+                        Declaro que sou maior de idade, e confirmo ter lido e aceite os{' '}
+                        <Link href={`/${lang}/termos`} target="_blank" className="text-emerald-600 font-bold underline">
+                          Termos e Condições
+                        </Link>{' '}
+                        da plataforma. {isGuest && "Ao prosseguir, será criada automaticamente uma conta segura associada ao seu email para poder gerir esta reserva."}
+                      </>
+                    )}
                   </span>
                 </label>
               </div>
 
             </section>
 
-            <button type="submit" disabled={processingStripe || !concordaTermos} style={{ width: '100%', padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontSize: '1.125rem', fontWeight: '900', borderRadius: '1rem', border: 'none', cursor: processingStripe || !concordaTermos ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.3)', transition: 'transform 0.2s', opacity: concordaTermos ? 1 : 0.7 }}>
-              {isEn ? `Confirm and Pay ${valorACobrarAgora.toFixed(2)}€` : `Confirmar e Pagar ${valorACobrarAgora.toFixed(2)}€`} {isPagamentoFracionado ? '(Sinal)' : ''}
+            <button
+              type="submit"
+              disabled={processingStripe || !concordaTermos}
+              className={`w-full p-5 bg-slate-900 text-white text-lg font-black rounded-2xl border-none transition-all ${
+                processingStripe || !concordaTermos
+                  ? 'cursor-not-allowed opacity-70'
+                  : 'cursor-pointer shadow-lg shadow-slate-900/30 hover:-translate-y-0.5'
+              }`}
+            >
+              {isEn ? `Confirm and Pay ${valorACobrarAgora.toFixed(2)}€` : `Confirmar e Pagar ${valorACobrarAgora.toFixed(2)}€`} {isPagamentoFracionado ? (isEn ? '(Deposit)' : '(Sinal)') : ''}
             </button>
           </form>
         </div>
 
-        {/* SIDEBAR DE RESUMO */}
-        <aside style={{ flex: '1 1 30%', minWidth: '320px', position: 'sticky', top: '2rem' }}>
-          <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-            <h3 style={{ fontSize: '1.125rem', fontWeight: '900', marginBottom: '1.5rem', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem' }}>
+        {/* SIDEBAR RESUMO */}
+        <aside className="flex-[1_1_30%] min-w-[320px] sticky top-8">
+          <div className="bg-white p-8 rounded-3xl shadow-sm">
+            <h3 className="text-lg font-black mb-6 border-b-2 border-slate-100 pb-4">
               {isEn ? 'Booking Summary' : 'Resumo da Reserva'}
             </h3>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+
+            <div className="flex flex-col gap-4 mb-6">
               <div>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Programa</span>
-                <p style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', margin: 0 }}>{turnoSelecionado?.nome || campo?.nome}</p>
+                <span className="text-xs text-slate-500 font-bold uppercase">
+                  {isEn ? 'Program' : 'Programa'}
+                </span>
+                <p className="text-[15px] font-extrabold text-slate-900 m-0">
+                  {turnoSelecionado?.nome || campo?.nome}
+                </p>
               </div>
 
               {turnoSelecionado?.dias_soltos?.length > 0 && (
                 <div>
-                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                  <span className="text-xs text-slate-500 font-bold uppercase">
                     {isEn ? 'Selected Dates' : 'Datas Selecionadas'}
                   </span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
                     {turnoSelecionado.dias_soltos.map((d: string) => (
-                      <span key={d} style={{ backgroundColor: '#e2e8f0', color: '#334155', fontSize: '11px', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>
+                      <span key={d} className="bg-slate-100 text-slate-700 text-[11px] px-2 py-1 rounded-md font-bold">
                         {new Date(d).toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit', month: 'short' })}
                       </span>
                     ))}
@@ -584,40 +711,91 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
               )}
 
               <div>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Duração</span>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>
-                  {totalDiasExtras} {totalDiasExtras === 1 ? (turnoSelecionado?.tipo === 'semana' ? 'Semana' : 'Dia') : (turnoSelecionado?.tipo === 'semana' ? 'Semanas' : 'Dias')}
+                <span className="text-xs text-slate-500 font-bold uppercase">
+                  {isEn ? 'Duration' : 'Duração'}
+                </span>
+                <p className="text-sm font-semibold text-slate-700 m-0">
+                  {totalDiasExtras} {totalDiasExtras === 1
+                    ? (turnoSelecionado?.tipo === 'semana' ? (isEn ? 'Week' : 'Semana') : (isEn ? 'Day' : 'Dia'))
+                    : (turnoSelecionado?.tipo === 'semana' ? (isEn ? 'Weeks' : 'Semanas') : (isEn ? 'Days' : 'Dias'))}
                 </p>
               </div>
+
               <div>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Preço Base (x{quantidade})</span>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>{(precoBaseUnitario * quantidade).toFixed(2)}€</p>
+                <span className="text-xs text-slate-500 font-bold uppercase">
+                  {isEn ? `Base Price (x${quantidade})` : `Preço Base (x${quantidade})`}
+                </span>
+                <p className="text-sm font-semibold text-slate-700 m-0">
+                  {(precoBaseUnitario * quantidade).toFixed(2)}€
+                </p>
               </div>
-              
-              {totalExtrasPorCrianca > 0 && (
+
+              {(extSeguro || extTransporte) && (
                 <div>
-                  <span style={{ fontSize: '12px', color: '#059669', fontWeight: 'bold', textTransform: 'uppercase' }}>+ Extras Selecionados</span>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>{(totalExtrasPorCrianca * quantidade).toFixed(2)}€</p>
+                  <span className="text-xs text-emerald-600 font-bold uppercase">
+                    {isEn ? '+ Selected Extras' : '+ Extras Selecionados'}
+                  </span>
+                  <div className="flex flex-col gap-1 mt-1.5">
+                    {extSeguro && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="flex items-center gap-1.5 text-slate-600">
+                          <IconShield className="w-3.5 h-3.5 text-emerald-500" />
+                          {isEn ? 'Insurance' : 'Seguro'}
+                        </span>
+                        <span className="font-bold text-slate-800">
+                          {(custoSeguroUnit * quantidade).toFixed(2)}€
+                        </span>
+                      </div>
+                    )}
+                    {extTransporte && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="flex items-center gap-1.5 text-slate-600">
+                          <IconBus className="w-3.5 h-3.5 text-emerald-500" />
+                          {isEn ? 'Transport' : 'Transporte'}
+                        </span>
+                        <span className="font-bold text-slate-800">
+                          {(custoTransporteUnit * quantidade).toFixed(2)}€
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            <div style={{ borderTop: '2px dashed #e2e8f0', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#0f172a' }}>{isEn ? 'Total Cost' : 'Custo Total'}</span>
-              <span style={{ fontSize: '1.125rem', fontWeight: '900', color: '#0f172a' }}>{precoFinalTotal.toFixed(2)}€</span>
+            <div className="border-t-2 border-dashed border-slate-200 pt-6 flex justify-between items-center">
+              <span className="text-base font-bold text-slate-900">
+                {isEn ? 'Total Cost' : 'Custo Total'}
+              </span>
+              <span className="text-lg font-black text-slate-900">
+                {precoFinalTotal.toFixed(2)}€
+              </span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', backgroundColor: '#f0fdf4', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid #bbf7d0' }}>
-              <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#064e3b' }}>{isEn ? 'To Pay Now' : 'A Pagar Agora'}</span>
-              <span style={{ fontSize: '1.5rem', fontWeight: '900', color: '#059669' }}>{valorACobrarAgora.toFixed(2)}€</span>
+            <div className="flex justify-between items-center mt-4 bg-emerald-50 p-3 px-4 rounded-lg border border-emerald-200">
+              <span className="text-sm font-bold text-emerald-900">
+                {isEn ? 'To Pay Now' : 'A Pagar Agora'}
+              </span>
+              <span className="text-2xl font-black text-emerald-600">
+                {valorACobrarAgora.toFixed(2)}€
+              </span>
             </div>
 
             {isPagamentoFracionado && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', padding: '0.5rem 1rem' }}>
-                <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#64748b' }}>{isEn ? 'Pending Balance' : 'Faltará Pagar'}</span>
-                <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#eab308' }}>{valorPendente.toFixed(2)}€</span>
+              <div className="flex justify-between items-center mt-2 p-2 px-4">
+                <span className="text-sm font-bold text-slate-500">
+                  {isEn ? 'Pending Balance' : 'Faltará Pagar'}
+                </span>
+                <span className="text-xl font-extrabold text-amber-500">
+                  {valorPendente.toFixed(2)}€
+                </span>
               </div>
             )}
+
+            <div className="flex items-center justify-center gap-2 mt-6 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+              <IconShield className="w-3.5 h-3.5" />
+              {isEn ? 'Secure Payment' : 'Pagamento Seguro'}
+            </div>
           </div>
         </aside>
 
@@ -626,6 +804,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   );
 }
 
-const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' as const, marginBottom: '0.4rem' };
-const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: 'white', fontSize: '14px', color: '#0f172a', outline: 'none' };
-const selectStyle = { padding: '0.75rem 1rem', paddingRight: '2.5rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', fontWeight: '600', color: '#0f172a', outline: 'none', appearance: 'none' as const, cursor: 'pointer', backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2em' };
+// ==========================================
+// ESTILOS TAILWIND REUTILIZÁVEIS
+// ==========================================
+const labelClass = "block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5";
+const inputClass = "w-full p-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 outline-none focus:border-emerald-500 transition-colors";
+const selectClass = "p-3 pr-10 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold text-slate-900 outline-none appearance-none cursor-pointer focus:border-emerald-500 transition-colors";
