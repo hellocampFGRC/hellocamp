@@ -5,15 +5,21 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 // ═══════════════════════════════════════════════════════════
-// 🔧 FIX CRÍTICO: Worker URL do MapLibre
-// O Next.js serve o worker como HTML (404) por defeito.
-// Apontamos para o CDN antes de criar qualquer mapa.
-// (Este bloco corre em module-load, antes de qualquer useEffect)
+// 🔧 FIX: Worker URL do MapLibre v5
+// Na v5 usa-se `setWorkerUrl(url)` em vez de `workerUrl = url`
+// Isto resolve o erro do Next.js servir o worker como HTML (404)
 // ═══════════════════════════════════════════════════════════
 if (typeof window !== "undefined") {
-  // @ts-ignore — workerUrl é válido na MapLibre v3/v4
-  maplibregl.workerUrl =
-    "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl-csp-worker.js";
+  try {
+    // @ts-ignore — setWorkerUrl existe na v5
+    if (typeof (maplibregl as any).setWorkerUrl === "function") {
+      (maplibregl as any).setWorkerUrl(
+        "https://cdn.jsdelivr.net/npm/maplibre-gl@5.0.1/dist/maplibre-gl-csp-worker.js"
+      );
+    }
+  } catch (e) {
+    console.warn("[MAPA] setWorkerUrl falhou:", e);
+  }
 }
 
 interface Campo {
@@ -104,11 +110,9 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       console.error("[MAPA ERRO]", e?.error?.message || e);
     });
 
-    // Resize quando o container muda de tamanho (bug comum do SSR)
     const resizeObserver = new ResizeObserver(() => instance.resize());
     if (mapContainer.current) resizeObserver.observe(mapContainer.current);
 
-    // Resize imediato após o primeiro paint
     const raf = requestAnimationFrame(() => instance.resize());
 
     return () => {
@@ -120,18 +124,13 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   }, []);
 
   // ─────────────────────────────────────────
-  // Adicionar pins — NÃO esperar pelo `load`
-  // ═════════════════════════════════════════
-  // ⚡ CORREÇÃO: markers são DOM puro e podem ser adicionados
-  // imediatamente, mesmo antes do style carregar.
-  // Esperar pelo `load` é o que está a impedir os pins de aparecer.
+  // Adicionar pins — SEM esperar pelo `load`
   // ─────────────────────────────────────────
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
 
     const setupMarkers = () => {
-      // Limpar markers antigos
       const existing = (instance as any)._hcMarkers as
         | maplibregl.Marker[]
         | undefined;
@@ -186,8 +185,8 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
             <div class="hc-popup-body">
               <h3 class="hc-popup-title">${escapeHtml(c.nome)}</h3>
               ${
-                (c.preco ?? 0) > 0
-                  ? `<p class="hc-popup-price">${c.preco ?? 0}€</p>`
+                c.preco != null && c.preco > 0
+                  ? `<p class="hc-popup-price">${c.preco}€</p>`
                   : ""
               }
               <a href="/${lang}/campo/${c.id}" class="hc-popup-cta">
@@ -215,7 +214,6 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
       (instance as any)._hcMarkers = newMarkers;
 
-      // Auto-fit
       if (camposValidos.length === 1) {
         instance.flyTo({
           center: [camposValidos[0].longitude, camposValidos[0].latitude],
@@ -235,11 +233,10 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       }
     };
 
-    // ⚡ CORREÇÃO: chamar IMEDIATAMENTE, sem esperar pelo `load`
+    // ⚡ Corre IMEDIATAMENTE (markers são DOM puro)
     setupMarkers();
 
-    // Se por acaso o style ainda não carregou e o load dispara mais tarde,
-    // volta a chamar (idempotente — limpa os antigos primeiro)
+    // E re-corre quando o style carregar (idempotente)
     instance.once("load", setupMarkers);
   }, [camposValidos, lang, isEn]);
 
