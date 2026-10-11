@@ -52,7 +52,7 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
               : 'A solução tecnológica definitiva para promotores de campos de férias. Simplifique a tesouraria e a gestão de clientes sem custos fixos e com controlo total.'}
           </p>
           <Link
-            href={`/${lang}/admin/registo`}
+            href={`/${lang}/registo`}
             className="inline-block bg-[#e2a41d] text-[#167524] font-black px-10 py-4 rounded-xl no-underline hover:bg-[#d4991b] transition-all transform hover:-translate-y-1 shadow-xl shadow-[#e2a41d]/20 text-lg"
           >
             {isEn ? 'Create Partner Account' : 'Registar Conta Parceiro'}
