@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -11,35 +10,71 @@ const supabaseAdmin = createClient(
 );
 
 // ==========================================
-// TRANSPORTER SMTP
+// CONFIG BREVO
 // ==========================================
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp.mailgun.org';
-const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
+const SENDER_EMAIL = 'info@hellocamp.pt';
+const SENDER_NAME = 'HelloCamp';
 
-console.log('🔧 [SMTP CONFIG] Host:', SMTP_HOST, '| Port:', SMTP_PORT, '| User:', SMTP_USER ? SMTP_USER.substring(0, 5) + '***' : 'AUSENTE');
-
-const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: SMTP_PORT,
-  secure: SMTP_PORT === 465, // SSL direto na 465, STARTTLS na 587
-  pool: true,
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-  },
-  // Timeouts para não ficar pendurado
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 20000,
-  // Debug para logs detalhados (aparecem no Vercel)
-  logger: true,
-  debug: true,
-});
+console.log('🔧 [BREVO] API Key presente:', !!BREVO_API_KEY, '| Sender:', SENDER_EMAIL);
 
 // ==========================================
-// TEMPLATES (iguais ao anterior)
+// FUNÇÃO: Enviar email via Brevo HTTP API
+// ==========================================
+async function enviarViaBrevo(params: {
+  to: { email: string; name?: string };
+  subject: string;
+  html: string;
+}): Promise<{ success: boolean; messageId?: string; error?: any }> {
+  if (!BREVO_API_KEY) {
+    return { success: false, error: { message: 'BREVO_API_KEY ausente nas variáveis de ambiente' } };
+  }
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+        to: [params.to],
+        subject: params.subject,
+        htmlContent: params.html,
+        headers: {
+          'X-Mailer': 'HelloCamp-B2B',
+        },
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      return {
+        success: false,
+        error: {
+          status: res.status,
+          message: data?.message || data?.error || 'Erro desconhecido do Brevo',
+          code: data?.code,
+          raw: data,
+        },
+      };
+    }
+
+    return { success: true, messageId: data?.messageId };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: { message: err?.message || String(err), code: 'FETCH_ERROR' },
+    };
+  }
+}
+
+// ==========================================
+// TEMPLATES
 // ==========================================
 const COLD_TEMPLATES = [
   {
@@ -148,7 +183,7 @@ function getTemplateHTML(titulo: string, mensagem: string, ctaTexto: string, cta
           ${mensagem}
         </div>
         <div style="text-align: center; margin-top: 40px; margin-bottom: 10px;">
-          <a href="${ctaLink}" style="display: inline-block; background-color: #F3A61C; color: #ffffff; padding: 15px 35px; text-decoration: none; font-size: 14px; font-weight: bold; border-radius: 40px; box-shadow: 0 4px 6px rgba(243, 166, 28, 0.2);">
+          <a href="${ctaLink}" style="display: inline-block; background-color: #F3A61C; color: #ffffff; padding: 15px 35px; text-decoration: none; font-size: 14px; font-weight: bold; border-radius: 40px;">
             ${ctaTexto}
           </a>
         </div>
@@ -157,7 +192,7 @@ function getTemplateHTML(titulo: string, mensagem: string, ctaTexto: string, cta
         <p style="color: #ffffff; font-size: 14px; font-weight: 600; margin: 0 0 10px 0;">A PLATAFORMA DE EXCELÊNCIA EM PORTUGAL</p>
         <p style="color: #8ca5c1; font-size: 11px; line-height: 1.5; margin: 0;">
           Comunicação direcionada a organizadores de eventos e campos de férias.<br/>
-          Para deixar de receber comunicações, basta ignorar este e-mail.
+          Para deixar de receber comunicações, basta responder a este e-mail com "remover".
         </p>
       </div>
     </div>
@@ -177,87 +212,41 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Acesso não autorizado' }, { status: 401 });
   }
 
-  const isDebug = searchParams.get('debug') === '1';
-  const testEmail = searchParams.get('test'); // ?test=alguem@exemplo.com
-
-  // ==========================================
-  // PASSO 0 — VERIFICAR CONEXÃO SMTP
-  // ==========================================
-  let smtpStatus: any = { verified: false, error: null };
-  try {
-    await transporter.verify();
-    smtpStatus.verified = true;
-    console.log('✅ [SMTP] Conexão verificada com sucesso');
-  } catch (verifyErr: any) {
-    smtpStatus.verified = false;
-    smtpStatus.error = verifyErr?.message || String(verifyErr);
-    smtpStatus.code = verifyErr?.code;
-    smtpStatus.command = verifyErr?.command;
-    smtpStatus.responseCode = verifyErr?.responseCode;
-    smtpStatus.response = verifyErr?.response;
-    console.error('❌ [SMTP] Falha na verificação:', smtpStatus);
-
-    // Retorna já — não vale a pena tentar enviar 75 emails se o servidor está inacessível
+  if (!BREVO_API_KEY) {
     return NextResponse.json({
-      step: 'smtp_verify',
-      success: false,
-      mensagem: 'Não foi possível conectar ao servidor SMTP. Verifica as credenciais (SMTP_USER, SMTP_PASS, SMTP_HOST, SMTP_PORT).',
-      config: {
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        user_presente: !!SMTP_USER,
-        pass_presente: !!SMTP_PASS,
-        user_inicio: SMTP_USER ? SMTP_USER.substring(0, 5) + '***' : null,
-      },
-      erro: smtpStatus,
+      step: 'config',
+      error: 'BREVO_API_KEY não está definida nas Environment Variables do Vercel.',
+      dica: 'Vai a Vercel → Settings → Environment Variables e confirma que BREVO_API_KEY está definida para Production.',
     }, { status: 500 });
   }
 
+  const isDebug = searchParams.get('debug') === '1';
+  const testEmail = searchParams.get('test');
+
   // ==========================================
-  // PASSO 1 — MODO TEST: enviar email para 1 endereço
+  // MODO TESTE — envia 1 email isolado
   // ==========================================
   if (testEmail) {
-    try {
-      const tpl = COLD_TEMPLATES[0];
-      const info = await transporter.sendMail({
-        from: '"HelloCamp" <info@hellocamp.pt>',
-        to: testEmail,
-        subject: '[TESTE] ' + tpl.assunto,
-        html: getTemplateHTML(
-          tpl.titulo,
-          tpl.gerarMensagem('Equipa de Teste'),
-          tpl.textoCta,
-          'https://www.hellocamp.pt'
-        ),
-      });
+    const tpl = COLD_TEMPLATES[0];
+    const resultado = await enviarViaBrevo({
+      to: { email: testEmail, name: 'Equipa de Teste' },
+      subject: '[TESTE] ' + tpl.assunto,
+      html: getTemplateHTML(tpl.titulo, tpl.gerarMensagem('Equipa de Teste'), tpl.textoCta, 'https://www.hellocamp.pt'),
+    });
 
-      return NextResponse.json({
-        step: 'test_send',
-        success: true,
-        mensagem: `Email de teste enviado para ${testEmail}`,
-        messageId: info.messageId,
-        response: info.response,
-        accepted: info.accepted,
-        rejected: info.rejected,
-      });
-    } catch (testErr: any) {
-      return NextResponse.json({
-        step: 'test_send',
-        success: false,
-        mensagem: 'Falha ao enviar email de teste.',
-        erro: {
-          message: testErr?.message,
-          code: testErr?.code,
-          command: testErr?.command,
-          responseCode: testErr?.responseCode,
-          response: testErr?.response,
-        },
-      }, { status: 500 });
-    }
+    return NextResponse.json({
+      step: 'test_send',
+      ...resultado,
+      config: {
+        sender_email: SENDER_EMAIL,
+        sender_name: SENDER_NAME,
+        api_key_inicio: BREVO_API_KEY.substring(0, 10) + '...',
+      },
+    }, { status: resultado.success ? 200 : 500 });
   }
 
   // ==========================================
-  // PASSO 2 — BUSCAR LEADS
+  // BUSCAR LEADS
   // ==========================================
   try {
     const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -299,13 +288,13 @@ export async function GET(request: Request) {
     const leadsProntas = merged.slice(0, 75);
 
     if (leadsProntas.length === 0) {
-      return NextResponse.json({ message: 'Nenhuma lead elegível.', smtp_verified: true });
+      return NextResponse.json({ message: 'Nenhuma lead elegível.', brevo_ok: true });
     }
 
     if (isDebug) {
       return NextResponse.json({
         debug: true,
-        smtp_verified: true,
+        brevo_ok: true,
         leads_prontas_count: leadsProntas.length,
         leads_amostra: leadsProntas.slice(0, 10).map(l => ({
           id: l.id, nome: l.nome_cliente, email: l.email_cliente, fase: l.fase_funil,
@@ -314,76 +303,72 @@ export async function GET(request: Request) {
     }
 
     // ==========================================
-    // PASSO 3 — ENVIAR (com captura de erros por lead)
+    // ENVIAR (sequencial para respeitar rate limit do Brevo)
+    // Brevo free = 300/dia, paid = 20k+/mês. 75 emails é seguro, mas em paralelo
+    // pode bater em rate limit por segundo. Limitamos a 10 em paralelo.
     // ==========================================
-    const resultados = await Promise.all(
-      leadsProntas.map(async (lead) => {
-        const email = (lead.email_cliente || '').trim();
-        if (!email || email.toLowerCase() === 'nan') {
-          return { status: 'skipped', id: lead.id, email, reason: 'email inválido' };
-        }
+    const BATCH_SIZE = 10;
+    const resultados: any[] = [];
 
-        const faseAtual = Number(lead.fase_funil) || 0;
-        const tpl = COLD_TEMPLATES[faseAtual];
-        if (!tpl) return { status: 'skipped', id: lead.id, email, reason: 'fase fora do range' };
+    for (let i = 0; i < leadsProntas.length; i += BATCH_SIZE) {
+      const batch = leadsProntas.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (lead) => {
+          const email = (lead.email_cliente || '').trim();
+          if (!email || email.toLowerCase() === 'nan') {
+            return { status: 'skipped', id: lead.id, email, reason: 'email inválido' };
+          }
 
-        const linkFinal = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.hellocamp.pt'}/registar?lang=pt&utm_source=cold_email&utm_campaign=fase${faseAtual}`;
+          const faseAtual = Number(lead.fase_funil) || 0;
+          const tpl = COLD_TEMPLATES[faseAtual];
+          if (!tpl) return { status: 'skipped', id: lead.id, email, reason: 'fase fora do range' };
 
-        try {
-          const info = await transporter.sendMail({
-            from: '"HelloCamp" <info@hellocamp.pt>',
-            to: email,
+          const linkFinal = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.hellocamp.pt'}/registar?lang=pt&utm_source=cold_email&utm_campaign=fase${faseAtual}`;
+
+          const r = await enviarViaBrevo({
+            to: { email, name: lead.nome_cliente || 'Organizador' },
             subject: tpl.assunto,
             html: getTemplateHTML(tpl.titulo, tpl.gerarMensagem(lead.nome_cliente || 'Organizador'), tpl.textoCta, linkFinal),
           });
-          console.log('✉️ [OK]', email, '| msgId:', info.messageId);
-          return { status: 'sent', id: lead.id, novaFase: faseAtual + 1, email };
-        } catch (e: any) {
-          const errInfo = {
-            message: e?.message,
-            code: e?.code,
-            command: e?.command,
-            responseCode: e?.responseCode,
-            response: e?.response,
-          };
-          console.error(`❌ [FALHA] ${email}:`, errInfo);
-          return { status: 'failed', id: lead.id, email, erro: errInfo };
-        }
-      })
-    );
 
-    const sucessos = resultados.filter(r => r.status === 'sent') as any[];
-    const falhas = resultados.filter(r => r.status === 'failed') as any[];
-    const skipped = resultados.filter(r => r.status === 'skipped') as any[];
+          if (r.success) {
+            console.log('✉️ [OK]', email, '| msgId:', r.messageId);
+            return { status: 'sent', id: lead.id, novaFase: faseAtual + 1, email, messageId: r.messageId };
+          } else {
+            console.error(`❌ [FALHA] ${email}:`, r.error);
+            return { status: 'failed', id: lead.id, email, erro: r.error };
+          }
+        })
+      );
+      resultados.push(...batchResults);
+    }
 
-    // Se TODAS falharam, retorna o erro detalhado do primeiro envio para diagnóstico
+    const sucessos = resultados.filter(r => r.status === 'sent');
+    const falhas = resultados.filter(r => r.status === 'failed');
+    const skipped = resultados.filter(r => r.status === 'skipped');
+
     if (sucessos.length === 0) {
       return NextResponse.json({
         step: 'send_batch',
         success: false,
-        mensagem: 'SMTP aceitou conexão, mas rejeitou todos os envios.',
+        mensagem: 'Brevo recusou todos os envios. Verifica o domínio e sender no painel Brevo.',
         enviados: 0,
         tentados: leadsProntas.length,
-        falhas: falhas.length,
-        skipped: skipped.length,
         primeiro_erro: falhas[0]?.erro || null,
-        amostra_falhas: falhas.slice(0, 3).map(f => ({ email: f.email, erro: f.erro })),
+        amostra_falhas: falhas.slice(0, 3).map((f: any) => ({ email: f.email, erro: f.erro })),
         config: {
-          host: SMTP_HOST,
-          port: SMTP_PORT,
-          from_usado: '"HelloCamp" <info@hellocamp.pt>',
-          user_inicio: SMTP_USER ? SMTP_USER.substring(0, 5) + '***' : null,
+          sender_email: SENDER_EMAIL,
+          api_key_inicio: BREVO_API_KEY.substring(0, 10) + '...',
         },
       }, { status: 500 });
     }
 
     // Atualizar fases das que enviaram
-    const groupedByFase: Record<number, number[]> = {};
-    for (const curr of sucessos) {
-      const fase = Number(curr.novaFase);
-      if (!groupedByFase[fase]) groupedByFase[fase] = [];
-      groupedByFase[fase].push(Number(curr.id));
-    }
+    const groupedByFase = sucessos.reduce((acc: any, curr: any) => {
+      if (!acc[curr.novaFase]) acc[curr.novaFase] = [];
+      acc[curr.novaFase].push(curr.id);
+      return acc;
+    }, {} as Record<number, string[]>);
 
     const nowIso = new Date().toISOString();
     await Promise.all(
@@ -391,7 +376,7 @@ export async function GET(request: Request) {
         supabaseAdmin
           .from('leads_externas')
           .update({ fase_funil: parseInt(faseStr, 10), ultimo_contacto: nowIso })
-          .in('id', ids as number[])
+          .in('id', ids as string[])
       )
     );
 
@@ -401,7 +386,7 @@ export async function GET(request: Request) {
       falhas: falhas.length,
       skipped: skipped.length,
       tentados: leadsProntas.length,
-      amostra_falhas: falhas.slice(0, 3).map(f => ({ email: f.email, erro: f.erro })),
+      amostra_falhas: falhas.slice(0, 3).map((f: any) => ({ email: f.email, erro: f.erro })),
     });
 
   } catch (error: any) {
