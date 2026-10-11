@@ -73,9 +73,6 @@ export default async function PaginaMapa({
   return (
     <main className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-50 font-sans overflow-hidden">
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* SIDEBAR                                      */}
-      {/* ═══════════════════════════════════════════ */}
       <aside className="w-full md:w-[340px] bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-5 md:p-6 flex flex-col flex-shrink-0 shadow-sm z-10 max-h-[45vh] md:max-h-full">
 
         <Link
@@ -173,9 +170,6 @@ export default async function PaginaMapa({
           </div>
         </form>
 
-        {/* ═══════════════════════════════════════════ */}
-        {/* LISTA DE CAMPOS (preenche o lado vazio)    */}
-        {/* ═══════════════════════════════════════════ */}
         {campos && campos.length > 0 && (
           <div className="mt-6 pt-5 border-t border-slate-100">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
@@ -185,8 +179,7 @@ export default async function PaginaMapa({
               {campos.map((c: any) => {
                 const nome = isEn && c.nome_en ? c.nome_en : c.nome;
                 const cat = isEn && c.categoria_en ? c.categoria_en : c.categoria;
-                const temCoords =
-                  c.latitude != null && c.longitude != null;
+                const temCoords = c.latitude != null && c.longitude != null;
                 return (
                   <Link
                     key={c.id}
@@ -216,9 +209,6 @@ export default async function PaginaMapa({
         )}
       </aside>
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* MAPA                                         */}
-      {/* ═══════════════════════════════════════════ */}
       <section className="flex-1 relative min-h-[55vh] md:min-h-0">
         <MapaWrapper campos={campos || []} lang={lang} />
       </section>
