@@ -10,15 +10,36 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// ==========================================
+// TRANSPORTER SMTP
+// ==========================================
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.mailgun.org';
+const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+
+console.log('🔧 [SMTP CONFIG] Host:', SMTP_HOST, '| Port:', SMTP_PORT, '| User:', SMTP_USER ? SMTP_USER.substring(0, 5) + '***' : 'AUSENTE');
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.mailgun.org',
-  port: Number(process.env.SMTP_PORT) || 587,
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_PORT === 465, // SSL direto na 465, STARTTLS na 587
   pool: true,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  auth: {
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+  },
+  // Timeouts para não ficar pendurado
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 20000,
+  // Debug para logs detalhados (aparecem no Vercel)
+  logger: true,
+  debug: true,
 });
 
 // ==========================================
-// FUNIL B2B HELLOCAMP: 5 EMAILS SEQUENCIAIS
+// TEMPLATES (iguais ao anterior)
 // ==========================================
 const COLD_TEMPLATES = [
   {
@@ -143,6 +164,9 @@ function getTemplateHTML(titulo: string, mensagem: string, ctaTexto: string, cta
   `;
 }
 
+// ==========================================
+// HANDLER
+// ==========================================
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const isAuthorized =
@@ -153,40 +177,91 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Acesso não autorizado' }, { status: 401 });
   }
 
-  // Modo debug: ?debug=1 mostra contagens sem enviar emails
   const isDebug = searchParams.get('debug') === '1';
+  const testEmail = searchParams.get('test'); // ?test=alguem@exemplo.com
 
+  // ==========================================
+  // PASSO 0 — VERIFICAR CONEXÃO SMTP
+  // ==========================================
+  let smtpStatus: any = { verified: false, error: null };
+  try {
+    await transporter.verify();
+    smtpStatus.verified = true;
+    console.log('✅ [SMTP] Conexão verificada com sucesso');
+  } catch (verifyErr: any) {
+    smtpStatus.verified = false;
+    smtpStatus.error = verifyErr?.message || String(verifyErr);
+    smtpStatus.code = verifyErr?.code;
+    smtpStatus.command = verifyErr?.command;
+    smtpStatus.responseCode = verifyErr?.responseCode;
+    smtpStatus.response = verifyErr?.response;
+    console.error('❌ [SMTP] Falha na verificação:', smtpStatus);
+
+    // Retorna já — não vale a pena tentar enviar 75 emails se o servidor está inacessível
+    return NextResponse.json({
+      step: 'smtp_verify',
+      success: false,
+      mensagem: 'Não foi possível conectar ao servidor SMTP. Verifica as credenciais (SMTP_USER, SMTP_PASS, SMTP_HOST, SMTP_PORT).',
+      config: {
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        user_presente: !!SMTP_USER,
+        pass_presente: !!SMTP_PASS,
+        user_inicio: SMTP_USER ? SMTP_USER.substring(0, 5) + '***' : null,
+      },
+      erro: smtpStatus,
+    }, { status: 500 });
+  }
+
+  // ==========================================
+  // PASSO 1 — MODO TEST: enviar email para 1 endereço
+  // ==========================================
+  if (testEmail) {
+    try {
+      const tpl = COLD_TEMPLATES[0];
+      const info = await transporter.sendMail({
+        from: '"HelloCamp" <info@hellocamp.pt>',
+        to: testEmail,
+        subject: '[TESTE] ' + tpl.assunto,
+        html: getTemplateHTML(
+          tpl.titulo,
+          tpl.gerarMensagem('Equipa de Teste'),
+          tpl.textoCta,
+          'https://www.hellocamp.pt'
+        ),
+      });
+
+      return NextResponse.json({
+        step: 'test_send',
+        success: true,
+        mensagem: `Email de teste enviado para ${testEmail}`,
+        messageId: info.messageId,
+        response: info.response,
+        accepted: info.accepted,
+        rejected: info.rejected,
+      });
+    } catch (testErr: any) {
+      return NextResponse.json({
+        step: 'test_send',
+        success: false,
+        mensagem: 'Falha ao enviar email de teste.',
+        erro: {
+          message: testErr?.message,
+          code: testErr?.code,
+          command: testErr?.command,
+          responseCode: testErr?.responseCode,
+          response: testErr?.response,
+        },
+      }, { status: 500 });
+    }
+  }
+
+  // ==========================================
+  // PASSO 2 — BUSCAR LEADS
+  // ==========================================
   try {
     const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    console.log('🔵 [CRON B2B] Cutoff (7 dias atrás):', seteDiasAtras);
-
-    // ==========================================
-    // DIAGNÓSTICO: contar leads em cada estado
-    // ==========================================
-    const { count: totalLeads } = await supabaseAdmin
-      .from('leads_externas')
-      .select('*', { count: 'exact', head: true });
-
-    const { count: countSemContacto } = await supabaseAdmin
-      .from('leads_externas')
-      .select('*', { count: 'exact', head: true })
-      .lt('fase_funil', COLD_TEMPLATES.length)
-      .is('ultimo_contacto', null);
-
-    const { count: countContactoAntigo } = await supabaseAdmin
-      .from('leads_externas')
-      .select('*', { count: 'exact', head: true })
-      .lt('fase_funil', COLD_TEMPLATES.length)
-      .lt('ultimo_contacto', seteDiasAtras);
-
-    console.log('📊 [CRON B2B] Total leads:', totalLeads);
-    console.log('📊 [CRON B2B] Leads sem contacto (null):', countSemContacto);
-    console.log('📊 [CRON B2B] Leads com contacto antigo:', countContactoAntigo);
-
-    // ==========================================
-    // QUERY 1 — Leads SEM contacto (ultimo_contacto IS NULL)
-    // ==========================================
     const { data: leadsSemContacto, error: err1 } = await supabaseAdmin
       .from('leads_externas')
       .select('id, nome_cliente, email_cliente, fase_funil, ultimo_contacto')
@@ -198,16 +273,8 @@ export async function GET(request: Request) {
       .order('created_at', { ascending: true })
       .limit(75);
 
-    if (err1) {
-      console.error('❌ [CRON B2B] Erro Query 1:', err1);
-      throw new Error('Query 1 falhou: ' + err1.message);
-    }
+    if (err1) throw new Error('Query 1 falhou: ' + err1.message);
 
-    console.log('✅ [CRON B2B] Query 1 (nulls) → ', leadsSemContacto?.length || 0, 'leads');
-
-    // ==========================================
-    // QUERY 2 — Leads COM contacto antigo (ultimo_contacto < cutoff)
-    // ==========================================
     const { data: leadsAntigas, error: err2 } = await supabaseAdmin
       .from('leads_externas')
       .select('id, nome_cliente, email_cliente, fase_funil, ultimo_contacto')
@@ -219,16 +286,8 @@ export async function GET(request: Request) {
       .order('ultimo_contacto', { ascending: true })
       .limit(75);
 
-    if (err2) {
-      console.error('❌ [CRON B2B] Erro Query 2:', err2);
-      throw new Error('Query 2 falhou: ' + err2.message);
-    }
+    if (err2) throw new Error('Query 2 falhou: ' + err2.message);
 
-    console.log('✅ [CRON B2B] Query 2 (antigas) → ', leadsAntigas?.length || 0, 'leads');
-
-    // ==========================================
-    // MERGE + DEDUPLICAÇÃO POR ID
-    // ==========================================
     const seenIds = new Set<string>();
     const merged: any[] = [];
     for (const l of [...(leadsSemContacto || []), ...(leadsAntigas || [])]) {
@@ -239,125 +298,110 @@ export async function GET(request: Request) {
     }
     const leadsProntas = merged.slice(0, 75);
 
-    console.log('🎯 [CRON B2B] Total leads prontas após merge:', leadsProntas.length);
-
     if (leadsProntas.length === 0) {
-      return NextResponse.json({
-        message: 'Nenhuma lead elegível para receber propostas neste momento.',
-        diagnostico: {
-          total_leads: totalLeads,
-          sem_contacto: countSemContacto,
-          contacto_antigo: countContactoAntigo,
-          cutoff_iso: seteDiasAtras,
-        }
-      });
+      return NextResponse.json({ message: 'Nenhuma lead elegível.', smtp_verified: true });
     }
 
-    // ==========================================
-    // MODO DEBUG: NÃO ENVIA, SÓ MOSTRA
-    // ==========================================
     if (isDebug) {
       return NextResponse.json({
         debug: true,
-        mensagem: 'Modo debug — nenhum email enviado.',
+        smtp_verified: true,
         leads_prontas_count: leadsProntas.length,
         leads_amostra: leadsProntas.slice(0, 10).map(l => ({
-          id: l.id,
-          nome: l.nome_cliente,
-          email: l.email_cliente,
-          fase: l.fase_funil,
-          ultimo_contacto: l.ultimo_contacto,
+          id: l.id, nome: l.nome_cliente, email: l.email_cliente, fase: l.fase_funil,
         })),
       });
     }
 
     // ==========================================
-    // DISPARO EM PARALELO (SMTP)
+    // PASSO 3 — ENVIAR (com captura de erros por lead)
     // ==========================================
-    const promisesEnvio = leadsProntas.map(async (lead) => {
-      if (!lead.email_cliente || typeof lead.email_cliente !== 'string') {
-        console.warn('⚠️ [CRON B2B] Lead sem email válido, ignorada:', lead.id);
-        return null;
-      }
+    const resultados = await Promise.all(
+      leadsProntas.map(async (lead) => {
+        const email = (lead.email_cliente || '').trim();
+        if (!email || email.toLowerCase() === 'nan') {
+          return { status: 'skipped', id: lead.id, email, reason: 'email inválido' };
+        }
 
-      // Sanitiza: se for literalmente "nan" (string) ignora
-      if (lead.email_cliente.trim().toLowerCase() === 'nan') {
-        console.warn('⚠️ [CRON B2B] Lead com email "nan", ignorada:', lead.id);
-        return null;
-      }
+        const faseAtual = Number(lead.fase_funil) || 0;
+        const tpl = COLD_TEMPLATES[faseAtual];
+        if (!tpl) return { status: 'skipped', id: lead.id, email, reason: 'fase fora do range' };
 
-      const faseAtual = Number(lead.fase_funil) || 0;
-      const tpl = COLD_TEMPLATES[faseAtual];
-      if (!tpl) {
-        console.warn('⚠️ [CRON B2B] Fase fora do range:', faseAtual, 'lead:', lead.id);
-        return null;
-      }
+        const linkFinal = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.hellocamp.pt'}/registar?lang=pt&utm_source=cold_email&utm_campaign=fase${faseAtual}`;
 
-      const linkFinal = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.hellocamp.pt'}/registar?lang=pt&utm_source=cold_email&utm_campaign=fase${faseAtual}`;
+        try {
+          const info = await transporter.sendMail({
+            from: '"HelloCamp" <info@hellocamp.pt>',
+            to: email,
+            subject: tpl.assunto,
+            html: getTemplateHTML(tpl.titulo, tpl.gerarMensagem(lead.nome_cliente || 'Organizador'), tpl.textoCta, linkFinal),
+          });
+          console.log('✉️ [OK]', email, '| msgId:', info.messageId);
+          return { status: 'sent', id: lead.id, novaFase: faseAtual + 1, email };
+        } catch (e: any) {
+          const errInfo = {
+            message: e?.message,
+            code: e?.code,
+            command: e?.command,
+            responseCode: e?.responseCode,
+            response: e?.response,
+          };
+          console.error(`❌ [FALHA] ${email}:`, errInfo);
+          return { status: 'failed', id: lead.id, email, erro: errInfo };
+        }
+      })
+    );
 
-      try {
-        await transporter.sendMail({
-          from: '"HelloCamp" <info@hellocamp.pt>',
-          to: lead.email_cliente,
-          subject: tpl.assunto,
-          html: getTemplateHTML(
-            tpl.titulo,
-            tpl.gerarMensagem(lead.nome_cliente || 'Organizador'),
-            tpl.textoCta,
-            linkFinal
-          ),
-        });
+    const sucessos = resultados.filter(r => r.status === 'sent') as any[];
+    const falhas = resultados.filter(r => r.status === 'failed') as any[];
+    const skipped = resultados.filter(r => r.status === 'skipped') as any[];
 
-        console.log('✉️ [CRON B2B] Enviado para:', lead.email_cliente, '| fase:', faseAtual);
-        return { id: lead.id, novaFase: faseAtual + 1 };
-      } catch (e: any) {
-        console.error(`❌ [CRON B2B] Falha envio para ${lead.email_cliente}:`, e?.message || e);
-        return null;
-      }
-    });
-
-    const resultados = await Promise.all(promisesEnvio);
-    const sucessos = resultados.filter((r) => r !== null) as { id: string; novaFase: number }[];
-
-    console.log('✅ [CRON B2B] Emails enviados com sucesso:', sucessos.length, '/', leadsProntas.length);
-
+    // Se TODAS falharam, retorna o erro detalhado do primeiro envio para diagnóstico
     if (sucessos.length === 0) {
       return NextResponse.json({
-        message: 'Falha global de SMTP. 0 emails enviados.',
+        step: 'send_batch',
+        success: false,
+        mensagem: 'SMTP aceitou conexão, mas rejeitou todos os envios.',
         enviados: 0,
         tentados: leadsProntas.length,
+        falhas: falhas.length,
+        skipped: skipped.length,
+        primeiro_erro: falhas[0]?.erro || null,
+        amostra_falhas: falhas.slice(0, 3).map(f => ({ email: f.email, erro: f.erro })),
+        config: {
+          host: SMTP_HOST,
+          port: SMTP_PORT,
+          from_usado: '"HelloCamp" <info@hellocamp.pt>',
+          user_inicio: SMTP_USER ? SMTP_USER.substring(0, 5) + '***' : null,
+        },
       }, { status: 500 });
     }
 
-    // ==========================================
-    // ATUALIZAÇÃO NO SUPABASE
-    // ==========================================
-    const groupedByFase = sucessos.reduce((acc, curr) => {
-      if (!acc[curr.novaFase]) acc[curr.novaFase] = [];
-      acc[curr.novaFase].push(curr.id);
-      return acc;
-    }, {} as Record<number, string[]>);
+    // Atualizar fases das que enviaram
+    const groupedByFase: Record<number, number[]> = {};
+    for (const curr of sucessos) {
+      const fase = Number(curr.novaFase);
+      if (!groupedByFase[fase]) groupedByFase[fase] = [];
+      groupedByFase[fase].push(Number(curr.id));
+    }
 
     const nowIso = new Date().toISOString();
-
-    const updatePromises = Object.entries(groupedByFase).map(([faseStr, ids]) => {
-      const faseNum = parseInt(faseStr, 10);
-      return supabaseAdmin
-        .from('leads_externas')
-        .update({ fase_funil: faseNum, ultimo_contacto: nowIso })
-        .in('id', ids);
-    });
-
-    await Promise.all(updatePromises);
+    await Promise.all(
+      Object.entries(groupedByFase).map(([faseStr, ids]) =>
+        supabaseAdmin
+          .from('leads_externas')
+          .update({ fase_funil: parseInt(faseStr, 10), ultimo_contacto: nowIso })
+          .in('id', ids as number[])
+      )
+    );
 
     return NextResponse.json({
       success: true,
       mensagens_enviadas: sucessos.length,
+      falhas: falhas.length,
+      skipped: skipped.length,
       tentados: leadsProntas.length,
-      diagnostico: {
-        sem_contacto: countSemContacto,
-        contacto_antigo: countContactoAntigo,
-      }
+      amostra_falhas: falhas.slice(0, 3).map(f => ({ email: f.email, erro: f.erro })),
     });
 
   } catch (error: any) {
