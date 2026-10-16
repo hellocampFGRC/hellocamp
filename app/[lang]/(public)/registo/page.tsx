@@ -142,7 +142,7 @@ export default function RegistoUnificado({ params }: { params: Promise<{ lang: s
                 className={`flex-1 py-3 rounded-lg text-xs tracking-widest font-black transition-all flex items-center justify-center gap-2
                   ${role === 'cliente' ? 'bg-[#0E3A68] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                👤 {isEn ? 'Parent' : 'Sou Encarregado'}
+                {isEn ? 'Parent' : 'Sou Encarregado'}
               </button>
               
               <button 
@@ -151,7 +151,7 @@ export default function RegistoUnificado({ params }: { params: Promise<{ lang: s
                 className={`flex-1 py-3 rounded-lg text-xs tracking-widest font-black transition-all flex items-center justify-center gap-2
                   ${role === 'organizador' ? 'bg-[#F3A61C] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                🎪 {isEn ? 'Partner' : 'Sou Campo / Parceiro'}
+                {isEn ? 'Partner' : 'Sou Campo / Parceiro'}
               </button>
             </div>
 
