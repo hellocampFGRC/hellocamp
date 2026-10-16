@@ -39,12 +39,6 @@ const IconArrowRight = ({ className = "w-5 h-5" }: { className?: string }) => (
   </svg>
 );
 
-const IconCheck = ({ className = "w-5 h-5" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
 // ═══════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════
@@ -55,13 +49,13 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
   const [websiteLink, setWebsiteLink] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Link para quem prefere fazer o registo manual
+  // Link dinâmico com o parâmetro de organizador
   const REGISTO_URL = `/${lang}/registo?role=organizador`;
 
   const handleMagicSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Aqui podes ligar à tua API para enviar o link para um canal de Slack/Discord ou enviar email para a tua equipa
+    // Aqui podes ligar à tua API para enviar o link para um canal de Slack/Discord ou e-mail
     setTimeout(() => {
       alert(isEn ? "Link received! Our team will contact you shortly." : "Link recebido! A nossa equipa vai tratar do seu perfil.");
       setWebsiteLink("");
@@ -73,51 +67,54 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
     <main className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900 pb-20">
 
       {/* ═══════════════════════════════════════════ */}
-      {/* HERO B2B - FOCO CHAVE-NA-MÃO                */}
+      {/* HERO B2B - PREMIUM & CLEAN                    */}
       {/* ═══════════════════════════════════════════ */}
-      <section className="bg-[#167524] text-white py-24 md:py-32 text-center relative overflow-hidden border-b-8 border-[#e2a41d]">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-black/10 rounded-full blur-3xl pointer-events-none" />
+      <section className="bg-white py-24 md:py-32 text-center relative overflow-hidden border-b border-slate-200">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-50 via-white to-white pointer-events-none" />
+        
         <div className="max-w-4xl mx-auto px-4 relative z-10">
-          <span className="text-xs font-bold text-[#167524] bg-[#e2a41d] px-4 py-2 rounded-full border border-[#e2a41d] uppercase tracking-widest shadow-sm">
+          <span className="text-xs font-bold text-[#167524] bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100 uppercase tracking-widest">
             {isEn ? "HelloCamp Partner Network" : "HelloCamp para Organizadores"}
           </span>
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight mt-8 mb-6 leading-tight">
+          
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-slate-900 tracking-tight mt-8 mb-6 leading-tight">
             {isEn
               ? "Fully Booked. Zero Effort."
               : "Lotação Esgotada. Zero Esforço."}
           </h1>
-          <p className="text-lg md:text-xl text-green-50 font-medium max-w-3xl mx-auto leading-relaxed mb-10">
+          
+          <p className="text-lg md:text-xl text-slate-500 font-medium max-w-3xl mx-auto leading-relaxed mb-12">
             {isEn
               ? "Don't waste time filling out forms. Paste your website link or send us your PDF, and our team will build your automated booking dashboard for free."
               : "Não perca tempo a preencher dezenas de formulários. Cole o link do seu site (ou envie o seu PDF) e a nossa equipa constrói o seu painel de inscrições gratuito em 24h."}
           </p>
 
-          {/* A "MAGIC BOX" */}
-          <div className="max-w-2xl mx-auto bg-white p-3 rounded-2xl shadow-2xl flex flex-col sm:flex-row gap-3">
-            <form onSubmit={handleMagicSubmit} className="flex-1 flex gap-2 w-full">
+          {/* MAGIC BOX OTIMIZADA */}
+          <div className="max-w-2xl mx-auto bg-white p-2 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 flex flex-col sm:flex-row gap-2">
+            <form onSubmit={handleMagicSubmit} className="flex-1 flex flex-col sm:flex-row gap-2 w-full">
               <input 
                 type="url" 
                 placeholder={isEn ? "Paste your camp's website link here..." : "Cole aqui o link do seu site..."}
                 required
                 value={websiteLink}
                 onChange={(e) => setWebsiteLink(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-4 outline-none focus:border-[#167524] transition-colors"
+                className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-5 py-4 outline-none focus:bg-white focus:border-[#167524] focus:ring-2 focus:ring-[#167524]/20 transition-all font-medium placeholder:text-slate-400"
               />
               <button 
                 type="submit" 
                 disabled={isSubmitting}
-                className="bg-[#e2a41d] hover:bg-[#d4991b] text-[#167524] font-black px-6 md:px-8 py-4 rounded-xl transition-all whitespace-nowrap"
+                className="bg-[#167524] hover:bg-[#115a1b] text-white font-black px-8 py-4 rounded-xl transition-all whitespace-nowrap shadow-md shadow-[#167524]/20"
               >
                 {isSubmitting ? "..." : (isEn ? "Do it for me" : "Criem o meu Perfil")}
               </button>
             </form>
           </div>
 
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 text-sm font-medium text-green-100">
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-2 text-sm font-medium text-slate-500">
             <span>
               {isEn ? "Or prefer to do it yourself?" : "Prefere criar a conta manualmente?"} 
             </span>
-            <Link href={REGISTO_URL} className="text-white underline hover:text-[#e2a41d] font-bold">
+            <Link href={REGISTO_URL} className="text-[#124072] hover:text-[#0a294b] font-bold underline decoration-[#124072]/30 hover:decoration-[#124072]">
               {isEn ? "Click here to register" : "Clique aqui para começar"}
             </Link>
           </div>
