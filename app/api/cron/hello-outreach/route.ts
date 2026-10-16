@@ -15,14 +15,10 @@ const supabaseAdmin = createClient(
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 const SENDER_EMAIL = 'info@hellocamp.pt';
-const SENDER_NAME = 'Afonso da HelloCamp'; // DICA: Usar nome de pessoa aumenta a taxa de abertura
+const SENDER_NAME = 'Afonso da HelloCamp';
 
-// URL BASE
 const BASE_LINK_REGISTO = 'https://www.hellocamp.pt/pt/registo';
 
-// ==========================================
-// FUNÇÃO: Enviar email via Brevo HTTP API
-// ==========================================
 async function enviarViaBrevo(params: {
   to: { email: string; name?: string };
   subject: string;
@@ -56,23 +52,21 @@ async function enviarViaBrevo(params: {
 }
 
 // ==========================================
-// OS NOVOS TEMPLATES (COPY DE ALTA CONVERSÃO)
+// TEMPLATES B2B: FOCO NO "SERVIÇO CHAVE-NA-MÃO"
 // ==========================================
 const COLD_TEMPLATES = [
   {
     gerarAssunto: (nome: string) => `uma pergunta rápida sobre as inscrições da ${nome}`,
-    titulo: "Mais reservas, zero comissões.",
+    titulo: "Lotação Esgotada, Zero Esforço",
     textoCta: "Ver como funciona a HelloCamp",
     gerarMensagem: (nome: string) => `
       <p>Olá equipa da <strong>${nome}</strong>,</p>
-      <p>Tenho acompanhado o vosso trabalho e sei como pode ser exaustivo depender apenas do "passa-a-palavra" ou das redes sociais para encher as vagas dos vossos campos de férias e atividades.</p>
-      <p>Criámos a <strong>HelloCamp</strong> (uma plataforma 100% portuguesa) com um objetivo muito simples: colocar a vossa marca à frente de milhares de pais que procuram exatamente o que vocês oferecem, <strong>sem vos cobrar comissões por reserva</strong>.</p>
-      <ul style="padding-left: 20px; color: #4a4a4a; line-height: 1.6; margin-bottom: 25px; margin-top: 15px;">
-        <li>Os pais falam convosco (não escondemos o vosso email/telefone).</li>
-        <li>Recebem 100% do valor da inscrição.</li>
-        <li>O registo demora 2 minutos e é totalmente gratuito.</li>
-      </ul>
-      <p>Querem espreitar como ficaria a vossa página no nosso diretório?</p>
+      <p>Tenho acompanhado o vosso trabalho e sei como pode ser exaustivo depender do "passa-a-palavra" ou de publicidade cara para encher as vagas dos vossos campos de férias e atividades.</p>
+      <p>Criámos a <strong>HelloCamp</strong> para colocar a vossa marca à frente de milhares de pais, <strong>sem cobrar comissões por reserva</strong> e sem esconder os vossos contactos (os pais falam diretamente convosco na plataforma).</p>
+      <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
+        <strong>Sabemos que o vosso tempo é escasso. Por isso, oferecemos um serviço chave-na-mão:</strong> basta responder a este e-mail com o link ou PDF do vosso programa atual. A nossa equipa encarrega-se de criar e otimizar o vosso perfil completo no nosso portal, sem qualquer custo ou esforço da vossa parte.
+      </p>
+      <p>Querem poupar dezenas de horas em gestão administrativa já na próxima época?</p>
     `
   },
   {
@@ -81,10 +75,10 @@ const COLD_TEMPLATES = [
     textoCta: "Descobrir o Dashboard Automático",
     gerarMensagem: (nome: string) => `
       <p>Olá novamente,</p>
-      <p>Falei com vários organizadores de campos de férias nas últimas semanas e a queixa é sempre a mesma: a burocracia das inscrições consome tempo que devia ser usado no terreno.</p>
+      <p>Falei com vários organizadores de campos de férias nas últimas semanas e a queixa é sempre a mesma: a burocracia das inscrições consome tempo que devia ser usado no terreno com os participantes.</p>
       <p>Ao colocarem a <strong>${nome}</strong> na HelloCamp, não ganham apenas publicidade. Ganham uma secretaria digital gratuita.</p>
       <p>Na nossa plataforma, <strong>os pais pagam automaticamente no momento da reserva</strong> (Multibanco ou MBWay) e as fichas médicas/alergias ficam imediatamente guardadas no vosso painel. Sem trocas infinitas de emails, sem comprovativos falsos e sem folhas de Excel desorganizadas.</p>
-      <p>Se quiserem poupar dezenas de horas na próxima época, vejam a nossa solução.</p>
+      <p>Acelere a vossa organização. Responda a este e-mail para ativarmos o vosso espaço.</p>
     `
   },
   {
@@ -93,10 +87,10 @@ const COLD_TEMPLATES = [
     textoCta: "Criar o meu Perfil Transparente",
     gerarMensagem: (nome: string) => `
       <p>Equipa da <strong>${nome}</strong>,</p>
-      <p>Se já usam outros agregadores de mercado, já devem ter reparado num detalhe frustrante: eles escondem os vossos contactos para obrigar os clientes a falar com eles primeiro.</p>
+      <p>Se já usam outros agregadores de mercado, já devem ter reparado num detalhe frustrante: eles escondem os vossos contactos para obrigar os clientes a falar com eles primeiro. Vocês tornam-se reféns da plataforma deles.</p>
       <p>A HelloCamp joga com outras regras. Acreditamos que a confiança constrói-se quando as famílias falam diretamente com quem organiza.</p>
       <p>No vosso perfil da HelloCamp, <strong>o vosso telefone, site e e-mail estão 100% visíveis</strong>. Adicionámos até um Chat integrado para que os pais possam tirar dúvidas convosco de forma rápida e segura.</p>
-      <p>Registem a vossa entidade sem custos e recuperem o controlo da vossa comunicação.</p>
+      <p>Recuperem o controlo da vossa comunicação. Podemos avançar com a criação da vossa página?</p>
     `
   },
   {
@@ -105,22 +99,22 @@ const COLD_TEMPLATES = [
     textoCta: "Explorar a Bolsa de Monitores",
     gerarMensagem: (nome: string) => `
       <p>Olá,</p>
-      <p>A qualidade do vosso campo de férias depende diretamente da energia e responsabilidade dos monitores que contratam. Mas sabemos que recrutar nas épocas de pico é uma dor de cabeça.</p>
+      <p>A qualidade do vosso campo de férias depende diretamente da energia e responsabilidade dos monitores que contratam. Mas sabemos que recrutar nas épocas de pico é uma dor de cabeça logística.</p>
       <p>Na HelloCamp, não trazemos apenas clientes. Construímos uma <strong>Bolsa de Talentos integrada</strong>.</p>
-      <p>Através do vosso Dashboard, podem aceder a perfis de jovens animadores (com formação IPDJ validada), atribuí-los às vossas turmas e gerir permissões para que eles acedam apenas às informações das crianças que lhes estão atribuídas.</p>
-      <p>A preparação do próximo campo pode ser muito mais simples do que imagina.</p>
+      <p>Através do vosso Dashboard, podem aceder a perfis de jovens animadores certificados, atribuí-los às vossas turmas e gerir permissões para que eles acedam apenas às informações (alergias, dados urgentes) das crianças que lhes estão atribuídas.</p>
+      <p>Garanta que a sua equipa está completa meses antes de o campo começar.</p>
     `
   },
   {
-    gerarAssunto: (nome: string) => `Último email (e um convite final para a ${nome})`,
+    gerarAssunto: (nome: string) => `Último email (e a nossa oferta chave-na-mão para a ${nome})`,
     titulo: "A Época de Reservas já Começou",
     textoCta: "Garantir o meu Lugar na HelloCamp",
     gerarMensagem: (nome: string) => `
       <p>Olá equipa da <strong>${nome}</strong>,</p>
-      <p>Prometo que não vos chateio mais. Queria apenas deixar um último convite antes da época alta arrancar em força.</p>
-      <p>Neste preciso momento, há famílias no Google a pesquisar por campos de férias e atividades na vossa zona. A HelloCamp está no topo dessas pesquisas, a encaminhar essas famílias para os nossos parceiros oficiais.</p>
-      <p>Demora literalmente 2 minutos a criar o vosso perfil. Não há taxas de adesão, não há mensalidades escondidas e não cobramos um cêntimo sobre as vossas inscrições.</p>
-      <p>Não fiquem de fora da plataforma que está a modernizar os campos de férias em Portugal. Esperamos por vocês.</p>
+      <p>Prometo que não vos chateio mais. Queria apenas deixar um último convite antes da época alta arrancar em força e as vagas da vossa zona ficarem preenchidas por outros parceiros.</p>
+      <p>Neste preciso momento, há famílias no Google a pesquisar por atividades na vossa região. A HelloCamp está a encaminhar essas famílias para os nossos organizadores oficiais.</p>
+      <p><strong>Reforço a nossa oferta especial: não precisam de preencher formulários longos.</strong> Enviem-nos apenas o PDF ou link das vossas datas em resposta a este e-mail, e a nossa equipa configura o vosso espaço em menos de 24 horas.</p>
+      <p>Não fiquem de fora da plataforma que está a modernizar as experiências das crianças em Portugal. Esperamos por vocês.</p>
     `
   }
 ];
@@ -185,7 +179,6 @@ export async function GET(request: Request) {
     if (error) throw error;
     if (!leadsProntas || leadsProntas.length === 0) return NextResponse.json({ message: 'Nenhuma lead elegível.' });
 
-    // ENVIAR EM BATCHES
     const resultados: any[] = [];
     for (const lead of leadsProntas) {
       const email = (lead.email_cliente || '').trim();
@@ -193,7 +186,6 @@ export async function GET(request: Request) {
       const faseAtual = Number(lead.fase_funil) || 0;
       const tpl = COLD_TEMPLATES[faseAtual];
 
-      // CRIAÇÃO DO LINK DINÂMICO COM UTMs
       const ctaLinkTracker = `${BASE_LINK_REGISTO}?utm_source=cold_email_b2b&utm_medium=email&utm_campaign=fase_${faseAtual}`;
 
       const r = await enviarViaBrevo({
