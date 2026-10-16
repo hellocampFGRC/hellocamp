@@ -312,7 +312,7 @@ export default function Header({ dict, lang }: { dict: any; lang: string }) {
               </Link>
 
               <Link
-                href={`/${lang}/ser-parceiro`}
+                href={`/${lang}/parceiro`}
                 className="px-3 py-2 text-sm font-bold text-slate-700 hover:text-[#167524] transition-colors"
               >
                 {isEn ? "Partners" : "Parceiros"}
