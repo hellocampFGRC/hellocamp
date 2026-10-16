@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import React from "react";
 
@@ -51,45 +51,76 @@ const IconCheck = ({ className = "w-5 h-5" }: { className?: string }) => (
 export default function SerParceiroPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const isEn = lang === "en";
+  
+  const [websiteLink, setWebsiteLink] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ✅ PONTO ÚNICO DE REGISTO
+  // Link para quem prefere fazer o registo manual
   const REGISTO_URL = `/${lang}/registo?role=organizador`;
+
+  const handleMagicSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    // Aqui podes ligar à tua API para enviar o link para um canal de Slack/Discord ou enviar email para a tua equipa
+    setTimeout(() => {
+      alert(isEn ? "Link received! Our team will contact you shortly." : "Link recebido! A nossa equipa vai tratar do seu perfil.");
+      setWebsiteLink("");
+      setIsSubmitting(false);
+    }, 1000);
+  };
 
   return (
     <main className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900 pb-20">
 
       {/* ═══════════════════════════════════════════ */}
-      {/* HERO B2B                                    */}
+      {/* HERO B2B - FOCO CHAVE-NA-MÃO                */}
       {/* ═══════════════════════════════════════════ */}
       <section className="bg-[#167524] text-white py-24 md:py-32 text-center relative overflow-hidden border-b-8 border-[#e2a41d]">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-black/10 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-4xl mx-auto px-4 relative z-10">
           <span className="text-xs font-bold text-[#167524] bg-[#e2a41d] px-4 py-2 rounded-full border border-[#e2a41d] uppercase tracking-widest shadow-sm">
-            {isEn ? "HelloCamp B2B Platform" : "HelloCamp para Organizadores"}
+            {isEn ? "HelloCamp Partner Network" : "HelloCamp para Organizadores"}
           </span>
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight mt-8 mb-6 leading-tight">
             {isEn
-              ? "Maximize Bookings. Simplify Operations."
-              : "Aumente as Inscrições. Otimize a Sua Operação."}
+              ? "Fully Booked. Zero Effort."
+              : "Lotação Esgotada. Zero Esforço."}
           </h1>
           <p className="text-lg md:text-xl text-green-50 font-medium max-w-3xl mx-auto leading-relaxed mb-10">
             {isEn
-              ? "The ultimate technological solution for camp organizers. No fixed costs. Absolute control."
-              : "A solução tecnológica definitiva para promotores de campos de férias. Simplifique a tesouraria e a gestão de clientes sem custos fixos e com controlo total."}
+              ? "Don't waste time filling out forms. Paste your website link or send us your PDF, and our team will build your automated booking dashboard for free."
+              : "Não perca tempo a preencher dezenas de formulários. Cole o link do seu site (ou envie o seu PDF) e a nossa equipa constrói o seu painel de inscrições gratuito em 24h."}
           </p>
-          <Link
-            href={REGISTO_URL}
-            className="inline-flex items-center gap-2 bg-[#e2a41d] text-[#167524] font-black px-10 py-4 rounded-xl no-underline hover:bg-[#d4991b] transition-all transform hover:-translate-y-1 shadow-xl shadow-[#e2a41d]/20 text-lg"
-          >
-            {isEn ? "Create Partner Account" : "Registar Conta Parceiro"}
-            <IconArrowRight />
-          </Link>
 
-          <p className="text-sm text-green-100/80 font-medium mt-6">
-            {isEn
-              ? "Free to join. No monthly fees. You only pay when you get paid."
-              : "Adesão gratuita. Sem mensalidades. Só paga quando receber."}
-          </p>
+          {/* A "MAGIC BOX" */}
+          <div className="max-w-2xl mx-auto bg-white p-3 rounded-2xl shadow-2xl flex flex-col sm:flex-row gap-3">
+            <form onSubmit={handleMagicSubmit} className="flex-1 flex gap-2 w-full">
+              <input 
+                type="url" 
+                placeholder={isEn ? "Paste your camp's website link here..." : "Cole aqui o link do seu site..."}
+                required
+                value={websiteLink}
+                onChange={(e) => setWebsiteLink(e.target.value)}
+                className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-4 outline-none focus:border-[#167524] transition-colors"
+              />
+              <button 
+                type="submit" 
+                disabled={isSubmitting}
+                className="bg-[#e2a41d] hover:bg-[#d4991b] text-[#167524] font-black px-6 md:px-8 py-4 rounded-xl transition-all whitespace-nowrap"
+              >
+                {isSubmitting ? "..." : (isEn ? "Do it for me" : "Criem o meu Perfil")}
+              </button>
+            </form>
+          </div>
+
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 text-sm font-medium text-green-100">
+            <span>
+              {isEn ? "Or prefer to do it yourself?" : "Prefere criar a conta manualmente?"} 
+            </span>
+            <Link href={REGISTO_URL} className="text-white underline hover:text-[#e2a41d] font-bold">
+              {isEn ? "Click here to register" : "Clique aqui para começar"}
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -103,119 +134,97 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
               ? "Why digitize your operation with HelloCamp?"
               : "Porquê digitalizar a sua operação connosco?"}
           </h2>
-          <p className="text-slate-600 text-base mt-4 max-w-3xl mx-auto font-medium leading-relaxed">
-            {isEn
-              ? "We engineered an infrastructure designed specifically to eliminate bottlenecks in treasury, marketing, and staff logistics."
-              : "Desenhámos uma infraestrutura dedicada exclusivamente a eliminar constrangimentos de tesouraria, angariação de clientes e logística de monitores."}
-          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-
-          {/* PILAR 1 — Faturação */}
           <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/30 flex flex-col hover:border-[#167524] transition-colors">
             <div className="w-16 h-16 rounded-2xl bg-[#167524]/10 text-[#167524] flex items-center justify-center mb-8 shadow-inner border border-[#167524]/20">
               <IconCreditCard />
             </div>
             <h3 className="text-xl font-black text-slate-900 tracking-tight mb-4">
-              {isEn ? "Automated Payouts" : "Faturação e Pagamentos Automatizados"}
+              {isEn ? "Automated Payouts" : "Pagamentos Automáticos"}
             </h3>
             <p className="text-slate-600 text-sm leading-relaxed font-medium">
               {isEn
-                ? "Say goodbye to chasing bank transfers. Parents pay, and Stripe Connect splits the transaction instantly. Your net revenue is deposited directly into your bank account."
-                : "Esqueça a validação manual de transferências bancárias. Através da nossa integração com a Stripe Connect, o pagamento do cliente é processado e dividido na hora: a nossa comissão é deduzida e o seu ganho líquido é depositado diretamente na sua conta bancária."}
+                ? "Say goodbye to chasing bank transfers. Parents pay, and Stripe Connect splits the transaction instantly. Your net revenue is deposited directly."
+                : "Esqueça a caça aos comprovativos de MBWay. Os pais pagam na plataforma e o seu dinheiro é depositado automaticamente na sua conta bancária."}
             </p>
           </div>
 
-          {/* PILAR 2 — Gestão */}
           <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/30 flex flex-col hover:border-[#124072] transition-colors">
             <div className="w-16 h-16 rounded-2xl bg-[#124072]/10 text-[#124072] flex items-center justify-center mb-8 shadow-inner border border-[#124072]/20">
               <IconChart />
             </div>
             <h3 className="text-xl font-black text-slate-900 tracking-tight mb-4">
-              {isEn ? "Nominal Rosters & Export" : "Gestão Logística e Dados Nominais"}
+              {isEn ? "Medical Forms & Rosters" : "Fichas Médicas Centralizadas"}
             </h3>
             <p className="text-slate-600 text-sm leading-relaxed font-medium">
               {isEn
-                ? "Centralize medical records, emergency contacts, and custom Q&A. Export real-time operational spreadsheets for your on-ground staff with a single click."
-                : "Substitua folhas de papel e ficheiros complexos. Acompanhe em tempo real o preenchimento de vagas, restrições alimentares e autorizações de recolha. Exporte a listagem nominal das suas equipas para Excel/CSV com um único clique."}
+                ? "Centralize medical records and allergies. Export real-time operational spreadsheets for your on-ground staff with a single click."
+                : "Substitua folhas de papel. Acompanhe em tempo real as alergias, fichas médicas e autorizações de recolha, exportando tudo para a sua equipa."}
             </p>
           </div>
 
-          {/* PILAR 3 — Risco Zero */}
           <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/30 flex flex-col hover:border-[#e2a41d] transition-colors">
             <div className="w-16 h-16 rounded-2xl bg-[#e2a41d]/10 text-[#e2a41d] flex items-center justify-center mb-8 shadow-inner border border-[#e2a41d]/20">
               <IconScale />
             </div>
             <h3 className="text-xl font-black text-slate-900 tracking-tight mb-4">
-              {isEn ? "Zero Risk. Success-Based Model." : "Risco Zero. Modelo Baseado no Sucesso"}
+              {isEn ? "Zero Risk" : "Custo Fixo Zero"}
             </h3>
             <p className="text-slate-600 text-sm leading-relaxed font-medium">
               {isEn
-                ? "No setup fees, no monthly retainers. Creating an account and listing your camp portfolio is 100% free. We strictly operate on a performance fee per successful booking."
-                : "Não aplicamos custos de configuração, mensalidades ou anuidades. O registo da sua entidade e a publicação dos seus programas são 100% gratuitos. A HelloCamp opera estritamente à performance, deduzindo uma taxa apenas quando uma inscrição é efetivada."}
+                ? "No setup fees, no monthly retainers. We strictly operate on a performance fee per successful booking."
+                : "A criação do perfil é gratuita. Não cobramos anuidades nem mensalidades, retendo apenas uma taxa de performance quando uma reserva é confirmada."}
             </p>
           </div>
-
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════ */}
-      {/* COMO FUNCIONA — 4 PASSOS                    */}
+      {/* COMO FUNCIONA — O MODELO "DO IT FOR ME"     */}
       {/* ═══════════════════════════════════════════ */}
-      <section className="bg-white border-t border-b border-slate-200 py-20">
+      <section className="bg-slate-900 text-white py-20">
         <div className="max-w-5xl mx-auto px-4 md:px-8">
           <div className="text-center mb-14">
-            <h3 className="text-3xl font-black text-slate-900 tracking-tight">
-              {isEn ? "How it works" : "Como funciona"}
+            <h3 className="text-3xl font-black tracking-tight">
+              {isEn ? "How the White-Glove Onboarding works" : "Como funciona o Serviço Chave-na-Mão"}
             </h3>
-            <p className="text-slate-500 text-base mt-3 font-medium">
+            <p className="text-slate-400 text-base mt-3 font-medium">
               {isEn
-                ? "From registration to your first booking in less than 30 minutes."
-                : "Do registo à primeira reserva em menos de 30 minutos."}
+                ? "You organize the camps. We handle the technology."
+                : "Vocês focam-se nos participantes. Nós tratamos da tecnologia."}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
               {
                 n: "1",
-                title: isEn ? "Register" : "Registe-se",
+                title: isEn ? "Send your data" : "Envie o Programa",
                 desc: isEn
-                  ? "Free sign-up with company details."
-                  : "Registo gratuito com dados da entidade.",
+                  ? "Paste your website link or send your brochure to our team."
+                  : "Cole o link do seu site acima ou responda aos nossos e-mails com as suas datas.",
               },
               {
                 n: "2",
-                title: isEn ? "Configure Stripe" : "Configure a Stripe",
+                title: isEn ? "We build it" : "Nós Construímos",
                 desc: isEn
-                  ? "Secure payouts via Stripe Connect."
-                  : "Recebimentos seguros via Stripe Connect.",
+                  ? "Our team creates your Dashboard, uploads photos and sets pricing."
+                  : "A nossa equipa estrutura os seus turnos, preços, lotação e imagens no sistema.",
               },
               {
                 n: "3",
-                title: isEn ? "Publish Programs" : "Publique Programas",
+                title: isEn ? "You receive bookings" : "Comece a Faturar",
                 desc: isEn
-                  ? "Add dates, prices and availability."
-                  : "Adicione datas, preços e vagas.",
-              },
-              {
-                n: "4",
-                title: isEn ? "Receive Bookings" : "Receba Inscrições",
-                desc: isEn
-                  ? "Parents book and pay directly. You get paid."
-                  : "Os pais reservam e pagam. O dinheiro é seu.",
+                  ? "You get the login keys and start receiving paid enrollments instantly."
+                  : "Recebe as chaves de acesso e vê as vagas esgotarem com pagamentos seguros.",
               },
             ].map((step) => (
-              <div
-                key={step.n}
-                className="relative bg-slate-50 border border-slate-200 rounded-2xl p-6"
-              >
-                <div className="w-10 h-10 rounded-xl bg-[#167524] text-white flex items-center justify-center font-black text-base mb-4">
-                  {step.n}
-                </div>
-                <h4 className="text-base font-black text-slate-900 mb-2">{step.title}</h4>
-                <p className="text-sm text-slate-600 font-medium leading-relaxed m-0">
+              <div key={step.n} className="bg-slate-800 rounded-2xl p-8 border border-slate-700">
+                <div className="text-[#e2a41d] font-black text-5xl mb-4 opacity-50">0{step.n}</div>
+                <h4 className="text-xl font-black mb-2">{step.title}</h4>
+                <p className="text-sm text-slate-400 font-medium leading-relaxed m-0">
                   {step.desc}
                 </p>
               </div>
@@ -225,56 +234,22 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
       </section>
 
       {/* ═══════════════════════════════════════════ */}
-      {/* TRANSPARÊNCIA COMERCIAL                     */}
-      {/* ═══════════════════════════════════════════ */}
-      <section className="py-20">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <h3 className="text-3xl font-black text-slate-900 mb-6 tracking-tight">
-            {isEn ? "Full Commercial Control" : "Transparência e Flexibilidade Comercial"}
-          </h3>
-          <p className="text-slate-600 text-base font-medium leading-relaxed max-w-3xl mx-auto mb-10">
-            {isEn
-              ? "Our dynamic management panel adapts to your business rules. View custom commission rates, track billing history, and manage specific program exemptions directly in your dashboard."
-              : "O nosso painel central ajusta-se à sua realidade operacional. Pode consultar regras de comissionamento gerais ou específicas, acompanhar o histórico de faturação de cada participante e gerir a capacidade dos seus turnos, garantindo transparência financeira absoluta."}
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              isEn ? "No setup fees" : "Sem custos de adesão",
-              isEn ? "No monthly fees" : "Sem mensalidades",
-              isEn ? "Full visibility of your data" : "Visibilidade total dos seus dados",
-            ].map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-left"
-              >
-                <span className="text-emerald-600 flex-shrink-0">
-                  <IconCheck className="w-5 h-5" />
-                </span>
-                <span className="text-sm font-bold text-emerald-900">{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════ */}
       {/* CTA FINAL                                   */}
       {/* ═══════════════════════════════════════════ */}
-      <section className="max-w-4xl mx-auto px-4 pt-10 text-center">
+      <section className="max-w-4xl mx-auto px-4 py-24 text-center">
         <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-6">
-          {isEn ? "Prepared to boost your organization?" : "Preparado para impulsionar a sua organização?"}
+          {isEn ? "Ready to join the European network?" : "Pronto para modernizar as suas inscrições?"}
         </h2>
         <p className="text-slate-500 text-base max-w-2xl mx-auto mb-10 font-medium leading-relaxed">
           {isEn
-            ? "It takes less than 5 minutes to set up your profile. Start receiving automated enrollments for your programs today."
-            : "O processo de configuração do perfil demora menos de 5 minutos. Inscreva a sua entidade e comece a receber reservas estruturadas para os seus programas de férias ao longo de todo o ano."}
+            ? "Send an email to info@hellocamp.pt with your camp details, or click below to set up your account instantly."
+            : "Envie-nos um e-mail para info@hellocamp.pt com a sua brochura, ou clique abaixo para abrir a sua conta imediatamente."}
         </p>
         <Link
           href={REGISTO_URL}
           className="inline-flex items-center gap-2 bg-[#167524] hover:bg-[#115a1b] text-white font-bold px-10 py-4 rounded-xl no-underline transition-colors shadow-lg shadow-[#167524]/20 text-lg"
         >
-          {isEn ? "Start Registration" : "Iniciar Registo da Entidade"}
+          {isEn ? "Open My Account" : "Quero Fazer o Registo Manual"}
           <IconArrowRight />
         </Link>
       </section>
