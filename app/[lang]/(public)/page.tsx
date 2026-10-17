@@ -97,7 +97,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                 <span className="text-sm font-black text-slate-900 uppercase tracking-widest hidden sm:block">
                   {isEn ? 'Find your next adventure' : 'Encontre a próxima aventura'}
                 </span>
-                <Link href={`/${lang}/mapa`} className="inline-flex items-center gap-2 bg-[#167524]/10 text-[#167524] px-4 py-2 rounded-lg text-xs font-bold no-underline hover:bg-[#167524]/20 transition-colors ml-auto">
+                <Link href={`/${lang}/mapa`} className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 hover:text-slate-900 px-4 py-2 rounded-lg text-xs font-bold no-underline hover:bg-slate-200 transition-colors ml-auto shadow-sm">
                   <span>🗺️</span> {dict.home.ver_mapa}
                 </Link>
               </div>
@@ -110,14 +110,14 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                   type="text"
                   name="q"
                   placeholder={isEn ? "What are you looking for? (e.g. Surf in Ericeira, Tech Camp...)" : "O que procura? (ex: Ténis no Porto, Surf na Caparica...)"}
-                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-base font-medium outline-none focus:bg-white focus:border-[#167524] focus:ring-2 focus:ring-[#167524]/20 transition-all placeholder:text-slate-400"
+                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-base font-medium outline-none focus:bg-white focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all placeholder:text-slate-400"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">{isEn ? 'Country' : 'País'}</label>
-                  <select name="pais" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#167524] cursor-pointer transition-all">
+                  <select name="pais" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-slate-900 cursor-pointer transition-all">
                     <option value="">{isEn ? 'All Countries' : 'Todos'}</option>
                     {paisesOpcoes.map((p) => <option key={p.valor} value={p.valor}>{p.label}</option>)}
                   </select>
@@ -125,7 +125,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">{dict.home.distrito}</label>
-                  <select name="distrito" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#167524] cursor-pointer transition-all">
+                  <select name="distrito" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-slate-900 cursor-pointer transition-all">
                     <option value="">{dict.home.todos_distritos}</option>
                     {distritosOpcoes.map((d) => <option key={d.valor} value={d.valor}>{d.label}</option>)}
                   </select>
@@ -133,7 +133,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">{dict.home.categoria}</label>
-                  <select name="categoria" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#167524] cursor-pointer transition-all">
+                  <select name="categoria" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-slate-900 cursor-pointer transition-all">
                     <option value="">{dict.home.todas_categorias}</option>
                     {categoriasOpcoes.map((cat) => <option key={cat.valor} value={cat.valor}>{cat.label}</option>)}
                   </select>
@@ -141,7 +141,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">{dict.home.faixa_etaria}</label>
-                  <select name="idade" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#167524] cursor-pointer transition-all">
+                  <select name="idade" className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-slate-900 cursor-pointer transition-all">
                     <option value="">{dict.home.todas_idades}</option>
                     {idadesOpcoes.map((faixa) => <option key={faixa.valor} value={faixa.valor}>{faixa.label}</option>)}
                   </select>
@@ -153,15 +153,16 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                     type="date"
                     name="data"
                     min={todayISO}
-                    className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#167524] cursor-pointer transition-all"
+                    className="w-full appearance-none rounded-xl bg-slate-50 px-4 py-3 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-slate-900 cursor-pointer transition-all"
                   />
                 </div>
               </div>
 
+              {/* O BOTÃO OTIMIZADO: Laranja c/ Texto Branco (Forte Contraste) */}
               <div className="flex justify-center mt-8 md:absolute md:-bottom-[4rem] md:left-1/2 md:-translate-x-1/2">
-                <button type="submit" className="group w-full md:w-56 bg-[#e2a41d] hover:bg-[#d4991b] rounded-xl md:rounded-full flex items-center justify-center gap-3 py-4 md:py-5 shadow-lg shadow-[#e2a41d]/30 transition-all hover:-translate-y-1">
-                  <svg className="w-5 h-5 text-[#167524]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                  <span className="text-[#167524] text-sm font-black uppercase tracking-widest">{dict.home.pesquisar}</span>
+                <button type="submit" className="group w-full md:w-64 bg-[#e2a41d] hover:bg-[#d4991b] rounded-xl md:rounded-full flex items-center justify-center gap-3 py-4 md:py-5 shadow-xl shadow-[#e2a41d]/40 transition-all hover:-translate-y-1">
+                  <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <span className="text-white text-sm font-black uppercase tracking-widest">{dict.home.pesquisar}</span>
                 </button>
               </div>
             </form>
@@ -178,7 +179,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                 <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">{dict.home.destaques_titulo}</h2>
                 <p className="mt-2 text-base text-slate-500 font-medium">{dict.home.destaques_subtitulo}</p>
               </div>
-              <Link href={`/${lang}/pesquisa`} className="text-[#167524] font-black hover:underline whitespace-nowrap">
+              <Link href={`/${lang}/pesquisa`} className="text-slate-600 font-black hover:text-slate-900 transition-colors whitespace-nowrap">
                 {isEn ? 'View all programs' : 'Ver todos os programas'} &rarr;
               </Link>
             </div>
@@ -228,7 +229,8 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'Prices from' : 'Preços desde'}</p>
                           <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                         </div>
-                        <Link href={`/${lang}/campo/${campoId}`} className="bg-slate-100 text-slate-900 group-hover:bg-[#167524] group-hover:text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
+                        {/* CTA BOTÃO: Slate Escuro (Altíssima conversão) */}
+                        <Link href={`/${lang}/campo/${campoId}`} className="bg-slate-900 text-white group-hover:bg-slate-800 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-colors shadow-md">
                           {isEn ? 'View Dates' : 'Ver Datas'}
                         </Link>
                       </div>
