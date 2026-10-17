@@ -2,6 +2,38 @@ import { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import BotaoFavorito from "../../../components/BotaoFavorito";
+import Image from "next/image";
+import { unstable_cache } from "next/cache";
+
+export const dynamic = 'force-dynamic'; // Porque usa searchParams, mas a BD está em cache
+
+const escapeOr = (str: string) => str.replace(/[,()]/g, ' ').trim();
+
+// ==========================================
+// CACHE DE DADOS (24 HORAS) - ZERO EGRESS
+// ==========================================
+const getPaisCache = unstable_cache(
+  async (nomePais: string) => {
+    const { data } = await supabase.from('paises').select('*').ilike('nome', nomePais).single();
+    return data;
+  },
+  ['cache-pais-detalhe'],
+  { revalidate: 86400 } // 24h
+);
+
+const getCamposPorPaisCache = unstable_cache(
+  async (nomePais: string) => {
+    const { data } = await supabase
+      .from("campos")
+      .select("*")
+      .not('contrato_parceiro_url', 'is', null)
+      .or(`pais.ilike.%${nomePais}%,pais_en.ilike.%${nomePais}%`)
+      .order('id', { ascending: false });
+    return data || [];
+  },
+  ['cache-campos-pais'],
+  { revalidate: 86400 } // 24h
+);
 
 // ==========================================
 // 1. SEO METADATA
@@ -15,11 +47,7 @@ export async function generateMetadata({
   const isEn = lang === 'en';
   const nomeLimpo = decodeURIComponent(paisNome).replace(/[%_]/g, '');
 
-  const { data: pais } = await supabase
-    .from('paises')
-    .select('seo_titulo, seo_descricao, seo_titulo_en, seo_descricao_en, nome, nome_en')
-    .ilike('nome', nomeLimpo)
-    .single();
+  const pais = await getPaisCache(nomeLimpo);
 
   if (!pais) {
     return { title: isEn ? `Camps in ${nomeLimpo} | HelloCamp` : `Campos em ${nomeLimpo} | HelloCamp` };
@@ -55,10 +83,8 @@ export default async function PesquisaPorPais({
   const sp = await searchParams;
   const isEn = lang === 'en';
 
-  // Sanitização do parâmetro do URL (evita wildcards maliciosos)
   const nomePaisInicial = decodeURIComponent(paisNome).replace(/[%_]/g, '');
 
-  // Captura os filtros do URL
   const categoriaParam = sp?.categoria || "";
   const distritoParam = sp?.distrito || "";
   const idadeParam = sp?.idade || "";
@@ -66,26 +92,29 @@ export default async function PesquisaPorPais({
 
   const mostrarDistritos = nomePaisInicial === "Portugal";
 
-  // Busca os dados editoriais do país
-  const { data: dadosPais } = await supabase
-    .from('paises')
-    .select('*')
-    .ilike('nome', nomePaisInicial)
-    .single();
+  // Buscar DADOS EM CACHE (24h)
+  const dadosPais = await getPaisCache(nomePaisInicial);
+  const todosOsCamposDoPais = await getCamposPorPaisCache(nomePaisInicial);
 
-  // Busca os campos de férias
-  let query = supabase.from("campos").select("*").not('contrato_parceiro_url', 'is', null);
+  // FILTRAGEM INSTANTÂNEA EM MEMÓRIA (Server-Side)
+  let resultados = todosOsCamposDoPais;
 
-  query = query.or(`pais.ilike.%${nomePaisInicial}%,pais_en.ilike.%${nomePaisInicial}%`);
+  if (categoriaParam) {
+    resultados = resultados.filter(c => c.categoria === categoriaParam);
+  }
+  if (distritoParam && mostrarDistritos) {
+    resultados = resultados.filter(c => (c.Distrito || '').toLowerCase().includes(escapeOr(distritoParam).toLowerCase()));
+  }
+  if (idadeParam) {
+    resultados = resultados.filter(c => c.idade === idadeParam);
+  }
+  if (dataParam) {
+    resultados = resultados.filter(c => {
+      if (!c.data_inicio) return false;
+      return new Date(c.data_inicio) >= new Date(dataParam);
+    });
+  }
 
-  if (categoriaParam) query = query.eq("categoria", categoriaParam);
-  if (distritoParam && mostrarDistritos) query = query.ilike("Distrito", `%${distritoParam}%`);
-  if (idadeParam) query = query.eq("idade", idadeParam);
-  if (dataParam) query = query.gte("data_inicio", dataParam);
-
-  const { data: campos } = await query.order('id', { ascending: false });
-
-  // Preparação dos textos
   const nomePaisApresentar = isEn && dadosPais?.nome_en ? dadosPais.nome_en : nomePaisInicial;
 
   const descricaoPadrao = isEn
@@ -98,7 +127,6 @@ export default async function PesquisaPorPais({
 
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
 
-  // SCHEMA MARKUP PARA BREADCRUMBS
   const baseUrl = "https://www.hellocamp.pt";
   const breadcrumbSchema = {
     "@context": "https://schema.org",
@@ -112,45 +140,39 @@ export default async function PesquisaPorPais({
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
-
-      {/* SCRIPT SEO INVISÍVEL */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
 
       {/* 1. CABEÇALHO EDITORIAL */}
-      <section className="bg-white pt-8 pb-8 px-4 md:px-6">
+      <section className="bg-white pt-10 pb-8 px-4 md:px-6 border-b border-slate-200 shadow-sm relative z-20">
         <div className="max-w-[1100px] mx-auto">
-
-          {/* BREADCRUMBS VISUAIS */}
-          <nav className="flex items-center gap-2 text-xs font-bold text-slate-400 mb-4 tracking-wider uppercase">
-            <Link href={`/${lang}`} className="hover:text-emerald-600 transition-colors">{isEn ? 'Home' : 'Início'}</Link>
+          <nav className="flex items-center gap-2 text-xs font-black text-slate-400 mb-6 tracking-widest uppercase">
+            <Link href={`/${lang}`} className="hover:text-slate-900 transition-colors">{isEn ? 'Home' : 'Início'}</Link>
             <span>/</span>
-            <Link href={`/${lang}/pesquisa`} className="hover:text-emerald-600 transition-colors">{isEn ? 'Countries' : 'Países'}</Link>
+            <Link href={`/${lang}/pesquisa`} className="hover:text-slate-900 transition-colors">{isEn ? 'Countries' : 'Países'}</Link>
             <span>/</span>
-            <span className="text-slate-600">{nomePaisApresentar}</span>
+            <span className="text-slate-900">{nomePaisApresentar}</span>
           </nav>
 
-          <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
-            <div className="max-w-3xl">
-              <span className="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">
-                {isEn ? 'Destination Guide' : 'Guia de Destino'}
-              </span>
-              <h1 className="text-3xl md:text-4xl font-black text-slate-900 mb-3 tracking-tight capitalize">
-                {isEn ? `Holiday Camps in ${nomePaisApresentar}` : `Campos de Férias em ${nomePaisApresentar}`}
-              </h1>
-              <p className="text-sm md:text-base text-slate-500 leading-relaxed font-medium">
-                {descPaisFinal}
-              </p>
-            </div>
+          <div className="max-w-3xl">
+            <span className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 bg-slate-100 w-max px-3 py-1.5 rounded-lg border border-slate-200">
+              {isEn ? 'Destination Guide' : 'Guia de Destino'}
+            </span>
+            <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-4 tracking-tight capitalize">
+              {isEn ? `Camps in ${nomePaisApresentar}` : `Campos em ${nomePaisApresentar}`}
+            </h1>
+            <p className="text-base md:text-lg text-slate-500 leading-relaxed font-medium">
+              {descPaisFinal}
+            </p>
           </div>
         </div>
       </section>
 
       {/* 2. BARRA DE FILTROS */}
-      <section className="bg-white border-y border-slate-200 py-4 px-4 md:px-6 sticky top-[72px] md:top-[80px] z-30 shadow-sm">
+      <section className="bg-white border-b border-slate-200 py-4 px-4 md:px-6 sticky top-[72px] md:top-[80px] z-30 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
         <div className="max-w-[1100px] mx-auto">
           <form action={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}`} method="GET" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 items-center">
 
-            <select name="categoria" defaultValue={categoriaParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer focus:border-emerald-500 focus:bg-white transition-colors" style={{ backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' }}>
+            <select name="categoria" defaultValue={categoriaParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer focus:border-slate-900 focus:bg-white transition-colors">
               <option value="">{isEn ? 'All Categories' : 'Todas as Categorias'}</option>
               <option value="Desporto">{isEn ? 'Sports' : 'Desporto'}</option>
               <option value="Aventura & Natureza">{isEn ? 'Adventure' : 'Aventura & Natureza'}</option>
@@ -160,13 +182,13 @@ export default async function PesquisaPorPais({
             </select>
 
             {mostrarDistritos && (
-              <select name="distrito" defaultValue={distritoParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer focus:border-emerald-500 focus:bg-white transition-colors" style={{ backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' }}>
+              <select name="distrito" defaultValue={distritoParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer focus:border-slate-900 focus:bg-white transition-colors">
                 <option value="">{isEn ? 'All Districts' : 'Todos os Distritos'}</option>
                 {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             )}
 
-            <select name="idade" defaultValue={idadeParam} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer focus:border-emerald-500 focus:bg-white transition-colors" style={{ backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' }}>
+            <select name="idade" defaultValue={idadeParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer focus:border-slate-900 focus:bg-white transition-colors">
               <option value="">{isEn ? 'All Ages' : 'Todas as Idades'}</option>
               <option value="6-9 anos">6-9 {isEn ? 'years' : 'anos'}</option>
               <option value="10-13 anos">10-13 {isEn ? 'years' : 'anos'}</option>
@@ -178,16 +200,16 @@ export default async function PesquisaPorPais({
               name="data"
               defaultValue={dataParam}
               min={new Date().toISOString().split('T')[0]}
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none cursor-pointer focus:border-emerald-500 focus:bg-white transition-colors"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer focus:border-slate-900 focus:bg-white transition-colors"
             />
 
-            <button type="submit" className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-bold transition-colors shadow-sm">
+            <button type="submit" className="w-full p-3 bg-[#e2a41d] hover:bg-[#d4991b] text-white rounded-xl text-sm font-black transition-colors shadow-sm uppercase tracking-widest">
               {isEn ? 'Update' : 'Atualizar'}
             </button>
 
             {(categoriaParam || distritoParam || idadeParam || dataParam) && (
-              <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}`} className="text-sm font-bold text-red-500 hover:text-red-600 text-center sm:text-left transition-colors lg:col-span-5">
-                {isEn ? 'Clear filters' : 'Limpar filtros'}
+              <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}`} className="text-xs font-bold text-red-500 hover:text-red-600 text-center sm:text-left transition-colors lg:col-span-5 uppercase tracking-widest bg-red-50 w-max px-3 py-1.5 rounded-lg border border-red-100">
+                ✕ {isEn ? 'Clear filters' : 'Limpar filtros'}
               </Link>
             )}
           </form>
@@ -195,18 +217,28 @@ export default async function PesquisaPorPais({
       </section>
 
       {/* 3. RESULTADOS DA PESQUISA */}
-      <section className="max-w-[1100px] mx-auto px-4 py-8 md:py-12">
-        {!campos || campos.length === 0 ? (
-          <div className="text-center p-12 bg-white rounded-2xl border border-slate-200 shadow-sm">
-            <p className="text-lg text-slate-500 font-bold">{isEn ? 'No camps found in this destination.' : 'Não foram encontrados programas neste destino.'}</p>
+      <section className="max-w-[1100px] mx-auto px-4 py-12 md:py-16">
+        {!resultados || resultados.length === 0 ? (
+          <div className="text-center p-12 bg-white rounded-[2rem] border border-slate-200 shadow-sm max-w-2xl mx-auto flex flex-col items-center gap-4">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl border border-slate-100 mb-2">🏕️</div>
+            <h3 className="text-2xl font-black text-slate-900">{isEn ? 'No camps found' : 'Nenhum programa encontrado'}</h3>
+            <p className="text-base text-slate-500 font-medium">
+              {isEn ? 'Try adjusting your filters or dates.' : 'Não encontrámos resultados exatos. Tente remover o filtro da data ou pesquisar noutra categoria.'}
+            </p>
+            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}`} className="mt-4 bg-slate-900 text-white font-bold px-6 py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-lg">
+              {isEn ? 'Clear all filters' : 'Ver todos os programas'}
+            </Link>
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between mb-6">
-              <span className="text-sm font-bold text-slate-500">{campos.length} {isEn ? 'experiences found' : 'experiências encontradas'}</span>
+            <div className="flex items-center justify-between mb-8">
+              <span className="text-sm font-bold text-slate-500 uppercase tracking-widest bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
+                {resultados.length} {isEn ? 'experiences found' : 'experiências encontradas'}
+              </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {campos.map((campo) => {
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+              {resultados.map((campo) => {
                 const nomeVisivel = isEn && campo.nome_en ? campo.nome_en : campo.nome;
                 const localVisivel = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
 
@@ -215,36 +247,45 @@ export default async function PesquisaPorPais({
                   const todosPrecos = campo.pacotes.flatMap((p: any) =>
                     p.variantes ? p.variantes.map((v: any) => v.preco) : []
                   );
-                  if (todosPrecos.length > 0) {
-                    precoVisivel = Math.min(...todosPrecos);
-                  }
+                  if (todosPrecos.length > 0) precoVisivel = Math.min(...todosPrecos);
                 }
 
                 return (
-                  <div key={campo.id} className="group flex flex-col bg-white rounded-2xl overflow-hidden border border-slate-200 relative shadow-sm hover:shadow-xl transition-all duration-300">
-                    <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar</span></Link>
-                    <div className="absolute top-3 right-3 z-20"><BotaoFavorito campoId={campo.id} /></div>
+                  <div key={campo.id} className="group flex flex-col bg-white rounded-[2rem] overflow-hidden border border-slate-200 relative shadow-sm hover:shadow-[0_20px_60px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1">
+                    <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeVisivel}</span></Link>
+                    <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
 
-                    <div className="relative h-56 w-full overflow-hidden bg-slate-100">
-                      <img src={campo.imagem} alt={nomeVisivel} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                      <div className="absolute top-3 left-3 bg-emerald-600 px-3 py-1 text-xs font-bold uppercase text-white rounded-full z-0">
+                    {/* IMAGEM NATIVA OTIMIZADA PARA LAZY LOADING */}
+                    <div className="relative h-60 w-full overflow-hidden bg-slate-100">
+                      <img 
+                        src={campo.imagem || '/og-image.jpg'} 
+                        alt={nomeVisivel} 
+                        loading="lazy" 
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                      />
+                      <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-900 rounded-lg z-0 shadow-sm">
                         {campo.categoria}
                       </div>
                     </div>
 
-                    <div className="flex flex-col p-5 flex-1 pointer-events-none">
-                      <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-1">📍 {localVisivel}</span>
-                      <h3 className="text-lg font-black text-slate-900 leading-tight mb-2">{nomeVisivel}</h3>
+                    <div className="flex flex-col p-6 flex-1 pointer-events-none">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        {localVisivel}
+                      </div>
+                      <h3 className="text-xl font-black text-slate-900 leading-tight mb-2 line-clamp-2">{nomeVisivel}</h3>
                       <p className="text-sm text-slate-500 font-medium mb-6">
-                        {isEn ? 'Age Group:' : 'Faixa Etária:'} <span className="text-slate-900">{campo.idade}</span>
+                        {isEn ? 'Ages:' : 'Idades:'} <span className="text-slate-900 font-bold">{campo.idade}</span>
                       </p>
 
-                      <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
+                      <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
-                          <p className="text-xl font-black text-emerald-600 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                          <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                         </div>
-                        <span className="text-sm font-bold text-[#EBA914] transition-transform group-hover:translate-x-1">{isEn ? 'Explore' : 'Explorar'} &rarr;</span>
+                        <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors group-hover:bg-[#e2a41d] group-hover:text-white shadow-sm">
+                          {isEn ? 'View Dates' : 'Ver Datas'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -256,18 +297,21 @@ export default async function PesquisaPorPais({
       </section>
 
       {/* 4. CROSS-LINKING (REDE DE LINKS SEO) */}
-      <section className="bg-white border-t border-slate-200 py-16 px-4 md:px-6">
-        <div className="max-w-[1100px] mx-auto">
-          <h3 className="text-xl font-black text-slate-900 mb-6">{isEn ? `Explore more in ${nomePaisApresentar}` : `Explore mais em ${nomePaisApresentar}`}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Desporto`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors text-sm font-bold text-slate-700 no-underline flex items-center gap-2 shadow-sm hover:shadow-md">
-              ⚽ {isEn ? `Sports Camps in ${nomePaisApresentar}` : `Campos de Desporto em ${nomePaisApresentar}`}
+      <section className="bg-white border-t border-slate-200 py-20 px-4 md:px-6">
+        <div className="max-w-[1100px] mx-auto text-center md:text-left">
+          <h3 className="text-2xl font-black text-slate-900 mb-8">{isEn ? `Explore more in ${nomePaisApresentar}` : `Explore mais em ${nomePaisApresentar}`}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Desporto`} className="p-6 bg-slate-50 border border-slate-200 rounded-2xl hover:border-slate-900 transition-colors text-base font-black text-slate-800 no-underline flex items-center justify-between group shadow-sm hover:shadow-lg">
+              <span className="flex items-center gap-3">⚽ {isEn ? `Sports Camps` : `Campos de Desporto`}</span>
+              <span className="text-slate-400 group-hover:text-slate-900 transition-colors">&rarr;</span>
             </Link>
-            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Línguas`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors text-sm font-bold text-slate-700 no-underline flex items-center gap-2 shadow-sm hover:shadow-md">
-              🗣️ {isEn ? `Language Camps in ${nomePaisApresentar}` : `Campos de Línguas em ${nomePaisApresentar}`}
+            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Línguas`} className="p-6 bg-slate-50 border border-slate-200 rounded-2xl hover:border-slate-900 transition-colors text-base font-black text-slate-800 no-underline flex items-center justify-between group shadow-sm hover:shadow-lg">
+              <span className="flex items-center gap-3">🗣️ {isEn ? `Language Camps` : `Campos de Línguas`}</span>
+              <span className="text-slate-400 group-hover:text-slate-900 transition-colors">&rarr;</span>
             </Link>
-            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Aventura & Natureza`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors text-sm font-bold text-slate-700 no-underline flex items-center gap-2 shadow-sm hover:shadow-md">
-              🏕️ {isEn ? `Adventure Camps in ${nomePaisApresentar}` : `Campos de Aventura em ${nomePaisApresentar}`}
+            <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}?categoria=Aventura & Natureza`} className="p-6 bg-slate-50 border border-slate-200 rounded-2xl hover:border-slate-900 transition-colors text-base font-black text-slate-800 no-underline flex items-center justify-between group shadow-sm hover:shadow-lg">
+              <span className="flex items-center gap-3">🏕️ {isEn ? `Adventure Camps` : `Campos de Aventura`}</span>
+              <span className="text-slate-400 group-hover:text-slate-900 transition-colors">&rarr;</span>
             </Link>
           </div>
         </div>
