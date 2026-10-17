@@ -74,11 +74,14 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      style: "https://tiles.openfreemap.org/styles/liberty",
+      // ═══════════════════════════════════════════════════════════
+      // NOVO ESTILO: Mais detalhado, mostra cidades, ruas e parques
+      // ═══════════════════════════════════════════════════════════
+      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
       center: [-8.2245, 39.3999],
       zoom: 6,
       minZoom: 4,
-      maxZoom: 18,
+      maxZoom: 20, // Aumentado para 20 para permitir zoom ao nível da rua
       attributionControl: { compact: true },
     });
 
