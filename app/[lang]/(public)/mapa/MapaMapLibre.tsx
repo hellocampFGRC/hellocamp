@@ -38,6 +38,35 @@ interface MapaMapLibreProps {
 const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f8fafc' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
+// ═══════════════════════════════════════════════════════════
+// ESTILO RASTER "VOYAGER" (Grátis, Estável e Sem API Keys)
+// ═══════════════════════════════════════════════════════════
+const cartoRasterStyle: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    'carto-voyager': {
+      type: 'raster',
+      tiles: [
+        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+        'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+        'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+        'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
+      ],
+      tileSize: 256,
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    }
+  },
+  layers: [
+    {
+      id: 'carto-voyager-layer',
+      type: 'raster',
+      source: 'carto-voyager',
+      minzoom: 0,
+      maxzoom: 20
+    }
+  ]
+};
+
 export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -74,14 +103,12 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      // ═══════════════════════════════════════════════════════════
-      // NOVO ESTILO: Mais detalhado, mostra cidades, ruas e parques
-      // ═══════════════════════════════════════════════════════════
-      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      // Passamos o objeto que criámos em vez de um link bloqueado
+      style: cartoRasterStyle,
       center: [-8.2245, 39.3999],
       zoom: 6,
       minZoom: 4,
-      maxZoom: 20, // Aumentado para 20 para permitir zoom ao nível da rua
+      maxZoom: 20,
       attributionControl: { compact: true },
     });
 
