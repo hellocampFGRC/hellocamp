@@ -39,29 +39,30 @@ const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f1f5f9' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
 // ═══════════════════════════════════════════════════════════
-// ESTILO OPENSTREETMAP (100% Grátis, Rápido e com Zoom à Rua)
+// ESTILO CARTO VOYAGER (Inglês, Grátis, Design Premium)
 // ═══════════════════════════════════════════════════════════
-const osmRasterStyle: maplibregl.StyleSpecification = {
+const cartoEnglishRasterStyle: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    'osm-tiles': {
+    'carto-tiles': {
       type: 'raster',
       tiles: [
-        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+        'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+        'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+        'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
       ],
       tileSize: 256,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OSM</a> &copy; <a href="https://carto.com/" target="_blank">CARTO</a>'
     }
   },
   layers: [
     {
-      id: 'osm-tiles-layer',
+      id: 'carto-tiles-layer',
       type: 'raster',
-      source: 'osm-tiles',
+      source: 'carto-tiles',
       minzoom: 0,
-      maxzoom: 19
+      maxzoom: 20
     }
   ]
 };
@@ -102,7 +103,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      style: osmRasterStyle,
+      style: cartoEnglishRasterStyle, // Injeta o mapa em Inglês aqui
       center: [-8.2245, 39.3999],
       zoom: 6,
       minZoom: 4,
@@ -154,7 +155,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
         el.addEventListener('mouseenter', () => { el.style.zIndex = "999"; });
         el.addEventListener('mouseleave', () => { el.style.zIndex = ""; });
 
-        // Pino Gota com Laranja HelloCamp (#e2a41d)
+        // Pino Gota Laranja (#e2a41d) com Pop-up integrado no Hover
         el.innerHTML = `
           <div class="hc-pin-svg">
             <svg viewBox="0 0 24 24" width="36" height="36" xmlns="http://www.w3.org/2000/svg">
@@ -221,7 +222,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           cursor: pointer;
         }
 
-        /* O SVG do Pino em si (Sombra ajustada para laranja) */
+        /* O SVG do Pino em si */
         .hc-pin-svg {
           transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
           filter: drop-shadow(0px 4px 6px rgba(226, 164, 29, 0.4));
@@ -296,7 +297,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;
         }
 
-        .hc-popup-price { margin: 0; font-size: 20px; font-weight: 900; color: #e2a41d; text-align: left; line-height: 1;}
+        .hc-popup-price { margin: 0; font-size: 20px; font-weight: 900; color: #0f172a; text-align: left; line-height: 1;}
         
         .hc-popup-cta {
           background: #0f172a; color: white;
@@ -305,7 +306,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           text-transform: uppercase; letter-spacing: 0.05em; transition: background 0.15s ease;
         }
         
-        .hc-popup-cta:hover { background: #1e293b; }
+        .hc-popup-cta:hover { background: #e2a41d; }
       `}</style>
       <div ref={mapContainer} className="w-full h-full bg-[#f1f5f9]" style={{ minHeight: "400px" }} />
     </>
