@@ -5,7 +5,7 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 // ═══════════════════════════════════════════════════════════
-// WORKER DO MAPLIBRE
+// WORKER DO MAPLIBRE (Prevenção de Erros no Next.js)
 // ═══════════════════════════════════════════════════════════
 if (typeof window !== "undefined") {
   try {
@@ -36,41 +36,14 @@ interface MapaMapLibreProps {
 }
 
 const FALLBACK_IMG =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f8fafc' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
-
-// ═══════════════════════════════════════════════════════════
-// ESTILO OPENSTREETMAP (100% Grátis, Sem API Keys, Sem Limites)
-// ═══════════════════════════════════════════════════════════
-const osmRasterStyle: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    'osm-tiles': {
-      type: 'raster',
-      tiles: [
-        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
-      ],
-      tileSize: 256,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
-    }
-  },
-  layers: [
-    {
-      id: 'osm-tiles-layer',
-      type: 'raster',
-      source: 'osm-tiles',
-      minzoom: 0,
-      maxzoom: 19
-    }
-  ]
-};
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f1f5f9' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
 export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const isEn = lang === "en";
 
+  // 1. Filtrar e formatar campos com coordenadas válidas
   const camposValidos = useMemo<Campo[]>(() => {
     const lista = campos || [];
     return lista
@@ -97,16 +70,20 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       .filter((c): c is Campo => c !== null);
   }, [campos, isEn]);
 
+  // 2. Inicializar o Mapa
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      style: osmRasterStyle,
+      // ═══════════════════════════════════════════════════════════
+      // ESTILO "GOOGLE-LIKE" (100% Grátis, Vectorial, Alta Qualidade)
+      // ═══════════════════════════════════════════════════════════
+      style: "https://tiles.openfreemap.org/styles/liberty",
       center: [-8.2245, 39.3999],
       zoom: 6,
-      minZoom: 4,
-      maxZoom: 19, // O OSM suporta zoom perfeito até ao nível 19 (rua/porta)
+      minZoom: 5,
+      maxZoom: 18,
       attributionControl: { compact: true },
     });
 
@@ -133,6 +110,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
     };
   }, []);
 
+  // 3. Injetar os Pinos e Lógica de Hover (Sem JS extra, CSS puro)
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
@@ -147,42 +125,52 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       const newMarkers: maplibregl.Marker[] = [];
 
       camposValidos.forEach((c) => {
+        // Criamos o elemento do Pino
         const el = document.createElement("div");
-        el.className = "hc-marker";
+        el.className = "hc-marker-container";
+        
+        // Z-Index dinâmico para o card não ficar por baixo de outros pinos quando abre
+        el.addEventListener('mouseenter', () => { el.style.zIndex = "999"; });
+        el.addEventListener('mouseleave', () => { el.style.zIndex = ""; });
+
+        // Estrutura HTML: O Pino (SVG Booking Style) + O Card (Hover Popup) juntos
         el.innerHTML = `
-          <div class="hc-marker-pin">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#1e293b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
-              <path d="M3 20h18L14 4l-3 6-2-2-6 12z"/>
+          <!-- Pino Estilo Booking.com (Azul Marinho com Ponto Branco) -->
+          <div class="hc-pin-svg">
+            <svg viewBox="0 0 24 24" width="36" height="36" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#0E3A68" stroke="#ffffff" stroke-width="1.5"/>
             </svg>
           </div>
-        `;
 
-        const popup = new maplibregl.Popup({
-          offset: 32,
-          closeButton: false,
-          maxWidth: "280px",
-          className: "hc-popup",
-        }).setHTML(
-          `
-          <div class="hc-popup-card">
+          <!-- Ponte invisível para o rato não perder o hover entre o pino e o card -->
+          <div class="hc-hover-bridge"></div>
+
+          <!-- O Card do Campo (Pop-up via CSS Hover) -->
+          <div class="hc-hover-popup">
             <div class="hc-popup-img-wrap">
               <img src="${c.imagem || FALLBACK_IMG}" alt="${escapeHtml(c.nome)}" class="hc-popup-img" loading="lazy" onerror="this.src='${FALLBACK_IMG}'"/>
               ${c.categoria ? `<span class="hc-popup-badge">${escapeHtml(c.categoria)}</span>` : ""}
             </div>
             <div class="hc-popup-body">
               <h3 class="hc-popup-title">${escapeHtml(c.nome)}</h3>
-              ${c.preco != null && c.preco > 0 ? `<p class="hc-popup-price">${c.preco}€</p>` : ""}
-              <a href="/${lang}/campo/${c.id}" class="hc-popup-cta">
-                ${isEn ? "View Details" : "Ver Detalhes"}
-              </a>
+              <div class="hc-popup-footer">
+                ${c.preco != null && c.preco > 0 ? `
+                  <div>
+                    <span class="hc-popup-from">${isEn ? 'From' : 'Desde'}</span>
+                    <p class="hc-popup-price">${c.preco}€</p>
+                  </div>
+                ` : '<div></div>'}
+                <a href="/${lang}/campo/${c.id}" class="hc-popup-cta">
+                  ${isEn ? "View Dates" : "Ver Datas"}
+                </a>
+              </div>
             </div>
           </div>
-          `
-        );
+        `;
 
+        // Note: Já não usamos o maplibregl.Popup(). O Pop-up agora faz parte do pino!
         const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([c.longitude, c.latitude])
-          .setPopup(popup)
           .addTo(instance);
 
         newMarkers.push(marker);
@@ -190,6 +178,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
       (instance as any)._hcMarkers = newMarkers;
 
+      // Ajuste automático da câmara
       if (camposValidos.length === 1) {
         instance.flyTo({ center: [camposValidos[0].longitude, camposValidos[0].latitude], zoom: 11, duration: 800 });
       } else {
@@ -206,33 +195,63 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   return (
     <>
       <style>{`
-        .hc-marker { width: 36px; height: 36px; cursor: pointer; box-sizing: content-box; line-height: 0; font-size: 0; }
-        .hc-marker-pin {
-          width: 36px; height: 36px;
-          background: #e2a41d;
-          border: 3px solid #ffffff;
-          border-radius: 50% 50% 50% 0;
-          box-shadow: 0 8px 16px rgba(226, 164, 29, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
-          transform: rotate(-45deg);
-          display: flex; align-items: center; justify-content: center;
-          transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
-        }
-        .hc-marker-pin > svg { transform: rotate(45deg); display: block; }
-        .hc-marker:hover .hc-marker-pin {
-          transform: rotate(-45deg) scale(1.15);
-          background: #d4991b;
-          box-shadow: 0 12px 24px rgba(226, 164, 29, 0.5), 0 4px 8px rgba(0, 0, 0, 0.2);
-          z-index: 50;
+        /* O Contentor Geral do Pino */
+        .hc-marker-container { 
+          position: relative; 
+          width: 36px; height: 36px; 
+          display: flex; justify-content: center; align-items: flex-end; 
+          cursor: pointer;
         }
 
-        .hc-popup .maplibregl-popup-content {
-          padding: 0; border-radius: 20px; overflow: hidden;
-          box-shadow: 0 20px 40px -8px rgba(0, 0, 0, 0.2);
-          font-family: inherit; border: 1px solid #f1f5f9;
+        /* O SVG do Pino em si */
+        .hc-pin-svg {
+          transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+          filter: drop-shadow(0px 4px 6px rgba(14, 58, 104, 0.3));
         }
-        .hc-popup .maplibregl-popup-tip { border-top-color: white; }
-        .hc-popup-card { width: 280px; background: white; box-sizing: border-box; }
-        .hc-popup-img-wrap { position: relative; width: 100%; height: 160px; overflow: hidden; background: #f8fafc; }
+
+        .hc-marker-container:hover .hc-pin-svg {
+          transform: scale(1.15) translateY(-2px);
+        }
+
+        /* Ponte invisível para o Hover não quebrar */
+        .hc-hover-bridge {
+          position: absolute;
+          bottom: 30px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 60px;
+          height: 20px;
+          background: transparent;
+        }
+
+        /* O Card (Popup) que aparece por cima */
+        .hc-hover-popup {
+          position: absolute;
+          bottom: 44px; /* Fica logo acima do pino */
+          left: 50%;
+          transform: translateX(-50%) translateY(10px);
+          width: 260px;
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 10px 30px -5px rgba(0,0,0,0.2);
+          opacity: 0;
+          visibility: hidden;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          pointer-events: none; /* Para não bloquear cliques até estar visível */
+          overflow: hidden;
+          border: 1px solid #f1f5f9;
+        }
+
+        /* A Magia do Hover: Mostrar o Card */
+        .hc-marker-container:hover .hc-hover-popup {
+          opacity: 1;
+          visibility: visible;
+          transform: translateX(-50%) translateY(0);
+          pointer-events: auto; /* Permite clicar no botão "Ver Datas" */
+        }
+
+        /* Design do Interior do Card */
+        .hc-popup-img-wrap { position: relative; width: 100%; height: 140px; background: #f8fafc; }
         .hc-popup-img { width: 100%; height: 100%; object-fit: cover; display: block; margin: 0; }
         .hc-popup-badge {
           position: absolute; top: 12px; left: 12px;
@@ -241,19 +260,34 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           text-transform: uppercase; letter-spacing: 0.08em;
           padding: 6px 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
-        .hc-popup-body { padding: 20px; }
+        
+        .hc-popup-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        
         .hc-popup-title {
-          margin: 0; font-size: 16px; font-weight: 900; color: #0f172a; line-height: 1.3;
+          margin: 0; font-size: 15px; font-weight: 900; color: #0f172a; line-height: 1.3;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-align: left;
         }
-        .hc-popup-price { margin: 8px 0 0 0; font-size: 20px; font-weight: 900; color: #e2a41d; text-align: left; }
+        
+        .hc-popup-footer {
+          display: flex; justify-content: space-between; align-items: flex-end;
+          margin-top: 4px; padding-top: 12px; border-top: 1px solid #f1f5f9;
+        }
+
+        .hc-popup-from {
+          display: block; font-size: 9px; font-weight: 800; color: #94a3b8; 
+          text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;
+        }
+
+        .hc-popup-price { margin: 0; font-size: 20px; font-weight: 900; color: #0E3A68; text-align: left; line-height: 1;}
+        
         .hc-popup-cta {
-          display: flex; align-items: center; justify-content: center; width: 100%;
-          margin-top: 16px; padding: 12px; background: #0f172a; color: white;
-          font-size: 12px; font-weight: 900; border-radius: 12px; text-decoration: none;
+          background: #0f172a; color: white;
+          font-size: 11px; font-weight: 900; padding: 10px 16px;
+          border-radius: 10px; text-decoration: none;
           text-transform: uppercase; letter-spacing: 0.05em; transition: background 0.15s ease;
         }
-        .hc-popup-cta:hover { background: #1e293b; }
+        
+        .hc-popup-cta:hover { background: #0E3A68; }
       `}</style>
       <div ref={mapContainer} className="w-full h-full bg-[#f1f5f9]" style={{ minHeight: "400px" }} />
     </>
