@@ -3,6 +3,7 @@
 import { use, useState } from "react";
 import Link from "next/link";
 import React from "react";
+import { supabase } from "@/lib/supabase";
 
 // ═══════════════════════════════════════════
 // ÍCONES SVG INLINE
@@ -49,25 +50,42 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
   const [websiteLink, setWebsiteLink] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Link dinâmico com o parâmetro de organizador
+  // Link dinâmico para quem prefere registar manualmente
   const REGISTO_URL = `/${lang}/registo?role=organizador`;
 
-  const handleMagicSubmit = (e: React.FormEvent) => {
+  // Submissão da "Magic Box" para a tabela pedidos_onboarding
+  const handleMagicSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Aqui podes ligar à tua API para enviar o link para um canal de Slack/Discord ou e-mail
-    setTimeout(() => {
-      alert(isEn ? "Link received! Our team will contact you shortly." : "Link recebido! A nossa equipa vai tratar do seu perfil.");
+
+    try {
+      const { error } = await supabase
+        .from('pedidos_onboarding')
+        .insert([{ 
+          website_link: websiteLink, 
+          idioma: lang.toUpperCase() 
+        }]);
+
+      if (error) throw error;
+
+      alert(isEn 
+        ? "Link received! Our team will review your website and contact you shortly to set up your dashboard." 
+        : "Link recebido com sucesso! A nossa equipa vai analisar o seu site e criar o seu perfil em menos de 24 horas."
+      );
       setWebsiteLink("");
+    } catch (err) {
+      alert(isEn ? "Error sending link. Please try again." : "Erro ao enviar o link. Tente novamente.");
+      console.error(err);
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   return (
     <main className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900 pb-20">
 
       {/* ═══════════════════════════════════════════ */}
-      {/* HERO B2B - PREMIUM & CLEAN                    */}
+      {/* HERO B2B - PREMIUM & MAGIC BOX                */}
       {/* ═══════════════════════════════════════════ */}
       <section className="bg-white py-24 md:py-32 text-center relative overflow-hidden border-b border-slate-200">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-50 via-white to-white pointer-events-none" />
@@ -89,7 +107,6 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
               : "Não perca tempo a preencher dezenas de formulários. Cole o link do seu site (ou envie o seu PDF) e a nossa equipa constrói o seu painel de inscrições gratuito em 24h."}
           </p>
 
-          {/* MAGIC BOX OTIMIZADA */}
           <div className="max-w-2xl mx-auto bg-white p-2 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 flex flex-col sm:flex-row gap-2">
             <form onSubmit={handleMagicSubmit} className="flex-1 flex flex-col sm:flex-row gap-2 w-full">
               <input 
