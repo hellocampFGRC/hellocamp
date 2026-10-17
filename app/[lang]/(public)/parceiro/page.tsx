@@ -102,7 +102,7 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
             </div>
             
             <h3 className="text-2xl md:text-3xl font-black text-slate-900 mb-4 tracking-tight">
-              {isEn ? "Link Received Successfully! 🚀" : "Link Recebido com Sucesso! 🚀"}
+              {isEn ? "Link Received Successfully! " : "Link Recebido com Sucesso! "}
             </h3>
             
             <p className="text-slate-600 font-medium leading-relaxed mb-6">
