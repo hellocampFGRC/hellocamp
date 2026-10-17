@@ -39,30 +39,29 @@ const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f8fafc' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
 // ═══════════════════════════════════════════════════════════
-// ESTILO RASTER "VOYAGER" (Grátis, Estável e Sem API Keys)
+// ESTILO OPENSTREETMAP (100% Grátis, Sem API Keys, Sem Limites)
 // ═══════════════════════════════════════════════════════════
-const cartoRasterStyle: maplibregl.StyleSpecification = {
+const osmRasterStyle: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    'carto-voyager': {
+    'osm-tiles': {
       type: 'raster',
       tiles: [
-        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-        'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
+        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
       ],
       tileSize: 256,
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
     }
   },
   layers: [
     {
-      id: 'carto-voyager-layer',
+      id: 'osm-tiles-layer',
       type: 'raster',
-      source: 'carto-voyager',
+      source: 'osm-tiles',
       minzoom: 0,
-      maxzoom: 20
+      maxzoom: 19
     }
   ]
 };
@@ -103,12 +102,11 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      // Passamos o objeto que criámos em vez de um link bloqueado
-      style: cartoRasterStyle,
+      style: osmRasterStyle,
       center: [-8.2245, 39.3999],
       zoom: 6,
       minZoom: 4,
-      maxZoom: 20,
+      maxZoom: 19, // O OSM suporta zoom perfeito até ao nível 19 (rua/porta)
       attributionControl: { compact: true },
     });
 
@@ -257,7 +255,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
         }
         .hc-popup-cta:hover { background: #1e293b; }
       `}</style>
-      <div ref={mapContainer} className="w-full h-full bg-slate-100" style={{ minHeight: "400px" }} />
+      <div ref={mapContainer} className="w-full h-full bg-[#f1f5f9]" style={{ minHeight: "400px" }} />
     </>
   );
 }
