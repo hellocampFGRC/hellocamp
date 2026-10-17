@@ -1,7 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import BotaoFavorito from "../components/BotaoFavorito";
-import Image from "next/image";
 import { unstable_cache } from "next/cache";
 
 export const dynamic = 'force-dynamic';
@@ -65,14 +64,13 @@ export default async function PaginaPesquisa({
   const categoriasDisponiveis = Array.from(catSet).sort();
   const idadesDisponiveis = Array.from(idadeSet).sort();
 
-  // 3. FILTRAGEM INSTANTÂNEA EM MEMÓRIA (Server-Side JS)
+  // 3. FILTRAGEM INSTANTÂNEA EM MEMÓRIA (Server-Side)
   let resultados = todosOsCampos;
 
   if (qParam) {
     const termos = escapeOr(qParam).toLowerCase().split(/\s+/).filter(Boolean);
     resultados = resultados.filter(campo => {
       const textoBuscavel = `${campo.nome || ''} ${campo.descricao || ''} ${campo.categoria || ''} ${campo.local || ''} ${campo.Distrito || ''} ${campo.nome_en || ''} ${campo.descricao_en || ''}`.toLowerCase();
-      // O campo tem de conter todos os termos pesquisados
       return termos.every(termo => textoBuscavel.includes(termo));
     });
   }
@@ -195,7 +193,7 @@ export default async function PaginaPesquisa({
 
             {filtrosAtivos && (
               <div className="text-right mt-2">
-                <Link href={`/${lang}/pesquisa`} className="text-xs font-bold text-red-600 hover:text-red-700 transition-colors uppercase tracking-widest bg-red-50 px-3 py-1.5 rounded-lg border border-red-100">
+                <Link href={`/${lang}/pesquisa`} className="text-xs font-bold text-red-600 hover:text-red-700 transition-colors uppercase tracking-widest bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 inline-block">
                   ✕ {isEn ? 'Clear filters' : 'Limpar filtros'}
                 </Link>
               </div>
@@ -238,14 +236,13 @@ export default async function PaginaPesquisa({
                   <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
                   <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
                   
-                  {/* IMAGEM COM NEXT/IMAGE PARA LCP RÁPIDO */}
+                  {/* IMAGEM NATIVA COM LAZY LOADING */}
                   <div className="relative h-60 w-full overflow-hidden bg-slate-100">
-                    <Image 
+                    <img 
                       src={campo.imagem || '/og-image.jpg'} 
                       alt={nomeCampo} 
-                      fill
-                      className="object-cover transition-transform duration-700 group-hover:scale-105" 
-                      sizes="(max-width: 768px) 100vw, 33vw"
+                      loading="lazy"
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
                     />
                     <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-900 rounded-lg z-0 shadow-sm">
                       {catCampo}
