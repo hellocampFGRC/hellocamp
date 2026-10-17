@@ -1,15 +1,12 @@
 import { supabase } from "../../../lib/supabase";
 import Link from "next/link";
-import Image from "next/image";
 import { getDictionary } from "../../../lib/getDictionary";
 import BotaoFavorito from "./components/BotaoFavorito";
 
 // ==========================================
 // CONFIGURAÇÃO DE CACHE DE ELITE (Vercel ISR)
 // ==========================================
-// 86400 segundos = 24 horas. O servidor só vai ao Supabase 1x por dia.
-// Reduz CPU, Egress e o tempo de carregamento (LCP) passa a ser quase zero.
-export const revalidate = 86400; 
+export const revalidate = 86400; // 24 horas
 
 const PAISES_DESTAQUE = [
   { nome: "Portugal", nome_en: "Portugal", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=800", desc: "Aventura e Sol", desc_en: "Adventure and Sun" },
@@ -39,10 +36,6 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
 
   const todayISO = new Date().toISOString().split('T')[0];
 
-  // ==========================================
-  // FETCH DE DADOS (Agora em Cache na Edge)
-  // ==========================================
-  // Executados em paralelo para evitar bloqueio de CPU
   const [resCampos, resInst, resFiltros] = await Promise.all([
     supabase.from('campos').select('*').not('contrato_parceiro_url', 'is', null).limit(6).order('created_at', { ascending: false }),
     supabase.from('programas_institucionais').select('*').eq('is_active', true).limit(3).order('created_at', { ascending: false }),
@@ -76,18 +69,14 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
   return (
     <main className="min-h-screen bg-slate-50 font-sans text-slate-900">
       
-      {/* ═══════════════════════════════════════════ */}
-      {/* HERO SECTION - OTIMIZADO PARA LCP           */}
-      {/* ═══════════════════════════════════════════ */}
+      {/* HERO SECTION */}
       <section className="relative min-h-[85vh] w-full flex flex-col items-center justify-center pt-16 pb-32">
-        <div className="absolute inset-0 z-0 bg-slate-900">
-          <Image 
+        <div className="absolute inset-0 z-0 bg-slate-900 overflow-hidden">
+          <img 
             src="https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&q=80&w=2000" 
             alt="Crianças no campo de férias" 
-            fill
-            priority
-            className="object-cover opacity-60"
-            sizes="100vw"
+            className="absolute inset-0 w-full h-full object-cover opacity-60"
+            fetchPriority="high"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-slate-50/10"></div>
         </div>
@@ -102,7 +91,6 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
             </p>
           </div>
 
-          {/* FORMULÁRIO DE PESQUISA (Redução de Bounce Rate) */}
           <div id="pesquisa" className="relative w-full bg-white rounded-3xl shadow-2xl p-6 md:p-10 border border-slate-100 scroll-mt-24">
             <form action={`/${lang}/pesquisa`} method="GET" className="relative pb-10 md:pb-4 mt-2">
               <div className="flex justify-between items-end mb-4">
@@ -170,7 +158,6 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                 </div>
               </div>
 
-              {/* BOTÃO DE PESQUISA OTIMIZADO */}
               <div className="flex justify-center mt-8 md:absolute md:-bottom-[4rem] md:left-1/2 md:-translate-x-1/2">
                 <button type="submit" className="group w-full md:w-56 bg-[#e2a41d] hover:bg-[#d4991b] rounded-xl md:rounded-full flex items-center justify-center gap-3 py-4 md:py-5 shadow-lg shadow-[#e2a41d]/30 transition-all hover:-translate-y-1">
                   <svg className="w-5 h-5 text-[#167524]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -182,11 +169,9 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* DESTAQUES B2C - MELHORIA DE CONVERSÃO       */}
-      {/* ═══════════════════════════════════════════ */}
+      {/* DESTAQUES B2C */}
       {camposDeFerias && camposDeFerias.length > 0 && (
-        <section className="bg-white py-20 md:py-32">
+        <section className="bg-white py-20 md:py-32 border-t border-slate-100">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
               <div>
@@ -217,12 +202,11 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                       <Link href={`/${lang}/campo/${campoId}`} className="absolute inset-0 z-10">
                         <span className="sr-only">Ver {nomeCampo}</span>
                       </Link>
-                      <Image 
+                      <img 
                         src={campo.imagem || '/og-image.jpg'} 
                         alt={nomeCampo} 
-                        fill
-                        className="object-cover transition-transform duration-700 group-hover:scale-105" 
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
                       />
                       <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-900 rounded-lg z-0">
                         {catCampo}
@@ -244,7 +228,6 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'Prices from' : 'Preços desde'}</p>
                           <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                         </div>
-                        {/* CTA Mais Agressiva */}
                         <Link href={`/${lang}/campo/${campoId}`} className="bg-slate-100 text-slate-900 group-hover:bg-[#167524] group-hover:text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
                           {isEn ? 'View Dates' : 'Ver Datas'}
                         </Link>
@@ -258,9 +241,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
         </section>
       )}
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* NAVEGAÇÃO POR DISTRITOS E PAÍSES            */}
-      {/* ═══════════════════════════════════════════ */}
+      {/* NAVEGAÇÃO POR DISTRITOS E PAÍSES */}
       {distritosAtivosCards.length > 0 && (
         <section className="bg-slate-50 py-20 border-t border-slate-200">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
@@ -272,9 +253,44 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                 const nomeDistrito = isEn ? distrito.nome_en : distrito.nome;
                 return (
                   <Link href={`/${lang}/distrito/${encodeURIComponent(distrito.nome)}`} key={distrito.nome} className="group relative block h-[180px] w-full overflow-hidden rounded-2xl bg-slate-900">
-                    <Image src={distrito.imagem} alt={nomeDistrito} fill className="object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60 group-hover:opacity-80" sizes="(max-width: 768px) 100vw, 25vw" />
+                    <img 
+                      src={distrito.imagem} 
+                      alt={nomeDistrito} 
+                      loading="lazy" 
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60 group-hover:opacity-80" 
+                    />
                     <div className="absolute inset-0 flex items-center justify-center p-6">
                       <h3 className="text-2xl font-black text-white tracking-tight drop-shadow-lg">{nomeDistrito}</h3>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* PAÍSES */}
+      {paisesAtivosCards.length > 0 && (
+        <section className="bg-white py-20 border-t border-slate-100">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">{isEn ? 'Discover by Country' : 'Descubra por País'}</h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {paisesAtivosCards.map((pais) => {
+                const nomePais = isEn ? pais.nome_en : pais.nome;
+                return (
+                  <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(pais.nome)}`} key={pais.nome} className="group relative block h-[220px] w-full overflow-hidden rounded-2xl bg-slate-900 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                    <img 
+                      src={pais.imagem} 
+                      alt={nomePais} 
+                      loading="lazy" 
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60 group-hover:opacity-80" 
+                    />
+                    <div className="absolute inset-0 flex flex-col justify-end p-6 bg-gradient-to-t from-black/80 via-black/20 to-transparent">
+                      <h3 className="text-2xl font-black text-white tracking-tight">{nomePais}</h3>
+                      <p className="mt-1 text-sm font-bold text-[#EBA914]">{isEn ? pais.desc_en : pais.desc}</p>
                     </div>
                   </Link>
                 );
