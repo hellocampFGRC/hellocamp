@@ -40,6 +40,13 @@ const IconArrowRight = ({ className = "w-5 h-5" }: { className?: string }) => (
   </svg>
 );
 
+const IconSuccessCheck = ({ className = "w-12 h-12" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
 // ═══════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════
@@ -49,11 +56,12 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
   
   const [websiteLink, setWebsiteLink] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Link dinâmico para quem prefere registar manualmente
   const REGISTO_URL = `/${lang}/registo?role=organizador`;
 
-  // Submissão da "Magic Box" para a tabela pedidos_onboarding
+  // Submissão da "Magic Box"
   const handleMagicSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -68,10 +76,8 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
 
       if (error) throw error;
 
-      alert(isEn 
-        ? "Link received! Our team will review your website and contact you shortly to set up your dashboard." 
-        : "Link recebido com sucesso! A nossa equipa vai analisar o seu site e criar o seu perfil em menos de 24 horas."
-      );
+      // Em vez de alert(), abrimos o nosso Modal personalizado
+      setShowSuccessModal(true);
       setWebsiteLink("");
     } catch (err) {
       alert(isEn ? "Error sending link. Please try again." : "Erro ao enviar o link. Tente novamente.");
@@ -82,7 +88,45 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900 pb-20">
+    <main className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900 pb-20 relative">
+
+      {/* ═══════════════════════════════════════════ */}
+      {/* MODAL DE SUCESSO PERSONALIZADO              */}
+      {/* ═══════════════════════════════════════════ */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2rem] p-8 md:p-10 max-w-lg w-full shadow-2xl relative text-center animate-in zoom-in-95 duration-300">
+            
+            <div className="mx-auto w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-[#167524] mb-6 border border-emerald-100 shadow-inner">
+              <IconSuccessCheck />
+            </div>
+            
+            <h3 className="text-2xl md:text-3xl font-black text-slate-900 mb-4 tracking-tight">
+              {isEn ? "Link Received Successfully! 🚀" : "Link Recebido com Sucesso! 🚀"}
+            </h3>
+            
+            <p className="text-slate-600 font-medium leading-relaxed mb-6">
+              {isEn 
+                ? "Our Onboarding team is already reviewing your website. We will build and optimize your HelloCamp profile in less than 24 hours. Once it's ready, we'll send you the secure login details." 
+                : "A nossa equipa de Onboarding já está a analisar o seu site. Vamos estruturar e otimizar o seu perfil na HelloCamp em menos de 24 horas. Assim que estiver pronto, enviaremos os dados de acesso seguro."}
+            </p>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8 text-sm font-medium text-slate-700">
+              <p className="mb-2">{isEn ? "Have an urgent question or specific details to share?" : "Tem alguma questão urgente ou detalhes específicos a partilhar?"}</p>
+              <div className="flex items-center justify-center gap-2">
+                {isEn ? "Email us at:" : "Fale connosco:"} <a href="mailto:info@hellocamp.pt" className="text-[#0E3A68] font-black hover:underline">info@hellocamp.pt</a>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full bg-[#167524] hover:bg-[#115a1b] text-white font-bold px-8 py-4 rounded-xl transition-all shadow-lg shadow-[#167524]/20"
+            >
+              {isEn ? "Close Window" : "Fechar Janela"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════ */}
       {/* HERO B2B - PREMIUM & MAGIC BOX                */}
@@ -110,7 +154,7 @@ export default function SerParceiroPage({ params }: { params: Promise<{ lang: st
           <div className="max-w-2xl mx-auto bg-white p-2 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 flex flex-col sm:flex-row gap-2">
             <form onSubmit={handleMagicSubmit} className="flex-1 flex flex-col sm:flex-row gap-2 w-full">
               <input 
-                type="url" 
+                type="text" 
                 placeholder={isEn ? "Paste your camp's website link here..." : "Cole aqui o link do seu site..."}
                 required
                 value={websiteLink}
