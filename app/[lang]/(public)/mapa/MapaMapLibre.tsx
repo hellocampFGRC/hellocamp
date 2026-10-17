@@ -5,7 +5,7 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 // ═══════════════════════════════════════════════════════════
-// WORKER DO MAPLIBRE (Prevenção de Erros no Next.js)
+// WORKER DO MAPLIBRE
 // ═══════════════════════════════════════════════════════════
 if (typeof window !== "undefined") {
   try {
@@ -38,12 +38,40 @@ interface MapaMapLibreProps {
 const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f1f5f9' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
+// ═══════════════════════════════════════════════════════════
+// ESTILO OPENSTREETMAP (O que estava a funcionar perfeitamente)
+// 100% Grátis, Sem API Keys, Zoom profundo até à rua
+// ═══════════════════════════════════════════════════════════
+const osmRasterStyle: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    'osm-tiles': {
+      type: 'raster',
+      tiles: [
+        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+      ],
+      tileSize: 256,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
+    }
+  },
+  layers: [
+    {
+      id: 'osm-tiles-layer',
+      type: 'raster',
+      source: 'osm-tiles',
+      minzoom: 0,
+      maxzoom: 19
+    }
+  ]
+};
+
 export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const isEn = lang === "en";
 
-  // 1. Filtrar e formatar campos com coordenadas válidas
   const camposValidos = useMemo<Campo[]>(() => {
     const lista = campos || [];
     return lista
@@ -70,20 +98,16 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       .filter((c): c is Campo => c !== null);
   }, [campos, isEn]);
 
-  // 2. Inicializar o Mapa
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      // ═══════════════════════════════════════════════════════════
-      // ESTILO "GOOGLE-LIKE" (100% Grátis, Vectorial, Alta Qualidade)
-      // ═══════════════════════════════════════════════════════════
-      style: "https://tiles.openfreemap.org/styles/liberty",
+      style: osmRasterStyle, // Restaurado o mapa perfeito do OSM
       center: [-8.2245, 39.3999],
       zoom: 6,
-      minZoom: 5,
-      maxZoom: 18,
+      minZoom: 4,
+      maxZoom: 19, // Zoom máximo suportado pelo OSM
       attributionControl: { compact: true },
     });
 
@@ -110,7 +134,6 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
     };
   }, []);
 
-  // 3. Injetar os Pinos e Lógica de Hover (Sem JS extra, CSS puro)
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
@@ -125,15 +148,14 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       const newMarkers: maplibregl.Marker[] = [];
 
       camposValidos.forEach((c) => {
-        // Criamos o elemento do Pino
         const el = document.createElement("div");
         el.className = "hc-marker-container";
         
-        // Z-Index dinâmico para o card não ficar por baixo de outros pinos quando abre
+        // Z-Index dinâmico para garantir que o hover fica por cima dos outros pinos
         el.addEventListener('mouseenter', () => { el.style.zIndex = "999"; });
         el.addEventListener('mouseleave', () => { el.style.zIndex = ""; });
 
-        // Estrutura HTML: O Pino (SVG Booking Style) + O Card (Hover Popup) juntos
+        // HTML do Pino (Gota) + Cartão Invisível (Hover)
         el.innerHTML = `
           <!-- Pino Estilo Booking.com (Azul Marinho com Ponto Branco) -->
           <div class="hc-pin-svg">
@@ -168,7 +190,6 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           </div>
         `;
 
-        // Note: Já não usamos o maplibregl.Popup(). O Pop-up agora faz parte do pino!
         const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([c.longitude, c.latitude])
           .addTo(instance);
@@ -178,7 +199,6 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
       (instance as any)._hcMarkers = newMarkers;
 
-      // Ajuste automático da câmara
       if (camposValidos.length === 1) {
         instance.flyTo({ center: [camposValidos[0].longitude, camposValidos[0].latitude], zoom: 11, duration: 800 });
       } else {
