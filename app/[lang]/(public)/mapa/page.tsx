@@ -2,12 +2,29 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import MapaWrapper from "./MapaWrapper";
 import { getDictionary } from "@/lib/getDictionary";
+import { unstable_cache } from "next/cache";
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: "Mapa de Campos de Férias em Portugal | HelloCamp",
-  description:
-    "Explore no mapa interativo todos os campos de férias verificados em Portugal. Filtre por categoria, idade e idioma.",
+  title: "Mapa de Campos de Férias | HelloCamp",
+  description: "Explore no mapa interativo todos os campos de férias em Portugal e no Mundo. Filtre por categoria e idade.",
 };
+
+// ═══════════════════════════════════════════
+// CACHE DE DADOS (24 HORAS) - ZERO EGRESS
+// ═══════════════════════════════════════════
+const getCamposMapaCache = unstable_cache(
+  async () => {
+    const { data } = await supabase
+      .from("campos")
+      .select("id, nome, nome_en, categoria, categoria_en, idade, idade_en, linguas_faladas, preco, imagem, latitude, longitude")
+      .not("contrato_parceiro_url", "is", null);
+    return data || [];
+  },
+  ['cache-mapa-campos'],
+  { revalidate: 86400 } // 24h
+);
 
 export default async function PaginaMapa({
   params,
@@ -25,182 +42,107 @@ export default async function PaginaMapa({
   const idade = sp?.idade || "";
   const lingua = sp?.lingua || "";
 
-  let query = supabase
-    .from("campos")
-    .select("*")
-    .not("contrato_parceiro_url", "is", null);
-
-  if (categoria) query = query.eq("categoria", categoria);
-  if (idade) query = query.eq("idade", idade);
-  if (lingua) query = query.ilike("linguas_faladas", `%${lingua}%`);
-
-  const { data: campos } = await query;
-
-  const { data: todosFiltros } = await supabase
-    .from("campos")
-    .select("categoria, categoria_en, idade, idade_en, linguas_faladas")
-    .not("contrato_parceiro_url", "is", null);
+  // 1. CARREGAR DADOS DA CACHE (Ultra-Rápido)
+  const todosOsCampos = await getCamposMapaCache();
 
   const categoriasMap = new Map<string, string>();
   const idadesMap = new Map<string, string>();
   const linguasMap = new Set<string>();
 
-  if (todosFiltros) {
-    todosFiltros.forEach((c: any) => {
-      if (c.categoria && c.categoria.trim())
-        categoriasMap.set(
-          c.categoria.trim(),
-          c.categoria_en?.trim() || c.categoria.trim()
-        );
-      if (c.idade && c.idade.trim())
-        idadesMap.set(c.idade.trim(), c.idade_en?.trim() || c.idade.trim());
-      if (c.linguas_faladas && c.linguas_faladas.trim())
-        linguasMap.add(c.linguas_faladas.trim());
-    });
-  }
+  todosOsCampos.forEach((c: any) => {
+    if (c.categoria?.trim()) categoriasMap.set(c.categoria.trim(), c.categoria_en?.trim() || c.categoria.trim());
+    if (c.idade?.trim()) idadesMap.set(c.idade.trim(), c.idade_en?.trim() || c.idade.trim());
+    if (c.linguas_faladas?.trim()) linguasMap.add(c.linguas_faladas.trim());
+  });
 
-  const categoriasOpcoes = Array.from(categoriasMap.entries()).map(
-    ([pt, en]) => ({ valor: pt, label: isEn ? en : pt })
-  );
-  const idadesOpcoes = Array.from(idadesMap.entries()).map(([pt, en]) => ({
-    valor: pt,
-    label: isEn ? en : pt,
-  }));
+  const categoriasOpcoes = Array.from(categoriasMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
+  const idadesOpcoes = Array.from(idadesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const linguasUnicas = Array.from(linguasMap).sort();
+
+  // 2. FILTRAGEM INSTANTÂNEA NA RAM
+  let camposExibidos = todosOsCampos;
+
+  if (categoria) camposExibidos = camposExibidos.filter(c => c.categoria === categoria);
+  if (idade) camposExibidos = camposExibidos.filter(c => c.idade === idade);
+  if (lingua) camposExibidos = camposExibidos.filter(c => (c.linguas_faladas || '').includes(lingua));
 
   const temFiltrosAtivos = !!(categoria || idade || lingua);
 
   return (
     <main className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-50 font-sans overflow-hidden">
 
-      <aside className="w-full md:w-[340px] bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-5 md:p-6 flex flex-col flex-shrink-0 shadow-sm z-10 max-h-[45vh] md:max-h-full">
+      {/* BARRA LATERAL (SIDEBAR DE FILTROS) */}
+      <aside className="w-full md:w-[380px] bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-6 md:p-8 flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 max-h-[45vh] md:max-h-full">
 
         <Link
           href={`/${lang}`}
-          className="hidden md:inline-flex items-center gap-1 mb-6 text-xs font-bold text-slate-500 no-underline hover:text-emerald-600 transition-colors"
+          className="hidden md:inline-flex items-center gap-2 mb-8 text-[10px] font-black uppercase tracking-widest text-slate-400 no-underline hover:text-slate-900 transition-colors bg-slate-50 px-3 py-1.5 rounded-lg w-max"
         >
           &larr; {dict.mapa.voltar}
         </Link>
 
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-black text-slate-900">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">
             {dict.mapa.filtros}
           </h2>
-          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
-            {campos?.length || 0} {dict.mapa.encontrados}
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+            {camposExibidos.length} {dict.mapa.encontrados}
           </span>
         </div>
 
-        <form
-          action={`/${lang}/mapa`}
-          method="GET"
-          className="flex flex-col gap-4"
-        >
-          <div className="grid grid-cols-2 md:grid-cols-1 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1.5">
-                {dict.mapa.categoria}
-              </label>
-              <select
-                name="categoria"
-                defaultValue={categoria}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                <option value="">{dict.mapa.todas}</option>
-                {categoriasOpcoes.map((cat) => (
-                  <option key={cat.valor} value={cat.valor}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1.5">
-                {dict.mapa.idade}
-              </label>
-              <select
-                name="idade"
-                defaultValue={idade}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                <option value="">{dict.mapa.qualquer_idade}</option>
-                {idadesOpcoes.map((id) => (
-                  <option key={id.valor} value={id.valor}>
-                    {id.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="col-span-2 md:col-span-1">
-              <label className="block text-xs font-bold text-slate-600 mb-1.5">
-                {dict.mapa.linguas}
-              </label>
-              <select
-                name="lingua"
-                defaultValue={lingua}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                <option value="">{dict.mapa.qualquer_lingua}</option>
-                {linguasUnicas.map((lin) => (
-                  <option key={lin} value={lin}>
-                    {lin}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <form action={`/${lang}/mapa`} method="GET" className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{dict.mapa.categoria}</label>
+            <select name="categoria" defaultValue={categoria} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-slate-900 cursor-pointer transition-colors">
+              <option value="">{dict.mapa.todas}</option>
+              {categoriasOpcoes.map((cat) => <option key={cat.valor} value={cat.valor}>{cat.label}</option>)}
+            </select>
           </div>
 
-          <div className="flex items-center gap-3 mt-2">
-            <button
-              type="submit"
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-sm transition-colors cursor-pointer"
-            >
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{dict.mapa.idade}</label>
+            <select name="idade" defaultValue={idade} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-slate-900 cursor-pointer transition-colors">
+              <option value="">{dict.mapa.qualquer_idade}</option>
+              {idadesOpcoes.map((id) => <option key={id.valor} value={id.valor}>{id.label}</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{dict.mapa.linguas}</label>
+            <select name="lingua" defaultValue={lingua} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-slate-900 cursor-pointer transition-colors">
+              <option value="">{dict.mapa.qualquer_lingua}</option>
+              {linguasUnicas.map((lin) => <option key={lin} value={lin}>{lin}</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-3 mt-4">
+            <button type="submit" className="w-full bg-[#167524] hover:bg-[#115a1b] text-white font-black py-4 rounded-xl text-sm transition-all shadow-md">
               {dict.mapa.atualizar}
             </button>
             {temFiltrosAtivos && (
-              <Link
-                href={`/${lang}/mapa`}
-                className="text-sm text-red-500 hover:text-red-700 font-bold whitespace-nowrap transition-colors"
-              >
+              <Link href={`/${lang}/mapa`} className="text-xs font-bold text-red-600 hover:text-red-700 uppercase tracking-widest text-center transition-colors">
                 {dict.mapa.limpar}
               </Link>
             )}
           </div>
         </form>
 
-        {campos && campos.length > 0 && (
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-              {isEn ? "Camps on map" : "Campos no mapa"}
+        {camposExibidos && camposExibidos.length > 0 && (
+          <div className="mt-8 pt-6 border-t border-slate-100 flex-1 overflow-y-auto pr-2">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+              {isEn ? "Camps on Map" : "No Mapa"}
             </p>
-            <div className="flex flex-col gap-1.5">
-              {campos.map((c: any) => {
+            <div className="flex flex-col gap-2">
+              {camposExibidos.map((c: any) => {
                 const nome = isEn && c.nome_en ? c.nome_en : c.nome;
-                const cat = isEn && c.categoria_en ? c.categoria_en : c.categoria;
                 const temCoords = c.latitude != null && c.longitude != null;
                 return (
-                  <Link
-                    key={c.id}
-                    href={`/${lang}/campo/${c.id}`}
-                    className="group flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-slate-50 transition-colors no-underline"
-                  >
-                    <span
-                      className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
-                        temCoords ? "bg-emerald-500" : "bg-slate-300"
-                      }`}
-                    />
+                  <Link key={c.id} href={`/${lang}/campo/${c.id}`} className="group flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-[#e2a41d] hover:bg-white transition-all no-underline">
+                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${temCoords ? "bg-[#e2a41d] shadow-sm" : "bg-slate-300"}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-slate-800 leading-tight truncate group-hover:text-emerald-600 transition-colors">
-                        {nome}
-                      </p>
-                      {cat && (
-                        <p className="text-[10px] font-medium text-slate-400 mt-0.5 truncate">
-                          {cat}
-                        </p>
-                      )}
+                      <p className="text-xs font-black text-slate-800 truncate group-hover:text-slate-900">{nome}</p>
                     </div>
+                    <span className="text-slate-300 group-hover:text-[#e2a41d] text-sm font-bold">&rarr;</span>
                   </Link>
                 );
               })}
@@ -209,8 +151,9 @@ export default async function PaginaMapa({
         )}
       </aside>
 
-      <section className="flex-1 relative min-h-[55vh] md:min-h-0">
-        <MapaWrapper campos={campos || []} lang={lang} />
+      {/* ÁREA DO MAPA */}
+      <section className="flex-1 relative min-h-[55vh] md:min-h-0 bg-slate-200">
+        <MapaWrapper campos={camposExibidos || []} lang={lang} />
       </section>
     </main>
   );
