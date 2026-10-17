@@ -39,30 +39,28 @@ const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f1f5f9' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
 // ═══════════════════════════════════════════════════════════
-// ESTILO CARTO VOYAGER (Inglês, Grátis, Design Premium)
+// ESTILO ESRI WORLD STREET MAP (Inglês, Grátis, Sem API Key)
+// Design Premium e Zoom profundo até ao nível da rua.
 // ═══════════════════════════════════════════════════════════
-const cartoEnglishRasterStyle: maplibregl.StyleSpecification = {
+const esriRasterStyle: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    'carto-tiles': {
+    'esri-tiles': {
       type: 'raster',
       tiles: [
-        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-        'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
       ],
       tileSize: 256,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OSM</a> &copy; <a href="https://carto.com/" target="_blank">CARTO</a>'
+      attribution: '&copy; <a href="https://www.esri.com/" target="_blank">Esri</a>, NAVTEQ, Garmin'
     }
   },
   layers: [
     {
-      id: 'carto-tiles-layer',
+      id: 'esri-tiles-layer',
       type: 'raster',
-      source: 'carto-tiles',
+      source: 'esri-tiles',
       minzoom: 0,
-      maxzoom: 20
+      maxzoom: 19
     }
   ]
 };
@@ -103,7 +101,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      style: cartoEnglishRasterStyle, // Injeta o mapa em Inglês aqui
+      style: esriRasterStyle, // Injetamos o mapa ESRI
       center: [-8.2245, 39.3999],
       zoom: 6,
       minZoom: 4,
