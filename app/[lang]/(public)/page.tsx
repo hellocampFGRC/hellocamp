@@ -29,6 +29,18 @@ const TRADUCOES_PAISES: Record<string, string> = {
   "Alemanha": "Germany", "Itália": "Italy", "Estados Unidos": "United States"
 };
 
+// ═══════════════════════════════════════════
+// AS ROTAS PROGRAMÁTICAS "ISECA" PARA O GOOGLE
+// ═══════════════════════════════════════════
+const LINKS_SEO_PROGRAMATICOS = [
+  { pt: "Surf no Algarve", en: "Surf in Algarve", url: "surf/algarve" },
+  { pt: "Futebol em Madrid", en: "Football in Madrid", url: "futebol/madrid" },
+  { pt: "Inglês no Reino Unido", en: "English in the UK", url: "ingles/reino-unido" },
+  { pt: "Desportos em Lisboa", en: "Sports in Lisbon", url: "desporto/lisboa" },
+  { pt: "Tecnologia no Porto", en: "Tech in Porto", url: "tecnologia/porto" },
+  { pt: "Aventura em Espanha", en: "Adventure in Spain", url: "aventura/espanha" },
+];
+
 export default async function Home({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params;
   const dict = await getDictionary(lang as "pt" | "en");
@@ -158,7 +170,6 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                 </div>
               </div>
 
-              {/* O BOTÃO OTIMIZADO: Laranja c/ Texto Branco (Forte Contraste) */}
               <div className="flex justify-center mt-8 md:absolute md:-bottom-[4rem] md:left-1/2 md:-translate-x-1/2">
                 <button type="submit" className="group w-full md:w-64 bg-[#e2a41d] hover:bg-[#d4991b] rounded-xl md:rounded-full flex items-center justify-center gap-3 py-4 md:py-5 shadow-xl shadow-[#e2a41d]/40 transition-all hover:-translate-y-1">
                   <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -218,19 +229,18 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
                     </div>
                     
                     <div className="flex flex-col p-6 flex-1">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
+                      <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
                         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                         {localCampo}
                       </div>
                       <h3 className="text-xl font-black text-slate-900 leading-tight mb-2 line-clamp-2">{nomeCampo}</h3>
                       
-                      <div className="mt-auto pt-6 flex items-center justify-between">
+                      <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'Prices from' : 'Preços desde'}</p>
                           <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                         </div>
-                        {/* CTA BOTÃO: Slate Escuro (Altíssima conversão) */}
-                        <Link href={`/${lang}/campo/${campoId}`} className="bg-slate-900 text-white group-hover:bg-slate-800 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-colors shadow-md">
+                        <Link href={`/${lang}/campo/${campoId}`} className="bg-slate-900 text-white group-hover:bg-slate-800 px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-md">
                           {isEn ? 'View Dates' : 'Ver Datas'}
                         </Link>
                       </div>
@@ -301,6 +311,28 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
           </div>
         </section>
       )}
+
+      {/* ═══════════════════════════════════════════ */}
+      {/* BLOCO SEO PROGRAMÁTICO (PESQUISAS POPULARES)*/}
+      {/* ═══════════════════════════════════════════ */}
+      <section className="bg-slate-50 py-16 border-t border-slate-200">
+        <div className="max-w-5xl mx-auto px-4 md:px-6">
+          <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 text-center">
+            {isEn ? 'Popular Searches' : 'Pesquisas Frequentes'}
+          </h2>
+          <div className="flex flex-wrap justify-center gap-3">
+            {LINKS_SEO_PROGRAMATICOS.map((link) => (
+              <Link 
+                key={link.url} 
+                href={`/${lang}/${link.url}`} 
+                className="bg-white border border-slate-200 hover:border-emerald-600 text-slate-600 hover:text-emerald-700 text-xs font-bold px-4 py-2 rounded-full transition-colors"
+              >
+                {isEn ? link.en : link.pt}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
 
     </main>
   );
