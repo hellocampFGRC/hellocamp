@@ -1,11 +1,11 @@
 import { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import BotaoPartilhaArtigo from "../components/BotaoPartilhaArtigo";
+import BotaoPartilhaArtigo from "../components/BotaoPartilhaArtigo"; // Ajustar se necessário
 import { notFound } from "next/navigation";
 
-const FALLBACK_COVER =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 630'%3E%3Crect fill='%231e293b' width='1200' height='630'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='60' font-weight='bold' fill='%23475569' text-anchor='middle' dy='.3em'%3EHelloCamp Blog%3C/text%3E%3C/svg%3E";
+// Fallback de alta qualidade
+const FALLBACK_COVER = "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=1200";
 
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; slug: string }> }): Promise<Metadata> {
   const { lang, slug } = await params;
@@ -59,38 +59,42 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
   };
 
   return (
-    <main className="min-h-screen bg-white font-sans antialiased text-slate-900 pb-24">
+    <main className="min-h-screen bg-white font-sans text-slate-900 pb-24">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
 
-      {/* CABEÇALHO */}
-      <header className="max-w-4xl mx-auto px-4 md:px-8 pt-12 pb-8 text-center">
+      {/* ═══════════════════════════════════════════ */}
+      {/* CABEÇALHO DO ARTIGO                         */}
+      {/* ═══════════════════════════════════════════ */}
+      <header className="max-w-4xl mx-auto px-4 md:px-6 pt-16 pb-12 text-center">
         <Link
           href={`/${lang}/blog`}
-          className="inline-block text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-5 py-2.5 rounded-full mb-8 transition-colors border border-emerald-100 shadow-sm"
+          className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-5 py-2.5 rounded-full mb-10 transition-colors border border-slate-200 shadow-sm"
         >
-          &larr; {isEn ? 'Back to Blog' : 'Voltar ao Blog'}
+          &larr; {isEn ? 'Back to Journal' : 'Voltar aos Guias'}
         </Link>
 
         {categoria && (
-          <div className="mb-5 text-xs font-black text-slate-400 uppercase tracking-widest">
+          <div className="mb-4 text-[11px] font-black text-[#0E3A68] uppercase tracking-widest bg-blue-50 border border-blue-100 px-3 py-1 rounded-md inline-block">
             {categoria}
           </div>
         )}
 
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight leading-tight mb-8">
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] mb-8 text-slate-900">
           {titulo}
         </h1>
 
-        <div className="flex items-center justify-center gap-4 text-sm font-bold text-slate-500 flex-wrap">
-          <span className="bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">{dataPublicacao}</span>
+        <div className="flex items-center justify-center gap-4 text-xs font-bold text-slate-500 uppercase tracking-widest flex-wrap">
+          <span>{dataPublicacao}</span>
           <span className="text-slate-300">•</span>
-          <BotaoPartilhaArtigo title={titulo} isEn={isEn} />
+          <span className="text-slate-400">{isEn ? 'HelloCamp Editorial' : 'Redação HelloCamp'}</span>
         </div>
       </header>
 
-      {/* IMAGEM DE CAPA */}
-      <div className="max-w-5xl mx-auto px-4 md:px-8 mb-16">
-        <div className="w-full aspect-video md:aspect-[21/9] rounded-3xl overflow-hidden shadow-2xl border border-slate-100 bg-slate-100">
+      {/* ═══════════════════════════════════════════ */}
+      {/* IMAGEM DE CAPA                              */}
+      {/* ═══════════════════════════════════════════ */}
+      <div className="max-w-5xl mx-auto px-4 md:px-6 mb-16">
+        <div className="w-full aspect-[16/9] md:aspect-[21/9] rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-100 bg-slate-100">
           <img
             src={post.imagem_url || FALLBACK_COVER}
             onError={(e) => { e.currentTarget.src = FALLBACK_COVER; }}
@@ -100,40 +104,51 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         </div>
       </div>
 
-      {/* CORPO */}
+      {/* ═══════════════════════════════════════════ */}
+      {/* CORPO DO ARTIGO (TYPOGRAPHY TAILWIND PRO)   */}
+      {/* ═══════════════════════════════════════════ */}
       <article className="
-        max-w-3xl mx-auto px-4 md:px-8
-        text-slate-600 font-medium text-[1.05rem] md:text-lg leading-relaxed text-justify
-        [&_h2]:text-2xl [&_h2]:md:text-3xl [&_h2]:font-black [&_h2]:text-slate-900 [&_h2]:mt-16 [&_h2]:mb-6 [&_h2]:leading-tight [&_h2]:text-left
-        [&_h3]:text-xl [&_h3]:md:text-2xl [&_h3]:font-black [&_h3]:text-slate-900 [&_h3]:mt-14 [&_h3]:mb-6 [&_h3]:pb-4 [&_h3]:border-b [&_h3]:border-slate-100 [&_h3]:text-left
-        [&_p]:mb-6 [&_p]:leading-loose
-        [&_strong]:font-black [&_strong]:text-slate-900
-        [&_ul]:list-none [&_ul]:pl-0 [&_ul]:mb-8 [&_ul]:space-y-6 [&_ul]:text-left
-        [&_li]:relative [&_li]:pl-8
-        [&_li::before]:content-[''] [&_li::before]:absolute [&_li::before]:left-0 [&_li::before]:top-3 [&_li::before]:w-2 [&_li::before]:h-2 [&_li::before]:bg-emerald-500 [&_li::before]:rounded-full
-        [&_p>strong:first-child]:block
-        [&_p>strong:first-child]:text-lg
-        [&_p>strong:first-child]:md:text-xl
-        [&_p>strong:first-child]:mt-10
-        [&_p>strong:first-child]:mb-3
-        [&_p>strong:first-child]:text-slate-900
-        [&_p>strong:first-child]:leading-snug
-        [&_p>strong:first-child]:text-left
+        max-w-3xl mx-auto px-4 md:px-6
+        prose prose-slate prose-lg md:prose-xl w-full
+        prose-headings:font-black prose-headings:tracking-tight prose-headings:text-slate-900
+        prose-h2:text-3xl prose-h2:mt-16 prose-h2:mb-6
+        prose-h3:text-2xl prose-h3:mt-12 prose-h3:mb-4
+        prose-p:text-slate-600 prose-p:leading-relaxed prose-p:mb-8
+        prose-a:text-[#0E3A68] prose-a:font-bold prose-a:no-underline hover:prose-a:underline
+        prose-strong:font-black prose-strong:text-slate-900
+        prose-li:text-slate-600 prose-li:marker:text-[#0E3A68]
+        prose-img:rounded-3xl prose-img:shadow-xl prose-img:border prose-img:border-slate-100
       ">
         <div dangerouslySetInnerHTML={{ __html: conteudo }} />
       </article>
 
-      {/* FOOTER */}
-      <div className="max-w-3xl mx-auto px-4 md:px-8 mt-20 pt-10 border-t-2 border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6 bg-slate-50/50 rounded-3xl p-8">
-        <div>
-          <p className="text-base font-black text-slate-900 m-0 mb-1">
-            {isEn ? 'Did you find this helpful?' : 'Achou este artigo útil?'}
-          </p>
-          <p className="text-sm font-medium text-slate-500 m-0">
-            {isEn ? 'Share it with other parents.' : 'Partilhe com outros encarregados de educação para os ajudar no planeamento.'}
-          </p>
+      {/* ═══════════════════════════════════════════ */}
+      {/* BOTTOM CROSS-SELLING (CONVERSÃO SEO)        */}
+      {/* ═══════════════════════════════════════════ */}
+      <div className="max-w-4xl mx-auto px-4 md:px-6 mt-20 pt-16 border-t border-slate-200">
+        <div className="bg-[#0E3A68] rounded-[2.5rem] p-10 md:p-14 text-center shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-800 to-[#0E3A68] pointer-events-none" />
+          
+          <div className="relative z-10">
+            <span className="text-4xl mb-6 block">🏕️</span>
+            <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-4">
+              {isEn ? 'Ready for the next adventure?' : 'Pronto para a próxima aventura?'}
+            </h2>
+            <p className="text-blue-100 text-lg font-medium mb-10 max-w-xl mx-auto">
+              {isEn 
+                ? `Don't wait until it's fully booked. Discover the best ${categoria || ''} summer camps on HelloCamp.` 
+                : `Não espere que esgote. Compare, escolha e reserve de forma segura na maior plataforma ibérica.`}
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link 
+                href={`/${lang}/pesquisa${categoria ? `?categoria=${encodeURIComponent(categoria)}` : ''}`} 
+                className="bg-[#e2a41d] hover:bg-[#d4991b] text-slate-900 font-black px-10 py-5 rounded-2xl transition-all shadow-xl shadow-[#e2a41d]/20 uppercase tracking-widest text-sm"
+              >
+                {isEn ? 'Search Camps Now' : 'Pesquisar Campos Agora'}
+              </Link>
+            </div>
+          </div>
         </div>
-        <BotaoPartilhaArtigo title={titulo} isEn={isEn} layout="button" />
       </div>
 
     </main>
