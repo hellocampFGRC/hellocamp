@@ -15,7 +15,7 @@ const supabaseAdmin = createClient(
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 const SENDER_EMAIL = 'info@hellocamp.pt';
-const SENDER_NAME = 'Afonso | HelloCamp'; 
+const SENDER_NAME = 'Rodrigo | HelloCamp'; 
 const BASE_URL = 'https://www.hellocamp.pt';
 
 // ==========================================
@@ -110,7 +110,7 @@ const TEMPLATES: Record<string, Template[]> = {
       footer: "Recebeu este e-mail porque a sua entidade é uma referência em Portugal. Para remover, responda 'Remover'.",
       gerarMensagem: (nome) => `
         <p>Olá equipa da <strong>${nome}</strong>,</p>
-        <p>Prometo que não vos chateio mais. Neste momento, há milhares de famílias no Google a pesquisar por atividades, e estamos a encaminhá-las para os nossos parceiros.</p>
+        <p>Prometo que não vos chateio mais. Neste momento, há milhares de famílias a pesquisar por atividades para este verão, e estamos a encaminhá-las para os nossos parceiros.</p>
         <p><strong>Não precisam de preencher nada.</strong> Enviem-nos apenas o PDF das vossas datas em resposta a este e-mail, e configuramos o vosso espaço grátis.</p>
         <p>Esperamos por vocês.</p>
       `
@@ -118,131 +118,130 @@ const TEMPLATES: Record<string, Template[]> = {
   ],
   EN: [
     {
-      gerarAssunto: (nome) => `Quick question about ${nome}'s registrations`,
-      titulo: "Fully Booked, Zero Effort",
-      textoCta: "Discover HelloCamp",
+      gerarAssunto: (nome) => `European students looking for ${nome} summer camps`,
+      titulo: "Welcome European Students",
+      textoCta: "List your Camps on HelloCamp",
       footer: "You received this because your organization is highly rated. Reply 'Remove' to unsubscribe.",
       gerarMensagem: (nome) => `
         <p>Hi <strong>${nome}</strong> team,</p>
-        <p>We built <strong>HelloCamp</strong> to connect your programs with thousands of families across Europe, <strong>without charging you booking commissions</strong>.</p>
-        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
-          <strong>Our Free White-Glove Service:</strong> We know you are busy. Just reply to this email with a link or PDF of your current program. Our team will build and optimize your full dashboard profile at no cost and zero effort on your part.
-        </p>
-        <p>Let us help you reach the Iberian and European markets effortlessly.</p>
+        <p>I'm reaching out from <strong>HelloCamp</strong>, Portugal's leading search engine and booking platform for summer camps and holiday programs.</p>
+        <p>We currently have thousands of families across Europe (especially in Portugal and Spain) actively looking for international summer experiences in the UK and the US. We noticed your excellent programs and would love to feature them to our audience.</p>
+        <p><strong>There are no setup fees.</strong> We simply connect international families directly to your booking system or our automated dashboard.</p>
+        <p>Would you be open to a quick 10-minute chat, or would you prefer to list your programs directly via the link below?</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Tired of chasing payments and medical forms?`,
-      titulo: "Say Goodbye to Admin Chaos",
-      textoCta: "See the Automated Dashboard",
+      gerarAssunto: (nome) => `Automating international bookings for ${nome}`,
+      titulo: "International Growth, Zero Hassle",
+      textoCta: "Create your Partner Account",
       footer: "You received this because your organization is highly rated. Reply 'Remove' to unsubscribe.",
       gerarMensagem: (nome) => `
         <p>Hello again,</p>
-        <p>By listing <strong>${nome}</strong> on HelloCamp, you get an automated digital secretary.</p>
-        <p>Parents pay securely online, and crucial data (like allergies and medical forms) instantly appears on your dashboard. No more messy spreadsheets.</p>
-        <p><strong>Just reply with your brochure</strong> and our onboarding team will set up your account for free.</p>
+        <p>Expanding your summer camp to international markets usually involves expensive marketing. By listing <strong>${nome}</strong> on HelloCamp, you tap instantly into the Iberian market.</p>
+        <p>We provide a dedicated B2B Partner Dashboard where you can manage dates, availability, and receive secure payments directly from European parents.</p>
+        <p>Registration takes 5 minutes. Feel free to set up your account or reply to this email to schedule a quick call with our Business Development team.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Why we don't hide ${nome}'s contact info`,
+      gerarAssunto: (nome) => `Why we put ${nome}'s brand first`,
       titulo: "Your Brand Comes First",
-      textoCta: "Create Your Profile",
+      textoCta: "Join HelloCamp for Free",
       footer: "You received this because your organization is highly rated. Reply 'Remove' to unsubscribe.",
       gerarMensagem: (nome) => `
         <p>Hi <strong>${nome}</strong>,</p>
-        <p>Other directories hide your contact details. At HelloCamp, <strong>your phone, website, and email are 100% visible</strong> to parents.</p>
-        <p>Take back control of your bookings. <strong>Reply to this email with your camp dates</strong> and we will build your page in 24 hours, completely free.</p>
+        <p>Unlike other directories that hide your details, at HelloCamp <strong>your website, email, and brand are 100% visible</strong> to parents.</p>
+        <p>We believe in transparent partnerships. Our goal is to drive high-quality European leads directly to your programs.</p>
+        <p>Create your free listing today and let us help you fill your remaining spots for the upcoming season.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Last email (and our white-glove offer for ${nome})`,
+      gerarAssunto: (nome) => `Last email (European bookings for ${nome})`,
       titulo: "Booking Season is Here",
-      textoCta: "Join HelloCamp",
+      textoCta: "Start Receiving Bookings",
       footer: "You received this because your organization is highly rated. Reply 'Remove' to unsubscribe.",
       gerarMensagem: (nome) => `
         <p>Hi <strong>${nome}</strong> team,</p>
-        <p>I promise this is my last email. Families across Europe are searching for camps right now, and we want to send them your way.</p>
-        <p><strong>No forms to fill out.</strong> Just send us your PDF program in reply to this email, and we will do all the setup for you.</p>
-        <p>We hope to welcome you aboard.</p>
+        <p>I promise this is my last email. Booking season is peaking, and European families are finalizing their summer plans right now.</p>
+        <p>We would hate for you to miss out on this demographic. You can list your programs in a few minutes, or just reply to this email and our team will set it up for you.</p>
+        <p>We hope to welcome you aboard HelloCamp soon!</p>
       `
     }
   ],
   ES: [
     {
-      gerarAssunto: (nome) => `Una pregunta rápida sobre las inscripciones de ${nome}`,
-      titulo: "Más Reservas, Cero Esfuerzo",
-      textoCta: "Descubrir HelloCamp",
-      footer: "Recibe este email porque su entidad es una referencia. Responda 'Eliminar' si no desea más emails.",
-      gerarMensagem: (nome) => `
-        <p>Hola equipo de <strong>${nome}</strong>,</p>
-        <p>Hemos creado <strong>HelloCamp</strong> para conectar su marca con miles de familias, <strong>sin cobrar comisiones por reserva</strong> y manteniendo sus contactos visibles.</p>
-        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
-          <strong>Nuestro Servicio Llave en Mano:</strong> Sabemos que no tienen tiempo. Solo responda a este correo con el enlace o PDF de su programa. Nuestro equipo creará su perfil optimizado gratis y sin esfuerzo por su parte.
-        </p>
-        <p>¿Quieren ahorrar decenas de horas en gestión administrativa?</p>
-      `
-    },
-    {
-      gerarAssunto: (nome) => `¿Fichas en papel y pagos caóticos?`,
-      titulo: "Adiós al Caos Administrativo",
-      textoCta: "Ver el Dashboard",
-      footer: "Recibe este email porque su entidad es una referencia. Responda 'Eliminar' si no desea más emails.",
-      gerarMensagem: (nome) => `
-        <p>Hola de nuevo,</p>
-        <p>Al unir <strong>${nome}</strong> a HelloCamp, ganan una secretaría digital.</p>
-        <p>Los padres pagan automáticamente y las fichas médicas quedan guardadas en su panel. Sin correos perdidos ni hojas de cálculo desordenadas.</p>
-        <p>Para activar su espacio hoy, <strong>solo responda a este email con su folleto</strong> y nosotros nos encargamos del resto.</p>
-      `
-    },
-    {
-      gerarAssunto: (nome) => `Por qué no ocultamos los contactos de ${nome}`,
-      titulo: "El Protagonismo es Suyo",
-      textoCta: "Crear Mi Perfil",
-      footer: "Recibe este email porque su entidad es una referencia. Responda 'Eliminar' si no desea más emails.",
-      gerarMensagem: (nome) => `
-        <p>Equipo de <strong>${nome}</strong>,</p>
-        <p>Otros portales ocultan sus datos. En HelloCamp, <strong>su teléfono, web y email son 100% visibles</strong>.</p>
-        <p>Recuperen el control. <strong>Respondan a este correo con sus programas</strong> y crearemos su perfil gratuitamente en 24 horas.</p>
-      `
-    },
-    {
-      gerarAssunto: (nome) => `Último email (y nuestra oferta llave en mano para ${nome})`,
-      titulo: "La Temporada ha Comenzado",
+      gerarAssunto: (nome) => `Familias portuguesas buscando campamentos en ${nome}`,
+      titulo: "Atrae Alumnos Internacionales",
       textoCta: "Unirse a HelloCamp",
       footer: "Recibe este email porque su entidad es una referencia. Responda 'Eliminar' si no desea más emails.",
       gerarMensagem: (nome) => `
         <p>Hola equipo de <strong>${nome}</strong>,</p>
-        <p>Prometo que es mi último correo. Miles de familias buscan actividades ahora mismo y queremos enviarlas a sus programas.</p>
-        <p><strong>No tienen que rellenar nada.</strong> Envíennos el PDF de sus fechas respondiendo a este email y configuraremos su espacio gratis.</p>
-        <p>Os esperamos.</p>
+        <p>Les escribo desde <strong>HelloCamp</strong>, el mayor buscador y plataforma de reservas de campamentos de verano en Portugal.</p>
+        <p>Tenemos miles de familias portuguesas que buscan cada año enviar a sus hijos a España para disfrutar de campamentos de deporte, idiomas y aventura. Al ser el destino internacional número uno para nuestros usuarios, nos encantaría incluir sus excelentes programas en nuestro portal.</p>
+        <p><strong>No hay costes de alta ni de mantenimiento.</strong> Solo conectamos a las familias con sus programas.</p>
+        <p>¿Tienen disponibilidad para una breve llamada de 10 minutos, o prefieren registrar la organización directamente en el botón de abajo?</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Gestión internacional sin esfuerzo para ${nome}`,
+      titulo: "Crece en el Mercado Ibérico",
+      textoCta: "Crear Cuenta de Partner",
+      footer: "Recibe este email porque su entidad es una referencia. Responda 'Eliminar' si no desea más emails.",
+      gerarMensagem: (nome) => `
+        <p>Hola de nuevo,</p>
+        <p>Captar alumnos internacionales suele requerir mucha inversión en marketing. Al anunciar <strong>${nome}</strong> en HelloCamp, acceden directamente a miles de clientes portugueses.</p>
+        <p>Les ofrecemos un Dashboard automatizado donde pueden recibir inscripciones, fichas médicas y pagos seguros de forma instantánea.</p>
+        <p>Pueden registrarse en 5 minutos o responder a este email para agendar una llamada con nuestro equipo comercial y aclarar cualquier duda.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Por qué damos visibilidad total a la marca de ${nome}`,
+      titulo: "Su Marca es la Protagonista",
+      textoCta: "Anunciar mis Campamentos",
+      footer: "Recibe este email porque su entidad es una referencia. Responda 'Eliminar' si no desea más emails.",
+      gerarMensagem: (nome) => `
+        <p>Equipo de <strong>${nome}</strong>,</p>
+        <p>Otros portales ocultan sus datos para obligar al cliente a pasar por ellos. En HelloCamp, <strong>su teléfono, web y logo son 100% visibles</strong>.</p>
+        <p>Creemos en alianzas transparentes. Nuestro objetivo es aportarles reservas de calidad desde el mercado portugués y europeo.</p>
+        <p>Creen su perfil gratuito hoy mismo y prepárense para la temporada de verano.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Último email (y reservas europeas para ${nome})`,
+      titulo: "La Temporada de Reservas ha Comenzado",
+      textoCta: "Garantizar mi espacio",
+      footer: "Recibe este email porque su entidad es una referencia. Responda 'Eliminar' si no desea más emails.",
+      gerarMensagem: (nome) => `
+        <p>Hola equipo de <strong>${nome}</strong>,</p>
+        <p>Prometo que es mi último correo. Las familias ya están cerrando sus planes de verano y nos encantaría poder recomendar sus programas.</p>
+        <p>Si prefieren no perder tiempo, <strong>respondan a este correo con un folleto/PDF de sus fechas</strong> y nuestro equipo se encargará de crear y traducir su perfil gratuitamente.</p>
+        <p>Esperamos colaborar con ustedes muy pronto.</p>
       `
     }
   ],
   FR: [
     {
-      gerarAssunto: (nome) => `Une question rapide sur les inscriptions de ${nome}`,
-      titulo: "Complet, Zéro Effort",
-      textoCta: "Découvrir HelloCamp",
+      gerarAssunto: (nome) => `Élèves européens cherchant des séjours avec ${nome}`,
+      titulo: "Attirez des Étudiants Internationaux",
+      textoCta: "Rejoindre HelloCamp",
       footer: "Vous recevez cet e-mail car votre organisation est une référence. Répondez 'Retirer' pour vous désabonner.",
       gerarMensagem: (nome) => `
         <p>Bonjour l'équipe de <strong>${nome}</strong>,</p>
-        <p>Nous avons créé <strong>HelloCamp</strong> pour connecter vos programmes à des milliers de familles, <strong>sans commissions sur les réservations</strong>.</p>
-        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
-          <strong>Notre Service Clé en Main :</strong> Nous savons que vous manquez de temps. Répondez simplement à cet e-mail avec un lien ou le PDF de votre programme. Notre équipe créera votre profil optimisé gratuitement.
-        </p>
-        <p>Prêt à gagner des dizaines d'heures de gestion ?</p>
+        <p>Je vous contacte de la part de <strong>HelloCamp</strong>, le principal moteur de recherche de colonies de vacances au Portugal et en Europe.</p>
+        <p>Des milliers de familles recherchent des expériences d'été internationales (sports, langues, aventure) et nous adorerions présenter vos excellents programmes à notre public.</p>
+        <p><strong>Il n'y a aucun frais de création.</strong> Nous connectons simplement les familles européennes directement à vos séjours.</p>
+        <p>Seriez-vous disponibles pour un court échange de 10 minutes, ou préférez-vous inscrire votre organisation via le lien ci-dessous ?</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Fiches papier et paiements chaotiques ?`,
-      titulo: "Adieu le Chaos Administratif",
-      textoCta: "Voir le Dashboard",
+      gerarAssunto: (nome) => `Développement international sans effort pour ${nome}`,
+      titulo: "Croissance Internationale Facilitée",
+      textoCta: "Créer votre compte Partenaire",
       footer: "Vous recevez cet e-mail car votre organisation est une référence. Répondez 'Retirer' pour vous désabonner.",
       gerarMensagem: (nome) => `
         <p>Re-bonjour,</p>
-        <p>En rejoignant HelloCamp, <strong>${nome}</strong> gagne un secrétariat numérique.</p>
-        <p>Les parents paient en ligne et les fiches médicales sont instantanément sauvegardées sur votre tableau de bord.</p>
-        <p><strong>Répondez avec votre brochure</strong> et notre équipe configurera votre compte gratuitement.</p>
+        <p>En rejoignant HelloCamp, <strong>${nome}</strong> accède immédiatement au marché ibérique et européen.</p>
+        <p>Nous vous fournissons un tableau de bord B2B pour gérer les dates, les disponibilités et recevoir des paiements sécurisés directement des parents.</p>
+        <p>L'inscription prend 5 minutes. Vous pouvez également répondre à cet e-mail pour planifier un appel avec notre équipe de développement commercial.</p>
       `
     },
     {
@@ -253,47 +252,46 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarMensagem: (nome) => `
         <p>L'équipe de <strong>${nome}</strong>,</p>
         <p>D'autres portails cachent vos coordonnées. Sur HelloCamp, <strong>votre téléphone, site et e-mail sont 100% visibles</strong>.</p>
-        <p>Reprenez le contrôle. <strong>Répondez à cet e-mail avec vos programmes</strong> et nous créerons votre profil gratuitement en 24h.</p>
+        <p>Reprenez le contrôle. Créez votre profil gratuit aujourd'hui et laissez-nous vous aider à remplir vos dernières places pour la saison à venir.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Dernier e-mail (et notre offre clé en main pour ${nome})`,
+      gerarAssunto: (nome) => `Dernier e-mail (Réservations européennes pour ${nome})`,
       titulo: "La Saison des Réservations a Commencé",
       textoCta: "Rejoindre HelloCamp",
       footer: "Vous recevez cet e-mail car votre organisation est une référence. Répondez 'Retirer' pour vous désabonner.",
       gerarMensagem: (nome) => `
         <p>Bonjour <strong>${nome}</strong>,</p>
-        <p>C'est mon dernier message. Des milliers de familles cherchent des activités et nous voulons vous les envoyer.</p>
-        <p><strong>Aucun formulaire à remplir.</strong> Envoyez-nous simplement votre PDF en réponse et nous ferons tout le paramétrage pour vous.</p>
-        <p>Nous vous attendons.</p>
+        <p>C'est mon dernier message. La saison des réservations bat son plein et les familles finalisent leurs plans d'été en ce moment même.</p>
+        <p>Si vous manquez de temps, <strong>envoyez-nous simplement votre PDF en réponse</strong> et nous ferons tout le paramétrage pour vous gratuitement.</p>
+        <p>Nous vous attendons avec impatience !</p>
       `
     }
   ],
   DE: [
     {
-      gerarAssunto: (nome) => `Eine kurze Frage zu den Anmeldungen von ${nome}`,
-      titulo: "Ausgebucht, ohne Aufwand",
-      textoCta: "HelloCamp Entdecken",
+      gerarAssunto: (nome) => `Europäische Schüler suchen nach ${nome} Sommercamps`,
+      titulo: "Internationale Schüler Anziehen",
+      textoCta: "HelloCamp Beitreten",
       footer: "Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. Antworten Sie mit 'Entfernen', um sich abzumelden.",
       gerarMensagem: (nome) => `
         <p>Hallo <strong>${nome}</strong> Team,</p>
-        <p>Wir haben <strong>HelloCamp</strong> gegründet, um Ihre Programme mit Tausenden von Familien zu verbinden, <strong>ohne Buchungsprovisionen zu verlangen</strong>.</p>
-        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
-          <strong>Unser kostenloser "Rundum-sorglos-Service":</strong> Wir wissen, dass Sie beschäftigt sind. Antworten Sie einfach auf diese E-Mail mit einem Link oder PDF Ihres Programms. Unser Team erstellt kostenlos Ihr optimiertes Profil.
-        </p>
-        <p>Möchten Sie Zeit bei der Verwaltung sparen?</p>
+        <p>ich kontaktiere Sie im Namen von <strong>HelloCamp</strong>, der führenden Buchungsplattform für Feriencamps in Südeuropa.</p>
+        <p>Tausende Familien suchen nach internationalen Sommererlebnissen und wir würden Ihre exzellenten Programme gerne unserem Publikum vorstellen.</p>
+        <p><strong>Es gibt keine Einrichtungsgebühren.</strong> Wir verbinden europäische Familien einfach direkt mit Ihren Camps.</p>
+        <p>Hätten Sie Zeit für ein kurzes 10-minütiges Gespräch oder möchten Sie Ihre Organisation direkt über den untenstehenden Link registrieren?</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Papierkram und chaotische Zahlungen?`,
-      titulo: "Schluss mit dem Verwaltungs-Chaos",
-      textoCta: "Dashboard Ansehen",
+      gerarAssunto: (nome) => `Müheloses internationales Wachstum für ${nome}`,
+      titulo: "Internationale Buchungen Automatisieren",
+      textoCta: "Partnerkonto Erstellen",
       footer: "Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. Antworten Sie mit 'Entfernen', um sich abzumelden.",
       gerarMensagem: (nome) => `
         <p>Hallo nochmal,</p>
-        <p>Mit <strong>${nome}</strong> auf HelloCamp erhalten Sie ein digitales Sekretariat.</p>
-        <p>Eltern zahlen sicher online und wichtige Daten (wie Allergien) erscheinen sofort in Ihrem Dashboard.</p>
-        <p><strong>Antworten Sie einfach mit Ihrer Broschüre</strong> und wir richten Ihr Konto kostenlos ein.</p>
+        <p>Durch die Listung von <strong>${nome}</strong> auf HelloCamp erschließen Sie sofort den iberischen und südeuropäischen Markt.</p>
+        <p>Wir bieten Ihnen ein B2B-Dashboard, über das Sie sichere Zahlungen direkt von Eltern empfangen können.</p>
+        <p>Die Registrierung dauert 5 Minuten. Alternativ können Sie auf diese E-Mail antworten, um ein kurzes Gespräch mit unserem Sales-Team zu vereinbaren.</p>
       `
     },
     {
@@ -304,19 +302,19 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarMensagem: (nome) => `
         <p>Team <strong>${nome}</strong>,</p>
         <p>Andere Portale verstecken Ihre Kontaktdaten. Bei HelloCamp sind <strong>Ihr Telefon, Ihre Website und Ihre E-Mail zu 100 % sichtbar</strong>.</p>
-        <p>Behalten Sie die Kontrolle. <strong>Antworten Sie auf diese E-Mail mit Ihren Programmen</strong> und wir erstellen Ihr Profil innerhalb von 24 Stunden kostenlos.</p>
+        <p>Erstellen Sie noch heute Ihren kostenlosen Eintrag und lassen Sie uns dabei helfen, Ihre restlichen Plätze für die kommende Saison zu füllen.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Letzte E-Mail (und unser Einrichtungsangebot für ${nome})`,
+      gerarAssunto: (nome) => `Letzte E-Mail (Europäische Buchungen für ${nome})`,
       titulo: "Die Buchungssaison hat begonnen",
       textoCta: "HelloCamp Beitreten",
       footer: "Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. Antworten Sie mit 'Entfernen', um sich abzumelden.",
       gerarMensagem: (nome) => `
         <p>Hallo <strong>${nome}</strong> Team,</p>
-        <p>Das ist meine letzte E-Mail. Tausende Familien suchen gerade nach Aktivitäten und wir möchten sie an Sie weiterleiten.</p>
-        <p><strong>Sie müssen keine Formulare ausfüllen.</strong> Senden Sie uns einfach Ihr PDF-Programm als Antwort auf diese E-Mail und wir übernehmen die Einrichtung.</p>
-        <p>Wir freuen uns auf Sie.</p>
+        <p>Das ist meine letzte E-Mail. Die Buchungssaison ist in vollem Gange und die Familien planen genau jetzt ihren Sommer.</p>
+        <p><strong>Senden Sie uns einfach Ihr PDF-Programm als Antwort</strong> und wir übernehmen die Einrichtung kostenlos für Sie.</p>
+        <p>Wir hoffen, Sie bald bei HelloCamp begrüßen zu dürfen!</p>
       `
     }
   ]
@@ -370,11 +368,10 @@ export async function GET(request: Request) {
   try {
     const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    // ESCALAR PARA 250 DISPAROS DIÁRIOS
     const { data: leadsProntas, error } = await supabaseAdmin
       .from('leads_externas')
       .select('id, nome_cliente, email_cliente, fase_funil, ultimo_contacto, idioma')
-      .lt('fase_funil', 4) // Todas as línguas têm 4 fases
+      .lt('fase_funil', 4) 
       .or(`ultimo_contacto.is.null,ultimo_contacto.lt.${seteDiasAtras}`)
       .not('email_cliente', 'is', null)
       .neq('email_cliente', '')
@@ -386,7 +383,7 @@ export async function GET(request: Request) {
     if (!leadsProntas || leadsProntas.length === 0) return NextResponse.json({ message: 'Nenhuma lead elegível hoje.' });
 
     const resultados: any[] = [];
-    const BATCH_SIZE = 25; // Processar de 25 em 25 para proteger o limite da API do Brevo
+    const BATCH_SIZE = 25; 
 
     for (let i = 0; i < leadsProntas.length; i += BATCH_SIZE) {
       const batch = leadsProntas.slice(i, i + BATCH_SIZE);
@@ -397,16 +394,16 @@ export async function GET(request: Request) {
           const nome = lead.nome_cliente || 'Organizador';
           const faseAtual = Number(lead.fase_funil) || 0;
           
-          // Fallback inteligente de idioma
           let lang = (lead.idioma || 'PT').toUpperCase();
-          if (!TEMPLATES[lang]) lang = 'EN'; // Se não tiver a língua, envia em Inglês (internacional)
+          if (!TEMPLATES[lang]) lang = 'EN'; 
           
           const tpl = TEMPLATES[lang][faseAtual];
-          if (!tpl) return { status: 'skipped', id: lead.id }; // Proteção caso a fase falhe
+          if (!tpl) return { status: 'skipped', id: lead.id };
 
-          // Link localizado dinâmico (ex: /pt/registo ou /en/registo)
           const linkLang = lang === 'PT' ? 'pt' : lang === 'ES' ? 'es' : lang === 'FR' ? 'fr' : 'en';
-          const ctaLinkTracker = `${BASE_URL}/${linkLang}/registo?utm_source=cold_email_b2b&utm_medium=email&utm_campaign=fase_${faseAtual}_${lang}`;
+          
+          // Melhoria na URL da CTA: Leva diretamente para o onboarding de parceiros em vez de apenas "/registo"
+          const ctaLinkTracker = `${BASE_URL}/${linkLang}/parceiros?utm_source=cold_email_b2b&utm_medium=email&utm_campaign=fase_${faseAtual}_${lang}`;
 
           const r = await enviarViaBrevo({
             to: { email, name: nome },
@@ -426,7 +423,6 @@ export async function GET(request: Request) {
 
     const sucessos = resultados.filter(r => r.status === 'sent');
 
-    // Atualização em Bulk no Supabase (muito mais rápido do que um a um)
     if (sucessos.length > 0) {
       const groupedByFase = sucessos.reduce((acc: any, curr: any) => {
         if (!acc[curr.novaFase]) acc[curr.novaFase] = [];
