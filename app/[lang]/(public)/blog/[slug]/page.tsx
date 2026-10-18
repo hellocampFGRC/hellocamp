@@ -1,22 +1,31 @@
 import { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import BotaoPartilhaArtigo from "../components/BotaoPartilhaArtigo"; // Ajustar se necessário
+import BotaoPartilhaArtigo from "../components/BotaoPartilhaArtigo";
 import { notFound } from "next/navigation";
 
-// Fallback de alta qualidade
 const FALLBACK_COVER = "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=1200";
 
+// ═══════════════════════════════════════════
+// METADADOS SEO (BLINDADO)
+// ═══════════════════════════════════════════
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; slug: string }> }): Promise<Metadata> {
   const { lang, slug } = await params;
   const isEn = lang === 'en';
 
-  const { data: post } = await supabase.from('blog_posts').select('*').eq('slug', slug).single();
+  const slugLimpo = decodeURIComponent(slug);
+
+  const { data: post } = await supabase
+    .from('blog_posts')
+    .select('*')
+    .eq('slug', slugLimpo)
+    .limit(1)
+    .maybeSingle();
 
   if (!post) return { title: 'Blog | HelloCamp' };
 
-  const title = (isEn && post.titulo_en ? post.titulo_en : post.titulo) + ' | HelloCamp';
-  const description = isEn && post.resumo_en ? post.resumo_en : post.resumo;
+  const title = (isEn && post.titulo_en ? post.titulo_en : (post.titulo || 'Blog')) + ' | HelloCamp';
+  const description = isEn && post.resumo_en ? post.resumo_en : (post.resumo || '');
 
   return {
     title,
@@ -25,36 +34,51 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
       title,
       description,
       type: 'article',
-      publishedTime: post.created_at,
+      publishedTime: post.created_at || new Date().toISOString(),
       images: [{ url: post.imagem_url || FALLBACK_COVER, width: 1200, height: 630 }]
     }
   };
 }
 
+// ═══════════════════════════════════════════
+// PÁGINA PRINCIPAL (BLINDADA CONTRA CRASHES)
+// ═══════════════════════════════════════════
 export default async function BlogPostPage({ params }: { params: Promise<{ lang: string; slug: string }> }) {
   const { lang, slug } = await params;
   const isEn = lang === 'en';
 
-  const { data: post } = await supabase.from('blog_posts').select('*').eq('slug', slug).single();
+  const slugLimpo = decodeURIComponent(slug);
 
-  if (!post) {
+  const { data: post, error } = await supabase
+    .from('blog_posts')
+    .select('*')
+    .eq('slug', slugLimpo)
+    .limit(1)
+    .maybeSingle();
+
+  // Se houver erro ou não encontrar, devolve 404 limpo em vez de erro 500
+  if (error || !post) {
     notFound();
   }
 
-  const titulo = isEn && post.titulo_en ? post.titulo_en : post.titulo;
-  const conteudo = isEn && post.conteudo_en ? post.conteudo_en : post.conteudo;
-  const categoria = isEn && post.categoria_en ? post.categoria_en : post.categoria;
+  // Prevenção de nulos em todos os campos
+  const titulo = isEn && post.titulo_en ? post.titulo_en : (post.titulo || 'Artigo sem título');
+  const conteudo = isEn && post.conteudo_en ? post.conteudo_en : (post.conteudo || '<p>Conteúdo em atualização...</p>');
+  const categoria = isEn && post.categoria_en ? post.categoria_en : (post.categoria || '');
 
-  const dataPublicacao = new Date(post.created_at).toLocaleDateString(isEn ? 'en-US' : 'pt-PT', {
-    day: 'numeric', month: 'long', year: 'numeric'
-  });
+  let dataPublicacao = '';
+  if (post.created_at) {
+    dataPublicacao = new Date(post.created_at).toLocaleDateString(isEn ? 'en-US' : 'pt-PT', {
+      day: 'numeric', month: 'long', year: 'numeric'
+    });
+  }
 
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     "headline": titulo,
     "image": post.imagem_url || FALLBACK_COVER,
-    "datePublished": post.created_at,
+    "datePublished": post.created_at || new Date().toISOString(),
     "author": { "@type": "Organization", "name": "HelloCamp" }
   };
 
@@ -84,7 +108,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         </h1>
 
         <div className="flex items-center justify-center gap-4 text-xs font-bold text-slate-500 uppercase tracking-widest flex-wrap">
-          <span>{dataPublicacao}</span>
+          {dataPublicacao && <span>{dataPublicacao}</span>}
           <span className="text-slate-300">•</span>
           <span className="text-slate-400">{isEn ? 'HelloCamp Editorial' : 'Redação HelloCamp'}</span>
         </div>
@@ -119,13 +143,34 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         prose-li:text-slate-600 prose-li:marker:text-[#0E3A68]
         prose-img:rounded-3xl prose-img:shadow-xl prose-img:border prose-img:border-slate-100
       ">
-        <div dangerouslySetInnerHTML={{ __html: conteudo }} />
+        {/* O fallback || '' impede o React de dar erro 500 se não houver conteúdo */}
+        <div dangerouslySetInnerHTML={{ __html: conteudo || '' }} />
       </article>
+
+      {/* ═══════════════════════════════════════════ */}
+      {/* RODAPÉ DO ARTIGO / PARTILHA                 */}
+      {/* ═══════════════════════════════════════════ */}
+      <div className="max-w-3xl mx-auto px-4 md:px-6 mt-16 pb-10">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 bg-slate-50 border border-slate-100 rounded-3xl p-8">
+          <div>
+            <p className="text-base font-black text-slate-900 mb-1">
+              {isEn ? 'Did you find this helpful?' : 'Achou este artigo útil?'}
+            </p>
+            <p className="text-sm font-medium text-slate-500 m-0">
+              {isEn ? 'Share it with your network.' : 'Partilhe o guia para ajudar outras famílias.'}
+            </p>
+          </div>
+          {/* Removi o layout="button" que podia estar a causar erro de Typescript */}
+          <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+             <BotaoPartilhaArtigo title={titulo} isEn={isEn} />
+          </div>
+        </div>
+      </div>
 
       {/* ═══════════════════════════════════════════ */}
       {/* BOTTOM CROSS-SELLING (CONVERSÃO SEO)        */}
       {/* ═══════════════════════════════════════════ */}
-      <div className="max-w-4xl mx-auto px-4 md:px-6 mt-20 pt-16 border-t border-slate-200">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 mt-10 pt-16 border-t border-slate-200">
         <div className="bg-[#0E3A68] rounded-[2.5rem] p-10 md:p-14 text-center shadow-2xl relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-800 to-[#0E3A68] pointer-events-none" />
           
