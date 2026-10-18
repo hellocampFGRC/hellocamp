@@ -2,17 +2,13 @@ import { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import dynamic from "next/dynamic";
-
-const BotaoPartilhaArtigo = dynamic(() => import("../components/BotaoPartilhaArtigo"), {
-  ssr: false,
-  loading: () => <div className="w-8 h-8 rounded-full bg-slate-100 animate-pulse"></div>
-});
+// Importação normal (O Next.js já sabe que é um Client Component devido ao "use client" dentro dele)
+import BotaoPartilhaArtigo from "../components/BotaoPartilhaArtigo";
 
 const FALLBACK_COVER = "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=1200";
 
 // ═══════════════════════════════════════════
-// METADADOS SEO 
+// METADADOS SEO (BLINDADO)
 // ═══════════════════════════════════════════
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; slug: string }> }): Promise<Metadata> {
   const { lang, slug } = await params;
@@ -70,14 +66,17 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
     console.error("Erro interno ao carregar o artigo:", error);
   }
 
+  // Se o artigo não for encontrado, aciona a página 404 elegantemente
   if (!post) {
     notFound();
   }
 
+  // Fallbacks para garantir que a página nunca crasha
   const titulo = isEn && post.titulo_en ? post.titulo_en : (post.titulo || 'Artigo sem título');
   const conteudo = isEn && post.conteudo_en ? post.conteudo_en : (post.conteudo || '<p>Conteúdo em atualização...</p>');
   const categoria = isEn && post.categoria_en ? post.categoria_en : (post.categoria || '');
 
+  // Formatação segura da data
   let dataPublicacao = '';
   try {
     if (post.created_at) {
@@ -88,6 +87,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
     dataPublicacao = 'Recente';
   }
 
+  // Schema de SEO injetado de forma segura
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
@@ -102,7 +102,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
     <main className="min-h-screen bg-white font-sans text-slate-900 pb-24">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schemaString }} />
 
-      {/* CABEÇALHO */}
+      {/* CABEÇALHO DO ARTIGO */}
       <header className="max-w-4xl mx-auto px-4 md:px-6 pt-16 pb-12 text-center">
         <Link
           href={`/${lang}/blog`}
@@ -128,7 +128,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         </div>
       </header>
 
-      {/* IMAGEM DE CAPA (AGORA CORRIGIDA, SEM ONERROR!) */}
+      {/* IMAGEM DE CAPA (Segura sem funções de cliente) */}
       <div className="max-w-5xl mx-auto px-4 md:px-6 mb-16">
         <div className="w-full aspect-[16/9] md:aspect-[21/9] rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-100 bg-slate-100">
           <img
@@ -152,7 +152,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         prose-li:text-slate-600 prose-li:marker:text-[#0E3A68]
         prose-img:rounded-3xl prose-img:shadow-xl prose-img:border prose-img:border-slate-100
       ">
-        <div dangerouslySetInnerHTML={{ __html: conteudo }} />
+        <div dangerouslySetInnerHTML={{ __html: conteudo || '' }} />
       </article>
 
       {/* RODAPÉ DO ARTIGO / PARTILHA */}
