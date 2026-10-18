@@ -88,14 +88,14 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
       
       {/* ═══════════════════════════════════════════ */}
-      {/* HEADER SEO */}
+      {/* HEADER SEO                                  */}
       {/* ═══════════════════════════════════════════ */}
       <section className="bg-white border-b border-slate-200 pt-8 pb-10 px-4 md:px-6 shadow-sm">
         <div className="max-w-[1100px] mx-auto">
           <nav className="flex items-center gap-2 text-[10px] font-black text-slate-400 mb-6 tracking-widest uppercase">
-            <Link href={`/${lang}`} className="hover:text-emerald-600 transition-colors">{isEn ? 'Home' : 'Início'}</Link>
+            <Link href={`/${lang}`} className="hover:text-[#124072] transition-colors">{isEn ? 'Home' : 'Início'}</Link>
             <span>/</span>
-            <Link href={`/${lang}/pesquisa`} className="hover:text-emerald-600 transition-colors">{isEn ? 'Search' : 'Pesquisa'}</Link>
+            <Link href={`/${lang}/pesquisa`} className="hover:text-[#124072] transition-colors">{isEn ? 'Search' : 'Pesquisa'}</Link>
             <span>/</span>
             <span className="text-slate-900">{catFormatada}</span>
             <span>/</span>
@@ -114,33 +114,87 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
       </section>
 
       {/* ═══════════════════════════════════════════ */}
-      {/* RESULTADOS OU SMART EMPTY STATE */}
+      {/* RESULTADOS OU SMART EMPTY STATE             */}
       {/* ═══════════════════════════════════════════ */}
       <section className="max-w-[1100px] mx-auto px-4 py-12 md:py-16">
         {resultados.length === 0 ? (
-          // SMART EMPTY STATE (O Google vê isto como conteúdo válido, não como Erro 404)
-          <div className="text-center p-12 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center gap-4 max-w-2xl mx-auto">
-            <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center text-4xl border border-amber-100 mb-2">
-              🗺️
+          // SMART EMPTY STATE COM CROSS-SELLING
+          <div className="flex flex-col gap-16">
+            {/* Mensagem de Vazio */}
+            <div className="text-center p-12 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center gap-4 max-w-2xl mx-auto">
+              <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center text-4xl border border-amber-100 mb-2">
+                🗺️
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                {isEn ? `No exact matches for ${catFormatada} in ${localFormatado}` : `Ainda não temos campos exatos de ${catFormatada} em ${localFormatado}`}
+              </h3>
+              <p className="text-base text-slate-500 font-medium">
+                {isEn 
+                  ? 'We are constantly adding new partners. Meanwhile, check out these amazing alternatives that other families are booking right now.' 
+                  : 'Estamos a adicionar parceiros todos os dias. Entretanto, veja estas alternativas incríveis que outras famílias estão a reservar.'}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 mt-6 w-full sm:w-auto">
+                <Link href={`/${lang}/pesquisa?categoria=${encodeURIComponent(catFormatada)}`} className="bg-[#124072] text-white font-black px-8 py-4 rounded-xl hover:bg-[#0a294b] transition-all shadow-lg uppercase tracking-widest text-xs flex-1 text-center">
+                  {isEn ? `Search Anywhere` : `Procurar Noutros Locais`}
+                </Link>
+                <Link href={`/${lang}/pesquisa`} className="bg-slate-100 text-slate-700 font-black px-8 py-4 rounded-xl hover:bg-slate-200 transition-colors uppercase tracking-widest text-xs flex-1 text-center border border-slate-200">
+                  {isEn ? 'View All Camps' : 'Ver Todos os Campos'}
+                </Link>
+              </div>
             </div>
-            <h3 className="text-2xl font-black text-slate-900">
-              {isEn ? `No ${catFormatada} camps in ${localFormatado} right now` : `Ainda não temos campos de ${catFormatada} em ${localFormatado}`}
-            </h3>
-            <p className="text-base text-slate-500 font-medium">
-              {isEn 
-                ? 'We are constantly adding new partners. In the meantime, you can explore other amazing camps in the country or search by a different category.' 
-                : 'Estamos constantemente a adicionar novos parceiros à plataforma. Entretanto, explore outros campos fantásticos em regiões próximas.'}
-            </p>
-            <div className="flex gap-4 mt-4 w-full md:w-auto">
-              <Link href={`/${lang}/pesquisa?categoria=${catFormatada}`} className="flex-1 bg-[#124072] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#0a294b] transition-colors text-sm uppercase tracking-widest">
-                {isEn ? `Anywhere in Europe` : `Em qualquer local`}
-              </Link>
-              <Link href={`/${lang}/pesquisa`} className="flex-1 bg-slate-100 text-slate-700 font-bold px-6 py-3 rounded-xl hover:bg-slate-200 transition-colors text-sm uppercase tracking-widest">
-                {isEn ? 'View All' : 'Ver Todos'}
-              </Link>
+
+            {/* Alternativas (Pega nos 3 primeiros campos disponíveis da base de dados geral) */}
+            <div>
+              <div className="flex items-center gap-4 mb-8">
+                <h4 className="text-2xl font-black text-slate-900 tracking-tight">
+                  {isEn ? 'Recommended Alternatives' : 'Alternativas Recomendadas'}
+                </h4>
+                <div className="flex-1 h-px bg-slate-200"></div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+                {todosOsCampos.slice(0, 3).map((campo) => {
+                  const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
+                  const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
+                  const localC = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
+                  let precoVisivel = campo.preco || 0;
+                  if (!precoVisivel && campo.pacotes?.length > 0) {
+                    const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes?.map((v: any) => v.preco) || []);
+                    if (todosPrecos.length > 0) precoVisivel = Math.min(...todosPrecos);
+                  }
+
+                  return (
+                    <div key={campo.id} className="group flex flex-col bg-white rounded-[2rem] overflow-hidden border border-slate-200 relative shadow-sm hover:shadow-[0_20px_60px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1">
+                      <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
+                      <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
+                      <div className="relative h-60 w-full overflow-hidden bg-slate-100">
+                        <img src={campo.imagem || '/og-image.jpg'} alt={nomeCampo} loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                        <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-900 rounded-lg z-0">{catCampo}</div>
+                      </div>
+                      <div className="flex flex-col p-6 flex-1 pointer-events-none">
+                        <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                          {localC}
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 leading-tight mb-2 line-clamp-2">{nomeCampo}</h3>
+                        <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'Desde'}</p>
+                            <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                          </div>
+                          <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#124072] group-hover:text-white shadow-sm">
+                            {isEn ? 'View Dates' : 'Ver Datas'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : (
+          // GRID NORMAL DE RESULTADOS (Quando encontra a combinação exata)
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
             {resultados.map((campo) => {
               const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
@@ -181,10 +235,10 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
                     
                     <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
                       <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'Desde'}</p>
                         <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                       </div>
-                      <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors group-hover:bg-[#124072] group-hover:text-white shadow-sm">
+                      <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#124072] group-hover:text-white shadow-sm">
                         {isEn ? 'View Dates' : 'Ver Datas'}
                       </span>
                     </div>
