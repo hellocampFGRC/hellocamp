@@ -13,31 +13,33 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
   const { lang, slug } = await params;
   const isEn = lang === 'en';
 
-  const slugLimpo = decodeURIComponent(slug);
+  try {
+    const { data: post } = await supabase
+      .from('blog_posts')
+      .select('titulo, titulo_en, resumo, resumo_en, imagem_url, created_at')
+      .eq('slug', slug)
+      .limit(1)
+      .maybeSingle();
 
-  const { data: post } = await supabase
-    .from('blog_posts')
-    .select('*')
-    .eq('slug', slugLimpo)
-    .limit(1)
-    .maybeSingle();
+    if (!post) return { title: 'Blog | HelloCamp' };
 
-  if (!post) return { title: 'Blog | HelloCamp' };
+    const title = (isEn && post.titulo_en ? post.titulo_en : (post.titulo || 'Blog')) + ' | HelloCamp';
+    const description = isEn && post.resumo_en ? post.resumo_en : (post.resumo || '');
 
-  const title = (isEn && post.titulo_en ? post.titulo_en : (post.titulo || 'Blog')) + ' | HelloCamp';
-  const description = isEn && post.resumo_en ? post.resumo_en : (post.resumo || '');
-
-  return {
-    title,
-    description,
-    openGraph: {
+    return {
       title,
       description,
-      type: 'article',
-      publishedTime: post.created_at || new Date().toISOString(),
-      images: [{ url: post.imagem_url || FALLBACK_COVER, width: 1200, height: 630 }]
-    }
-  };
+      openGraph: {
+        title,
+        description,
+        type: 'article',
+        publishedTime: post.created_at || new Date().toISOString(),
+        images: [{ url: post.imagem_url || FALLBACK_COVER, width: 1200, height: 630 }]
+      }
+    };
+  } catch (error) {
+    return { title: 'Blog | HelloCamp' };
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -47,30 +49,37 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
   const { lang, slug } = await params;
   const isEn = lang === 'en';
 
-  const slugLimpo = decodeURIComponent(slug);
+  let post = null;
 
-  const { data: post, error } = await supabase
-    .from('blog_posts')
-    .select('*')
-    .eq('slug', slugLimpo)
-    .limit(1)
-    .maybeSingle();
+  try {
+    // maybeSingle() previne crashes se houver slugs duplicados
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .select('*')
+      .eq('slug', slug)
+      .limit(1)
+      .maybeSingle();
 
-  // Se houver erro ou não encontrar, devolve 404 limpo em vez de erro 500
-  if (error || !post) {
+    if (error) throw error;
+    post = data;
+  } catch (error) {
+    console.error("Erro interno ao carregar o artigo:", error);
+  }
+
+  // Se o post não existir ou houver erro, devolve o Empty State (404) de forma elegante
+  if (!post) {
     notFound();
   }
 
-  // Prevenção de nulos em todos os campos
+  // Fallbacks de segurança para evitar que campos nulos deitem a página abaixo
   const titulo = isEn && post.titulo_en ? post.titulo_en : (post.titulo || 'Artigo sem título');
   const conteudo = isEn && post.conteudo_en ? post.conteudo_en : (post.conteudo || '<p>Conteúdo em atualização...</p>');
   const categoria = isEn && post.categoria_en ? post.categoria_en : (post.categoria || '');
 
   let dataPublicacao = '';
   if (post.created_at) {
-    dataPublicacao = new Date(post.created_at).toLocaleDateString(isEn ? 'en-US' : 'pt-PT', {
-      day: 'numeric', month: 'long', year: 'numeric'
-    });
+    const d = new Date(post.created_at);
+    dataPublicacao = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
   }
 
   const articleSchema = {
@@ -143,8 +152,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
         prose-li:text-slate-600 prose-li:marker:text-[#0E3A68]
         prose-img:rounded-3xl prose-img:shadow-xl prose-img:border prose-img:border-slate-100
       ">
-        {/* O fallback || '' impede o React de dar erro 500 se não houver conteúdo */}
-        <div dangerouslySetInnerHTML={{ __html: conteudo || '' }} />
+        <div dangerouslySetInnerHTML={{ __html: conteudo }} />
       </article>
 
       {/* ═══════════════════════════════════════════ */}
@@ -157,10 +165,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
               {isEn ? 'Did you find this helpful?' : 'Achou este artigo útil?'}
             </p>
             <p className="text-sm font-medium text-slate-500 m-0">
-              {isEn ? 'Share it with your network.' : 'Partilhe o guia para ajudar outras famílias.'}
+              {isEn ? 'Share it with your network.' : 'Partilhe o guia para ajudar outras famílias ou parceiros.'}
             </p>
           </div>
-          {/* Removi o layout="button" que podia estar a causar erro de Typescript */}
           <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
              <BotaoPartilhaArtigo title={titulo} isEn={isEn} />
           </div>
