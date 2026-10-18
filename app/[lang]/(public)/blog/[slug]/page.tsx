@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
     const { data: post } = await supabase
       .from('blog_posts')
       .select('titulo, titulo_en, resumo, resumo_en, imagem_url, created_at')
-      .eq('slug', slug)
+      .eq('slug', decodeURIComponent(slug))
       .limit(1)
       .maybeSingle();
 
@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
 }
 
 // ═══════════════════════════════════════════
-// PÁGINA PRINCIPAL (BLINDADA CONTRA CRASHES)
+// PÁGINA PRINCIPAL DO ARTIGO
 // ═══════════════════════════════════════════
 export default async function BlogPostPage({ params }: { params: Promise<{ lang: string; slug: string }> }) {
   const { lang, slug } = await params;
@@ -52,11 +52,10 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
   let post = null;
 
   try {
-    // maybeSingle() previne crashes se houver slugs duplicados
     const { data, error } = await supabase
       .from('blog_posts')
       .select('*')
-      .eq('slug', slug)
+      .eq('slug', decodeURIComponent(slug))
       .limit(1)
       .maybeSingle();
 
@@ -66,22 +65,28 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
     console.error("Erro interno ao carregar o artigo:", error);
   }
 
-  // Se o post não existir ou houver erro, devolve o Empty State (404) de forma elegante
+  // Se não encontrar o artigo (slug inválido), ativa o 404 corretamente
   if (!post) {
     notFound();
   }
 
-  // Fallbacks de segurança para evitar que campos nulos deitem a página abaixo
+  // Fallbacks de Segurança para Textos Nulos
   const titulo = isEn && post.titulo_en ? post.titulo_en : (post.titulo || 'Artigo sem título');
   const conteudo = isEn && post.conteudo_en ? post.conteudo_en : (post.conteudo || '<p>Conteúdo em atualização...</p>');
   const categoria = isEn && post.categoria_en ? post.categoria_en : (post.categoria || '');
 
+  // Proteção da Data (Impede o crash se a data na BD for inválida)
   let dataPublicacao = '';
-  if (post.created_at) {
-    const d = new Date(post.created_at);
-    dataPublicacao = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+  try {
+    if (post.created_at) {
+      const d = new Date(post.created_at);
+      dataPublicacao = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+    }
+  } catch (e) {
+    dataPublicacao = 'Recente';
   }
 
+  // Schema SEO protegido contra quebras de React
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
@@ -90,10 +95,11 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
     "datePublished": post.created_at || new Date().toISOString(),
     "author": { "@type": "Organization", "name": "HelloCamp" }
   };
+  const schemaString = JSON.stringify(articleSchema).replace(/</g, '\\u003c');
 
   return (
     <main className="min-h-screen bg-white font-sans text-slate-900 pb-24">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schemaString }} />
 
       {/* ═══════════════════════════════════════════ */}
       {/* CABEÇALHO DO ARTIGO                         */}
@@ -169,7 +175,8 @@ export default async function BlogPostPage({ params }: { params: Promise<{ lang:
             </p>
           </div>
           <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
-             <BotaoPartilhaArtigo title={titulo} isEn={isEn} />
+             {/* RECUPERADO: layout="button" para evitar o crash do teu componente local */}
+             <BotaoPartilhaArtigo title={titulo} isEn={isEn} layout="button" />
           </div>
         </div>
       </div>
