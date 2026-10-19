@@ -61,7 +61,7 @@ export default function AdminLayout({
             <span className="text-white">Hello</span>
             <span className="text-[#e2a41d]">Camp</span>
           </h2>
-          <span className="block text-xs font-bold text-green-100/80 mt-1 uppercase tracking-widest">
+          <span className="block text-xs font-bold text-emerald-100 mt-1 uppercase tracking-widest">
             Parceiros B2B
           </span>
         </div>
@@ -74,6 +74,9 @@ export default function AdminLayout({
           <NavLink href={`/${lang}/admin/reservas`} active={pathname.includes('/reservas')} text={isEn ? 'Bookings' : 'Reservas'} />
           <NavLink href={`/${lang}/admin/faturacao`} active={pathname.includes('/faturacao')} text={isEn ? 'Billing' : 'Faturação'} />
           
+          {/* NOVA PÁGINA: Estatísticas */}
+          <NavLink href={`/${lang}/admin/estatisticas`} active={pathname.includes('/estatisticas')} text={isEn ? 'Analytics' : 'Estatísticas'} />
+          
           {/* NOVA PÁGINA: Bolsa de Monitores / Recrutamento */}
           <NavLink href={`/${lang}/admin/recrutamento`} active={pathname.includes('/recrutamento')} text={isEn ? 'Staff Recruitment' : 'Recrutamento'} />
           
@@ -85,7 +88,7 @@ export default function AdminLayout({
 
         {/* Rodapé da Sidebar: Email e Logout exclusivo para PC */}
         <div className="p-6 border-t border-white/10 hidden md:block mt-auto">
-          <p className="text-xs text-green-100/70 mb-4 break-all">
+          <p className="text-xs text-emerald-100/70 mb-4 break-all">
             {user?.email}
           </p>
           <button onClick={handleLogout} className="w-full p-3 bg-transparent border border-white/20 text-white rounded-lg cursor-pointer font-bold text-sm hover:bg-white/10 transition-colors">
@@ -97,7 +100,7 @@ export default function AdminLayout({
       {/* ÁREA PRINCIPAL DO PARCEIRO */}
       <main className="flex-1 flex flex-col w-full overflow-hidden">
         
-        {/* Header Superior (Apenas Língua e Atalho para Site, limpo e direto) */}
+        {/* Header Superior */}
         <header className="bg-white px-4 md:px-8 py-3 md:py-4 border-b border-slate-200 flex justify-end items-center gap-4 flex-shrink-0">
           <div className="flex items-center gap-6">
             <div className="flex gap-2 text-sm font-bold">
@@ -128,7 +131,7 @@ function NavLink({ href, active, text }: { href: string, active: boolean, text: 
       href={href} 
       className={`
         px-5 py-2.5 md:py-3 rounded-full md:rounded-lg text-sm whitespace-nowrap transition-colors flex-shrink-0
-        ${active ? 'bg-white/20 text-white font-bold shadow-sm' : 'text-green-50/80 font-medium hover:bg-white/10 hover:text-white'}
+        ${active ? 'bg-white/20 text-white font-bold shadow-sm' : 'text-emerald-50/80 font-medium hover:bg-white/10 hover:text-white'}
       `}
     >
       {text}
