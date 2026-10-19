@@ -34,6 +34,39 @@ const getReviewsCached = unstable_cache(
   { revalidate: 86400 }
 );
 
+// Cache inteligente para o Cross-Selling (Carga rápida sem pesar na BD)
+const getRelacionadosCached = unstable_cache(
+  async (id: string, organizadorId: string | null, categoria: string | null) => {
+    // 1. Mais campos do MESMO parceiro
+    let outrosDoParceiro: any[] = [];
+    if (organizadorId) {
+      const { data } = await supabase
+        .from('campos')
+        .select('id, nome, nome_en, imagem, distrito')
+        .eq('organizador_id', organizadorId)
+        .neq('id', id)
+        .limit(3);
+      outrosDoParceiro = data || [];
+    }
+
+    // 2. Campos SEMELHANTES da mesma categoria
+    let semelhantes: any[] = [];
+    if (categoria) {
+      const { data } = await supabase
+        .from('campos')
+        .select('id, nome, nome_en, imagem, distrito')
+        .eq('categoria', categoria)
+        .neq('id', id)
+        .limit(3);
+      semelhantes = data || [];
+    }
+
+    return { outrosDoParceiro, semelhantes };
+  },
+  ['cache-campo-relacionados'],
+  { revalidate: 86400 } // Atualiza uma vez por dia
+);
+
 // ==========================================
 // METADATA (SEO & OpenGraph)
 // ==========================================
@@ -79,11 +112,22 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
     );
   }
 
+  // REGISTAR A VISUALIZAÇÃO DE FORMA ASSÍNCRONA (Não atrasa o carregamento da página)
+  if (campo.id && campo.organizador_id) {
+    // Chamamos o RPC criado em SQL sem usar await para não bloquear o utilizador
+    supabase.rpc('registar_visualizacao_campo', {
+      p_campo_id: campo.id,
+      p_organizador_id: campo.organizador_id
+    }).then();
+  }
+
   let parceiroInfo = null;
   if (campo.organizador_id) {
     const { data: organizador } = await supabase.from("perfis").select("nome_empresa, logotipo_url, parceiro_verificado").eq("id", campo.organizador_id).single();
     parceiroInfo = organizador;
   }
+
+  const { outrosDoParceiro, semelhantes } = await getRelacionadosCached(campo.id, campo.organizador_id, campo.categoria);
 
   const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
   const descCampo = isEn && campo.descricao_en ? campo.descricao_en : campo.descricao;
@@ -353,8 +397,72 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 </div>
               )}
 
+              {/* ========================================== */}
+              {/* CROSS SELLING: OUTROS CAMPOS DO PARCEIRO     */}
+              {/* ========================================== */}
+              {outrosDoParceiro.length > 0 && (
+                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-black text-slate-900 m-0">
+                      {isEn ? `More from ${parceiroInfo?.nome_empresa || 'this partner'}` : `Mais de ${parceiroInfo?.nome_empresa || 'este parceiro'}`}
+                    </h2>
+                    {campo.organizador_id && (
+                      <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="text-xs font-bold text-blue-600 hover:underline">
+                        {isEn ? 'View all' : 'Ver todos'}
+                      </Link>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {outrosDoParceiro.map((c: any) => (
+                      <Link key={c.id} href={`/${lang}/campo/${c.id}`} className="group flex flex-col gap-2 rounded-2xl bg-slate-50 p-2 border border-slate-100 hover:border-blue-200 transition-colors">
+                        <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-200 relative">
+                          <img src={c.imagem || '/og-image.jpg'} alt={isEn && c.nome_en ? c.nome_en : c.nome} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        </div>
+                        <div className="px-1 pb-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">{c.distrito}</p>
+                          <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors">
+                            {isEn && c.nome_en ? c.nome_en : c.nome}
+                          </h3>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================== */}
+              {/* CROSS SELLING: CAMPOS SEMELHANTES          */}
+              {/* ========================================== */}
+              {semelhantes.length > 0 && (
+                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-black text-slate-900 m-0">
+                      {isEn ? 'Similar Camps' : 'Campos Semelhantes'}
+                    </h2>
+                    <Link href={`/${lang}/pesquisa?categoria=${encodeURIComponent(campo.categoria || '')}`} className="text-xs font-bold text-blue-600 hover:underline">
+                      {isEn ? 'View all' : 'Ver mais'}
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {semelhantes.map((c: any) => (
+                      <Link key={c.id} href={`/${lang}/campo/${c.id}`} className="group flex flex-col gap-2 rounded-2xl bg-slate-50 p-2 border border-slate-100 hover:border-blue-200 transition-colors">
+                        <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-200 relative">
+                          <img src={c.imagem || '/og-image.jpg'} alt={isEn && c.nome_en ? c.nome_en : c.nome} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        </div>
+                        <div className="px-1 pb-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">{c.distrito}</p>
+                          <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors">
+                            {isEn && c.nome_en ? c.nome_en : c.nome}
+                          </h3>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* FORMULÁRIO DE CONTACTO */}
-              <div id="duvidas" className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10 scroll-mt-24">
+              <div id="duvidas" className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10 scroll-mt-24 mt-4">
                 <h3 className="text-xl font-black text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
                 <p className="text-sm text-slate-500 font-medium mb-6">{dict.detalhe.duvidas_sub}</p>
 
