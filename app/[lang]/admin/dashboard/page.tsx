@@ -188,7 +188,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
       <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '2.25rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-            {isEn ? `Welcome, ${nomeEmpresa}` : `Olá, ${nomeEmpresa} 👋`}
+            {isEn ? `Welcome, ${nomeEmpresa}` : `Olá, ${nomeEmpresa}`}
           </h1>
           <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: '15px', fontWeight: '500' }}>
             {isEn ? 'Monitor your marketing traction and optimize your camps to sell more.' : 'Acompanhe a sua tração e descubra como otimizar os seus campos para vender mais.'}
