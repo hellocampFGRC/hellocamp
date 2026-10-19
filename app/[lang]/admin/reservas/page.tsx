@@ -13,29 +13,14 @@ const customSelectStyle = {
   backgroundSize: '1.2em'
 };
 
-// ==========================================
-// FUNÇÕES AUXILIARES GLOBAIS
-// ==========================================
 const limparNomeParaExibicao = (nomeCru: string) => {
   if (!nomeCru) return "";
   return nomeCru.split('(')[0].split('- Dia')[0].split('- Day')[0].trim();
 };
 
-const getHorarioInfo = (nome: string, isEn: boolean) => {
-  if (nome.includes("Completo") || nome.includes("Full")) return { tag: isEn ? "Full Day" : "Dia Completo", icon: "🌅" };
-  if (nome.includes("Manhã") || nome.includes("Morning")) return { tag: isEn ? "Morning" : "Só Manhã", icon: "🥞" };
-  if (nome.includes("Tarde") || nome.includes("Afternoon")) return { tag: isEn ? "Afternoon" : "Só Tarde", icon: "🥪" };
-  return { tag: "Geral", icon: "🎟️" };
-};
-
 export default function GestaoReservasParceiro({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const isEn = lang === 'en';
-
-  const formatarDataExibicao = (dStr: string) => {
-    if (!dStr) return '';
-    return new Date(dStr).toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
-  };
 
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -55,8 +40,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [filtroModo, setFiltroModo] = useState<'pacote' | 'dia_solto'>('pacote');
   const [filtroDiaSelecionado, setFiltroDiaSelecionado] = useState<string>('');
-  
-  // NOVO: Navegação de Meses no Filtro
   const [filtroMesAtual, setFiltroMesAtual] = useState<Date>(new Date());
 
   // UI States (Modais)
@@ -82,29 +65,21 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   // Estados do Mini-Calendário no Modal (Adicionar)
   const [modalidadeExterna, setModalidadeExterna] = useState<'pacote' | 'dia_solto'>('pacote');
   const [diaExterno, setDiaExterno] = useState<string>('');
-  
-  // NOVO: Navegação de Meses no Modal de Inserção
   const [modalMesAtual, setModalMesAtual] = useState<Date>(new Date());
 
-  // ==========================================
-  // FETCH DE DADOS (BASE DE DADOS) - VERSÃO SIMPLIFICADA SEM JOIN
-  // ==========================================
   const fetchDashboardData = async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     setSessionUser(session.user);
 
-    // 1. Busca Campos
     const { data: camposData } = await supabase
       .from('campos')
-      .select('id, nome, nome_en, vagas_totais')
+      .select('id, nome, nome_en, vagas_totais, pacotes, calendario_funcionamento')
       .eq('organizador_id', session.user.id);
     
     setCamposParceiro(camposData || []);
 
-    // 2. BUSCA DE RESERVAS SIMPLIFICADA (Sem JOINs para evitar falhas)
-    // Buscamos apenas os dados da tabela reservas puramente
     const { data: reservasData, error: resError } = await supabase
       .from('reservas')
       .select('*') 
@@ -117,10 +92,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
       return;
     }
 
-    console.log("Total de reservas encontradas:", reservasData?.length);
-
     if (reservasData) {
-      // 3. Mapeamento manual para garantir que não perdemos dados
       const reservasFormatadas = reservasData.map((res: any) => {
         const campoRelacionado = camposData?.find((c: any) => c.id === res.campo_id);
         
@@ -133,7 +105,12 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
           valor_pago: Number(res.valor_pago) || 0,
           status: res.status_pagamento || 'Pendente',
           isExterna: res.status_pagamento === 'Externo' || res.cliente_id === session.user.id,
-          crianca: { nome: res.nome_encarregado || 'Participante' }, // Simplificado para garantir que não é nulo
+          crianca: { 
+            nome: res.nome_encarregado || 'Participante',
+            restricoes_alimentares: res.respostas_customizadas?.alergias || 'Nenhuma',
+            doencas_cronicas: res.respostas_customizadas?.doencas || 'Sem observações',
+            data_nascimento: 'N/A'
+          }, 
           pai: {
             nome: res.nome_encarregado || 'N/D',
             email: res.email_encarregado || 'N/D',
@@ -156,9 +133,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setIsFilterPanelOpen(false);
   }, [filtroCampoId]);
 
-  // ==========================================
-  // FILTRAGEM INTELIGENTE DA TABELA
-  // ==========================================
   let reservasFiltradas = [...todasReservas];
   
   if (filtroCampoId !== 'todos') reservasFiltradas = reservasFiltradas.filter((r: any) => r.campo_id === filtroCampoId);
@@ -175,7 +149,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     );
   }
 
-  // Prepara pacotes para o filtro
   const campoSelecionadoFiltro = camposParceiro.find((c: any) => c.id === filtroCampoId);
   const pacotesDoCampo = campoSelecionadoFiltro?.pacotes || [];
   const pacotesFiltro = pacotesDoCampo.filter((p: any) => p.tipo === 'semana');
@@ -204,7 +177,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     }
   }, [filtroCampoId, campoSelecionadoFiltro]);
 
-  // Lógica de Paginação do Mês - Filtro
   const nextMonthFiltro = () => setFiltroMesAtual(new Date(filtroMesAtual.getFullYear(), filtroMesAtual.getMonth() + 1, 1));
   const prevMonthFiltro = () => setFiltroMesAtual(new Date(filtroMesAtual.getFullYear(), filtroMesAtual.getMonth() - 1, 1));
   const datasFiltroVisiveis = datasCalendarioGlobal.filter(d => {
@@ -215,12 +187,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
   const validas = reservasFiltradas.filter((r: any) => r.status !== 'Cancelada' && r.status !== 'Abandonada');
   const countHelloCamp = validas.filter((r: any) => !r.isExterna).length;
   const countExternas = validas.filter((r: any) => r.isExterna).length;
-  const faturaçãoHelloCamp = validas.filter((r: any) => !r.isExterna).reduce((acc: number, curr: any) => acc + curr.valor, 0);
-  const faturaçãoExterna = validas.filter((r: any) => r.isExterna).reduce((acc: number, curr: any) => acc + curr.valor, 0);
 
-  // ==========================================
-  // LÓGICA DO MODAL ADICIONAR E FATURAÇÃO
-  // ==========================================
   const fecharModalReserva = () => {
     setReservaSelecionada(null);
     setIsAjusteModalOpen(false);
@@ -234,7 +201,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setSavingAjuste(true);
     try {
       const novoAjuste = { data: new Date().toISOString(), motivo: ajusteForm.motivo, valor_pedido: ajusteForm.valor };
-      const historicoAtualizado = [...(reservaSelecionada.historico_ajustes || []), novoAjuste];
+      const historicoAtualizado = [...(reservaSelecionada.respostasCustomizadas?.historico_ajustes || []), novoAjuste];
       const novasRespostas = { ...reservaSelecionada.respostasCustomizadas, historico_ajustes: historicoAtualizado };
       delete novasRespostas.pedido_pai_pendente;
 
@@ -253,9 +220,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setSavingAjuste(false);
   };
 
-  // ==========================================
-  // INSERÇÃO MANUAL DE RESERVA (1 A 1)
-  // ==========================================
   const campoSelecionadoModal = camposParceiro.find((c: any) => c.id === formExterno.campo_id);
   const pacotesModal = campoSelecionadoModal?.pacotes?.filter((p: any) => p.tipo === 'semana') || [];
   const diasSoltosModal = campoSelecionadoModal?.pacotes?.filter((p: any) => p.tipo === 'dia') || [];
@@ -270,7 +234,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     }
   }, [formExterno.campo_id]);
 
-  // Lógica de Paginação do Mês - Modal de Inserção
   const nextMonthModal = () => setModalMesAtual(new Date(modalMesAtual.getFullYear(), modalMesAtual.getMonth() + 1, 1));
   const prevMonthModal = () => setModalMesAtual(new Date(modalMesAtual.getFullYear(), modalMesAtual.getMonth() - 1, 1));
   const datasModalVisiveis = datasUnicasModal.filter(d => {
@@ -289,22 +252,24 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setSavingExterno(true);
 
     try {
-      const anoNasc = new Date().getFullYear() - (Number(formExterno.idade) || 10);
-      const dataNascAprox = `${anoNasc}-01-01`;
-
-      const { data: crianca, error: errC } = await supabase.from('criancas').insert({
-        cliente_id: sessionUser.id, nome: formExterno.nome_crianca, data_nascimento: dataNascAprox,
-        restricoes_alimentares: formExterno.alergias || 'Nenhuma', doencas_cronicas: formExterno.doencas || 'Nenhuma'
-      }).select('id').single();
-
-      if (errC) throw errC;
-
       const { error: errR } = await supabase.from('reservas').insert({
-        organizador_id: sessionUser.id, cliente_id: sessionUser.id, crianca_id: crianca.id,
-        campo_id: formExterno.campo_id, turno_nome: formExterno.turno_nome, valor_total: formExterno.valor_pago,
-        valor_pago: formExterno.valor_pago, status_pagamento: 'Externo', nome_encarregado: formExterno.nome_pai, 
-        email_encarregado: formExterno.email_pai, telefone_encarregado: formExterno.telefone_pai, 
-        respostas_customizadas: { origem: "Inserção Manual 1 a 1" }
+        organizador_id: sessionUser.id, 
+        cliente_id: sessionUser.id, 
+        campo_id: formExterno.campo_id, 
+        turno_nome: formExterno.turno_nome, 
+        valor_total: formExterno.valor_pago,
+        valor_pago: formExterno.valor_pago, 
+        status_pagamento: 'Externo', 
+        nome_encarregado: formExterno.nome_pai, 
+        email_encarregado: formExterno.email_pai, 
+        telefone_encarregado: formExterno.telefone_pai, 
+        respostas_customizadas: { 
+          origem: "Inserção Manual 1 a 1",
+          nome_crianca: formExterno.nome_crianca,
+          idade_crianca: formExterno.idade,
+          alergias: formExterno.alergias,
+          doencas: formExterno.doencas
+        }
       });
 
       if (errR) throw errR;
@@ -319,9 +284,6 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     setSavingExterno(false);
   };
 
-  // ==========================================
-  // FUNÇÕES DE EXCEL E CSV
-  // ==========================================
   const exportarCSV = () => {
     if (validas.length === 0) { 
       alert(isEn ? "No active bookings to export." : "Não existem inscrições ativas para exportar."); 
@@ -331,7 +293,7 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
     let csv = "\ufeffOrigem;Data Reserva;Programa;Turno;Valor Pago;Nome Participante;Alergias;Doenças;Encarregado de Educação;Telefone;Email\n";
     validas.forEach((item: any) => {
       const origem = item.isExterna ? "Externa" : "HelloCamp";
-      const dataReserva = new Date(item.data).toLocaleDateString('pt-PT');
+      const dataReserva = item.created_at ? new Date(item.created_at).toLocaleDateString('pt-PT') : 'N/D';
       const alergias = (item.crianca?.restricoes_alimentares || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
       const doencas = (item.crianca?.doencas_cronicas || "Nenhuma").replace(/;/g, ",").replace(/\n/g, " ");
       
@@ -375,23 +337,25 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         const campoAlvo = camposParceiro.find((c: any) => c.nome.toLowerCase() === nomeCampoCSV.toLowerCase());
         if (!campoAlvo) continue;
 
-        const anoNasc = new Date().getFullYear() - (Number(idade) || 10);
-        const dataNascAprox = `${anoNasc}-01-01`;
-
-        const { data: crianca } = await supabase.from('criancas').insert({
-          cliente_id: sessionUser.id, nome: nomeCrianca, data_nascimento: dataNascAprox,
-          restricoes_alimentares: alergias || 'Nenhuma', doencas_cronicas: doencas || 'Nenhuma'
-        }).select('id').single();
-
-        if (crianca) {
-          await supabase.from('reservas').insert({
-            organizador_id: sessionUser.id, cliente_id: sessionUser.id, crianca_id: crianca.id,
-            campo_id: campoAlvo.id, turno_nome: nomeTurno, valor_total: Number(valorPago) || 0,
-            status_pagamento: 'Externo', nome_encarregado: nomePai, email_encarregado: email || "",
-            telefone_encarregado: telefone, respostas_customizadas: { origem: "Importação via Excel/CSV" }
-          });
-          sucessoCount++;
-        }
+        await supabase.from('reservas').insert({
+          organizador_id: sessionUser.id, 
+          cliente_id: sessionUser.id, 
+          campo_id: campoAlvo.id, 
+          turno_nome: nomeTurno, 
+          valor_total: Number(valorPago) || 0,
+          status_pagamento: 'Externo', 
+          nome_encarregado: nomePai, 
+          email_encarregado: email || "",
+          telefone_encarregado: telefone, 
+          respostas_customizadas: { 
+            origem: "Importação via Excel/CSV",
+            nome_crianca: nomeCrianca,
+            idade_crianca: idade,
+            alergias: alergias || "Nenhuma",
+            doencas: doencas || "Nenhuma"
+          }
+        });
+        sucessoCount++;
       }
 
       setIsAddModalOpen(false);
@@ -412,68 +376,59 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
       {/* HEADER & ACÕES GLOBAIS */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Booking Operations' : 'Central de Reservas'}</h1>
-          <p className="text-slate-500 mt-1 font-medium text-sm">{isEn ? 'Manage Hellocamp and manual bookings in one place.' : 'Gira inscrições da HelloCamp e veja os pacotes contratados pelos pais.'}</p>
+          <h1 className="text-3xl md:text-4xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Booking Operations' : 'Central de Reservas'}</h1>
+          <p className="text-slate-500 mt-2 font-medium text-sm">{isEn ? 'Manage Hellocamp and manual bookings in one place.' : 'Gira inscrições da HelloCamp e controle os pacotes contratados pelos pais num só local.'}</p>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
-          <button onClick={exportarCSV} className="flex-1 md:flex-none px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-colors text-sm">
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <button onClick={exportarCSV} className="w-full sm:w-auto px-6 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-colors text-sm uppercase tracking-widest text-center">
             📥 Exportar Lista (Excel)
           </button>
-          <button onClick={() => { setImportMode('selecao'); setIsAddModalOpen(true); }} className="flex-1 md:flex-none px-5 py-2.5 bg-slate-900 text-white font-bold rounded-xl shadow-md hover:bg-orange-600 transition-colors text-sm">
+          <button onClick={() => { setImportMode('selecao'); setIsAddModalOpen(true); }} className="w-full sm:w-auto px-6 py-3.5 bg-[#167524] text-white font-bold rounded-xl shadow-md hover:bg-[#115a1b] hover:shadow-[#167524]/20 transition-all text-sm uppercase tracking-widest text-center">
             + Adicionar Inscrições
           </button>
         </div>
       </div>
 
-      {/* MÉTRICAS (KPIs) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Lotação Preenchida</span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-black text-slate-900">{validas.length}</span>
-            <span className="text-sm font-bold text-slate-500">participantes</span>
+      {/* MÉTRICAS (KPIs) - Adaptados para Verde e Tons Neutros */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-[#167524] relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 w-24 h-24 bg-[#167524]/5 rounded-full flex items-center justify-center opacity-50 text-4xl">🟢</div>
+          <span className="text-[10px] font-black text-[#167524] uppercase tracking-widest mb-2 relative z-10">Origem: HelloCamp</span>
+          <div className="flex items-baseline justify-between relative z-10">
+            <span className="text-5xl font-black text-slate-900">{countHelloCamp}</span>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-emerald-500 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center opacity-50 text-3xl">🟢</div>
-          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1 relative z-10">Origem: HelloCamp</span>
+        <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-slate-400 relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center opacity-50 text-4xl">⚪</div>
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 relative z-10">Origem: Externos / Permanentes</span>
           <div className="flex items-baseline justify-between relative z-10">
-            <span className="text-4xl font-black text-slate-900">{countHelloCamp}</span>
-            <span className="text-sm font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-md">+{faturaçãoHelloCamp}€</span>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-orange-500 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center opacity-50 text-3xl">🟠</div>
-          <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1 relative z-10">Origem: Permanentes/Externos</span>
-          <div className="flex items-baseline justify-between relative z-10">
-            <span className="text-4xl font-black text-slate-900">{countExternas}</span>
-            <span className="text-sm font-black text-orange-600 bg-orange-50 border border-orange-100 px-2 py-1 rounded-md">+{faturaçãoExterna}€</span>
+            <span className="text-5xl font-black text-slate-900">{countExternas}</span>
           </div>
         </div>
       </div>
 
       {/* BARRA DE FILTROS COM POPOVER */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row gap-4 relative z-20">
+      <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200 shadow-sm mb-8 flex flex-col lg:flex-row gap-4 relative z-20">
         <div className="flex-1">
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Procurar Nome</label>
-          <input type="text" placeholder="Pesquisar miúdo ou encarregado..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-slate-400" />
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Procurar Nome</label>
+          <input type="text" placeholder="Pesquisar miúdo ou encarregado..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-3.5 text-sm font-medium outline-none focus:border-[#167524]" />
         </div>
         
         <div className="flex-1">
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar Campo</label>
-          <select value={filtroCampoId} onChange={e => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500 font-bold text-slate-700 cursor-pointer">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Filtrar Campo</label>
+          <select value={filtroCampoId} onChange={e => { setFiltroCampoId(e.target.value); setFiltroTurno('todos'); }} style={customSelectStyle} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-3.5 text-sm outline-none focus:border-[#167524] font-bold text-slate-700 cursor-pointer">
             <option value="todos">Todos os Campos</option>
             {camposParceiro.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         </div>
 
-        {/* BOTÃO DO FILTRO FIXO (FIXED) DE CALENDÁRIO */}
+        {/* BOTÃO DO FILTRO DE CALENDÁRIO */}
         {filtroCampoId !== 'todos' && (
           <div className="flex-1 relative animate-in fade-in">
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filtrar por Passe/Data</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Filtrar por Passe/Data</label>
             <div 
               onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-              className={`w-full border rounded-xl px-4 py-2.5 text-sm font-bold cursor-pointer flex justify-between items-center transition-colors ${filtroTurno === 'todos' ? 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300' : 'bg-emerald-50 border-emerald-500 text-emerald-900'}`}
+              className={`w-full border rounded-xl px-5 py-3.5 text-sm font-bold cursor-pointer flex justify-between items-center transition-colors ${filtroTurno === 'todos' ? 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300' : 'bg-[#167524]/10 border-[#167524] text-[#167524]'}`}
             >
               <span className="truncate">{filtroTurno === 'todos' ? 'Todas as Opções' : limparNomeParaExibicao(filtroTurno)}</span>
               <span className="text-slate-400 text-[10px]">▼</span>
@@ -482,36 +437,36 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
             {isFilterPanelOpen && (
               <>
                 <div className="fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsFilterPanelOpen(false)}></div>
-                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-[420px] bg-white rounded-3xl shadow-2xl z-[200] p-6 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
+                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-[420px] bg-white rounded-[2rem] shadow-2xl z-[200] p-6 md:p-8 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
                   
-                  <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
+                  <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
                     <span className="text-sm font-black text-slate-900 uppercase tracking-widest">Filtrar por Passe</span>
                     <div className="flex gap-2">
                       {filtroTurno !== 'todos' && (
-                        <button onClick={() => { setFiltroTurno('todos'); setIsFilterPanelOpen(false); }} className="text-[10px] font-black text-red-600 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-xl transition-colors">Limpar &times;</button>
+                        <button onClick={() => { setFiltroTurno('todos'); setIsFilterPanelOpen(false); }} className="text-[10px] font-black text-red-600 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl transition-colors">Limpar &times;</button>
                       )}
-                      <button onClick={() => setIsFilterPanelOpen(false)} className="text-[10px] font-black text-slate-400 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-xl transition-colors">Fechar</button>
+                      <button onClick={() => setIsFilterPanelOpen(false)} className="text-[10px] font-black text-slate-500 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl transition-colors">Fechar</button>
                     </div>
                   </div>
 
                   {/* Alternador de Modo de Filtro */}
                   {(pacotesFiltro.length > 0 && diasSoltosFiltro.length > 0) && (
-                    <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-5">
-                      <button onClick={() => setFiltroModo('pacote')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${filtroModo === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Semanas Completas</button>
-                      <button onClick={() => setFiltroModo('dia_solto')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${filtroModo === 'dia_solto' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}`}>Dias Soltos</button>
+                    <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-6">
+                      <button onClick={() => setFiltroModo('pacote')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${filtroModo === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Semanas Completas</button>
+                      <button onClick={() => setFiltroModo('dia_solto')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${filtroModo === 'dia_solto' ? 'bg-white text-[#167524] shadow-sm' : 'text-slate-500'}`}>Dias Soltos</button>
                     </div>
                   )}
 
                   {/* Lista de Passes Semanais */}
                   {filtroModo === 'pacote' && (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-3">
                       {pacotesFiltro.map((pac: any) => (
-                        <div key={pac.id} onClick={() => { setFiltroTurno(pac.titulo); setIsFilterPanelOpen(false); }} className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${filtroTurno === pac.titulo ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200 hover:border-emerald-300'}`}>
+                        <div key={pac.id} onClick={() => { setFiltroTurno(pac.titulo); setIsFilterPanelOpen(false); }} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${filtroTurno === pac.titulo ? 'bg-[#167524]/10 border-[#167524]' : 'bg-white border-slate-200 hover:border-[#167524]/50'}`}>
                           <div>
                             <p className="text-sm font-black text-slate-800 m-0">{pac.titulo}</p>
                             <p className="text-[11px] text-slate-400 mt-1 font-bold">Variantes: {pac.variantes?.length || 0}</p>
                           </div>
-                          <span className="text-xl bg-slate-100 p-2 rounded-xl leading-none">🗓️</span>
+                          <span className="text-xl bg-slate-100 p-2.5 rounded-xl leading-none">🗓️</span>
                         </div>
                       ))}
                     </div>
@@ -520,25 +475,25 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                   {/* Calendário Global com Navegação */}
                   {filtroModo === 'dia_solto' && (
                     <div>
-                      <div className="flex items-center justify-between mb-4 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                        <button type="button" onClick={prevMonthFiltro} className="p-2 text-slate-400 hover:text-emerald-600 transition-colors font-bold">&larr;</button>
+                      <div className="flex items-center justify-between mb-5 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                        <button type="button" onClick={prevMonthFiltro} className="p-2 w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-400 hover:text-[#167524] transition-colors font-black">&larr;</button>
                         <span className="text-xs font-black uppercase tracking-widest text-slate-700">
                           {capitalize(filtroMesAtual.toLocaleDateString(isEn ? 'en-US' : 'pt-PT', { month: 'long', year: 'numeric' }))}
                         </span>
-                        <button type="button" onClick={nextMonthFiltro} className="p-2 text-slate-400 hover:text-emerald-600 transition-colors font-bold">&rarr;</button>
+                        <button type="button" onClick={nextMonthFiltro} className="p-2 w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-400 hover:text-[#167524] transition-colors font-black">&rarr;</button>
                       </div>
 
-                      <div className="grid grid-cols-5 gap-1.5 mb-2 p-3 rounded-2xl">
+                      <div className="grid grid-cols-5 gap-2 mb-2">
                         {datasFiltroVisiveis.length === 0 ? (
-                          <div className="col-span-5 text-center text-xs font-bold text-slate-400 py-4">Nenhum dia de campo neste mês.</div>
+                          <div className="col-span-5 text-center text-xs font-bold text-slate-400 py-6">Nenhum dia de campo neste mês.</div>
                         ) : (
                           datasFiltroVisiveis.map((data: string) => {
                             const isActive = filtroDiaSelecionado === data;
                             const dateObj = new Date(data);
                             return (
-                              <div key={data} onClick={() => { setFiltroTurno(data); setFiltroDiaSelecionado(data); setIsFilterPanelOpen(false); }} className={`flex flex-col items-center justify-center py-2.5 rounded-xl border-2 cursor-pointer transition-all ${isActive ? 'bg-emerald-600 border-emerald-600 text-white shadow-md scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-400'}`}>
-                                <span className={`text-[8px] font-black uppercase mb-0.5 ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{dateObj.toLocaleDateString('pt-PT', {weekday: 'short'}).replace('.','')}</span>
-                                <span className="text-base font-black leading-none">{dateObj.toLocaleDateString('pt-PT', {day: '2-digit'})}</span>
+                              <div key={data} onClick={() => { setFiltroTurno(data); setFiltroDiaSelecionado(data); setIsFilterPanelOpen(false); }} className={`flex flex-col items-center justify-center py-3 rounded-2xl border-2 cursor-pointer transition-all ${isActive ? 'bg-[#167524] border-[#167524] text-white shadow-md scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-[#167524]/50'}`}>
+                                <span className={`text-[9px] font-black uppercase mb-1 ${isActive ? 'text-white/80' : 'text-slate-400'}`}>{dateObj.toLocaleDateString('pt-PT', {weekday: 'short'}).replace('.','')}</span>
+                                <span className="text-lg font-black leading-none">{dateObj.toLocaleDateString('pt-PT', {day: '2-digit'})}</span>
                               </div>
                             )
                           })
@@ -553,22 +508,22 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
         )}
       </div>
 
-      {/* TABELA UNIFICADA */}
+      {/* TABELA UNIFICADA COM OTIMIZAÇÃO MOBILE */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative z-10">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Participante</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Passe / Variante Contratada</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Estado Clínico</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Origem / Pagamento</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ação</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Participante</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Passe / Variante Contratada</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Estado Clínico</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Origem / Pagamento</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ação</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {reservasFiltradas.length === 0 ? (
-                <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold text-sm">Nenhum resultado encontrado.</td></tr>
+                <tr><td colSpan={5} className="p-12 text-center text-slate-400 font-bold text-sm">Nenhum resultado encontrado.</td></tr>
               ) : (
                 reservasFiltradas.map((item: any) => {
                   const isInativa = item.status === 'Abandonada' || item.status === 'Cancelada';
@@ -581,54 +536,54 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
                   return (
                     <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isInativa ? 'opacity-50 grayscale' : ''}`}>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-black ${isExterna ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0 ${isExterna ? 'bg-slate-100 text-slate-600' : 'bg-[#167524]/10 text-[#167524]'}`}>
                             {item.crianca?.nome ? item.crianca.nome.charAt(0) : '?'}
                           </div>
-                          <div>
-                            <p className="font-bold text-slate-900 m-0 text-sm">{item.crianca?.nome || 'N/D'}</p>
-                            <p className="text-[11px] text-slate-500 font-medium m-0 truncate max-w-[150px]">{item.pai?.nome}</p>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 m-0 text-sm truncate">{item.crianca?.nome || 'N/D'}</p>
+                            <p className="text-[11px] text-slate-500 font-medium m-0 truncate mt-0.5">{item.pai?.nome}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-slate-800 m-0 text-xs">{item.turno || 'Passe Global'}</p>
+                      <td className="px-6 py-5">
+                        <p className="font-bold text-slate-800 m-0 text-xs leading-tight">{item.turno || 'Passe Global'}</p>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-5">
                         {temRisco ? (
-                           <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">
+                           <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
                              ⚠️ Alerta Ativo
                            </span>
                         ) : (
-                           <span className="text-slate-300 text-xs font-bold">- Ok -</span>
+                            <span className="text-slate-300 text-xs font-bold">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-5">
                         {temPedidoAlteracao ? (
-                           <div className="flex flex-col gap-1 items-start">
-                             <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider shadow-sm animate-pulse">
+                           <div className="flex flex-col gap-1.5 items-start">
+                             <span className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm animate-pulse">
                                📬 Pedido do Pai
                              </span>
                            </div>
                         ) : isExterna ? (
-                          <div className="flex flex-col gap-1 items-start">
-                            <span className="bg-orange-50 text-orange-700 border border-orange-200 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider shadow-sm">
-                              🟠 Externo / Manual
+                          <div className="flex flex-col gap-1.5 items-start">
+                            <span className="bg-slate-50 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm">
+                              ⚪ Externo / Manual
                             </span>
-                            <span className="text-xs font-black text-slate-900">{item.valor}€</span>
+                            <span className="text-sm font-black text-slate-900">{item.valor}€</span>
                           </div>
                         ) : (
-                          <div className="flex flex-col gap-1 items-start">
-                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border shadow-sm ${item.status === 'Pago' || item.status === 'Sinal Pago' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                          <div className="flex flex-col gap-1.5 items-start">
+                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${item.status === 'Pago' || item.status === 'Sinal Pago' ? 'bg-[#167524]/10 text-[#167524] border-[#167524]/20' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                               🟢 HelloCamp • {item.status}
                             </span>
-                            <span className="text-xs font-black text-slate-900">{item.valor}€</span>
+                            <span className="text-sm font-black text-slate-900">{item.valor}€</span>
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <button onClick={() => setReservaSelecionada(item)} className={`px-4 py-2 bg-white border rounded-lg text-xs font-bold transition-colors shadow-sm ${temPedidoAlteracao ? 'border-blue-300 text-blue-700 hover:bg-blue-600 hover:text-white' : 'border-slate-200 text-slate-700 hover:bg-slate-900 hover:text-white'}`}>
+                      <td className="px-6 py-5 text-right">
+                        <button onClick={() => setReservaSelecionada(item)} className={`px-5 py-2.5 bg-white border rounded-xl text-xs font-bold transition-colors shadow-sm whitespace-nowrap ${temPedidoAlteracao ? 'border-blue-300 text-blue-700 hover:bg-blue-600 hover:text-white' : 'border-slate-200 text-slate-700 hover:bg-slate-900 hover:text-white'}`}>
                           Abrir Ficha
                         </button>
                       </td>
@@ -644,55 +599,55 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
       {/* MODAL MESTRE: ADICIONAR INSCRIÇÕES MANUAIS COM MODELO DE PASSES E CALENDÁRIO MENSAIS */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div>
-                <h2 className="text-xl font-black text-slate-900 m-0">Adicionar Inscrições Externas</h2>
+                <h2 className="text-xl font-black text-slate-900 m-0 tracking-tight">Adicionar Inscrições Externas</h2>
                 <p className="text-xs font-bold text-slate-500 mt-1 mb-0">Centralize os clientes que reservaram por fora da plataforma.</p>
               </div>
-              <button onClick={() => { setIsAddModalOpen(false); setImportMode('selecao'); }} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 font-bold">&times;</button>
+              <button onClick={() => { setIsAddModalOpen(false); setImportMode('selecao'); }} className="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-900 hover:text-white font-black transition-colors">&times;</button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 md:p-8">
               {importMode === 'selecao' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <button onClick={() => setImportMode('manual')} className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-slate-200 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all group">
-                    <span className="text-4xl">✍️</span>
-                    <span className="font-black text-slate-800 group-hover:text-orange-700">Adicionar Manualmente</span>
-                    <span className="text-xs font-medium text-slate-500 text-center">Selecionar Passes e Variantes de Preço configuradas.</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 h-full content-center py-8">
+                  <button onClick={() => setImportMode('manual')} className="flex flex-col items-center justify-center gap-4 p-8 border-2 border-slate-200 rounded-3xl hover:border-[#167524] hover:bg-[#167524]/5 transition-all group">
+                    <span className="text-5xl">✍️</span>
+                    <span className="font-black text-slate-800 text-lg group-hover:text-[#167524]">Adicionar Manualmente</span>
+                    <span className="text-xs font-medium text-slate-500 text-center leading-relaxed">Selecionar Passes e Variantes de Preço configuradas individualmente.</span>
                   </button>
-                  <button onClick={() => setImportMode('excel')} className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-slate-200 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
-                    <span className="text-4xl">📊</span>
-                    <span className="font-black text-slate-800 group-hover:text-emerald-700">Importar Excel/CSV</span>
-                    <span className="text-xs font-medium text-slate-500 text-center">Fazer upload de um ficheiro em lote.</span>
+                  <button onClick={() => setImportMode('excel')} className="flex flex-col items-center justify-center gap-4 p-8 border-2 border-slate-200 rounded-3xl hover:border-slate-900 hover:bg-slate-50 transition-all group">
+                    <span className="text-5xl">📊</span>
+                    <span className="font-black text-slate-800 text-lg group-hover:text-slate-900">Importar Excel/CSV</span>
+                    <span className="text-xs font-medium text-slate-500 text-center leading-relaxed">Fazer upload de um ficheiro CSV para importar inscrições em lote.</span>
                   </button>
                 </div>
               )}
 
               {importMode === 'manual' && (
-                <form id="form-manual" onSubmit={handleAddExterno} className="flex flex-col gap-6">
+                <form id="form-manual" onSubmit={handleAddExterno} className="flex flex-col gap-8">
                   
-                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">1. Escolha do Programa e Variante de Preço</h3>
-                    <div className="flex flex-col gap-4">
+                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200">
+                    <h3 className="text-[11px] font-black text-[#167524] uppercase tracking-widest mb-5">1. Escolha do Programa e Variante de Preço</h3>
+                    <div className="flex flex-col gap-5">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Programa/Campo de Férias</label>
-                        <select required value={formExterno.campo_id} onChange={e => { setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: "", valor_pago: 0}); setDiaExterno(""); }} style={customSelectStyle} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-orange-500 cursor-pointer">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-2 uppercase">Programa/Campo de Férias</label>
+                        <select required value={formExterno.campo_id} onChange={e => { setFormExterno({...formExterno, campo_id: e.target.value, turno_nome: "", valor_pago: 0}); setDiaExterno(""); }} style={customSelectStyle} className="w-full bg-white border border-slate-300 rounded-xl px-5 py-3.5 text-sm font-bold text-slate-900 outline-none focus:border-[#167524] cursor-pointer shadow-sm">
                           <option value="">Selecione o Campo...</option>
                           {camposParceiro.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </div>
 
                       {formExterno.campo_id && (
-                        <div className="bg-white p-4 border border-slate-200 rounded-2xl animate-in fade-in space-y-4">
+                        <div className="bg-white p-5 border border-slate-200 rounded-2xl animate-in fade-in space-y-5">
                           {/* Listagem Dinâmica Baseada nos Novos Passes */}
                           {(pacotesModal.length > 0 && diasSoltosModal.length > 0) && (
-                            <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
-                              <button type="button" onClick={() => { setModalidadeExterna('pacote'); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+                            <div className="flex bg-slate-100 p-1.5 rounded-xl mb-4">
+                              <button type="button" onClick={() => { setModalidadeExterna('pacote'); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'pacote' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
                                 Programa Inteiro (Pacote)
                               </button>
-                              <button type="button" onClick={() => { setModalidadeExterna('dia_solto'); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'dia_solto' ? 'bg-white text-orange-700 shadow-sm border border-orange-100' : 'text-slate-500'}`}>
+                              <button type="button" onClick={() => { setModalidadeExterna('dia_solto'); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${modalidadeExterna === 'dia_solto' ? 'bg-white text-[#167524] shadow-sm' : 'text-slate-500'}`}>
                                 Dias Soltos Avulso
                               </button>
                             </div>
@@ -700,18 +655,18 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
 
                           {modalidadeExterna === 'pacote' && pacotesModal.length > 0 && (
                             <div>
-                              <span className="block text-[10px] font-black text-indigo-800 uppercase tracking-widest mb-2">Opções Semanais Disponíveis:</span>
-                              <div className="flex flex-col gap-2">
+                              <span className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Opções Semanais Disponíveis:</span>
+                              <div className="flex flex-col gap-3">
                                 {pacotesModal.map((pac: any) => (
-                                  <div key={pac.id} className="border border-slate-200 p-3 rounded-xl bg-slate-50/50">
-                                    <p className="text-xs font-black text-slate-800 mb-2">{pac.titulo}</p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div key={pac.id} className="border border-slate-200 p-4 rounded-xl bg-slate-50/50">
+                                    <p className="text-xs font-black text-slate-800 mb-3">{pac.titulo}</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       {pac.variantes?.map((v: any, i: number) => {
                                         const isSelected = formExterno.turno_nome === `${pac.titulo} (${v.nome})`;
                                         return (
-                                          <div key={i} onClick={() => setTurnoEscolhido(pac.titulo, v)} className={`p-2 rounded-lg border-2 cursor-pointer text-center transition-all ${isSelected ? 'bg-orange-50 border-orange-500 font-bold text-orange-900' : 'bg-white border-slate-200 hover:border-orange-200 text-slate-700'}`}>
-                                            <p className="text-[11px] m-0 font-bold">{v.nome}</p>
-                                            <p className="text-xs font-black text-indigo-700 mt-0.5">{v.preco}€</p>
+                                          <div key={i} onClick={() => setTurnoEscolhido(pac.titulo, v)} className={`p-3 rounded-xl border-2 cursor-pointer text-center transition-all ${isSelected ? 'bg-[#167524]/10 border-[#167524] text-[#167524]' : 'bg-white border-slate-200 hover:border-[#167524]/50 text-slate-700'}`}>
+                                            <p className="text-xs m-0 font-bold">{v.nome}</p>
+                                            <p className="text-sm font-black mt-1">{v.preco}€</p>
                                           </div>
                                         )
                                       })}
@@ -725,19 +680,19 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                           {/* NOVO CALENDÁRIO COM MESES (MODAL DE INSERÇÃO) */}
                           {modalidadeExterna === 'dia_solto' && diasSoltosModal.length > 0 && (
                             <div className="pt-2 border-t border-slate-100">
-                              <span className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-3">A. Clique no Dia Pretendido:</span>
+                              <span className="block text-[10px] font-black text-[#167524] uppercase tracking-widest mb-4">A. Clique no Dia Pretendido:</span>
                               
-                              <div className="flex items-center justify-between mb-4 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                                <button type="button" onClick={prevMonthModal} className="p-2 text-slate-400 hover:text-orange-600 transition-colors font-bold">&larr;</button>
+                              <div className="flex items-center justify-between mb-4 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                                <button type="button" onClick={prevMonthModal} className="p-2 w-10 h-10 bg-white rounded-xl shadow-sm text-slate-400 hover:text-[#167524] transition-colors font-black">&larr;</button>
                                 <span className="text-xs font-black uppercase tracking-widest text-slate-700">
                                   {capitalize(modalMesAtual.toLocaleDateString(isEn ? 'en-US' : 'pt-PT', { month: 'long', year: 'numeric' }))}
                                 </span>
-                                <button type="button" onClick={nextMonthModal} className="p-2 text-slate-400 hover:text-orange-600 transition-colors font-bold">&rarr;</button>
+                                <button type="button" onClick={nextMonthModal} className="p-2 w-10 h-10 bg-white rounded-xl shadow-sm text-slate-400 hover:text-[#167524] transition-colors font-black">&rarr;</button>
                               </div>
 
-                              <div className="grid grid-cols-5 gap-1.5 mb-4">
+                              <div className="grid grid-cols-5 gap-2 mb-4">
                                 {datasModalVisiveis.length === 0 ? (
-                                  <div className="col-span-5 text-center text-xs font-bold text-slate-400 py-4">Nenhum dia disponível para venda avulso neste mês.</div>
+                                  <div className="col-span-5 text-center text-xs font-bold text-slate-400 py-6">Nenhum dia disponível para venda avulso neste mês.</div>
                                 ) : (
                                   datasModalVisiveis.map((data: string) => {
                                     const isActive = diaExterno === data;
@@ -746,9 +701,9 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                                     const diaNumero = dateObj.toLocaleDateString(isEn ? 'en-GB' : 'pt-PT', { day: '2-digit' });
 
                                     return (
-                                      <div key={data} onClick={() => { setDiaExterno(data); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex flex-col items-center justify-center py-2 rounded-lg cursor-pointer border-2 transition-all ${isActive ? 'bg-orange-600 border-orange-600 text-white shadow-sm scale-105' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-orange-400'}`}>
-                                        <span className={`text-[8px] font-black uppercase ${isActive ? 'text-orange-100' : 'text-slate-400'}`}>{diaSemana}</span>
-                                        <span className="text-sm font-black">{diaNumero}</span>
+                                      <div key={data} onClick={() => { setDiaExterno(data); setFormExterno(p => ({...p, turno_nome: "", valor_pago: 0})); }} className={`flex flex-col items-center justify-center py-3 rounded-2xl cursor-pointer border-2 transition-all ${isActive ? 'bg-[#167524] border-[#167524] text-white shadow-md scale-105' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-[#167524]/50'}`}>
+                                        <span className={`text-[9px] font-black uppercase mb-1 ${isActive ? 'text-white/80' : 'text-slate-400'}`}>{diaSemana}</span>
+                                        <span className="text-base font-black leading-none">{diaNumero}</span>
                                       </div>
                                     )
                                   })
@@ -756,19 +711,19 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                               </div>
 
                               {diaExterno && (
-                                <div className="border-t border-orange-200/50 pt-3 animate-in fade-in">
-                                  <span className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-2">B. Escolha a Opção Diária:</span>
-                                  <div className="flex flex-col gap-2">
+                                <div className="border-t border-slate-200 pt-5 mt-5 animate-in fade-in">
+                                  <span className="block text-[10px] font-black text-[#167524] uppercase tracking-widest mb-3">B. Escolha a Opção Diária:</span>
+                                  <div className="flex flex-col gap-3">
                                     {diasSoltosModal.map((pac: any) => (
-                                      <div key={pac.id} className="border border-slate-200 p-3 rounded-xl bg-slate-50/50">
-                                        <p className="text-xs font-black text-slate-800 mb-2">{pac.titulo}</p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      <div key={pac.id} className="border border-slate-200 p-4 rounded-xl bg-slate-50/50">
+                                        <p className="text-xs font-black text-slate-800 mb-3">{pac.titulo}</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                           {pac.variantes?.map((v: any, i: number) => {
                                             const isSelected = formExterno.turno_nome === `${pac.titulo} (${v.nome})`;
                                             return (
-                                              <div key={i} onClick={() => setTurnoEscolhido(pac.titulo, v)} className={`p-2 rounded-lg border-2 cursor-pointer text-center transition-all ${isSelected ? 'bg-orange-50 border-orange-500 font-bold text-orange-900' : 'bg-white border-slate-200 hover:border-orange-200 text-slate-700'}`}>
-                                                <p className="text-[11px] m-0 font-bold">{v.nome}</p>
-                                                <p className="text-xs font-black text-indigo-700 mt-0.5">{v.preco}€</p>
+                                              <div key={i} onClick={() => setTurnoEscolhido(pac.titulo, v)} className={`p-3 rounded-xl border-2 cursor-pointer text-center transition-all ${isSelected ? 'bg-[#167524]/10 border-[#167524] text-[#167524]' : 'bg-white border-slate-200 hover:border-[#167524]/50 text-slate-700'}`}>
+                                                <p className="text-xs m-0 font-bold">{v.nome}</p>
+                                                <p className="text-sm font-black mt-1">{v.preco}€</p>
                                               </div>
                                             )
                                           })}
@@ -784,52 +739,52 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                       )}
                       
                       <div className="sm:col-span-2 mt-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Confirmação: Valor Cobrado ao Cliente (€)</label>
-                        <input type="number" required value={formExterno.valor_pago} onChange={e => setFormExterno({...formExterno, valor_pago: Number(e.target.value)})} className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-orange-500" />
+                        <label className="block text-[11px] font-bold text-slate-700 mb-2 uppercase">Confirmação: Valor Cobrado ao Cliente (€)</label>
+                        <input type="number" required value={formExterno.valor_pago} onChange={e => setFormExterno({...formExterno, valor_pago: Number(e.target.value)})} className="w-full p-4 bg-white border border-slate-300 rounded-xl text-base font-black text-slate-900 outline-none focus:border-[#167524] shadow-sm" />
                       </div>
                     </div>
                   </div>
 
                   {/* Dados do Miúdo */}
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">2. Dados do Participante</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5">2. Dados do Participante</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Nome Completo</label>
-                        <input type="text" required value={formExterno.nome_crianca} onChange={e => setFormExterno({...formExterno, nome_crianca: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-slate-400" />
+                        <label className="block text-[11px] font-bold text-slate-700 mb-2 uppercase">Nome Completo</label>
+                        <input type="text" required value={formExterno.nome_crianca} onChange={e => setFormExterno({...formExterno, nome_crianca: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-[#167524]" />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Idade (Anos)</label>
-                        <input type="number" required value={formExterno.idade} onChange={e => setFormExterno({...formExterno, idade: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-slate-400" />
+                        <label className="block text-[11px] font-bold text-slate-700 mb-2 uppercase">Idade (Anos)</label>
+                        <input type="number" required value={formExterno.idade} onChange={e => setFormExterno({...formExterno, idade: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-[#167524]" />
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div>
-                        <label className="block text-[11px] font-bold text-red-600 mb-1.5 uppercase">Alergias Alimentares</label>
-                        <input type="text" value={formExterno.alergias} onChange={e => setFormExterno({...formExterno, alergias: e.target.value})} placeholder="Ex: Amendoins" className="w-full p-3 bg-red-50 border border-red-200 rounded-xl text-sm outline-none focus:border-red-400" />
+                        <label className="block text-[11px] font-bold text-red-600 mb-2 uppercase">Alergias Alimentares</label>
+                        <input type="text" value={formExterno.alergias} onChange={e => setFormExterno({...formExterno, alergias: e.target.value})} placeholder="Ex: Amendoins" className="w-full p-3.5 bg-red-50 border border-red-200 rounded-xl text-sm font-bold text-red-900 outline-none focus:border-red-500 placeholder-red-300" />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-red-600 mb-1.5 uppercase">Doenças / Medicação</label>
-                        <input type="text" value={formExterno.doencas} onChange={e => setFormExterno({...formExterno, doencas: e.target.value})} placeholder="Ex: Asma" className="w-full p-3 bg-red-50 border border-red-200 rounded-xl text-sm outline-none focus:border-red-400" />
+                        <label className="block text-[11px] font-bold text-red-600 mb-2 uppercase">Doenças / Medicação</label>
+                        <input type="text" value={formExterno.doencas} onChange={e => setFormExterno({...formExterno, doencas: e.target.value})} placeholder="Ex: Asma" className="w-full p-3.5 bg-red-50 border border-red-200 rounded-xl text-sm font-bold text-red-900 outline-none focus:border-red-500 placeholder-red-300" />
                       </div>
                     </div>
                   </div>
 
                   {/* Dados do Pai */}
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">3. Encarregado de Educação</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5">3. Encarregado de Educação</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-2">
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Nome do Responsável</label>
-                        <input type="text" required value={formExterno.nome_pai} onChange={e => setFormExterno({...formExterno, nome_pai: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                        <label className="block text-[11px] font-bold text-slate-700 mb-2 uppercase">Nome do Responsável</label>
+                        <input type="text" required value={formExterno.nome_pai} onChange={e => setFormExterno({...formExterno, nome_pai: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-[#167524]" />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Telemóvel</label>
-                        <input type="tel" required value={formExterno.telefone_pai} onChange={e => setFormExterno({...formExterno, telefone_pai: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                        <label className="block text-[11px] font-bold text-slate-700 mb-2 uppercase">Telemóvel</label>
+                        <input type="tel" required value={formExterno.telefone_pai} onChange={e => setFormExterno({...formExterno, telefone_pai: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-[#167524]" />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Email</label>
-                        <input type="email" value={formExterno.email_pai} onChange={e => setFormExterno({...formExterno, email_pai: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                        <label className="block text-[11px] font-bold text-slate-700 mb-2 uppercase">Email</label>
+                        <input type="email" value={formExterno.email_pai} onChange={e => setFormExterno({...formExterno, email_pai: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-[#167524]" />
                       </div>
                     </div>
                   </div>
@@ -837,39 +792,40 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
               )}
 
               {importMode === 'excel' && (
-                <div className="flex flex-col gap-6">
-                  <div className="bg-blue-50 border border-blue-200 p-5 rounded-2xl">
-                    <h3 className="text-sm font-black text-blue-900 mb-2">1. Descarregue o Template</h3>
-                    <p className="text-xs text-blue-700 mb-4">Mantenha os cabeçalhos intactos para a importação em lote.</p>
-                    <button onClick={downloadTemplateCSV} className="px-4 py-2 bg-white border border-blue-300 text-blue-800 font-bold rounded-lg shadow-sm hover:bg-blue-100 text-xs">
-                      ⬇️ Download Template CSV
+                <div className="flex flex-col gap-6 pt-4">
+                  <div className="bg-slate-50 border border-slate-200 p-8 rounded-3xl text-center">
+                    <span className="text-4xl block mb-4">📝</span>
+                    <h3 className="text-lg font-black text-slate-900 mb-2">Descarregue o Template CSV</h3>
+                    <p className="text-xs font-medium text-slate-500 mb-6 max-w-sm mx-auto">Mantenha os cabeçalhos intactos para a importação em lote funcionar corretamente.</p>
+                    <button onClick={downloadTemplateCSV} className="px-6 py-3 bg-white border border-slate-300 text-slate-900 font-black uppercase tracking-widest text-[11px] rounded-xl shadow-sm hover:bg-slate-100 transition-colors">
+                      ⬇️ Download Template
                     </button>
                   </div>
 
-                  <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl">
-                    <h3 className="text-sm font-black text-slate-800 mb-2">2. Faça Upload do Ficheiro</h3>
-                    <input type="file" accept=".csv" onChange={(e: any) => setCsvFile(e.target.files ? e.target.files[0] : null)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0" />
+                  <div className="bg-white border-2 border-dashed border-slate-300 p-8 rounded-3xl text-center hover:border-[#167524] transition-colors group">
+                    <h3 className="text-base font-black text-slate-800 mb-4 group-hover:text-[#167524]">Faça Upload do Ficheiro</h3>
+                    <input type="file" accept=".csv" onChange={(e: any) => setCsvFile(e.target.files ? e.target.files[0] : null)} className="block w-full max-w-xs mx-auto text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-5 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 transition-colors cursor-pointer" />
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="p-5 border-t border-slate-200 bg-white flex justify-between items-center">
+            <div className="p-6 border-t border-slate-100 bg-white flex flex-col sm:flex-row justify-between items-center gap-4">
               {importMode !== 'selecao' ? (
-                <button onClick={() => setImportMode('selecao')} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800">&larr; Voltar</button>
-              ) : <div></div>}
+                <button onClick={() => setImportMode('selecao')} className="w-full sm:w-auto px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-800 border border-slate-200 rounded-xl transition-colors">&larr; Voltar à Seleção</button>
+              ) : <div className="hidden sm:block"></div>}
               
-              <div className="flex gap-3">
-                <button type="button" onClick={() => { setIsAddModalOpen(false); setImportMode('selecao'); }} className="px-6 py-2.5 font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors text-sm">Cancelar</button>
+              <div className="flex w-full sm:w-auto gap-3">
+                <button type="button" onClick={() => { setIsAddModalOpen(false); setImportMode('selecao'); }} className="flex-1 sm:flex-none px-6 py-3 font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors text-sm">Cancelar</button>
                 
                 {importMode === 'manual' && (
-                  <button type="submit" form="form-manual" disabled={savingExterno || !formExterno.turno_nome} className="px-8 py-2.5 font-bold text-white bg-orange-600 rounded-xl hover:bg-orange-700 transition-colors shadow-md text-sm disabled:opacity-50">
+                  <button type="submit" form="form-manual" disabled={savingExterno || !formExterno.turno_nome} className="flex-1 sm:flex-none px-8 py-3 font-black text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] transition-all shadow-md shadow-[#167524]/20 text-sm disabled:opacity-50 uppercase tracking-widest">
                     {savingExterno ? 'A Guardar...' : '✓ Inserir Reserva'}
                   </button>
                 )}
 
                 {importMode === 'excel' && (
-                  <button onClick={handleImportCSV} disabled={!csvFile || savingExterno} className="px-8 py-2.5 font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors shadow-md text-sm disabled:opacity-50">
+                  <button onClick={handleImportCSV} disabled={!csvFile || savingExterno} className="flex-1 sm:flex-none px-8 py-3 font-black text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] transition-all shadow-md shadow-[#167524]/20 text-sm disabled:opacity-50 uppercase tracking-widest">
                     {savingExterno ? 'A Importar...' : '✓ Processar Excel'}
                   </button>
                 )}
@@ -883,58 +839,59 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
       {/* MODAL: VER FICHA CLÍNICA DETALHADA E UPSALES */}
       {reservaSelecionada && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             
-            <div className={`p-6 text-white flex justify-between items-center ${reservaSelecionada.status === 'Cancelada' || reservaSelecionada.status === 'Abandonada' ? 'bg-red-600' : 'bg-slate-900'}`}>
+            <div className={`p-6 md:p-8 text-white flex justify-between items-center ${reservaSelecionada.status === 'Cancelada' || reservaSelecionada.status === 'Abandonada' ? 'bg-red-600' : 'bg-[#167524]'}`}>
               <div>
-                <h2 className="m-0 text-2xl font-black">Ficha de Participante</h2>
-                <p className="m-0 text-slate-300 text-xs font-mono mt-1">REF: {reservaSelecionada.id}</p>
+                <h2 className="m-0 text-xl md:text-2xl font-black tracking-tight">Ficha de Participante</h2>
+                <p className="m-0 text-white/70 text-[10px] font-bold uppercase tracking-widest mt-1.5">REF: {reservaSelecionada.id}</p>
               </div>
-              <button onClick={fecharModalReserva} className="text-white opacity-60 hover:opacity-100 text-3xl font-light">&times;</button>
+              <button onClick={fecharModalReserva} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white font-black transition-colors">&times;</button>
             </div>
 
-            <div className="p-8 overflow-y-auto bg-slate-50 flex flex-col gap-6">
+            <div className="p-6 md:p-8 overflow-y-auto bg-slate-50 flex flex-col gap-6 md:gap-8">
               
               {reservaSelecionada.isExterna ? (
-                <div className="bg-orange-100 text-orange-800 p-3 rounded-xl border border-orange-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
-                  <b>🟠 Inscrição Externa (Manual)</b>
+                <div className="bg-slate-100 text-slate-600 p-4 rounded-2xl border border-slate-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
+                  <b>⚪ Inscrição Externa (Manual)</b>
                 </div>
               ) : (
-                <div className="bg-emerald-100 text-emerald-800 p-3 rounded-xl border border-emerald-200 text-xs font-black uppercase tracking-widest text-center shadow-sm">
+                <div className="bg-[#167524]/10 text-[#167524] p-4 rounded-2xl border border-[#167524]/20 text-xs font-black uppercase tracking-widest text-center shadow-sm">
                   <b>🟢 Inscrição Online HelloCamp</b>
                 </div>
               )}
 
               {/* CARTÃO GESTÃO FINANCEIRA */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
-                <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
+              <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm md:col-span-2">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 pb-4 border-b border-slate-100 gap-4">
                   <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest m-0">💳 Controlo Financeiro do Passe</h3>
                   {(!reservaSelecionada.isExterna && reservaSelecionada.status !== 'Cancelada') && (
-                    <button onClick={() => setIsAjusteModalOpen(!isAjusteModalOpen)} className="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-200">
+                    <button onClick={() => setIsAjusteModalOpen(!isAjusteModalOpen)} className="text-xs font-black uppercase tracking-widest bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl transition-colors border border-slate-200 w-full sm:w-auto">
                       + Cobrar Valor Adicional
                     </button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500 font-bold mb-1">Total Faturado</p>
-                    <p className="text-2xl font-black text-slate-900 m-0">{reservaSelecionada.valor}€</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mb-1">Total Faturado</p>
+                    <p className="text-3xl font-black text-slate-900 m-0">{reservaSelecionada.valor}€</p>
                   </div>
-                  <div className="text-right">
-                    <span className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${reservaSelecionada.status === 'Pago' || reservaSelecionada.status === 'Sinal Pago' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
-                      Estado: {reservaSelecionada.status}
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col justify-center items-start sm:items-end">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mb-2">Estado Atual</p>
+                    <span className={`inline-flex px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${reservaSelecionada.status === 'Pago' || reservaSelecionada.status === 'Sinal Pago' ? 'bg-[#167524]/10 text-[#167524] border-[#167524]/20' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                      {reservaSelecionada.status}
                     </span>
                   </div>
                 </div>
 
                 {reservaSelecionada.pedido_pendente && (
-                  <div className="mt-5 bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-start gap-3">
-                    <span className="text-2xl">📬</span>
-                    <div className="flex-1">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 m-0 mb-1">Pedido de Upgrade do Pai:</p>
-                      <p className="text-sm font-bold text-blue-900 m-0 italic">"{reservaSelecionada.pedido_pendente}"</p>
-                      <button onClick={() => setIsAjusteModalOpen(true)} className="mt-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors">
+                  <div className="mt-6 bg-blue-50 border border-blue-200 p-5 md:p-6 rounded-2xl flex flex-col md:flex-row items-start gap-4">
+                    <span className="text-3xl hidden md:block">📬</span>
+                    <div className="flex-1 w-full">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 m-0 mb-1.5">Pedido de Upgrade do Pai:</p>
+                      <p className="text-base font-bold text-blue-900 m-0 italic bg-white p-4 rounded-xl border border-blue-100 shadow-sm">"{reservaSelecionada.pedido_pendente}"</p>
+                      <button onClick={() => setIsAjusteModalOpen(true)} className="mt-4 w-full md:w-auto text-xs font-black uppercase tracking-widest text-white bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-xl transition-all shadow-sm">
                         Aprovar e Lançar Fatura Extra
                       </button>
                     </div>
@@ -942,56 +899,63 @@ export default function GestaoReservasParceiro({ params }: { params: Promise<{ l
                 )}
 
                 {isAjusteModalOpen && (
-                  <form onSubmit={handleSubmeterAjuste} className="mt-6 pt-5 border-t border-slate-100 animate-in fade-in">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                  <form onSubmit={handleSubmeterAjuste} className="mt-8 pt-6 border-t border-slate-200 animate-in fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Motivo do Ajuste (Ex: Upgrade para Variante Alimentação)</label>
-                        <input type="text" required value={ajusteForm.motivo} onChange={e => setAjusteForm({...ajusteForm, motivo: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400" />
+                        <label className="block text-[11px] font-bold text-slate-700 mb-2 uppercase">Motivo do Ajuste (Ex: Upgrade para Variante Alimentação)</label>
+                        <input type="text" required value={ajusteForm.motivo} onChange={e => setAjusteForm({...ajusteForm, motivo: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500" />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase">Preço a Cobrar Extra (€)</label>
-                        <input type="number" required min="1" value={ajusteForm.valor} onChange={e => setAjusteForm({...ajusteForm, valor: Number(e.target.value)})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400" />
+                        <label className="block text-[11px] font-bold text-slate-700 mb-2 uppercase">Preço a Cobrar Extra (€)</label>
+                        <input type="number" required min="1" value={ajusteForm.valor} onChange={e => setAjusteForm({...ajusteForm, valor: Number(e.target.value)})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-blue-700 outline-none focus:border-blue-500 text-right" />
                       </div>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => setIsAjusteModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg">Cancelar</button>
-                      <button type="submit" disabled={savingAjuste} className="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Enviar Pedido</button>
+                    <div className="flex flex-col sm:flex-row justify-end gap-3">
+                      <button type="button" onClick={() => setIsAjusteModalOpen(false)} className="w-full sm:w-auto px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-500 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
+                      <button type="submit" disabled={savingAjuste} className="w-full sm:w-auto px-8 py-3 text-xs font-black uppercase tracking-widest text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md transition-all">Enviar Pedido de Pagamento</button>
                     </div>
                   </form>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">👦 Identificação</h3>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between"><span className="font-bold text-slate-500">Nome:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.nome}</span></div>
-                    <div className="flex justify-between"><span className="font-bold text-slate-500">Nascimento:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.data_nascimento || 'N/A'}</span></div>
-                    <div className="flex justify-between"><span className="font-bold text-slate-500">Género:</span> <span className="font-black text-slate-900">{reservaSelecionada.crianca?.sexo || 'N/A'}</span></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm">
+                  <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 pb-3 border-b border-slate-100">👦 Identificação do Participante</h3>
+                  <div className="space-y-4 text-sm">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                      <span className="font-bold text-slate-500 text-xs uppercase">Nome Completo:</span> 
+                      <span className="font-black text-slate-900">{reservaSelecionada.crianca?.nome}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                      <span className="font-bold text-slate-500 text-xs uppercase">Data de Nascimento:</span> 
+                      <span className="font-black text-slate-900 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">{reservaSelecionada.crianca?.data_nascimento || 'N/A'}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-2xl border-2 border-red-100 shadow-sm relative overflow-hidden">
-                  <h3 className="text-sm font-black text-red-400 uppercase tracking-widest mb-4 pb-2 border-b border-red-50">Perfil Clínico</h3>
-                  <div className="mb-2 bg-red-50 p-2.5 rounded-lg text-xs font-bold text-red-900">
-                    Alergias: {reservaSelecionada.crianca?.restricoes_alimentares || 'Nenhuma'}
+                <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border-2 border-red-100 shadow-sm relative overflow-hidden">
+                  <h3 className="text-[11px] font-black text-red-400 uppercase tracking-widest mb-5 pb-3 border-b border-red-50">🏥 Perfil Clínico e Alertas</h3>
+                  <div className="mb-3 bg-red-50 border border-red-100 p-4 rounded-xl text-sm font-medium text-red-900">
+                    <strong className="block text-[10px] font-black uppercase tracking-widest text-red-800 mb-1">Alergias Alimentares:</strong> 
+                    {reservaSelecionada.crianca?.restricoes_alimentares || 'Nenhuma'}
                   </div>
-                  <div className="bg-red-50 p-2.5 rounded-lg text-xs font-bold text-red-900">
-                    Doenças: {reservaSelecionada.crianca?.doencas_cronicas || 'Nenhuma'}
+                  <div className="bg-red-50 border border-red-100 p-4 rounded-xl text-sm font-medium text-red-900">
+                    <strong className="block text-[10px] font-black uppercase tracking-widest text-red-800 mb-1">Doenças ou Medicação:</strong> 
+                    {reservaSelecionada.crianca?.doencas_cronicas || 'Nenhuma'}
                   </div>
                 </div>
               </div>
 
               {reservaSelecionada.respostasCustomizadas && Object.keys(reservaSelecionada.respostasCustomizadas).length > 0 && (
-                <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl shadow-sm">
-                   <h3 className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4 pb-2 border-b border-blue-200/50">📋 Respostas Específicas das Perguntas Customizadas</h3>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-slate-50 border border-slate-200 p-6 md:p-8 rounded-[1.5rem] shadow-sm">
+                   <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-5 pb-3 border-b border-slate-200">📋 Respostas aos Formulários Customizados</h3>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                      {Object.entries(reservaSelecionada.respostasCustomizadas)
-                        .filter(([p]) => p !== 'origem' && p !== 'historico_ajustes' && p !== 'pedido_pai_pendente')
+                        .filter(([p]) => p !== 'origem' && p !== 'historico_ajustes' && p !== 'pedido_pai_pendente' && p !== 'nome_crianca' && p !== 'idade_crianca' && p !== 'alergias' && p !== 'doencas')
                         .map(([pergunta, resposta]: any, idx: number) => (
-                        <div key={idx} className="bg-white p-3 rounded-xl border border-blue-50">
-                          <span className="block text-[10px] font-bold text-blue-500 mb-1">{pergunta}</span>
-                          <span className="text-sm font-black text-slate-800">{resposta}</span>
+                        <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                          <span className="block text-[10px] font-bold text-slate-400 uppercase mb-2">{pergunta}</span>
+                          <span className="text-sm font-black text-slate-900">{resposta}</span>
                         </div>
                      ))}
                    </div>
