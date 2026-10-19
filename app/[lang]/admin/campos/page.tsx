@@ -37,7 +37,7 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
     const dados = campo.contrato_dados;
     const comissaoText = campo.taxa_comissao || 12;
     const dataContrato = dados.dataSubmissao ? new Date(dados.dataSubmissao).toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/D';
-    
+
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       alert(isEn ? "Your browser blocked the pop-up. Please allow it to generate the PDF." : "O seu navegador bloqueou a abertura da janela (Pop-up). Por favor, permita para gerar o PDF.");
@@ -63,153 +63,146 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
     }
 
     const html = `
-      <!DOCTYPE html>
-      <html lang="pt">
-      <head>
-        <meta charset="UTF-8">
-        <title>Contrato Intermediação - ${dados.empresaNome || campo.nome}</title>
-        <style>
-          body { font-family: "Times New Roman", Times, serif; color: #000; max-width: 850px; margin: 0 auto; padding: 40px 30px; line-height: 1.5; font-size: 14px; text-align: justify; }
-          .header { text-align: center; margin-bottom: 40px; }
-          .header h1 { margin: 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; font-family: Arial, sans-serif; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 10px; display: inline-block; }
-          .header p { font-size: 12px; font-family: Arial, sans-serif; color: #555; margin-top: 5px; }
-          
-          h2 { font-size: 16px; text-align: center; text-transform: uppercase; font-family: Arial, sans-serif; margin-top: 30px; margin-bottom: 15px; }
-          h3 { font-size: 14px; font-weight: bold; margin-top: 25px; margin-bottom: 10px; text-transform: uppercase; }
-          
-          .party-block { background-color: #f9f9f9; border: 1px solid #ddd; padding: 20px; margin-bottom: 20px; border-radius: 4px; }
-          .party-block p { margin: 5px 0; }
-          
-          .clause { margin-bottom: 15px; }
-          .clause-title { font-weight: bold; }
-          
-          .signatures { display: flex; justify-content: space-between; margin-top: 50px; border-top: 2px solid #000; padding-top: 30px; }
-          .sig-box { width: 45%; }
-          .sig-title { font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
-          .sig-name { font-size: 22px; font-style: italic; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 5px; display: inline-block; min-width: 100%; }
-          .sig-details { font-size: 12px; font-family: Arial, sans-serif; }
-          
-          .stamp { font-size: 10px; font-family: monospace; color: #666; margin-top: 15px; padding: 10px; border: 1px dashed #ccc; background: #fafafa; }
-          
-          @media print { 
-            body { padding: 0; max-width: 100%; } 
-            .print-btn { display: none; } 
-            .page-break { page-break-before: always; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="print-btn" style="text-align: center; margin-bottom: 30px;">
-          <button onclick="window.print()" style="padding: 10px 25px; background: #000; color: #fff; font-weight: bold; border: none; cursor: pointer; font-size: 16px;">Imprimir Contrato Jurídico</button>
+    <!DOCTYPE html>
+    <html lang="pt">
+    <head>
+      <meta charset="UTF-8">
+      <title>Contrato Intermediação - ${dados.empresaNome || campo.nome}</title>
+      <style>
+        body { font-family: "Times New Roman", Times, serif; color: #000; max-width: 850px; margin: 0 auto; padding: 40px 30px; line-height: 1.5; font-size: 14px; text-align: justify; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .header h1 { margin: 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; font-family: Arial, sans-serif; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 10px; display: inline-block; }
+        .header p { font-size: 12px; font-family: Arial, sans-serif; color: #555; margin-top: 5px; }
+        h2 { font-size: 16px; text-align: center; text-transform: uppercase; font-family: Arial, sans-serif; margin-top: 30px; margin-bottom: 15px; }
+        h3 { font-size: 14px; font-weight: bold; margin-top: 25px; margin-bottom: 10px; text-transform: uppercase; }
+        .party-block { background-color: #f9f9f9; border: 1px solid #ddd; padding: 20px; margin-bottom: 20px; border-radius: 4px; }
+        .party-block p { margin: 5px 0; }
+        .clause { margin-bottom: 15px; }
+        .clause-title { font-weight: bold; }
+        .signatures { display: flex; justify-content: space-between; margin-top: 50px; border-top: 2px solid #000; padding-top: 30px; }
+        .sig-box { width: 45%; }
+        .sig-title { font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
+        .sig-name { font-size: 22px; font-style: italic; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 5px; display: inline-block; min-width: 100%; }
+        .sig-details { font-size: 12px; font-family: Arial, sans-serif; }
+        .stamp { font-size: 10px; font-family: monospace; color: #666; margin-top: 15px; padding: 10px; border: 1px dashed #ccc; background: #fafafa; }
+        @media print { 
+          body { padding: 0; max-width: 100%; } 
+          .print-btn { display: none; } 
+          .page-break { page-break-before: always; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="print-btn" style="text-align: center; margin-bottom: 30px;">
+        <button onclick="window.print()" style="padding: 10px 25px; background: #000; color: #fff; font-weight: bold; border: none; cursor: pointer; font-size: 16px;">Imprimir Contrato Jurídico</button>
+      </div>
+
+      <div class="header">
+        <h1>Contrato de Intermediação – HelloCamp</h1>
+        <p>Acordo de Prestação de Serviços</p>
+      </div>
+
+      <p>Entre a <strong>HelloCamp</strong>, com website em www.hellocamp.pt e contacto via info@hellocamp.pt, doravante designada por "Primeiro Outorgante"; e do outro lado:</p>
+
+      <div class="party-block">
+        <p><strong>Nome da Empresa (Faturação):</strong> ${dados.empresaNome}</p>
+        <p><strong>NIF:</strong> ${dados.nif}</p>
+        <p><strong>Forma Jurídica:</strong> ${dados.formaJuridica}</p>
+        <p><strong>Morada Fiscal:</strong> ${dados.morada}, ${dados.codigoPostal}</p>
+        <p><strong>Pessoa de Contacto:</strong> ${dados.pessoaContacto}</p>
+        <p><strong>Telefone:</strong> ${dados.telefone}</p>
+        <p><strong>E-mail Comercial:</strong> ${dados.emailContacto}</p>
+        <p><strong>E-mail para Reservas:</strong> ${dados.emailReservas}</p>
+        <p><strong>Responsável de Dados (RGPD):</strong> ${dados.responsavelRGPD}</p>
+        <p><strong>Website:</strong> ${dados.website || 'N/A'}</p>
+      </div>
+
+      <p style="text-align: center; font-style: italic;">- doravante designado por "Parceiro" -</p>
+
+      <p>É celebrado o presente contrato de intermediação e divulgação comercial aplicável, mas não limitado, ao programa/campo de férias com a designação: <strong>"${campo.nome}"</strong>.</p>
+
+      <h2>Cláusulas Contratuais</h2>
+
+      <div class="clause">
+        <span class="clause-title">Artigo 1.º – Comissão</span><br>
+        O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (iva não incluído)</strong> sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes. A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados. A comissão torna-se devida após a confirmação da reserva. O Parceiro deverá enviar ao cliente a confirmação da reserva e assegurar a prestação dos serviços contratados. Caso uma reserva não possa ser realizada por motivos justificados, o Parceiro deverá informar a HelloCamp com a maior brevidade possível.
+      </div>
+
+      <div class="clause">
+        <span class="clause-title">Artigo 2.º – Condições de Pagamento</span><br>
+        As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados não incluem IVA ou otros impostos legalmente aplicáveis.
+      </div>
+
+      <div class="clause">
+        <span class="clause-title">Artigo 3.º – Obrigações do Parceiro</span><br>
+        O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades. O Parceiro garante que possui todos os direitos necessários sobre os conteúdos disponibilizados (direitos de autor e de imagem). A HelloCamp poderá utilizar os conteúdos fornecidos para promoção. Os preços divulgados na plataforma não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas. O Parceiro compromete-se a informar imediatamente a HelloCamp de alterações de atividades, preços ou condições.
+      </div>
+
+      <div class="clause">
+        <span class="clause-title">Artigo 4.º – Duração e Renovação</span><br>
+        O presente contrato produz efeitos a partir da data da sua assinatura por ambas as partes e mantém-se válido até ao final do respetivo ano civil. O contrato será automaticamente renovado por períodos sucessivos de um ano, salvo denúncia por qualquer das partes com aviso prévio de 30 dias.
+      </div>
+
+      <div class="clause">
+        <span class="clause-title">Artigo 5.º e 6.º – Separabilidade e Alterações</span><br>
+        A eventual invalidade de qualquer disposição não prejudica a validade das restantes cláusulas. Quaisquer alterações a este contrato deverão constar no Anexo 4 para produzirem efeitos.
+      </div>
+
+      <div class="clause">
+        <span class="clause-title">Artigo 7.º – Limitação de Responsabilidade e Seguros</span><br>
+        A HelloCamp atua exclusivamente como plataforma intermediária de reservas e não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos ou disputas. O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças e certificações exigidas para o ejercicio da sua atividade.
+      </div>
+
+      <div class="page-break"></div>
+
+      <h2>Anexos e Condições Operacionais Acordadas</h2>
+
+      <div class="clause">
+        <span class="clause-title">Anexo 1 – Procedimento de Reserva Acordado</span><br>
+        ${anexo1Text}
+      </div>
+
+      <div class="clause">
+        <span class="clause-title">Anexo 2 – Pagamento e Comissão</span><br>
+        O Parceiro autoriza a HelloCamp a receber um depósito durante o processo de reserva efetuado através da plataforma Stripe. O valor do depósito corresponde, regra geral, à comissão devida à HelloCamp pela reserva efetuada, acrescida de IVA. Modalidade escolhida: <br>
+        ${anexo2Text}
+      </div>
+
+      <div class="clause">
+        <span class="clause-title">Anexo 3 – Política de Cancelamento e Reembolso</span><br>
+        A opção selecionada ditará as regras de reembolso para os pais na plataforma. A comissão devida à HelloCamp será sempre ajustada proporcionalmente ao montante que o Parceiro retiver do cliente em caso de desistência. Modalidade escolhida: <br>
+        ${anexo3Text}
+      </div>
+
+      <div class="clause">
+        <span class="clause-title">Anexo 4 – Acordos Extraordinários</span><br>
+        O Parceiro declarou e a HelloCamp validou as siguientes alterações ou exceções ao contrato-modelo:<br>
+        <i>${dados.acordosComplementares || 'Nenhuma cláusula de exceção preenchida pelo parceiro. O contrato-modelo aplica-se na sua totalidade.'}</i>
+      </div>
+
+      <div class="signatures">
+        <div class="sig-box">
+          <div class="sig-title">Pela HelloCamp</div>
+          <div class="sig-name" style="font-family: 'Times New Roman', serif;">Administração HelloCamp</div>
+          <div class="sig-details">Data: ${dataContrato}</div>
         </div>
+        <div class="sig-box">
+          <div class="sig-title">Pelo Parceiro</div>
+          <div class="sig-name">${dados.assinaturaNome}</div>
+          <div class="sig-details">Cargo: ${dados.assinaturaCargo}</div>
+          <div class="sig-details">Data da Assinatura: ${dataContrato}</div>
 
-        <div class="header">
-          <h1>Contrato de Intermediação – HelloCamp</h1>
-          <p>Acordo de Prestação de Serviços</p>
-        </div>
-
-        <p>Entre a <strong>HelloCamp</strong>, com website em www.hellocamp.pt e contacto via info@hellocamp.pt, doravante designada por "Primeiro Outorgante"; e do outro lado:</p>
-        
-        <div class="party-block">
-          <p><strong>Nome da Empresa (Faturação):</strong> ${dados.empresaNome}</p>
-          <p><strong>NIF:</strong> ${dados.nif}</p>
-          <p><strong>Forma Jurídica:</strong> ${dados.formaJuridica}</p>
-          <p><strong>Morada Fiscal:</strong> ${dados.morada}, ${dados.codigoPostal}</p>
-          <p><strong>Pessoa de Contacto:</strong> ${dados.pessoaContacto}</p>
-          <p><strong>Telefone:</strong> ${dados.telefone}</p>
-          <p><strong>E-mail Comercial:</strong> ${dados.emailContacto}</p>
-          <p><strong>E-mail para Reservas:</strong> ${dados.emailReservas}</p>
-          <p><strong>Responsável de Dados (RGPD):</strong> ${dados.responsavelRGPD}</p>
-          <p><strong>Website:</strong> ${dados.website || 'N/A'}</p>
-        </div>
-
-        <p style="text-align: center; font-style: italic;">- doravante designado por "Parceiro" -</p>
-
-        <p>É celebrado o presente contrato de intermediação e divulgação comercial aplicável, mas não limitado, ao programa/campo de férias com a designação: <strong>"${campo.nome}"</strong>.</p>
-
-        <h2>Cláusulas Contratuais</h2>
-
-        <div class="clause">
-          <span class="clause-title">Artigo 1.º – Comissão</span><br>
-          O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (iva não incluído)</strong> sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes. A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados. A comissão torna-se devida após a confirmação da reserva. O Parceiro deverá enviar ao cliente a confirmação da reserva e assegurar a prestação dos serviços contratados. Caso uma reserva não possa ser realizada por motivos justificados, o Parceiro deverá informar a HelloCamp com a maior brevidade possível.
-        </div>
-
-        <div class="clause">
-          <span class="clause-title">Artigo 2.º – Condições de Pagamento</span><br>
-          As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados não incluem IVA ou outros impostos legalmente aplicáveis.
-        </div>
-
-        <div class="clause">
-          <span class="clause-title">Artigo 3.º – Obrigações do Parceiro</span><br>
-          O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades. O Parceiro garante que possui todos os direitos necessários sobre os conteúdos disponibilizados (direitos de autor e de imagem). A HelloCamp poderá utilizar os conteúdos fornecidos para promoção. Os preços divulgados na plataforma não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas. O Parceiro compromete-se a informar imediatamente a HelloCamp de alterações de atividades, preços ou condições.
-        </div>
-
-        <div class="clause">
-          <span class="clause-title">Artigo 4.º – Duração e Renovação</span><br>
-          O presente contrato produz efeitos a partir da data da sua assinatura por ambas as partes e mantém-se válido até ao final do respetivo ano civil. O contrato será automaticamente renovado por períodos sucessivos de um ano, salvo denúncia por qualquer das partes com aviso prévio de 30 dias.
-        </div>
-
-        <div class="clause">
-          <span class="clause-title">Artigo 5.º e 6.º – Separabilidade e Alterações</span><br>
-          A eventual invalidade de qualquer disposição não prejudica a validade das restantes cláusulas. Quaisquer alterações a este contrato deverão constar no Anexo 4 para produzirem efeitos.
-        </div>
-
-        <div class="clause">
-          <span class="clause-title">Artigo 7.º – Limitação de Responsabilidade e Seguros</span><br>
-          A HelloCamp atua exclusivamente como plataforma intermediária de reservas e não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos ou disputas. O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças e certificações exigidas para o exercício da sua atividade.
-        </div>
-
-        <div class="page-break"></div>
-
-        <h2>Anexos e Condições Operacionais Acordadas</h2>
-
-        <div class="clause">
-          <span class="clause-title">Anexo 1 – Procedimento de Reserva Acordado</span><br>
-          ${anexo1Text}
-        </div>
-
-        <div class="clause">
-          <span class="clause-title">Anexo 2 – Pagamento e Comissão</span><br>
-          O Parceiro autoriza a HelloCamp a receber um depósito durante o processo de reserva efetuado através da plataforma Stripe. O valor do depósito corresponde, regra geral, à comissão devida à HelloCamp pela reserva efetuada, acrescida de IVA. Modalidade escolhida: <br>
-          ${anexo2Text}
-        </div>
-
-        <div class="clause">
-          <span class="clause-title">Anexo 3 – Política de Cancelamento e Reembolso</span><br>
-          A opção selecionada ditará as regras de reembolso para os pais na plataforma. A comissão devida à HelloCamp será sempre ajustada proporcionalmente ao montante que o Parceiro retiver do cliente em caso de desistência. Modalidade escolhida: <br>
-          ${anexo3Text}
-        </div>
-
-        <div class="clause">
-          <span class="clause-title">Anexo 4 – Acordos Extraordinários</span><br>
-          O Parceiro declarou e a HelloCamp validou as seguintes alterações ou exceções ao contrato-modelo:<br>
-          <i>${dados.acordosComplementares || 'Nenhuma cláusula de exceção preenchida pelo parceiro. O contrato-modelo aplica-se na sua totalidade.'}</i>
-        </div>
-
-        <div class="signatures">
-          <div class="sig-box">
-            <div class="sig-title">Pela HelloCamp</div>
-            <div class="sig-name" style="font-family: 'Times New Roman', serif;">Administração HelloCamp</div>
-            <div class="sig-details">Data: ${dataContrato}</div>
-          </div>
-          <div class="sig-box">
-            <div class="sig-title">Pelo Parceiro</div>
-            <div class="sig-name">${dados.assinaturaNome}</div>
-            <div class="sig-details">Cargo: ${dados.assinaturaCargo}</div>
-            <div class="sig-details">Data da Assinatura: ${dataContrato}</div>
-            
-            <div class="stamp">
-              <strong>Declaração de Vinculação Aceite:</strong> "Declaro ter lido e aceite os termos. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital."<br><br>
-              <strong>Registo Digital:</strong><br>
-              IP/Método: ${dados.ipAssinatura}<br>
-              Timestamp: ${dados.dataSubmissao}<br>
-              ID Contrato Sistema: ${campo.id}
-            </div>
+          <div class="stamp">
+            <strong>Declaração de Vinculação Aceite:</strong> "Declaro ter lido e aceite os termos. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital."<br><br>
+            <strong>Registo Digital:</strong><br>
+            IP/Método: ${dados.ipAssinatura}<br>
+            Timestamp: ${dados.dataSubmissao}<br>
+            ID Contrato Sistema: ${campo.id}
           </div>
         </div>
-
-      </body>
-      </html>
+      </div>
+    </body>
+    </html>
     `;
     printWindow.document.write(html);
     printWindow.document.close();
@@ -220,18 +213,18 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
 
   return (
     <div className="max-w-[1200px] mx-auto pb-10">
-      
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl md:text-4xl font-black text-slate-900 m-0">
+          <h1 className="text-3xl md:text-4xl font-black text-slate-900 m-0 tracking-tight">
             {isEn ? 'My Camps' : 'Os Meus Campos'}
           </h1>
           <p className="text-slate-500 mt-2 text-sm md:text-base">
             {isEn ? 'Manage your holiday programs and availability.' : 'Gira os seus programas de férias e disponibilidade.'}
           </p>
         </div>
-        
-        <Link href={`/${lang}/admin/campos/novo`} className="w-full sm:w-auto bg-[#167524] hover:bg-[#115a1b] text-white px-5 py-3 rounded-xl font-bold text-sm text-center transition-colors shadow-sm no-underline">
+
+        <Link href={`/${lang}/admin/campos/novo`} className="w-full sm:w-auto bg-[#167524] hover:bg-[#115a1b] text-white px-6 py-3.5 rounded-xl font-bold text-sm text-center transition-colors shadow-sm no-underline uppercase tracking-widest">
           + {isEn ? 'Add New Camp' : 'Adicionar Novo'}
         </Link>
       </div>
@@ -252,7 +245,7 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
             const localVisivel = isEn && campo.local_en ? campo.local_en : campo.local;
             const vagasVisivel = campo.vagas_totais || 0;
             const textoVagas = isEn ? 'spots' : 'vagas';
-            
+
             // Lógica Inteligente para encontrar o preço mais baixo da nova estrutura (pacotes)
             let precoVisivel = campo.preco || 0;
             if (!precoVisivel && campo.pacotes && campo.pacotes.length > 0) {
@@ -269,27 +262,27 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
 
             return (
               <div key={campo.id} className="flex flex-col lg:flex-row justify-between lg:items-center gap-5 p-5 md:p-6 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                
+
                 <div className="flex-1">
                   <h3 className="m-0 text-lg md:text-xl font-black text-slate-900 mb-3">{nomeVisivel}</h3>
                   <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                    <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">📍 {localVisivel}</span>
-                    <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">👥 {vagasVisivel} {textoVagas}</span>
-                    <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                    <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-md">📍 {localVisivel}</span>
+                    <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-md">👥 {vagasVisivel} {textoVagas}</span>
+                    <span className="text-xs md:text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-md">
                       💰 {isEn ? 'From ' : 'A partir de '}{precoVisivel > 0 ? `${precoVisivel}€` : '--'}
                     </span>
-                    
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full border ${isComissaoEspecifica ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+
+                    <span className={`text-xs font-bold px-3 py-1 rounded-md border ${isComissaoEspecifica ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
                       {taxaVisual}% {isEn ? 'Fee' : 'Comissão'}
                     </span>
-                    
+
                     {campo.status_aprovacao === 'Aprovado' && (
-                      <span className="text-xs font-bold px-3 py-1 rounded-full border bg-[#167524]/10 text-[#167524] border-[#167524]/20">
+                      <span className="text-xs font-bold px-3 py-1 rounded-md border bg-[#167524]/10 text-[#167524] border-[#167524]/20">
                         ✅ {isEn ? 'Verified' : 'Validado'}
                       </span>
                     )}
                     {campo.status_aprovacao === 'Pendente de Revisão' && (
-                      <span className="text-xs font-bold px-3 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                      <span className="text-xs font-bold px-3 py-1 rounded-md border bg-amber-50 text-amber-700 border-amber-200">
                         ⏳ {isEn ? 'Under Review' : 'Em Revisão'}
                       </span>
                     )}
@@ -297,20 +290,20 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
                 </div>
 
                 <div className="flex flex-col sm:flex-row flex-wrap justify-end gap-3 mt-4 lg:mt-0 w-full lg:w-auto">
-                  
-                  <a href={`/${lang}/campo/${campo.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 rounded-lg font-bold text-sm no-underline transition-colors cursor-pointer">
-                      {isEn ? 'Preview' : 'Ver Online'}
+
+                  <a href={`/${lang}/campo/${campo.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 px-5 py-3 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs uppercase tracking-widest no-underline transition-colors cursor-pointer shadow-sm">
+                    {isEn ? 'Preview' : 'Ver Online'}
                   </a>
 
                   {/* NOVO BOTÃO DE PDF (Apenas se houver contrato assinado) - Adaptado para o Amarelo da Marca */}
                   {campo.contrato_dados && (
-                    <button onClick={() => handleImprimirPDF(campo)} className="flex items-center justify-center px-4 py-2.5 bg-[#e2a41d]/10 text-[#b58010] hover:bg-[#e2a41d]/20 border border-[#e2a41d]/30 rounded-lg font-bold text-sm no-underline transition-colors cursor-pointer">
+                    <button onClick={() => handleImprimirPDF(campo)} className="flex items-center justify-center px-5 py-3 bg-[#e2a41d] text-white hover:bg-[#d4991b] rounded-xl font-bold text-xs uppercase tracking-widest no-underline transition-colors cursor-pointer shadow-sm">
                       {isEn ? 'Download Contract' : '📥 Contrato PDF'}
                     </button>
                   )}
-                  
+
                   {/* Botão de Edição com a cor corporativa principal */}
-                  <Link href={`/${lang}/admin/campos/editar/${campo.id}`} className="flex items-center justify-center px-6 py-2.5 bg-[#167524] text-white hover:bg-[#115a1b] rounded-lg font-bold text-sm no-underline transition-colors">
+                  <Link href={`/${lang}/admin/campos/editar/${campo.id}`} className="flex items-center justify-center px-6 py-3 bg-[#167524] text-white hover:bg-[#115a1b] rounded-xl font-bold text-xs uppercase tracking-widest no-underline transition-colors shadow-sm">
                     {isEn ? 'Edit Camp' : 'Editar Campo'}
                   </Link>
                 </div>

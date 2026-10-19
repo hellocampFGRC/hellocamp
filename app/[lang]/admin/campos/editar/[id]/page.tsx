@@ -58,7 +58,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
       data_inicio: "", 
       data_fim: "", 
       dias_semana: [1, 2, 3, 4, 5],
-      dias_fechados: [] as string[] // NOVO: Guarda os dias bloqueados/fechados
+      dias_fechados: [] as string[] 
     },
     pacotes: [] as Pacote[],
     descontos: [] as Desconto[],
@@ -113,7 +113,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
             data_inicio: data.calendario_funcionamento?.data_inicio || "",
             data_fim: data.calendario_funcionamento?.data_fim || "",
             dias_semana: data.calendario_funcionamento?.dias_semana || [1,2,3,4,5],
-            dias_fechados: data.calendario_funcionamento?.dias_fechados || [] // Inicializa se existir
+            dias_fechados: data.calendario_funcionamento?.dias_fechados || [] 
           },
           pacotes: data.pacotes || [],
           descontos: data.descontos || [],
@@ -155,7 +155,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   // ==========================================
   // 4. HANDLERS E FUNÇÕES DE MANIPULAÇÃO
   // ==========================================
-  
   const handleApagarCampo = async () => {
     const confirmacao = window.confirm(
       isEn 
@@ -166,7 +165,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
     setDeleting(true);
     const { error } = await supabase.from('campos').delete().eq('id', id);
-    
+
     if (error) {
       alert((isEn ? "Error deleting camp. There might be bookings associated with it. Contact support. Details: " : "Erro ao apagar. Podem existir reservas associadas a este campo que impedem a sua eliminação por questões financeiras. Contacte o suporte. Detalhe: ") + error.message);
       setDeleting(false);
@@ -217,7 +216,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, dias_semana: dias } });
   };
 
-  // --- LÓGICA DIAS FECHADOS ---
+  // LÓGICA DIAS FECHADOS
   const adicionarDiaFechado = () => {
     if (!novoDiaFechado) return;
     const diasAtuais = formData.calendario_funcionamento.dias_fechados || [];
@@ -297,10 +296,10 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         if (img.file) {
           const fileExt = img.file.name.split('.').pop();
           const fileName = `${session.user.id}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-          
+
           const { error: uploadError } = await supabase.storage.from('campos-imagens').upload(fileName, img.file);
           if (uploadError) throw new Error(`Erro ao enviar foto: ${uploadError.message}`);
-          
+
           const { data: { publicUrl } } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
           uploadedUrls.push(publicUrl);
           if (img.isCapa) capaUrl = publicUrl;
@@ -332,7 +331,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         pacotes: formData.pacotes,
         descontos: formData.descontos,
         status_aprovacao: 'Pendente',
-        
+
         racio_monitores: formData.racio_monitores,
         racio_monitores_en: formData.racio_monitores,
         alimentacao: formData.alimentacao,
@@ -380,7 +379,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   // ==========================================
   return (
     <div className="max-w-[1000px] mx-auto p-4 md:p-8 font-sans pb-24">
-      
+
       {/* HEADER & PROGRESS BAR */}
       <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div className="w-full sm:w-auto flex-1">
@@ -388,16 +387,15 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           <div className="flex items-center gap-2 mt-6 max-w-md">
             {[1, 2, 3].map((num) => (
               <div key={num} className="flex-1 flex flex-col gap-2">
-                <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
-                <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-indigo-700' : 'text-slate-400'}`}>
+                <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-[#167524]' : 'bg-slate-200'}`}></div>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-[#167524]' : 'text-slate-400'}`}>
                   {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual'}
                 </span>
               </div>
             ))}
           </div>
         </div>
-        
-        {/* BOTÃO DE APAGAR CAMPO NO TOPO */}
+
         <button 
           onClick={handleApagarCampo} 
           disabled={deleting}
@@ -408,24 +406,24 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 md:p-10 mb-8 relative overflow-hidden transition-all duration-300">
-        
+
         {/* ========================================== */}
         {/* PASSO 1: DADOS BÁSICOS, LOCAL E MAPA */}
         {/* ========================================== */}
         {step === 1 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500">
             <h2 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-2"><span>🎯</span> {isEn ? 'Basic Details' : 'Informações do Programa'}</h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="md:col-span-2">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Nome do Campo *</label>
-                <input type="text" required placeholder="Ex: Surf Camp de Verão Caparica" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors" />
+                <input type="text" required placeholder="Ex: Surf Camp de Verão Caparica" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] focus:bg-white transition-colors" />
               </div>
-              
+
               {/* DROPDOWN CUSTOMIZADO: CATEGORIA */}
               <div className="relative">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Categoria Temática *</label>
-                <div onClick={() => setIsCatDropdownOpen(!isCatDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                <div onClick={() => setIsCatDropdownOpen(!isCatDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-[#167524]/50 transition-colors">
                   <span>{getCatName(formData.categoria)}</span>
                   <span className="text-[10px] text-slate-400">▼</span>
                 </div>
@@ -434,7 +432,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                     <div className="fixed inset-0 z-40" onClick={() => setIsCatDropdownOpen(false)}></div>
                     <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
                       {CATEGORIAS.map(cat => (
-                        <div key={cat.id} onClick={() => handleSelectCategoria(cat.id)} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors flex items-center gap-2">
+                        <div key={cat.id} onClick={() => handleSelectCategoria(cat.id)} className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer transition-colors flex items-center gap-2">
                           <span className="text-lg">{cat.icon}</span> {isEn ? cat.en : cat.pt}
                         </div>
                       ))}
@@ -446,7 +444,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               {/* DROPDOWN CUSTOMIZADO: POLÍTICA CANCELAMENTO */}
               <div className="relative">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Política de Cancelamento</label>
-                <div onClick={() => setIsPolDropdownOpen(!isPolDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                <div onClick={() => setIsPolDropdownOpen(!isPolDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-[#167524]/50 transition-colors">
                   <span className="truncate">{formData.politica_cancelamento}</span>
                   <span className="text-[10px] text-slate-400">▼</span>
                 </div>
@@ -455,7 +453,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                     <div className="fixed inset-0 z-40" onClick={() => setIsPolDropdownOpen(false)}></div>
                     <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
                       {["Flexível (100% até 7 dias)", "Moderada (50% até 15 dias)", "Estrita (Sem reembolso)"].map((pol, i) => (
-                        <div key={i} onClick={() => { setFormData({...formData, politica_cancelamento: pol}); setIsPolDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                        <div key={i} onClick={() => { setFormData({...formData, politica_cancelamento: pol}); setIsPolDropdownOpen(false); }} className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
                           {pol}
                         </div>
                       ))}
@@ -467,17 +465,17 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Idade Min.</label>
-                  <input type="number" min="3" value={formData.idade_min} onChange={e => setFormData({...formData, idade_min: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-center text-indigo-700 outline-none focus:border-indigo-500 focus:bg-white" />
+                  <input type="number" min="3" value={formData.idade_min} onChange={e => setFormData({...formData, idade_min: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-center text-[#167524] outline-none focus:border-[#167524] focus:bg-white" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Idade Max.</label>
-                  <input type="number" min="3" value={formData.idade_max} onChange={e => setFormData({...formData, idade_max: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-center text-indigo-700 outline-none focus:border-indigo-500 focus:bg-white" />
+                  <input type="number" min="3" value={formData.idade_max} onChange={e => setFormData({...formData, idade_max: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-center text-[#167524] outline-none focus:border-[#167524] focus:bg-white" />
                 </div>
               </div>
 
               <div>
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Lotação Máxima Geral</label>
-                <input type="number" placeholder="Ex: 50" value={formData.vagas_totais} onChange={e => setFormData({...formData, vagas_totais: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white" />
+                <input type="number" placeholder="Ex: 50" value={formData.vagas_totais} onChange={e => setFormData({...formData, vagas_totais: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] focus:bg-white" />
               </div>
 
               <div className="md:col-span-2 border-t border-slate-100 pt-8 mt-2">
@@ -485,8 +483,8 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 <input type="text" required placeholder="Ex: Praia da Caparica, Rua X, Setúbal" value={formData.local} onChange={e => {
                   setFormData({...formData, local: e.target.value});
                   setMapIframeUrl(`https://maps.google.com/maps?q=${encodeURIComponent(e.target.value)}&t=&z=13&ie=UTF8&iwloc=&output=embed`);
-                }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors mb-4" />
-                
+                }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] focus:bg-white transition-colors mb-4" />
+
                 <div className="w-full h-48 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative flex items-center justify-center">
                   {!formData.local ? (
                     <span className="text-sm font-bold text-slate-400">O mapa atualizará quando escrever a morada...</span>
@@ -512,7 +510,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         {/* ========================================== */}
         {step === 2 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-10">
-            
+
             <div>
               <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>📅</span> {isEn ? 'Operation Calendar' : '1. Calendário de Portas Abertas'} *</h2>
               <p className="text-xs text-slate-500 mb-6">{isEn ? 'When does the camp run?' : 'Defina os limites globais do campo. O pai só poderá escolher datas dentro deste período.'}</p>
@@ -520,21 +518,21 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Data de Abertura</label>
-                  <input type="date" value={formData.calendario_funcionamento.data_inicio} onChange={e => setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, data_inicio: e.target.value}})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-indigo-500 focus:bg-white" />
+                  <input type="date" value={formData.calendario_funcionamento.data_inicio} onChange={e => setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, data_inicio: e.target.value}})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-[#167524] focus:bg-white" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Data de Encerramento</label>
-                  <input type="date" value={formData.calendario_funcionamento.data_fim} onChange={e => setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, data_fim: e.target.value}})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-indigo-500 focus:bg-white" />
+                  <input type="date" value={formData.calendario_funcionamento.data_fim} onChange={e => setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, data_fim: e.target.value}})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-[#167524] focus:bg-white" />
                 </div>
               </div>
-              
+
               <div className="mb-6">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Dias da Semana Ativos</label>
                 <div className="flex flex-wrap gap-2">
                   {DIAS_SEMANA.map(dia => {
                     const isActive = formData.calendario_funcionamento.dias_semana.includes(dia.id);
                     return (
-                      <button type="button" key={dia.id} onClick={() => toggleDiaSemana(dia.id)} className={`w-12 h-12 rounded-xl text-xs font-black transition-all ${isActive ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-slate-50 text-slate-400 border border-slate-200 hover:border-indigo-300'}`}>
+                      <button type="button" key={dia.id} onClick={() => toggleDiaSemana(dia.id)} className={`w-12 h-12 rounded-xl text-xs font-black transition-all ${isActive ? 'bg-[#167524] text-white shadow-md shadow-[#167524]/30' : 'bg-slate-50 text-slate-400 border border-slate-200 hover:border-[#167524]/50'}`}>
                         {isEn ? dia.en : dia.pt}
                       </button>
                     )
@@ -542,13 +540,13 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 </div>
               </div>
 
-              {/* NOVO: SECÇÃO DE DIAS DE ENCERRAMENTO (EXCEÇÕES) */}
+              {/* DIAS DE ENCERRAMENTO (EXCEÇÕES) */}
               <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
                 <label className="block text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">
                   Dias de Encerramento (Exceções / Esgotado)
                 </label>
                 <p className="text-xs text-amber-700 mb-4">Adicione datas específicas (ex: feriados) em que o campo estará fechado. Estes dias não aparecerão disponíveis para reserva nas pesquisas.</p>
-                
+
                 <div className="flex gap-2 mb-4">
                   <input 
                     type="date" 
@@ -584,22 +582,22 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                   <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>🎟️</span> {isEn ? 'Packages / Passes' : '2. Pacotes e Preços'} *</h2>
                   <p className="text-xs text-slate-500 max-w-sm">{isEn ? 'Create the packages parents will buy.' : 'Crie os Passes que o pai pode comprar no checkout.'}</p>
                 </div>
-                <button type="button" onClick={() => setIsPacoteModalOpen(true)} className="bg-slate-900 text-white font-bold text-xs px-5 py-3 rounded-xl shadow-sm hover:bg-indigo-600 transition-colors whitespace-nowrap">
+                <button type="button" onClick={() => setIsPacoteModalOpen(true)} className="bg-[#167524] text-white font-bold text-xs px-5 py-3 rounded-xl shadow-sm hover:bg-[#115a1b] transition-colors whitespace-nowrap">
                   + {isEn ? 'Add Package' : 'Novo Pacote'}
                 </button>
               </div>
 
               {formData.pacotes.length === 0 ? (
-                <div className="text-center p-8 bg-blue-50/50 border border-blue-100 rounded-2xl">
+                <div className="text-center p-8 bg-[#167524]/5 border border-[#167524]/20 rounded-2xl">
                   <span className="text-3xl block mb-2 opacity-50">🏷️</span>
-                  <p className="text-xs font-bold text-blue-800 m-0">A sua montra está vazia. Adicione o seu primeiro passe de venda.</p>
+                  <p className="text-xs font-bold text-[#167524] m-0">A sua montra está vazia. Adicione o seu primeiro passe de venda.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {formData.pacotes.map((pacote, idx) => (
-                    <div key={idx} className="bg-white border-2 border-slate-100 rounded-2xl p-5 relative group hover:border-indigo-200 transition-colors shadow-sm">
+                    <div key={idx} className="bg-white border-2 border-slate-100 rounded-2xl p-5 relative group hover:border-[#167524]/30 transition-colors shadow-sm">
                       <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button type="button" onClick={() => { setNovoPacote(pacote); setIsPacoteModalOpen(true); }} className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs hover:bg-blue-100">✏️</button>
+                        <button type="button" onClick={() => { setNovoPacote(pacote); setIsPacoteModalOpen(true); }} className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs hover:bg-[#167524] hover:text-white transition-colors">✏️</button>
                         <button type="button" onClick={() => eliminarPacote(pacote.id)} className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center font-bold text-xs hover:bg-red-100">🗑️</button>
                       </div>
                       <div className="inline-block px-2 py-1 bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded mb-2">
@@ -610,7 +608,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                         {pacote.variantes.map((v: any, i: number) => (
                           <div key={i} className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
                             <span className="text-[11px] font-bold text-slate-600">{v.nome}</span>
-                            <span className="text-sm font-black text-indigo-700">{v.preco}€</span>
+                            <span className="text-sm font-black text-[#167524]">{v.preco}€</span>
                           </div>
                         ))}
                       </div>
@@ -624,16 +622,16 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
             <div className="pt-8 border-t border-slate-100">
               <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>💰</span> {isEn ? 'Optional Extras' : '3. Configurar Extras Opcionais'}</h2>
               <p className="text-xs text-slate-500 mb-6">A alimentação e o alojamento já são mapeados em variantes. Aqui configura apenas os suplementos isolados.</p>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                
+
                 {/* EXTRA CUSTOMIZADO: SEGURO */}
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor do Seguro (€)</label>
-                  <input type="number" min="0" value={formData.extra_seguro} onChange={e => setFormData({...formData, extra_seguro: Number(e.target.value)})} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 mb-4" />
-                  
+                  <input type="number" min="0" value={formData.extra_seguro} onChange={e => setFormData({...formData, extra_seguro: Number(e.target.value)})} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] mb-4" />
+
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Modelo de Cobrança</label>
-                  <div onClick={() => setIsSegDropdownOpen(!isSegDropdownOpen)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                  <div onClick={() => setIsSegDropdownOpen(!isSegDropdownOpen)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-[#167524]/50 transition-colors">
                     <span>{formData.tipo_extra_seguro === 'fixo' ? 'Taxa Fixa (Cobra 1x no total)' : 'Por Dia (Multiplica pelos dias)'}</span>
                     <span className="text-[10px] text-slate-400">▼</span>
                   </div>
@@ -641,10 +639,10 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIsSegDropdownOpen(false)}></div>
                       <div className="absolute top-[calc(100%-12px)] left-5 right-5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                        <div onClick={() => { setFormData({...formData, tipo_extra_seguro: 'fixo'}); setIsSegDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                        <div onClick={() => { setFormData({...formData, tipo_extra_seguro: 'fixo'}); setIsSegDropdownOpen(false); }} className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
                           Taxa Fixa (Cobra 1x no total)
                         </div>
-                        <div onClick={() => { setFormData({...formData, tipo_extra_seguro: 'diario'}); setIsSegDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                        <div onClick={() => { setFormData({...formData, tipo_extra_seguro: 'diario'}); setIsSegDropdownOpen(false); }} className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
                           Por Dia (Multiplica pelos dias)
                         </div>
                       </div>
@@ -655,10 +653,10 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 {/* EXTRA CUSTOMIZADO: TRANSPORTE */}
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor do Transporte (€)</label>
-                  <input type="number" min="0" value={formData.extra_transporte} onChange={e => setFormData({...formData, extra_transporte: Number(e.target.value)})} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 mb-4" />
-                  
+                  <input type="number" min="0" value={formData.extra_transporte} onChange={e => setFormData({...formData, extra_transporte: Number(e.target.value)})} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] mb-4" />
+
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Modelo de Cobrança</label>
-                  <div onClick={() => setIsTraDropdownOpen(!isTraDropdownOpen)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors">
+                  <div onClick={() => setIsTraDropdownOpen(!isTraDropdownOpen)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-[#167524]/50 transition-colors">
                     <span>{formData.tipo_extra_transporte === 'diario' ? 'Por Dia (Multiplica pelos dias)' : 'Taxa Fixa (Cobra 1x no total)'}</span>
                     <span className="text-[10px] text-slate-400">▼</span>
                   </div>
@@ -666,10 +664,10 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIsTraDropdownOpen(false)}></div>
                       <div className="absolute top-[calc(100%-12px)] left-5 right-5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                        <div onClick={() => { setFormData({...formData, tipo_extra_transporte: 'diario'}); setIsTraDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                        <div onClick={() => { setFormData({...formData, tipo_extra_transporte: 'diario'}); setIsTraDropdownOpen(false); }} className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
                           Por Dia (Multiplica pelos dias)
                         </div>
-                        <div onClick={() => { setFormData({...formData, tipo_extra_transporte: 'fixo'}); setIsTraDropdownOpen(false); }} className="p-3.5 hover:bg-indigo-50 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
+                        <div onClick={() => { setFormData({...formData, tipo_extra_transporte: 'fixo'}); setIsTraDropdownOpen(false); }} className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer transition-colors">
                           Taxa Fixa (Cobra 1x no total)
                         </div>
                       </div>
@@ -687,7 +685,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                   <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>✨</span> {isEn ? 'Discounts' : '4. Regras de Desconto'}</h2>
                   <p className="text-xs text-slate-500">{isEn ? 'Create automated cart discounts.' : 'Crie as regras de negócio para quem compra em volume ou traz irmãos.'}</p>
                 </div>
-                <button type="button" onClick={() => setIsDescontoModalOpen(true)} className="bg-indigo-50 text-indigo-700 font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-indigo-100 transition-colors">
+                <button type="button" onClick={() => setIsDescontoModalOpen(true)} className="bg-[#167524]/10 text-[#167524] font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-[#167524]/20 transition-colors">
                   + Novo Desconto
                 </button>
               </div>
@@ -698,13 +696,13 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {formData.descontos.map((desc) => (
                     <div key={desc.id} className="flex items-center justify-between bg-white border-2 border-slate-100 p-4 rounded-2xl group">
-                       <div>
-                         <p className="text-sm font-black text-slate-800 m-0">{desc.nome}</p>
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                           {desc.percentagem}% • {desc.acumulavel ? 'Acumulável ✅' : 'Não Acumulável 🚫'}
-                         </p>
-                       </div>
-                       <button type="button" onClick={() => setFormData({...formData, descontos: formData.descontos.filter(d => d.id !== desc.id)})} className="w-8 h-8 rounded-full bg-red-50 text-red-500 font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100">×</button>
+                      <div>
+                        <p className="text-sm font-black text-slate-800 m-0">{desc.nome}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                          {desc.percentagem}% • {desc.acumulavel ? 'Acumulável ✅' : 'Não Acumulável 🚫'}
+                        </p>
+                      </div>
+                      <button type="button" onClick={() => setFormData({...formData, descontos: formData.descontos.filter(d => d.id !== desc.id)})} className="w-8 h-8 rounded-full bg-red-50 text-red-500 font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100">×</button>
                     </div>
                   ))}
                 </div>
@@ -719,13 +717,13 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         {/* ========================================== */}
         {step === 3 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-            
+
             <div className="mb-10 space-y-6">
               <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><span>📸</span> {isEn ? 'Media & Forms' : '1. Apresentação Editorial e Logística'}</h2>
-              
+
               <div>
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição Longa do Programa *</label>
-                <textarea rows={5} placeholder="Descreva as atividades, os horários, e o que as crianças vão aprender..." value={formData.descricao} onChange={e => setFormData({...formData, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:bg-white resize-none leading-relaxed transition-colors" />
+                <textarea rows={5} placeholder="Descreva as atividades, os horários, e o que as crianças vão aprender..." value={formData.descricao} onChange={e => setFormData({...formData, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-[#167524] focus:bg-white resize-none leading-relaxed transition-colors" />
               </div>
 
               {/* INPUTS DE TEXTOS DESCRITIVOS LOGÍSTICOS */}
@@ -735,19 +733,19 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 </div>
                 <div>
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Rácio de Monitores (Texto)</label>
-                  <input type="text" placeholder='Ex: "1 monitor para 6 crianças"' value={formData.racio_monitores} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 transition-colors" />
+                  <input type="text" placeholder='Ex: "1 monitor para 6 crianças"' value={formData.racio_monitores} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alimentação (Texto)</label>
-                  <input type="text" placeholder='Ex: "Almoço e lanches incluídos"' value={formData.alimentacao} onChange={e => setFormData({...formData, alimentacao: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 transition-colors" />
+                  <input type="text" placeholder='Ex: "Almoço e lanches incluídos"' value={formData.alimentacao} onChange={e => setFormData({...formData, alimentacao: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alojamento / Dormida (Texto)</label>
-                  <input type="text" placeholder='Ex: "Regime Diurno (sem dormida)"' value={formData.alojamento} onChange={e => setFormData({...formData, alojamento: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 transition-colors" />
+                  <input type="text" placeholder='Ex: "Regime Diurno (sem dormida)"' value={formData.alojamento} onChange={e => setFormData({...formData, alojamento: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Cobertura de Seguros (Texto)</label>
-                  <input type="text" placeholder='Ex: "Seguro Acidentes Pessoais incluído"' value={formData.seguro} onChange={e => setFormData({...formData, seguro: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 transition-colors" />
+                  <input type="text" placeholder='Ex: "Seguro Acidentes Pessoais incluído"' value={formData.seguro} onChange={e => setFormData({...formData, seguro: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
               </div>
 
@@ -757,7 +755,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                     <label className="block text-[11px] font-black text-slate-800 uppercase tracking-widest m-0">Galeria de Fotografias *</label>
                     <p className="text-[10px] text-slate-500 m-0 mt-1">Adicione fotos do campo. A imagem com ⭐ será a Capa.</p>
                   </div>
-                  <label className="bg-indigo-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer hover:bg-indigo-700 transition-colors shadow-sm">
+                  <label className="bg-[#167524] text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer hover:bg-[#115a1b] transition-colors shadow-sm">
                     + Escolher Ficheiros
                     <input type="file" multiple accept="image/*" onChange={handleFileUpload} className="hidden" />
                   </label>
@@ -771,9 +769,9 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {galeria.map((img) => (
-                      <div key={img.id} className={`relative rounded-xl overflow-hidden aspect-square border-4 transition-all group ${img.isCapa ? 'border-indigo-500 shadow-lg' : 'border-transparent'}`}>
+                      <div key={img.id} className={`relative rounded-xl overflow-hidden aspect-square border-4 transition-all group ${img.isCapa ? 'border-[#167524] shadow-lg' : 'border-transparent'}`}>
                         <img src={img.previewUrl} className="w-full h-full object-cover" />
-                        
+
                         <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
                           {!img.isCapa && (
                             <button type="button" onClick={() => setComoCapa(img.id)} className="bg-white text-slate-900 text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm">
@@ -786,7 +784,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                         </div>
 
                         {img.isCapa && (
-                          <div className="absolute top-2 left-2 bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">
+                          <div className="absolute top-2 left-2 bg-[#167524] text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">
                             Capa ⭐
                           </div>
                         )}
@@ -804,20 +802,20 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                   <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>📋</span> {isEn ? 'Custom Forms' : '2. Perguntas aos Pais'}</h2>
                   <p className="text-[10px] text-slate-500 m-0 mt-1 max-w-sm">NIF, Alergias e Doenças já são recolhidos. Adicione perguntas específicas se necessário.</p>
                 </div>
-                <button type="button" onClick={addPergunta} className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-4 py-2.5 rounded-xl hover:bg-emerald-100 transition-colors">
+                <button type="button" onClick={addPergunta} className="text-[10px] font-black uppercase tracking-widest text-[#167524] bg-[#167524]/10 px-4 py-2.5 rounded-xl hover:bg-[#167524]/20 transition-colors">
                   + Pergunta
                 </button>
               </div>
-              
+
               <div className="space-y-3">
                 {formData.perguntas.map((pergunta, i) => (
                   <div key={i} className="flex gap-2">
-                    <input type="text" placeholder="Ex: Qual o tamanho da T-Shirt do Participante?" value={pergunta} onChange={e => updatePergunta(i, e.target.value)} className="flex-1 p-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 shadow-sm" />
+                    <input type="text" placeholder="Ex: Qual o tamanho da T-Shirt do Participante?" value={pergunta} onChange={e => updatePergunta(i, e.target.value)} className="flex-1 p-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#167524] shadow-sm" />
                     <button type="button" onClick={() => removePergunta(i)} className="w-12 h-12 flex items-center justify-center bg-red-50 text-red-500 rounded-xl hover:bg-red-100 font-bold transition-colors">×</button>
                   </div>
                 ))}
                 {formData.perguntas.length === 0 && (
-                   <div className="p-6 bg-slate-50 rounded-xl text-xs font-bold text-slate-400 text-center border border-dashed border-slate-200">Não exige informações adicionais aos pais no checkout.</div>
+                  <div className="p-6 bg-slate-50 rounded-xl text-xs font-bold text-slate-400 text-center border border-dashed border-slate-200">Não exige informações adicionais aos pais no checkout.</div>
                 )}
               </div>
             </div>
@@ -834,9 +832,9 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         ) : <div></div>}
 
         {step < 3 ? (
-          <button onClick={nextStep} className="bg-slate-900 text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-indigo-600 hover:shadow-indigo-500/30 transition-all">Próximo Passo →</button>
+          <button onClick={nextStep} className="bg-[#167524] text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all uppercase tracking-widest text-sm">Próximo Passo →</button>
         ) : (
-          <button onClick={handleGravarCampo} disabled={saving} className="bg-emerald-600 text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all disabled:opacity-50">
+          <button onClick={handleGravarCampo} disabled={saving} className="bg-[#167524] text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all disabled:opacity-50 uppercase tracking-widest">
             {saving ? 'A Atualizar...' : '✓ Atualizar Campo'}
           </button>
         )}
@@ -859,36 +857,36 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">A. Formato Logístico</label>
                 <div className="flex bg-slate-100 p-1.5 rounded-xl">
-                  <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'semana'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'semana' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semanas Completas</button>
-                  <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'dia'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'dia' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Dias Individuais Avulso</button>
+                  <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'semana'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'semana' ? 'bg-white text-[#167524] shadow-sm border border-[#167524]/20' : 'text-slate-500 hover:text-slate-700'}`}>Semanas Completas</button>
+                  <button type="button" onClick={() => setNovoPacote({...novoPacote, tipo: 'dia'})} className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${novoPacote.tipo === 'dia' ? 'bg-white text-[#167524] shadow-sm border border-[#167524]/20' : 'text-slate-500 hover:text-slate-700'}`}>Dias Individuais Avulso</button>
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">B. Título (Nome do Passe)</label>
-                  <input type="text" placeholder='Ex: "Pack de 2 Semanas"' value={novoPacote.titulo} onChange={e => setNovoPacote({...novoPacote, titulo: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 bg-slate-50" />
+                  <input type="text" placeholder='Ex: "Pack de 2 Semanas"' value={novoPacote.titulo} onChange={e => setNovoPacote({...novoPacote, titulo: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-[#167524] bg-slate-50" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Qtd de {novoPacote.tipo === 'semana' ? 'Semanas' : 'Dias'}</label>
-                  <input type="number" min="1" value={novoPacote.quantidade} onChange={e => setNovoPacote({...novoPacote, quantidade: Number(e.target.value)})} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-black text-indigo-700 outline-none focus:border-indigo-500 bg-slate-50 text-center" />
+                  <input type="number" min="1" value={novoPacote.quantidade} onChange={e => setNovoPacote({...novoPacote, quantidade: Number(e.target.value)})} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-black text-[#167524] outline-none focus:border-[#167524] bg-slate-50 text-center" />
                 </div>
               </div>
 
               <div className="border-t border-slate-100 pt-6">
                 <div className="flex justify-between items-center mb-3">
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest m-0">C. Variantes e Preços</label>
-                  <button type="button" onClick={adicionarVariante} className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors">+ Variante</button>
+                  <button type="button" onClick={adicionarVariante} className="text-[10px] font-black uppercase tracking-widest text-[#167524] bg-[#167524]/10 px-3 py-1.5 rounded-lg hover:bg-[#167524]/20 transition-colors">+ Variante</button>
                 </div>
                 <p className="text-[11px] text-slate-500 mb-4 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                   Tem preços diferentes para este passe (ex: <i>Com Almoço vs Sem Almoço</i>)? Crie variantes. Se tiver apenas 1 preço fixo, deixe apenas o <b>Bilhete Base</b>.
                 </p>
                 <div className="flex flex-col gap-2.5">
                   {novoPacote.variantes.map((v, i) => (
-                    <div key={i} className="flex gap-2 items-center bg-white border border-slate-200 p-2 rounded-xl group hover:border-indigo-300 transition-colors">
+                    <div key={i} className="flex gap-2 items-center bg-white border border-slate-200 p-2 rounded-xl group hover:border-[#167524]/50 transition-colors">
                       <input type="text" placeholder="Nome (Ex: Pack c/ Almoço)" value={v.nome} onChange={e => atualizarVariante(i, 'nome', e.target.value)} className="flex-1 p-2 text-sm font-bold outline-none bg-transparent placeholder-slate-300" />
-                      <div className="w-32 flex items-center bg-slate-50 rounded-lg border border-slate-100 px-2 focus-within:border-indigo-500 focus-within:bg-white transition-colors">
-                        <input type="number" min="0" placeholder="0" value={v.preco} onChange={e => atualizarVariante(i, 'preco', Number(e.target.value))} className="w-full py-2.5 text-sm font-black text-indigo-700 outline-none bg-transparent text-right" />
+                      <div className="w-32 flex items-center bg-slate-50 rounded-lg border border-slate-100 px-2 focus-within:border-[#167524] focus-within:bg-white transition-colors">
+                        <input type="number" min="0" placeholder="0" value={v.preco} onChange={e => atualizarVariante(i, 'preco', Number(e.target.value))} className="w-full py-2.5 text-sm font-black text-[#167524] outline-none bg-transparent text-right" />
                         <span className="text-xs font-black text-slate-400 ml-1">€</span>
                       </div>
                       {novoPacote.variantes.length > 1 && (
@@ -901,7 +899,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
             </div>
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
               <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
-              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-slate-900 rounded-xl hover:bg-indigo-600 shadow-md text-sm transition-colors">✓ Guardar Pacote</button>
+              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">✓ Guardar Pacote</button>
             </div>
           </div>
         </div>
@@ -918,30 +916,30 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
             <div className="p-6 flex flex-col gap-5">
               <div>
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Nome do Desconto (Visível no Checkout)</label>
-                <input type="text" placeholder='Ex: "Desconto Sócio Clube"' value={novoDesconto.nome} onChange={e => setNovoDesconto({...novoDesconto, nome: e.target.value})} className="w-full p-3.5 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 bg-slate-50" />
+                <input type="text" placeholder='Ex: "Desconto Sócio Clube"' value={novoDesconto.nome} onChange={e => setNovoDesconto({...novoDesconto, nome: e.target.value})} className="w-full p-3.5 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-[#167524] bg-slate-50" />
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex-1">
                   <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Percentagem a Retirar</label>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:border-indigo-500 transition-colors">
+                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:border-[#167524] transition-colors">
                     <input type="number" min="1" max="100" value={novoDesconto.percentagem} onChange={e => setNovoDesconto({...novoDesconto, percentagem: Number(e.target.value)})} className="w-full p-3.5 text-base font-black outline-none bg-transparent" />
                     <span className="bg-slate-100 text-slate-400 px-4 py-3.5 text-sm font-black border-l border-slate-200">%</span>
                   </div>
                 </div>
               </div>
-              <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex items-center justify-between cursor-pointer" onClick={() => setNovoDesconto({...novoDesconto, acumulavel: !novoDesconto.acumulavel})}>
+              <div className="bg-[#167524]/5 border border-[#167524]/20 p-4 rounded-xl flex items-center justify-between cursor-pointer" onClick={() => setNovoDesconto({...novoDesconto, acumulavel: !novoDesconto.acumulavel})}>
                 <div>
-                  <p className="text-xs font-black text-indigo-900 mb-0.5">É Acumulável?</p>
-                  <p className="text-[10px] text-indigo-700 font-bold m-0 leading-tight max-w-[200px]">Se ativo, este desconto soma-se a outros descontos no carrinho.</p>
+                  <p className="text-xs font-black text-[#167524] mb-0.5">É Acumulável?</p>
+                  <p className="text-[10px] text-[#167524]/80 font-bold m-0 leading-tight max-w-[200px]">Se ativo, este desconto soma-se a outros descontos no carrinho.</p>
                 </div>
-                <div className={`w-10 h-5 rounded-full relative transition-colors ${novoDesconto.acumulavel ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                <div className={`w-10 h-5 rounded-full relative transition-colors ${novoDesconto.acumulavel ? 'bg-[#167524]' : 'bg-slate-300'}`}>
                   <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${novoDesconto.acumulavel ? 'translate-x-5' : ''}`}></div>
                 </div>
               </div>
             </div>
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
               <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
-              <button type="button" onClick={guardarDesconto} className="px-6 py-2.5 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md text-sm transition-colors">Gravar Regra</button>
+              <button type="button" onClick={guardarDesconto} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">Gravar Regra</button>
             </div>
           </div>
         </div>
