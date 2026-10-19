@@ -44,77 +44,88 @@ export default function PerfilPaiPage({ params }: { params: Promise<{ lang: stri
     setSaving(false);
   };
 
-  if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>{isEn ? 'Loading profile...' : 'A carregar o seu perfil...'}</div>;
+  if (loading) return <div className="p-20 text-center font-bold text-slate-400 uppercase tracking-widest text-xs animate-pulse">{isEn ? 'Loading profile...' : 'A carregar o seu perfil...'}</div>;
 
   return (
-    <main style={{ maxWidth: '800px', margin: '0 auto', fontFamily: 'sans-serif', padding: '3rem 1.5rem' }}>
-      <div style={{ marginBottom: '2.5rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>
-          {isEn ? 'My Profile & Security' : 'O Meu Perfil e Segurança'}
+    <main className="max-w-[850px] mx-auto font-sans pb-24">
+      
+      <div className="mb-10">
+        <h1 className="text-3xl md:text-4xl font-black text-slate-900 m-0 tracking-tight">
+          {isEn ? 'Profile & Security' : 'O Meu Perfil e Segurança'}
         </h1>
-        <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: '15px' }}>
-          {isEn ? 'Manage your contact details and authorized pickup persons.' : 'Gira os seus contactos e defina quem está autorizado a recolher as suas crianças.'}
+        <p className="text-slate-500 mt-2 text-sm md:text-base font-medium">
+          {isEn ? 'Manage your contact details and authorized pickup persons.' : 'Gira os seus contactos e defina quem está autorizado a recolher os seus educandos no final do dia.'}
         </p>
       </div>
 
-      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <form onSubmit={handleSave} className="flex flex-col gap-8">
         
-        <div style={cardStyle}>
-          <h2 style={cardTitleStyle}>👤 {isEn ? 'Personal Details' : 'Os Seus Dados (Encarregado de Educação)'}</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>{isEn ? 'Full Name' : 'Nome Completo'}</label>
-              <input type="text" value={perfil?.nome_completo || ''} onChange={e => setPerfil({...perfil, nome_completo: e.target.value})} required style={inputStyle} />
+        {/* DADOS PESSOAIS */}
+        <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm">
+          <h2 className="text-base font-black text-slate-900 mb-6 pb-4 border-b border-slate-100 flex items-center gap-3 uppercase tracking-widest">
+            <span className="text-2xl">👤</span> {isEn ? 'Personal Details' : 'Os Seus Dados'}
+          </h2>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="sm:col-span-2">
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">{isEn ? 'Full Name' : 'Nome Completo'}</label>
+              <input type="text" value={perfil?.nome_completo || ''} onChange={e => setPerfil({...perfil, nome_completo: e.target.value})} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors" />
             </div>
-            <div>
-              <label style={labelStyle}>{isEn ? 'Email (Login)' : 'Email (Login)'}</label>
-              <input type="email" value={perfil?.email || ''} disabled style={{...inputStyle, backgroundColor: '#f1f5f9', cursor: 'not-allowed', color: '#94a3b8'}} />
+            
+            <div className="sm:col-span-2">
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">{isEn ? 'Email (Login)' : 'E-mail (Login e Notificações)'}</label>
+              <input type="email" value={perfil?.email || ''} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-400 cursor-not-allowed outline-none" />
             </div>
+            
             <div>
-              <label style={labelStyle}>{isEn ? 'Phone Number' : 'Telefone / Telemóvel'}</label>
-              <input type="tel" value={perfil?.telefone || ''} onChange={e => setPerfil({...perfil, telefone: e.target.value})} required style={inputStyle} />
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">{isEn ? 'Phone Number' : 'Telefone / Telemóvel'}</label>
+              <input type="tel" value={perfil?.telefone || ''} onChange={e => setPerfil({...perfil, telefone: e.target.value})} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors" />
             </div>
+            
             <div>
-              <label style={labelStyle}>{isEn ? 'Tax ID (Billing)' : 'NIF (Faturação)'}</label>
-              <input type="text" value={perfil?.nif || ''} onChange={e => setPerfil({...perfil, nif: e.target.value})} style={inputStyle} placeholder={isEn ? "For receipt issuance" : "Para emissão de recibos"} />
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">{isEn ? 'Tax ID (Billing)' : 'NIF (Faturação IRS)'}</label>
+              <input type="text" value={perfil?.nif || ''} onChange={e => setPerfil({...perfil, nif: e.target.value})} placeholder={isEn ? "For receipt issuance" : "Para emissão de faturas"} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors" />
             </div>
           </div>
         </div>
 
-        <div style={{ ...cardStyle, border: '1px solid #fecdd3' }}>
-          <h2 style={{ ...cardTitleStyle, color: '#e11d48', borderBottomColor: '#ffe4e6' }}>🛡️ {isEn ? 'Security & Emergency' : 'Segurança e Recolha'}</h2>
+        {/* SEGURANÇA E RECOLHA */}
+        <div className="bg-red-50 p-6 md:p-8 rounded-[2rem] border border-red-100 shadow-sm">
+          <h2 className="text-base font-black text-red-800 mb-6 pb-4 border-b border-red-200/50 flex items-center gap-3 uppercase tracking-widest">
+            <span className="text-2xl bg-white rounded-full w-10 h-10 flex items-center justify-center shadow-sm">🛡️</span> 
+            {isEn ? 'Security & Emergency' : 'Segurança e Recolha'}
+          </h2>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="flex flex-col gap-6">
             <div>
-              <label style={{ ...labelStyle, color: '#e11d48' }}>{isEn ? 'Emergency Contact (Name & Phone)' : 'Contacto de Emergência Alternativo (Nome e Telemóvel)'} *</label>
-              <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 0.5rem 0' }}>{isEn ? 'Who should we call if we cannot reach you?' : 'A quem deve o campo ligar caso não consiga contactar o encarregado principal?'}</p>
-              <input type="text" value={perfil?.contacto_emergencia || ''} onChange={e => setPerfil({...perfil, contacto_emergencia: e.target.value})} required style={inputStyle} placeholder={isEn ? "E.g.: Grandma Mary - 912 345 678" : "Ex: Avó Maria - 912 345 678"} />
+              <label className="block text-[11px] font-black text-red-800 uppercase tracking-widest mb-1.5 ml-1">{isEn ? 'Emergency Contact (Name & Phone)' : 'Contacto de Emergência Alternativo'} *</label>
+              <p className="text-xs font-bold text-red-600 mb-3 ml-1">{isEn ? 'Who should we call if we cannot reach you?' : 'A quem deve o campo ligar num cenário de SOS caso não consigam contactar o encarregado de educação principal?'}</p>
+              <input type="text" value={perfil?.contacto_emergencia || ''} onChange={e => setPerfil({...perfil, contacto_emergencia: e.target.value})} required placeholder={isEn ? "E.g.: Grandma Mary - 912 345 678" : "Ex: Avó Maria - 912 345 678"} className="w-full p-4 bg-white border border-red-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-red-500 transition-colors shadow-sm" />
             </div>
 
-            <div>
-              <label style={labelStyle}>{isEn ? 'Authorized Pickup Persons' : 'Pessoas Autorizadas a Levantar as Crianças'} *</label>
-              <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 0.5rem 0' }}>{isEn ? 'List names and ID numbers. For security reasons, camps may require identification on site.' : 'Liste os Nomes e números de Cartão de Cidadão das pessoas autorizadas. Por motivos de segurança, os campos podem exigir identificação no local.'}</p>
+            <div className="border-t border-red-200/50 pt-6">
+              <label className="block text-[11px] font-black text-red-800 uppercase tracking-widest mb-1.5 ml-1">{isEn ? 'Authorized Pickup Persons' : 'Pessoas Autorizadas na Recolha'} *</label>
+              <p className="text-xs font-bold text-red-600 mb-3 ml-1 leading-relaxed">{isEn ? 'List names and ID numbers. For security reasons, camps may require identification on site.' : 'Liste os Nomes e números de Cartão de Cidadão das pessoas autorizadas. Por motivos de segurança e rapto parental, os campos podem exigir identificação no local e recusar a entrega da criança a pessoas não listadas nesta caixa.'}</p>
               <textarea 
-                rows={3} 
+                rows={4} 
                 value={perfil?.pessoas_autorizadas_recolha || ''} 
                 onChange={e => setPerfil({...perfil, pessoas_autorizadas_recolha: e.target.value})} 
                 required 
-                style={{ ...inputStyle, resize: 'vertical' }} 
-                placeholder={isEn ? "E.g.: John Doe (Father) - ID: 12345678, Grandma Mary - ID: 87654321" : "Ex: João Silva (Pai) - CC: 12345678, Avó Margarida - CC: 87654321"} 
+                placeholder={isEn ? "E.g.: John Doe (Father) - ID: 12345678" : "Ex: João Silva (Pai) - CC: 12345678, Avó Margarida - CC: 87654321"} 
+                className="w-full p-4 bg-white border border-red-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-red-500 transition-colors shadow-sm resize-none"
               />
             </div>
           </div>
         </div>
 
-        <button type="submit" disabled={saving} style={{ padding: '1.25rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.75rem', border: 'none', cursor: 'pointer', fontSize: '16px', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.2)' }}>
-          {saving ? (isEn ? 'Saving...' : 'A guardar...') : (isEn ? 'Save Profile' : 'Guardar Alterações')}
+        <button 
+          type="submit" 
+          disabled={saving} 
+          className="mt-4 p-5 bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black uppercase tracking-widest rounded-2xl border-none cursor-pointer text-sm shadow-xl shadow-[#0E3A68]/30 transition-all hover:-translate-y-1 disabled:opacity-50"
+        >
+          {saving ? (isEn ? 'Saving data...' : 'A guardar...') : (isEn ? 'Save Profile' : 'Gravar Alterações e Segurança')}
         </button>
       </form>
     </main>
   );
 }
-
-const cardStyle = { backgroundColor: 'white', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' };
-const cardTitleStyle = { fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' };
-const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '800', color: '#334155', marginBottom: '0.5rem', textTransform: 'uppercase' as const };
-const inputStyle = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };

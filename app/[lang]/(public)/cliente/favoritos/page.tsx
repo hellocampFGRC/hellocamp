@@ -44,31 +44,32 @@ export default function FavoritosCliente({ params }: { params: Promise<{ lang: s
     carregarFavoritos();
   }, []);
 
-  if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>{isEn ? 'Loading your wishlist...' : 'A carregar os seus favoritos...'}</div>;
+  if (loading) return <div className="p-20 text-center font-bold text-slate-400 uppercase tracking-widest text-xs animate-pulse">{isEn ? 'Loading your wishlist...' : 'A carregar os seus favoritos...'}</div>;
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+    <div className="max-w-[1000px] mx-auto pb-20 font-sans">
       
-      <div style={{ marginBottom: '2.5rem' }}>
-        <h1 style={{ fontSize: '2.25rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>
+      <div className="mb-10">
+        <h1 className="text-3xl md:text-4xl font-black text-slate-900 m-0 tracking-tight">
           {isEn ? 'My Wishlist' : 'Os Meus Favoritos'}
         </h1>
-        <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: '15px' }}>
-          {isEn ? 'Holiday programs saved for later review.' : 'Programas de férias guardados para análise ou inscrição posterior.'}
+        <p className="text-slate-500 mt-2 text-sm md:text-base font-medium">
+          {isEn ? 'Holiday programs saved for later review.' : 'Programas de férias guardados para analisar em família.'}
         </p>
       </div>
 
       {camposFavoritos.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '5rem', backgroundColor: 'white', border: '2px dashed #cbd5e1', borderRadius: '1.5rem' }}>
-          <p style={{ color: '#64748b', fontSize: '16px', marginBottom: '1.5rem' }}>
+        <div className="text-center p-16 md:p-24 bg-white border-2 border-dashed border-slate-300 rounded-[2rem] shadow-sm">
+          <span className="text-5xl block mb-6 opacity-50">❤️</span>
+          <p className="text-slate-500 text-base md:text-lg mb-8 font-medium">
             {isEn ? 'Your wishlist is currently empty.' : 'Ainda não adicionou nenhuma colónia aos seus favoritos.'}
           </p>
-          <Link href={`/${lang}`} style={{ display: 'inline-block', backgroundColor: '#0f172a', color: 'white', padding: '0.875rem 1.75rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px' }}>
+          <Link href={`/${lang}/pesquisa`} className="inline-block bg-[#0E3A68] text-white px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs shadow-md hover:bg-[#0b2b4d] hover:-translate-y-0.5 transition-all no-underline">
             {isEn ? 'Explore Camps' : 'Explorar Programas'}
           </Link>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {camposFavoritos.map((campo) => {
             const nomeVisivel = isEn && campo.nome_en ? campo.nome_en : campo.nome;
             const localVisivel = isEn && campo.local_en ? campo.local_en : campo.local;
@@ -76,25 +77,25 @@ export default function FavoritosCliente({ params }: { params: Promise<{ lang: s
             return (
               <div 
                 key={campo.id} 
-                style={{ backgroundColor: 'white', borderRadius: '1.25rem', border: '1px solid #e2e8f0', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}
+                className="bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden flex flex-col relative shadow-sm hover:shadow-lg hover:border-[#0E3A68]/30 transition-all duration-300 group"
               >
-                <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 10 }}>
+                <div className="absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-md rounded-full shadow-sm">
                   <BotaoFavorito campoId={campo.id} />
                 </div>
 
-                <Link href={`/${lang}/campo/${campo.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                  <div style={{ height: '160px', width: '100%', overflow: 'hidden' }}>
-                    <img src={campo.imagem} alt={nomeVisivel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <Link href={`/${lang}/campo/${campo.id}`} className="no-underline text-inherit flex flex-col flex-1">
+                  <div className="h-44 w-full overflow-hidden bg-slate-100">
+                    <img src={campo.imagem || 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?q=80&w=600'} alt={nomeVisivel} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                   </div>
 
-                  <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase' }}>{campo.categoria}</span>
-                    <h3 style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '1.15rem', fontWeight: '800', color: '#0f172a' }}>{nomeVisivel}</h3>
-                    <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>📍 {localVisivel}</p>
+                  <div className="p-6 flex flex-col flex-1">
+                    <span className="text-[10px] font-black text-[#e2a41d] uppercase tracking-widest bg-[#e2a41d]/10 px-3 py-1 rounded-md self-start">{campo.categoria || 'Geral'}</span>
+                    <h3 className="mt-3 mb-2 text-lg font-black text-slate-900 leading-tight group-hover:text-[#0E3A68] transition-colors line-clamp-2">{nomeVisivel}</h3>
+                    <p className="text-xs font-bold text-slate-500 m-0">📍 {localVisivel}</p>
                     
-                    <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '12px', color: '#94a3b8' }}>{campo.idade}</span>
-                      <span style={{ fontSize: '1.15rem', fontWeight: '900', color: '#059669' }}>{campo.preco}€</span>
+                    <div className="mt-auto pt-5 border-t border-slate-100 flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{campo.idade}</span>
+                      <span className="text-xl font-black text-[#0E3A68]">{campo.preco}€</span>
                     </div>
                   </div>
                 </Link>
