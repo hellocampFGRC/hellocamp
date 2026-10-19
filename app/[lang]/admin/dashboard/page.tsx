@@ -183,7 +183,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
   if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>{isEn ? 'Loading marketing data...' : 'A carregar motor de otimização...'}</div>;
 
   return (
-    <main style={{ maxWidth: '1200px', margin: '0 auto', fontFamily: 'sans-serif', padding: '2rem 1.5rem', paddingBottom: '4rem' }}>
+    <main style={{ maxWidth: '1200px', margin: '0 auto', fontFamily: 'sans-serif', padding: '1rem', paddingBottom: '4rem' }}>
       
       <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -195,31 +195,31 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
           </p>
         </div>
         
-        {/* BOTÕES DE ACÃO (NOVO: LINK PARA O CONTRATO) */}
+        {/* BOTÕES DE ACÃO (Estética B2B - Verde) */}
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <Link href={`/${lang}/admin/contrato`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'white', border: '1px solid #cbd5e1', color: '#0f172a', padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', transition: 'background-color 0.2s' }}>
+          <Link href={`/${lang}/admin/contrato`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'white', border: '1px solid #167524', color: '#167524', padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', transition: 'background-color 0.2s' }}>
             <span>📝</span> {isEn ? 'Global Contract' : 'Contrato Global'}
           </Link>
-          <Link href={`/${lang}/admin/campos/novo`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#0f172a', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', transition: 'transform 0.2s' }}>
+          <Link href={`/${lang}/admin/campos/novo`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#167524', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', transition: 'transform 0.2s', boxShadow: '0 4px 6px -1px rgba(22, 117, 36, 0.2)' }}>
             <span>+</span> {isEn ? 'Create Camp' : 'Novo Campo'}
           </Link>
         </div>
       </div>
 
       {metricas.pedidosPendentes > 0 && (
-        <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', padding: '1.5rem', borderRadius: '1.25rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.5rem', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.1)' }}>
+        <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', padding: '1.5rem', borderRadius: '1.25rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.5rem', boxShadow: '0 4px 6px -1px rgba(253, 230, 138, 0.2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
             <span style={{ fontSize: '2.5rem', animation: 'pulse 2s infinite' }}>📬</span>
             <div>
-              <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.125rem', fontWeight: '900', color: '#1e3a8a' }}>
+              <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.125rem', fontWeight: '900', color: '#92400e' }}>
                 {isEn ? `You have ${metricas.pedidosPendentes} pending change request(s)!` : `Tem ${metricas.pedidosPendentes} pedido(s) de alteração pendente(s)!`}
               </h3>
-              <p style={{ margin: 0, fontSize: '14px', color: '#1e40af', fontWeight: '500' }}>
+              <p style={{ margin: 0, fontSize: '14px', color: '#b45309', fontWeight: '500' }}>
                 {isEn ? 'Parents are waiting for your approval to add extras.' : 'Os encarregados de educação solicitaram novos extras. Aprove para lhes enviar o pagamento.'}
               </p>
             </div>
           </div>
-          <Link href={`/${lang}/admin/reservas`} style={{ backgroundColor: '#2563eb', color: 'white', padding: '0.875rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', whiteSpace: 'nowrap', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)', transition: 'background-color 0.2s' }}>
+          <Link href={`/${lang}/admin/reservas`} style={{ backgroundColor: '#d97706', color: 'white', padding: '0.875rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', whiteSpace: 'nowrap', boxShadow: '0 4px 6px -1px rgba(217, 119, 6, 0.3)', transition: 'background-color 0.2s' }}>
             {isEn ? 'Review Requests' : 'Analisar Pedidos'} &rarr;
           </Link>
         </div>
@@ -235,7 +235,7 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1.5rem' }}>
             <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                <div style={{ width: '3rem', height: '3rem', backgroundColor: '#fef2f2', color: '#ef4444', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>❤️</div>
+                <div style={{ width: '3rem', height: '3rem', backgroundColor: '#fef2f2', color: '#ef4444', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>❤️</div>
                 <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{isEn ? 'Wishlists' : 'Favoritos'}</span>
               </div>
               <span style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0f172a', display: 'block', lineHeight: 1 }}>{metricas.vezesGuardado}</span>
@@ -251,33 +251,34 @@ export default function DashboardMarketing({ params }: { params: Promise<{ lang:
               <p style={{ margin: '0.5rem 0 0 0', fontSize: '12px', color: '#64748b', fontWeight: '600' }}>{isEn ? 'Average score.' : 'Média das reviews recebidas.'}</p>
             </div>
 
+            {/* Cartão principal atualizado para Verde Corporativo */}
             <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', gridColumn: '1 / -1' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                <div style={{ width: '3rem', height: '3rem', backgroundColor: '#f0fdf4', color: '#10b981', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>🎫</div>
+                <div style={{ width: '3rem', height: '3rem', backgroundColor: '#16752410', color: '#167524', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>🎫</div>
                 <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{isEn ? 'Total Confirmed Bookings' : 'Total de Inscrições Validadas'}</span>
               </div>
-              <span style={{ fontSize: '2.5rem', fontWeight: '900', color: '#10b981', display: 'block', lineHeight: 1 }}>{metricas.totalReservas}</span>
+              <span style={{ fontSize: '2.5rem', fontWeight: '900', color: '#167524', display: 'block', lineHeight: 1 }}>{metricas.totalReservas}</span>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <Link href={`/${lang}/admin/reservas`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', textDecoration: 'none', transition: 'border-color 0.2s' }}>
+            <Link href={`/${lang}/admin/reservas`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', textDecoration: 'none', transition: 'border-color 0.2s', boxShadow: '0 2px 4px -1px rgba(0,0,0,0.02)' }}>
               <span style={{ fontSize: '1.5rem' }}>📋</span>
-              <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>{isEn ? 'Manage Logistics' : 'Gestão de Logística'} &rarr;</span>
+              <span style={{ fontSize: '14px', fontWeight: '800', color: '#167524' }}>{isEn ? 'Manage Logistics' : 'Gestão de Logística'} &rarr;</span>
             </Link>
-            <Link href={`/${lang}/admin/faturacao`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', textDecoration: 'none', transition: 'border-color 0.2s' }}>
+            <Link href={`/${lang}/admin/faturacao`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', textDecoration: 'none', transition: 'border-color 0.2s', boxShadow: '0 2px 4px -1px rgba(0,0,0,0.02)' }}>
               <span style={{ fontSize: '1.5rem' }}>💰</span>
-              <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>{isEn ? 'Finance & Billing' : 'Finanças e Faturação'} &rarr;</span>
+              <span style={{ fontSize: '14px', fontWeight: '800', color: '#167524' }}>{isEn ? 'Finance & Billing' : 'Finanças e Faturação'} &rarr;</span>
             </Link>
           </div>
         </div>
 
         <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(15,23,42,0.05)' }}>
-          <div style={{ display: 'flex', justifyItems: 'center', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {isEn ? 'Optimization Engine' : 'Motor de Otimização'}
             </h2>
-            <span style={{ backgroundColor: sugestoes.length > 0 ? '#fef2f2' : '#f0fdf4', color: sugestoes.length > 0 ? '#ef4444' : '#10b981', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '12px', fontWeight: '900' }}>
+            <span style={{ backgroundColor: sugestoes.length > 0 ? '#fef2f2' : '#f0fdf4', color: sugestoes.length > 0 ? '#ef4444' : '#167524', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '12px', fontWeight: '900' }}>
               {sugestoes.length} {isEn ? 'Tasks' : 'Avisos'}
             </span>
           </div>

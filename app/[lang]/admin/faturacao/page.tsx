@@ -25,7 +25,7 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
       const { data: perfilData } = await supabase.from('perfis').select('*').eq('id', session.user.id).single();
       setPerfil(perfilData || {});
 
-      // Extração plana e à prova de falhas (Ignora os Joins nativos)
+      // Extração plana e à prova de falhas
       const { data: camposData } = await supabase.from('campos').select('id, nome, preco, taxa_comissao, base_comissao, contrato_parceiro_url').eq('organizador_id', session.user.id);
       const { data: reservasData } = await supabase.from('reservas').select('*').eq('organizador_id', session.user.id).order('created_at', { ascending: false });
       const { data: criancasData } = await supabase.from('criancas').select('id, nome');
@@ -157,7 +157,7 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
   const contratoExibido = campoFiltradoData?.contrato_parceiro_url || null;
 
   return (
-    <main style={{ maxWidth: '1000px', margin: '0 auto', fontFamily: 'sans-serif', padding: '1rem' }}>
+    <main style={{ maxWidth: '1000px', margin: '0 auto', fontFamily: 'sans-serif', padding: '1rem', paddingBottom: '4rem' }}>
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -176,7 +176,7 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
           <select 
             value={filtroCampoId} 
             onChange={(e) => setFiltroCampoId(e.target.value)} 
-            style={{ ...selectStyle, borderColor: '#059669', backgroundColor: '#f0fdf4', color: '#064e3b', fontWeight: '800' }}
+            style={{ ...selectStyle, borderColor: '#167524', backgroundColor: '#f0fdf4', color: '#167524', fontWeight: '800' }}
           >
             <option value="todos">{isEn ? 'All Active Camps (Global)' : 'Visão Global (Todos os Campos)'}</option>
             {camposParceiro.map(c => (
@@ -186,7 +186,7 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
         </div>
       </div>
 
-      <div style={{ marginBottom: '2.5rem', padding: '2rem', borderRadius: '1rem', backgroundColor: perfil?.stripe_account_id ? '#f0fdf4' : '#f8fafc', border: `1px solid ${perfil?.stripe_account_id ? '#bbf7d0' : '#e2e8f0'}` }}>
+      <div style={{ marginBottom: '2.5rem', padding: '2rem', borderRadius: '1.25rem', backgroundColor: perfil?.stripe_account_id ? '#f0fdf4' : '#f8fafc', border: `1px solid ${perfil?.stripe_account_id ? '#bbf7d0' : '#e2e8f0'}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
           <div>
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>
@@ -205,13 +205,15 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
             disabled={connectLoading}
             style={{
               padding: '1rem 1.5rem',
-              backgroundColor: perfil?.stripe_account_id ? '#059669' : '#0f172a',
+              backgroundColor: perfil?.stripe_account_id ? '#167524' : '#167524',
               color: 'white',
-              fontWeight: 'bold',
-              borderRadius: '0.5rem',
+              fontWeight: '900',
+              borderRadius: '0.75rem',
               border: 'none',
               cursor: 'pointer',
-              fontSize: '14px'
+              fontSize: '14px',
+              transition: 'background-color 0.2s',
+              boxShadow: '0 4px 6px -1px rgba(22, 117, 36, 0.2)'
             }}
           >
             {connectLoading ? (isEn ? 'Processing...' : 'A processar...') : (perfil?.stripe_account_id ? (isEn ? 'Manage Stripe Account' : 'Gerir Conta Stripe') : (isEn ? 'Connect to Stripe' : 'Ligar à Stripe'))}
@@ -230,11 +232,11 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
           <p style={{ fontSize: '2rem', fontWeight: '900', color: '#ef4444', margin: 0 }}>{totalComissoesGeradas.toFixed(2)}€</p>
         </div>
 
-        <div style={{ backgroundColor: '#ecfdf5', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #10b981' }}>
-          <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#065f46', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+        <div style={{ backgroundColor: '#f0fdf4', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #167524' }}>
+          <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#167524', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
             {isEn ? 'Your Net Balance' : 'O Seu Ganho Líquido'}
           </p>
-          <p style={{ fontSize: '2rem', fontWeight: '900', color: '#059669', margin: 0 }}>
+          <p style={{ fontSize: '2rem', fontWeight: '900', color: '#167524', margin: 0 }}>
             {saldoParceiroSeraTransferido.toFixed(2)}€
           </p>
         </div>
@@ -252,7 +254,7 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
               <label style={labelStyle}>{isEn ? 'NIF / Tax ID' : 'NIF'}</label>
               <input type="text" value={perfil.nif_empresa || ''} onChange={e => setPerfil({...perfil, nif_empresa: e.target.value})} style={inputStyle} required />
             </div>
-            <button type="submit" disabled={saving} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#0f172a', color: 'white', fontWeight: '900', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}>
+            <button type="submit" disabled={saving} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#167524', color: 'white', fontWeight: '900', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {saving ? (isEn ? 'Saving...' : 'A guardar...') : (isEn ? 'Save Details' : 'Gravar Dados Fiscais')}
             </button>
           </form>
@@ -266,7 +268,7 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
               <div style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', textAlign: 'center', minWidth: '120px' }}>
                 <p style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{filtroCampoId === 'todos' ? (isEn ? 'Base Rate' : 'Taxa Base') : (isEn ? 'Camp Rate' : 'Taxa do Campo')}</p>
-                <span style={{ fontSize: '2rem', fontWeight: '900', color: '#059669' }}>{taxaExibida}%</span>
+                <span style={{ fontSize: '2rem', fontWeight: '900', color: '#167524' }}>{taxaExibida}%</span>
               </div>
               <div>
                 <p style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.25rem' }}>{isEn ? 'Incidence Base' : 'Base de Incidência'}</p>
@@ -277,13 +279,13 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
             </div>
 
             {filtroCampoId !== 'todos' && contratoExibido && (
-              <a href={contratoExibido} target="_blank" rel="noopener noreferrer" style={{ padding: '1rem', backgroundColor: '#fffbeb', color: '#b45309', borderRadius: '0.5rem', textDecoration: 'none', fontWeight: 'bold', fontSize: '13px', border: '1px solid #fde68a', textAlign: 'center', display: 'block' }}>
+              <a href={contratoExibido} target="_blank" rel="noopener noreferrer" style={{ padding: '1rem', backgroundColor: '#167524', color: 'white', borderRadius: '0.5rem', textDecoration: 'none', fontWeight: 'bold', fontSize: '13px', textAlign: 'center', display: 'block', transition: 'background-color 0.2s', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 📥 {isEn ? 'Download Verified Contract' : 'Descarregar Contrato Validado'}
               </a>
             )}
             
-            <div style={{ backgroundColor: '#fefce8', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #fef08a', marginTop: 'auto' }}>
-              <p style={{ fontSize: '12px', color: '#854d0e', margin: 0, fontWeight: 'bold', lineHeight: 1.4 }}>
+            <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', marginTop: 'auto' }}>
+              <p style={{ fontSize: '12px', color: '#475569', margin: 0, fontWeight: 'bold', lineHeight: 1.4 }}>
                 💡 {isEn ? 'Commission fees are auto-deducted directly at checkout transaction.' : 'As comissões da plataforma são deduzidas e divididas automaticamente no ato do pagamento.'}
               </p>
             </div>
@@ -342,8 +344,8 @@ export default function FaturacaoPage({ params }: { params: Promise<{ lang: stri
                       <td style={{ padding: '1rem' }}>
                         <span style={{ 
                           padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase',
-                          backgroundColor: res.status_pagamento_real === 'Pago' || res.status_pagamento_real === 'Sinal Pago' ? '#ecfdf5' : (eReembolsado ? '#fef2f2' : '#f1f5f9'),
-                          color: res.status_pagamento_real === 'Pago' || res.status_pagamento_real === 'Sinal Pago' ? '#059669' : (eReembolsado ? '#dc2626' : '#64748b')
+                          backgroundColor: res.status_pagamento_real === 'Pago' || res.status_pagamento_real === 'Sinal Pago' ? '#f0fdf4' : (eReembolsado ? '#fef2f2' : '#f1f5f9'),
+                          color: res.status_pagamento_real === 'Pago' || res.status_pagamento_real === 'Sinal Pago' ? '#167524' : (eReembolsado ? '#dc2626' : '#64748b')
                         }}>
                           {res.status_pagamento_real}
                         </span>
@@ -365,5 +367,5 @@ const cardStyle = { display: 'flex', flexDirection: 'column' as const, backgroun
 const cardTitleStyle = { fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' };
 const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '0.5rem', textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
 const inputBase = { width: '100%', padding: '0.875rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' as const };
-const inputStyle = { ...inputBase };
-const selectStyle = { ...inputBase, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2em' };
+const inputStyle = { ...inputBase, transition: 'border-color 0.2s', ':focus': { borderColor: '#167524' } };
+const selectStyle = { ...inputBase, cursor: 'pointer', appearance: 'none' as const, backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23167524' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2em' };
