@@ -34,7 +34,7 @@ export default function PaginaAvaliacao({ params }: { params: Promise<{ lang: st
         .from("reservas")
         .select(`id, campo_id, criancas(nome), campos(nome, nome_en)`)
         .eq("id", reservaId)
-        .eq("user_id", session.user.id)
+        .eq("cliente_id", session.user.id)
         .single();
 
       if (error || !data) {
@@ -52,7 +52,7 @@ export default function PaginaAvaliacao({ params }: { params: Promise<{ lang: st
         .single();
 
       if (reviewExistente) {
-        setSucesso(true); // Já avaliou, mostra logo a mensagem de sucesso
+        setSucesso(true); 
       } else {
         setReserva(data);
       }
@@ -96,18 +96,20 @@ export default function PaginaAvaliacao({ params }: { params: Promise<{ lang: st
     setSubmetendo(false);
   };
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">{isEn ? 'Loading...' : 'A carregar...'}</div>;
-  if (erro) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-red-500">{erro}</div>;
+  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400 animate-pulse">{isEn ? 'Loading...' : 'A verificar dados...'}</div>;
+  if (erro) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-black text-red-500">{erro}</div>;
 
   if (sucesso) {
     return (
       <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white p-10 rounded-3xl shadow-sm border border-slate-200 text-center max-w-md w-full">
-          <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">✓</div>
-          <h1 className="text-2xl font-black text-slate-900 mb-2">{isEn ? 'Thank you!' : 'Obrigado!'}</h1>
-          <p className="text-slate-500 mb-8">{isEn ? 'Your review helps other parents make the best decision.' : 'A sua avaliação ajuda outros pais a tomar a melhor decisão.'}</p>
-          <Link href={`/${lang}/cliente/mensagens`} className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl block w-full no-underline hover:bg-slate-800 transition-colors">
-            {isEn ? 'Back to Dashboard' : 'Voltar ao Dashboard'}
+        <div className="bg-white p-10 md:p-14 rounded-[2rem] shadow-xl shadow-slate-200 border border-slate-100 text-center max-w-md w-full animate-in zoom-in-95 duration-500">
+          <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center text-5xl mx-auto mb-8 shadow-inner border border-emerald-100">
+            ✓
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 mb-3 tracking-tight">{isEn ? 'Thank you!' : 'Muito Obrigado!'}</h1>
+          <p className="text-slate-500 mb-10 font-medium leading-relaxed">{isEn ? 'Your review helps other parents make the best decision for their children.' : 'A sua avaliação foi submetida e vai ajudar outros pais a tomar a melhor decisão no próximo verão.'}</p>
+          <Link href={`/${lang}/cliente/dashboard`} className="px-8 py-4 bg-[#0E3A68] text-white text-[11px] font-black uppercase tracking-widest rounded-xl block w-full no-underline hover:bg-[#0b2b4d] transition-all shadow-md hover:-translate-y-1">
+            {isEn ? 'Back to Dashboard' : 'Voltar ao Meu Dashboard'}
           </Link>
         </div>
       </main>
@@ -118,20 +120,20 @@ export default function PaginaAvaliacao({ params }: { params: Promise<{ lang: st
 
   return (
     <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
-      <div className="bg-white p-8 md:p-12 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 max-w-xl w-full">
+      <div className="bg-white p-8 md:p-12 rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 max-w-xl w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
         
-        <div className="text-center mb-8">
-          <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">{isEn ? 'Rate your experience' : 'Avalie a experiência'}</span>
-          <h1 className="text-3xl font-black text-slate-900 mt-2 mb-1">{nomeCampo}</h1>
-          <p className="text-slate-500 font-medium text-sm">{isEn ? 'Participant:' : 'Participante:'} <span className="text-slate-800 font-bold">{reserva.criancas.nome}</span></p>
+        <div className="text-center mb-10">
+          <span className="text-[10px] font-black text-[#e2a41d] uppercase tracking-widest bg-[#e2a41d]/10 px-4 py-1.5 rounded-full">{isEn ? 'Rate your experience' : 'Avalie a experiência'}</span>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 mt-6 mb-2 tracking-tight">{nomeCampo}</h1>
+          <p className="text-slate-500 font-medium text-sm">{isEn ? 'Participant:' : 'Participante:'} <span className="text-slate-900 font-black">{reserva.criancas.nome}</span></p>
         </div>
 
-        <form onSubmit={submeterAvaliacao} className="flex flex-col gap-8">
+        <form onSubmit={submeterAvaliacao} className="flex flex-col gap-10">
           
           {/* SISTEMA DE ESTRELAS INTERATIVO */}
-          <div className="flex flex-col items-center gap-3">
-            <label className="text-sm font-bold text-slate-900">{isEn ? 'Overall Rating' : 'Classificação Geral'}</label>
-            <div className="flex gap-2">
+          <div className="flex flex-col items-center gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{isEn ? 'Overall Rating' : 'Classificação Geral'}</label>
+            <div className="flex gap-2 md:gap-4">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button 
                   key={star} 
@@ -139,32 +141,32 @@ export default function PaginaAvaliacao({ params }: { params: Promise<{ lang: st
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHoverRating(star)}
                   onMouseLeave={() => setHoverRating(0)}
-                  className="text-5xl transition-transform hover:scale-110 focus:outline-none"
-                  style={{ color: star <= (hoverRating || rating) ? '#EBA914' : '#e2e8f0' }}
+                  className="text-5xl md:text-6xl transition-transform hover:scale-110 focus:outline-none leading-none"
+                  style={{ color: star <= (hoverRating || rating) ? '#e2a41d' : '#e2e8f0', textShadow: star <= (hoverRating || rating) ? '0 4px 10px rgba(226, 164, 29, 0.3)' : 'none' }}
                 >
                   ★
                 </button>
               ))}
             </div>
-            {rating === 0 && <p className="text-xs text-amber-600 font-bold mt-2">{isEn ? 'Select a rating to continue' : 'Selecione uma pontuação para avançar'}</p>}
+            {rating === 0 && <p className="text-[10px] font-bold uppercase tracking-widest text-[#e2a41d] mt-2 animate-pulse">{isEn ? 'Select a rating to continue' : 'Clique nas estrelas para pontuar'}</p>}
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">{isEn ? 'Write a review (Optional)' : 'Escreva um comentário (Opcional)'}</label>
+          <div className="flex flex-col gap-3">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Write a review (Optional)' : 'Escreva um comentário (Opcional)'}</label>
             <textarea 
               value={comentario} 
               onChange={e => setComentario(e.target.value)} 
-              placeholder={isEn ? "How was the experience? What did your child like the most?" : "Como correu a experiência? O que o seu filho gostou mais?"}
-              className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 outline-none focus:border-emerald-500 resize-none h-32"
+              placeholder={isEn ? "How was the experience? What did your child like the most?" : "Como correu a experiência? A equipa de monitores foi simpática? O que o seu filho gostou mais?"}
+              className="w-full p-5 rounded-2xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white resize-none h-36 transition-colors shadow-inner"
             ></textarea>
           </div>
 
           <button 
             type="submit" 
             disabled={rating === 0 || submetendo} 
-            className={`w-full py-4 rounded-xl text-lg font-black transition-all ${rating === 0 || submetendo ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-[#EBA914] hover:bg-amber-500 text-white shadow-lg shadow-amber-500/30 hover:-translate-y-1'}`}
+            className={`w-full py-4 rounded-xl text-sm uppercase tracking-widest font-black transition-all ${rating === 0 || submetendo ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' : 'bg-[#0E3A68] text-white shadow-xl shadow-[#0E3A68]/20 hover:bg-[#0b2b4d] hover:-translate-y-1 cursor-pointer'}`}
           >
-            {submetendo ? (isEn ? 'Submitting...' : 'A enviar...') : (isEn ? 'Submit Review' : 'Enviar Avaliação')}
+            {submetendo ? (isEn ? 'Submitting...' : 'A enviar avaliação...') : (isEn ? 'Submit Review' : 'Enviar Avaliação')}
           </button>
 
         </form>
