@@ -78,7 +78,7 @@ const TEMPLATES: Record<string, Template[]> = {
         <p><strong>Como funciona o nosso modelo de parceria?</strong></p>
         <ul>
           <li><strong>Visibilidade 100% Gratuita:</strong> Estar presente no nosso motor de busca não tem qualquer custo fixo. O vosso perfil exibirá as vossas fotografias, descrições, website oficial e contactos, permitindo que as famílias vos encontrem livremente.</li>
-          <li><strong>Reservas Diretas (Opcional):</strong> Caso pretendam automatizar as vossas inscrições, podem ativar a opção de reservas diretas através da HelloCamp. Neste modelo, fornecemos uma secretaria digital completa e cobramos uma comissão justa, que varia entre <strong>10% e 12% por inscrição confirmada</strong>.</li>
+          <li><strong>Reservas Diretas (Opcional):</strong> Caso pretendam automatizar as vossas inscrições, podem ativar a opção de reservas diretas através da HelloCamp. Neste modelo, fornecemos uma secretaria digital completa e cobramos uma comissão <strong>significativamente mais baixa que a média do mercado</strong>, aplicada apenas às reservas confirmadas.</li>
         </ul>
         <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
           <strong>O nosso serviço chave-na-mão:</strong> Sabemos que nesta altura o tempo é escasso. Se pretenderem aderir, basta responderem a este e-mail com o link do vosso website ou o PDF da vossa brochura. A nossa equipa encarrega-se de construir o vosso perfil completo em 24 horas, sem qualquer esforço da vossa parte.
@@ -95,7 +95,7 @@ const TEMPLATES: Record<string, Template[]> = {
         <p>Olá novamente,</p>
         <p>No meu e-mail anterior falei-vos sobre a integração da <strong>${nome}</strong> na nossa plataforma, mas hoje gostava de vos mostrar o que acontece "nos bastidores" quando ativam as reservas diretas na HelloCamp.</p>
         <p>Gerir dezenas de e-mails, pedir comprovativos de transferência e compilar fichas de alergias em folhas de Excel é exaustivo. Foi por isso que construímos um <strong>Dashboard Exclusivo para Organizadores</strong>.</p>
-        <p>Ao permitirem reservas através da nossa plataforma (com a nossa comissão de 10% a 12%):</p>
+        <p>Ao permitirem reservas através da nossa plataforma (com a nossa estrutura de comissões muito competitiva):</p>
         <ul>
           <li>Os pais pagam diretamente por Multibanco, MBWay ou Cartão, e o valor é processado automaticamente.</li>
           <li>Os formulários de saúde, alergias e contactos de emergência são centralizados e exportáveis com um clique.</li>
@@ -113,8 +113,8 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarMensagem: (nome) => `
         <p>Cara equipa da <strong>${nome}</strong>,</p>
         <p>Muitos portais no mercado optam por esconder o website ou o telefone dos organizadores, obrigando as famílias a passar por intermediários. Na HelloCamp, não acreditamos nessa abordagem.</p>
-        <p>Ao figurarem na nossa plataforma, <strong>a vossa identidade e os vossos contactos estão sempre à vista</strong>. Se os pais preferirem contactar-vos diretamente para tirar dúvidas, têm total liberdade para o fazer. É assim que construímos uma relação de transparência.</p>
-        <p>Como referi anteriormente, só aplicamos a taxa de comissão de 10% a 12% se a família optar por fechar a inscrição diretamente pelo nosso sistema de pagamentos.</p>
+        <p>Ao figurarem na nossa plataforma, <strong>a vossa identidade e os vossos contactos estão sempre à vista</strong>. Se os pais preferirem contactar-vos directamente para tirar dúvidas, têm total liberdade para o fazer. É assim que construímos uma relação de transparência.</p>
+        <p>Como referi anteriormente, a nossa taxa de comissão só é aplicada se a família optar por fechar a inscrição diretamente pelo nosso sistema de pagamentos.</p>
         <p>Recuperem o controlo da vossa presença online. Basta responderem a este e-mail a confirmar o vosso interesse e a nossa equipa de Onboarding fará a introdução dos vossos programas no nosso portal.</p>
       `
     },
@@ -145,7 +145,7 @@ const TEMPLATES: Record<string, Template[]> = {
         <p><strong>How does our partnership work?</strong></p>
         <ul>
           <li><strong>Free Visibility Listing:</strong> Being listed in our directory is completely free. We will showcase your photos, descriptions, and official contact details so European parents can find you effortlessly.</li>
-          <li><strong>Direct Bookings (Optional):</strong> If you wish to streamline your enrollments, you can activate direct bookings through HelloCamp. We provide a full digital dashboard for this service and charge a fair commission of <strong>10% to 12% per confirmed booking</strong>.</li>
+          <li><strong>Direct Bookings (Optional):</strong> If you wish to streamline your enrollments, you can activate direct bookings through HelloCamp. We provide a full digital dashboard for this service and charge a <strong>highly competitive commission, significantly lower than the industry average</strong>, per confirmed booking.</li>
         </ul>
         <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
           <strong>Our white-glove onboarding:</strong> We know you are busy preparing for the season. To get started, simply reply to this email with a link to your website or a PDF brochure. Our team will build and optimize your profile within 24 hours at no cost.
@@ -162,7 +162,7 @@ const TEMPLATES: Record<string, Template[]> = {
         <p>Hello again,</p>
         <p>In my previous email, I mentioned featuring <strong>${nome}</strong> on our platform. Today, I'd like to show you the operational side of HelloCamp if you choose to activate direct bookings.</p>
         <p>Expanding your summer camp to international markets often involves chasing wire transfers and managing medical forms in foreign languages. That is why we built our <strong>Partner Dashboard</strong>.</p>
-        <p>By enabling direct bookings (with our 10-12% commission structure):</p>
+        <p>By enabling direct bookings (with our highly competitive low-commission structure):</p>
         <ul>
           <li>Parents pay securely online, and funds are automatically processed.</li>
           <li>Medical records, dietary restrictions, and emergency contacts are standardized and accessible with one click.</li>
@@ -181,7 +181,7 @@ const TEMPLATES: Record<string, Template[]> = {
         <p>Hi <strong>${nome}</strong> team,</p>
         <p>Unlike other directories that hide your contact details to force clients through their funnels, HelloCamp believes in transparent partnerships.</p>
         <p>On our platform, <strong>your website, email, and brand logo are 100% visible</strong>. If a parent prefers to contact your admissions office directly with questions, they are free to do so.</p>
-        <p>As mentioned, our 10-12% commission fee is only applied if the family decides to complete their booking using our integrated payment system.</p>
+        <p>As mentioned, our commission fee is only applied if the family decides to complete their booking using our integrated payment system.</p>
         <p>Regain control of your international visibility. Create your free listing today or simply reply to this email to let our onboarding team do the work for you.</p>
       `
     },
@@ -212,7 +212,7 @@ const TEMPLATES: Record<string, Template[]> = {
         <p><strong>¿Cómo funciona nuestra colaboración?</strong></p>
         <ul>
           <li><strong>Visibilidad 100% Gratuita:</strong> Estar en nuestro buscador no tiene coste. Mostraremos sus fotos, descripciones y datos de contacto oficiales para que las familias les encuentren sin barreras.</li>
-          <li><strong>Reservas Directas (Opcional):</strong> Si desean automatizar las inscripciones internacionales, pueden activar las reservas directas. En este caso, proporcionamos un panel de control completo y cobramos una comisión del <strong>10% al 12% por cada reserva confirmada</strong>.</li>
+          <li><strong>Reservas Directas (Opcional):</strong> Si desean automatizar las inscripciones internacionales, pueden activar las reservas directas. En este caso, proporcionamos un panel de control completo y cobramos una comisión <strong>muy competitiva y significativamente más baja que la media del sector</strong>, solo por cada reserva confirmada.</li>
         </ul>
         <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
           <strong>Servicio llave en mano:</strong> Sabemos que están inmersos en la preparación del verano. Simplemente respondan a este email con un enlace a su web o su folleto en PDF, y nuestro equipo creará su perfil en 24 horas sin esfuerzo alguno por su parte.
@@ -228,7 +228,7 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarMensagem: (nome) => `
         <p>Hola de nuevo,</p>
         <p>Captar y gestionar alumnos internacionales a menudo implica cruce de correos, traducciones de fichas médicas y transferencias bancarias lentas. Por eso hemos creado el <strong>Dashboard para Partners de HelloCamp</strong>.</p>
-        <p>Al activar las reservas directas con nosotros (sujetas a la comisión del 10-12%):</p>
+        <p>Al activar las reservas directas con nosotros (sujetas a nuestra comisión reducida):</p>
         <ul>
           <li>Los padres pagan de forma segura online, y los fondos se procesan automáticamente.</li>
           <li>Las fichas médicas y restricciones alimentarias quedan centralizadas y listas para exportar.</li>
@@ -247,7 +247,7 @@ const TEMPLATES: Record<string, Template[]> = {
         <p>Equipo de <strong>${nome}</strong>,</p>
         <p>A diferencia de otros directorios que ocultan los datos de contacto para forzar al cliente a pasar por ellos, en HelloCamp creemos en las alianzas transparentes.</p>
         <p>En nuestra plataforma, <strong>su sitio web, email y número de teléfono son totalmente visibles</strong>. Si una familia portuguesa prefiere llamarles directamente para aclarar dudas, tiene total libertad para hacerlo.</p>
-        <p>Como mencioné antes, nuestra comisión del 10-12% solo se aplica cuando la familia decide completar la inscripción a través de nuestro sistema automatizado.</p>
+        <p>Como mencioné antes, nuestra comisión por reserva solo se aplica cuando la familia decide completar la inscripción a través de nuestro sistema automatizado.</p>
         <p>Recuperen el control de su exposición internacional. Respondan a este correo con sus programas y nosotros nos encargaremos del resto.</p>
       `
     },
@@ -278,7 +278,7 @@ const TEMPLATES: Record<string, Template[]> = {
         <p><strong>Comment fonctionne notre partenariat ?</strong></p>
         <ul>
           <li><strong>Visibilité 100% Gratuite :</strong> Être présent dans notre annuaire n'a aucun coût fixe. Votre profil affichera vos photos, descriptions et contacts officiels pour que les parents puissent vous trouver facilement.</li>
-          <li><strong>Réservations Directes (Optionnel) :</strong> Si vous souhaitez automatiser vos inscriptions, vous pouvez activer les réservations via HelloCamp. Nous facturons une commission équitable de <strong>10% à 12% par réservation confirmée</strong>.</li>
+          <li><strong>Réservations Directes (Optionnel) :</strong> Si vous souhaitez automatiser vos inscriptions, vous pouvez activer les réservations via HelloCamp. Nous facturons une commission <strong>très compétitive et nettement inférieure à la moyenne du marché</strong> par réservation confirmée.</li>
         </ul>
         <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
           <strong>Notre service clé en main :</strong> Répondez simplement à cet e-mail avec un lien vers votre site ou une brochure PDF. Notre équipe créera et optimisera votre profil en 24 heures sans aucun effort de votre part.
@@ -294,7 +294,7 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarMensagem: (nome) => `
         <p>Re-bonjour,</p>
         <p>Accueillir des étudiants internationaux implique souvent des virements compliqués et des fiches médicales complexes. C'est pourquoi nous avons développé le <strong>Tableau de Bord HelloCamp</strong>.</p>
-        <p>En activant les réservations directes (avec notre commission de 10-12%) :</p>
+        <p>En activant les réservations directes (avec notre commission très réduite) :</p>
         <ul>
           <li>Les parents paient en ligne de manière sécurisée.</li>
           <li>Les dossiers médicaux et les allergies sont centralisés et exportables.</li>
@@ -312,7 +312,7 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarMensagem: (nome) => `
         <p>L'équipe de <strong>${nome}</strong>,</p>
         <p>Contrairement à d'autres plateformes qui cachent vos coordonnées, sur HelloCamp, <strong>votre site web et votre téléphone sont 100% visibles</strong>.</p>
-        <p>Si un parent préfère vous contacter directement, il est libre de le faire. Notre commission de 10-12% ne s'applique que si la famille décide de réserver directement via notre système de paiement.</p>
+        <p>Si un parent préfère vous contacter directement, il est libre de le faire. Notre commission ne s'applique que si la famille décide de réserver directement via notre système de paiement.</p>
         <p>Reprenez le contrôle de votre visibilité internationale. Répondez à cet e-mail et nous ferons le travail pour vous.</p>
       `
     },
@@ -343,7 +343,7 @@ const TEMPLATES: Record<string, Template[]> = {
         <p><strong>Wie funktioniert unsere Partnerschaft?</strong></p>
         <ul>
           <li><strong>100% Kostenlose Sichtbarkeit:</strong> Der Eintrag in unser Verzeichnis ist komplett kostenlos. Wir zeigen Ihre Fotos, Beschreibungen und Kontaktdaten.</li>
-          <li><strong>Direktbuchungen (Optional):</strong> Wenn Sie Ihre Anmeldungen automatisieren möchten, können Sie die direkte Buchung über HelloCamp aktivieren. Wir berechnen eine faire Provision von <strong>10% bis 12% pro bestätigter Buchung</strong>.</li>
+          <li><strong>Direktbuchungen (Optional):</strong> Wenn Sie Ihre Anmeldungen automatisieren möchten, können Sie die direkte Buchung über HelloCamp aktivieren. Wir berechnen eine äußerst <strong>wettbewerbsfähige Provision, die deutlich unter dem Branchenstandard liegt</strong>, nur bei bestätigten Buchungen.</li>
         </ul>
         <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
           <strong>Unser Full-Service:</strong> Antworten Sie einfach auf diese E-Mail mit einem Link zu Ihrer Website. Unser Team erstellt und optimiert Ihr Profil innerhalb von 24 Stunden kostenlos für Sie.
@@ -359,7 +359,7 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarMensagem: (nome) => `
         <p>Hallo nochmal,</p>
         <p>Internationale Anmeldungen bringen oft Probleme mit Banküberweisungen und fremdsprachigen Formularen mit sich. Aus diesem Grund haben wir unser <strong>Partner-Dashboard</strong> entwickelt.</p>
-        <p>Durch die Aktivierung von Direktbuchungen (mit unserer 10-12% Provision):</p>
+        <p>Durch die Aktivierung von Direktbuchungen (mit unserer wettbewerbsfähigen Provision):</p>
         <ul>
           <li>Eltern zahlen sicher online.</li>
           <li>Medizinische Daten und Allergien werden zentralisiert erfasst.</li>
@@ -377,7 +377,7 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarMensagem: (nome) => `
         <p>Team <strong>${nome}</strong>,</p>
         <p>Im Gegensatz zu anderen Portalen, die Kontaktdaten verstecken, ist bei HelloCamp <strong>Ihre Website und E-Mail zu 100% sichtbar</strong>.</p>
-        <p>Wenn Eltern Sie lieber direkt kontaktieren möchten, können sie das tun. Unsere Provision von 10-12% fällt nur an, wenn die Familie direkt über unser integriertes Zahlungssystem bucht.</p>
+        <p>Wenn Eltern Sie lieber direkt kontaktieren möchten, können sie das tun. Unsere Provision fällt nur an, wenn die Familie direkt über unser integriertes Zahlungssystem bucht.</p>
         <p>Erstellen Sie noch heute Ihren kostenlosen Eintrag oder antworten Sie auf diese E-Mail, damit unser Team das für Sie übernimmt.</p>
       `
     },
