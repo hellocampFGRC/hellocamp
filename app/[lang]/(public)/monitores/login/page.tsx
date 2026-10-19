@@ -30,23 +30,23 @@ export default function LoginMonitorPage({ params }: { params: Promise<{ lang: s
     }
   };
 
-  const inputClass = "w-full py-3.5 px-4 bg-slate-50 border border-slate-200 rounded-xl text-base font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all shadow-sm";
+  const inputClass = "w-full py-4 px-5 bg-slate-50 border border-slate-200 rounded-xl text-base font-bold text-slate-900 outline-none focus:bg-white focus:border-[#2563eb] focus:ring-4 focus:ring-blue-50 transition-all shadow-sm";
 
   return (
-    <main className="min-h-[calc(100vh-80px)] flex flex-col bg-slate-50">
+    <main className="min-h-[calc(100vh-80px)] flex flex-col bg-slate-50 font-sans">
       
       {/* Botão flutuante para voltar atrás */}
       <div className="w-full max-w-md mx-auto pt-8 px-4 relative z-10 text-left">
-         <Link href={`/${lang}/monitores`} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm no-underline">
+         <Link href={`/${lang}/monitores`} className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors bg-white px-5 py-2.5 rounded-full border border-slate-200 shadow-sm no-underline">
            &larr; {isEn ? "Back" : "Voltar Atrás"}
          </Link>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-4">
+      <div className="flex-1 flex items-center justify-center p-4 pb-20">
         <div className="w-full max-w-md">
           
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">
+            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">
               {isEn ? "Monitor Portal" : "Portal do Monitor"}
             </h1>
             <p className="text-sm font-medium text-slate-500">
@@ -54,17 +54,17 @@ export default function LoginMonitorPage({ params }: { params: Promise<{ lang: s
             </p>
           </div>
 
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50">
+          <div className="bg-white p-8 md:p-10 rounded-[2rem] border border-slate-200 shadow-2xl shadow-slate-200/50">
             
             {errorMsg && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm font-bold rounded-xl text-center">
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-xs font-black uppercase tracking-widest rounded-xl text-center">
                 {errorMsg}
               </div>
             )}
 
-            <form onSubmit={handleLogin} className="space-y-5">
+            <form onSubmit={handleLogin} className="space-y-6">
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Email</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block ml-1">Email</label>
                 <input 
                   type="email" 
                   required 
@@ -75,7 +75,7 @@ export default function LoginMonitorPage({ params }: { params: Promise<{ lang: s
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">{isEn ? "Password" : "Palavra-Passe"}</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block ml-1">{isEn ? "Password" : "Palavra-Passe"}</label>
                 <input 
                   type="password" 
                   required 
@@ -89,21 +89,21 @@ export default function LoginMonitorPage({ params }: { params: Promise<{ lang: s
               <button 
                 type="submit" 
                 disabled={loading}
-                className="w-full bg-blue-600 text-white font-black uppercase tracking-widest text-xs py-4 rounded-xl shadow-md hover:bg-blue-700 hover:-translate-y-0.5 transition-all mt-4 disabled:opacity-50 disabled:transform-none"
+                className="w-full bg-[#2563eb] text-white font-black uppercase tracking-widest text-xs py-4 md:py-5 rounded-xl shadow-lg hover:bg-blue-700 hover:-translate-y-0.5 transition-all mt-4 disabled:opacity-50 disabled:transform-none"
               >
                 {loading ? (isEn ? "Entering..." : "A entrar...") : (isEn ? "Sign In" : "Entrar no Portal")}
               </button>
             </form>
           </div>
 
-          <div className="text-center mt-8 space-y-4">
+          <div className="text-center mt-10 space-y-5">
             <p className="text-sm font-medium text-slate-500">
               {isEn ? "Want to work in summer camps?" : "Queres trabalhar em campos de férias?"} <br />
-              <Link href={`/${lang}/monitores/registo`} className="text-blue-600 font-bold hover:underline">
-                {isEn ? "Create your profile here" : "Cria o teu perfil aqui"}
+              <Link href={`/${lang}/monitores/registo`} className="text-[#2563eb] font-black hover:underline mt-1 inline-block">
+                {isEn ? "Create your profile here" : "Cria o teu perfil de monitor aqui"}
               </Link>
             </p>
-            <p className="text-xs text-slate-400">
+            <p className="text-[10px] text-slate-400 font-bold">
               Ao entrar, aceitas os <Link href={`/${lang}/monitores/termos`} className="underline hover:text-slate-600">Termos e Condições</Link>.
             </p>
           </div>
