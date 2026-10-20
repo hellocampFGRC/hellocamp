@@ -5,7 +5,7 @@ import BotaoFavorito from "../../../components/BotaoFavorito";
 import Image from "next/image";
 import { unstable_cache } from "next/cache";
 
-export const dynamic = 'force-dynamic'; // Porque usa searchParams, mas a BD está em cache
+export const dynamic = 'force-dynamic';
 
 const escapeOr = (str: string) => str.replace(/[,()]/g, ' ').trim();
 
@@ -18,7 +18,7 @@ const getPaisCache = unstable_cache(
     return data;
   },
   ['cache-pais-detalhe'],
-  { revalidate: 86400 } // 24h
+  { revalidate: 86400 }
 );
 
 const getCamposPorPaisCache = unstable_cache(
@@ -32,7 +32,7 @@ const getCamposPorPaisCache = unstable_cache(
     return data || [];
   },
   ['cache-campos-pais'],
-  { revalidate: 86400 } // 24h
+  { revalidate: 86400 }
 );
 
 // ==========================================
@@ -90,9 +90,9 @@ export default async function PesquisaPorPais({
   const idadeParam = sp?.idade || "";
   const dataParam = sp?.data || "";
 
-  const mostrarDistritos = nomePaisInicial === "Portugal";
+  const mostrarDistritos = nomePaisInicial.toLowerCase() === "portugal";
 
-  // Buscar DADOS EM CACHE (24h)
+  // Buscar DADOS EM CACHE (24h) com a nova coluna rigorosa de país
   const dadosPais = await getPaisCache(nomePaisInicial);
   const todosOsCamposDoPais = await getCamposPorPaisCache(nomePaisInicial);
 
@@ -115,7 +115,7 @@ export default async function PesquisaPorPais({
     });
   }
 
-  const nomePaisApresentar = isEn && dadosPais?.nome_en ? dadosPais.nome_en : nomePaisInicial;
+  const nomePaisApresentar = isEn && dadosPais?.nome_en ? dadosPais.nome_en : (dadosPais?.nome || nomePaisInicial);
 
   const descricaoPadrao = isEn
     ? `Explore premium holiday camps in ${nomePaisApresentar}. From thrilling outdoor adventures and intensive sports clubs to creative arts and language classes, discover handpicked programs.`
@@ -255,7 +255,6 @@ export default async function PesquisaPorPais({
                     <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeVisivel}</span></Link>
                     <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
 
-                    {/* IMAGEM NATIVA OTIMIZADA PARA LAZY LOADING */}
                     <div className="relative h-60 w-full overflow-hidden bg-slate-100">
                       <img 
                         src={campo.imagem || '/og-image.jpg'} 
@@ -296,7 +295,7 @@ export default async function PesquisaPorPais({
         )}
       </section>
 
-      {/* 4. CROSS-LINKING (REDE DE LINKS SEO) */}
+      {/* 4. CROSS-LINKING */}
       <section className="bg-white border-t border-slate-200 py-20 px-4 md:px-6">
         <div className="max-w-[1100px] mx-auto text-center md:text-left">
           <h3 className="text-2xl font-black text-slate-900 mb-8">{isEn ? `Explore more in ${nomePaisApresentar}` : `Explore mais em ${nomePaisApresentar}`}</h3>
@@ -316,7 +315,6 @@ export default async function PesquisaPorPais({
           </div>
         </div>
       </section>
-
     </main>
   );
 }
