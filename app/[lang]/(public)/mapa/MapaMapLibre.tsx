@@ -39,25 +39,25 @@ const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f1f5f9' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
 // ═══════════════════════════════════════════════════════════
-// ESTILO CARTODB VOYAGER (100% Grátis, Sem API Key, Rápido)
+// ESTILO ESRI WORLD STREET MAP (O TEU ORIGINAL - SEM API KEY)
 // ═══════════════════════════════════════════════════════════
-const cartoRasterStyle: maplibregl.StyleSpecification = {
+const esriRasterStyle: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    'carto-tiles': {
+    'esri-tiles': {
       type: 'raster',
       tiles: [
-        'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
       ],
       tileSize: 256,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      attribution: '&copy; <a href="https://www.esri.com/" target="_blank">Esri</a>, NAVTEQ, Garmin'
     }
   },
   layers: [
     {
-      id: 'carto-tiles-layer',
+      id: 'esri-tiles-layer',
       type: 'raster',
-      source: 'carto-tiles',
+      source: 'esri-tiles',
       minzoom: 0,
       maxzoom: 19
     }
@@ -72,7 +72,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   const camposValidos = useMemo<Campo[]>(() => {
     const lista = campos || [];
     
-    // Objeto para contar quantos campos existem na mesma coordenada exata
+    // Objeto para contar quantos campos partilham a mesma coordenada exata
     const contagemCoords: Record<string, number> = {};
 
     return lista
@@ -87,15 +87,16 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           latBase === 0 || lngBase === 0
         ) return null;
 
-        // LÓGICA DE SPIDERING: Espalha os marcadores para não ficarem uns por cima dos outros
+        // LÓGICA DE SPIDERING: Separa campos na mesma morada (Ex: Studio Cambridge)
         const coordKey = `${latBase.toFixed(4)},${lngBase.toFixed(4)}`;
         if (!contagemCoords[coordKey]) contagemCoords[coordKey] = 0;
         
         const indiceColisao = contagemCoords[coordKey];
         contagemCoords[coordKey] += 1;
 
+        // Se houver mais que um campo no mesmo local, cria um pequeno desvio em forma de cruz
         const angulo = (indiceColisao * Math.PI) / 2;
-        const raioDesvio = indiceColisao > 0 ? 0.0002 : 0; 
+        const raioDesvio = indiceColisao > 0 ? 0.00025 : 0; 
         
         const lat = latBase + (Math.sin(angulo) * raioDesvio);
         const lng = lngBase + (Math.cos(angulo) * raioDesvio);
@@ -118,7 +119,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      style: cartoRasterStyle, // Injetamos o novo mapa Grátis
+      style: esriRasterStyle, 
       center: [-8.2245, 39.3999],
       zoom: 5,
       minZoom: 3,
@@ -198,8 +199,8 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           </div>
         `;
 
-        // Anchor "bottom" diz ao MapLibre para colar a base exata da div no ponto geográfico
-        const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
+        // Anchor "bottom" é crucial. O CSS agora garante que o bottom da div é a ponta do pino.
+        const marker = new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, 0] })
           .setLngLat([c.longitude, c.latitude])
           .addTo(instance);
 
@@ -224,6 +225,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   return (
     <>
       <style>{`
+        /* CSS CORRIGIDO: O contentor é o tamanho exato do pino e não tem margens fantasmas */
         .hc-marker-container { 
           position: relative; 
           width: 36px; height: 36px; 
@@ -235,7 +237,10 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           transform-origin: bottom center;
           transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
           filter: drop-shadow(0px 4px 6px rgba(226, 164, 29, 0.4));
-          display: flex;
+          display: block;
+          line-height: 0;
+          margin: 0;
+          padding: 0;
         }
 
         .hc-marker-container:hover .hc-pin-svg {
@@ -248,7 +253,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
         }
 
         .hc-hover-popup {
-          position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(10px);
+          position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%) translateY(10px);
           width: 260px; background: white; border-radius: 16px;
           box-shadow: 0 10px 30px -5px rgba(0,0,0,0.2); opacity: 0; visibility: hidden;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none;
