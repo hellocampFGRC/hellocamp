@@ -18,9 +18,9 @@ export default function MapaWrapper({ campos, lang }: { campos: any[], lang: str
     const lista = campos || [];
     return lista
       .map((c, index) => {
-        // MICRO-DESVIO: Espalha os marcadores que partilhem a mesma morada
-        const lat = Number(c.latitude) + (index * 0.0001);
-        const lng = Number(c.longitude) + (index * 0.0001);
+        // MICRO-DESVIO: Espalha os marcadores que partilhem a exata mesma morada (ex: Studio Cambridge)
+        const lat = Number(c.latitude) + (index * 0.00015);
+        const lng = Number(c.longitude) + (index * 0.00015);
 
         if (!c.latitude || !c.longitude || isNaN(lat) || isNaN(lng)) return null;
 
@@ -37,37 +37,49 @@ export default function MapaWrapper({ campos, lang }: { campos: any[], lang: str
     );
   }
 
-  // O Pin com o Triângulo Amarelo e Borda Branca exato da tua foto
+  // Ícone Perfeito: Cravado no mapa pela ponta inferior (iconAnchor: [16, 38])
   const createCustomIcon = () => {
     return L.divIcon({
-      className: 'custom-leaflet-marker',
+      className: 'bg-transparent border-0',
       html: `
         <div style="
+          position: relative;
           width: 32px; height: 32px; 
           background-color: white; 
-          border: 3px solid #eab308; /* Amarelo HelloCamp */
+          border: 3px solid #eab308; 
           border-radius: 50%; 
           display: flex; justify-content: center; align-items: center;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
         ">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="#eab308">
-            <path d="M12 2L2 22h20L12 2z"/>
-          </svg>
+          <!-- Ponto central decorativo -->
+          <div style="width: 10px; height: 10px; background: #eab308; border-radius: 50%;"></div>
+          <!-- Bico do pino a apontar para baixo -->
+          <div style="
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0; 
+            height: 0; 
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid #eab308;
+          "></div>
         </div>
       `,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-      popupAnchor: [0, -18],
+      iconSize: [32, 40],       // Largura 32px, Altura total 40px (32 + bico)
+      iconAnchor: [16, 40],     // A âncora é EXATAMENTE o meio (16) e a base do bico (40). Isto impede que mexa com o zoom!
+      popupAnchor: [0, -42],    // O popup abre logo acima do pino
     });
   };
 
   return (
     <MapContainer 
-      center={[39.5, -4.0]} // Focado no centro da Península Ibérica
-      zoom={6} 
+      center={[46.0, 2.0]} // Focado na Europa Ocidental
+      zoom={5} 
       style={{ height: "100%", width: "100%", zIndex: 10 }}
     >
-      {/* MAPA TERRAIN ESTILO WATERCOLOR (Igual à tua Foto) */}
+      {/* MAPA TERRAIN ESTILO WATERCOLOR */}
       <TileLayer
         url="https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}{r}.jpg"
         attribution='Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.'
