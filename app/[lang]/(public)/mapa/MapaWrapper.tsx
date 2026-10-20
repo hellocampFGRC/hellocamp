@@ -18,7 +18,7 @@ export default function MapaWrapper({ campos, lang }: { campos: any[], lang: str
     const lista = campos || [];
     return lista
       .map((c, index) => {
-        // MICRO-DESVIO: Espalha os marcadores que partilhem a exata mesma morada (ex: Studio Cambridge)
+        // MICRO-DESVIO: Espalha os marcadores que partilhem a exata mesma morada
         const lat = Number(c.latitude) + (index * 0.00015);
         const lng = Number(c.longitude) + (index * 0.00015);
 
@@ -37,7 +37,7 @@ export default function MapaWrapper({ campos, lang }: { campos: any[], lang: str
     );
   }
 
-  // Ícone Perfeito: Cravado no mapa pela ponta inferior (iconAnchor: [16, 38])
+  // Ícone Cravado no mapa pela ponta inferior (iconAnchor: [16, 40])
   const createCustomIcon = () => {
     return L.divIcon({
       className: 'bg-transparent border-0',
@@ -51,9 +51,7 @@ export default function MapaWrapper({ campos, lang }: { campos: any[], lang: str
           display: flex; justify-content: center; align-items: center;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
         ">
-          <!-- Ponto central decorativo -->
           <div style="width: 10px; height: 10px; background: #eab308; border-radius: 50%;"></div>
-          <!-- Bico do pino a apontar para baixo -->
           <div style="
             position: absolute;
             bottom: -8px;
@@ -67,22 +65,22 @@ export default function MapaWrapper({ campos, lang }: { campos: any[], lang: str
           "></div>
         </div>
       `,
-      iconSize: [32, 40],       // Largura 32px, Altura total 40px (32 + bico)
-      iconAnchor: [16, 40],     // A âncora é EXATAMENTE o meio (16) e a base do bico (40). Isto impede que mexa com o zoom!
-      popupAnchor: [0, -42],    // O popup abre logo acima do pino
+      iconSize: [32, 40],
+      iconAnchor: [16, 40],
+      popupAnchor: [0, -42],
     });
   };
 
   return (
     <MapContainer 
-      center={[46.0, 2.0]} // Focado na Europa Ocidental
+      center={[40.5, -4.0]} 
       zoom={5} 
       style={{ height: "100%", width: "100%", zIndex: 10 }}
     >
-      {/* MAPA TERRAIN ESTILO WATERCOLOR */}
+      {/* NOVO MAPA DE FUNDO: CartoDB Voyager (Bonito, Rápido e Grátis) */}
       <TileLayer
-        url="https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}{r}.jpg"
-        attribution='Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.'
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
         subdomains='abcd'
       />
       
