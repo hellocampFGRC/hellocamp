@@ -39,25 +39,25 @@ const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f1f5f9' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
 // ═══════════════════════════════════════════════════════════
-// ESTILO ESRI WORLD STREET MAP (Inglês, Grátis, Sem API Key)
+// ESTILO CARTODB VOYAGER (100% Grátis, Sem API Key, Rápido)
 // ═══════════════════════════════════════════════════════════
-const esriRasterStyle: maplibregl.StyleSpecification = {
+const cartoRasterStyle: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    'esri-tiles': {
+    'carto-tiles': {
       type: 'raster',
       tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+        'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
       ],
       tileSize: 256,
-      attribution: '&copy; <a href="https://www.esri.com/" target="_blank">Esri</a>, NAVTEQ, Garmin'
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
     }
   },
   layers: [
     {
-      id: 'esri-tiles-layer',
+      id: 'carto-tiles-layer',
       type: 'raster',
-      source: 'esri-tiles',
+      source: 'carto-tiles',
       minzoom: 0,
       maxzoom: 19
     }
@@ -87,15 +87,14 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           latBase === 0 || lngBase === 0
         ) return null;
 
-        // LÓGICA DE SPIDERING (Avançada para o MapLibre)
+        // LÓGICA DE SPIDERING: Espalha os marcadores para não ficarem uns por cima dos outros
         const coordKey = `${latBase.toFixed(4)},${lngBase.toFixed(4)}`;
         if (!contagemCoords[coordKey]) contagemCoords[coordKey] = 0;
         
         const indiceColisao = contagemCoords[coordKey];
         contagemCoords[coordKey] += 1;
 
-        // Se for o primeiro na morada, fica no centro. Os seguintes fazem um pequeno círculo à volta (Raio aumentado para 0.0002)
-        const angulo = (indiceColisao * Math.PI) / 2; // Distribui em cruz
+        const angulo = (indiceColisao * Math.PI) / 2;
         const raioDesvio = indiceColisao > 0 ? 0.0002 : 0; 
         
         const lat = latBase + (Math.sin(angulo) * raioDesvio);
@@ -119,9 +118,9 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      style: esriRasterStyle,
+      style: cartoRasterStyle, // Injetamos o novo mapa Grátis
       center: [-8.2245, 39.3999],
-      zoom: 5, // Começa mais longe para ver Europa
+      zoom: 5,
       minZoom: 3,
       maxZoom: 19,
       attributionControl: { compact: true },
@@ -170,7 +169,6 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
         el.addEventListener('mouseenter', () => { el.style.zIndex = "999"; });
         el.addEventListener('mouseleave', () => { el.style.zIndex = ""; });
 
-        // O HTML do pino
         el.innerHTML = `
           <div class="hc-pin-svg">
             <svg viewBox="0 0 24 24" width="36" height="36" xmlns="http://www.w3.org/2000/svg">
@@ -200,9 +198,8 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
           </div>
         `;
 
-        // AQUI ESTÁ O SEGREDO: anchor: "bottom" encosta a base da DIV na coordenada.
-        // E o offset [0, 4] puxa visualmente a gota 4px para baixo, fazendo a ponta tocar exatamente na coordenada real!
-        const marker = new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, 4] })
+        // Anchor "bottom" diz ao MapLibre para colar a base exata da div no ponto geográfico
+        const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([c.longitude, c.latitude])
           .addTo(instance);
 
@@ -227,7 +224,6 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   return (
     <>
       <style>{`
-        /* CSS CORRIGIDO PARA O PINO FICAR FIXO E ANCORADO */
         .hc-marker-container { 
           position: relative; 
           width: 36px; height: 36px; 
@@ -236,10 +232,10 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
         }
 
         .hc-pin-svg {
-          transform-origin: bottom center; /* Anima a partir da ponta inferior */
+          transform-origin: bottom center;
           transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
           filter: drop-shadow(0px 4px 6px rgba(226, 164, 29, 0.4));
-          display: flex; /* Remove espaços mortos do inline-block */
+          display: flex;
         }
 
         .hc-marker-container:hover .hc-pin-svg {
@@ -252,7 +248,7 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
         }
 
         .hc-hover-popup {
-          position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%) translateY(10px);
+          position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(10px);
           width: 260px; background: white; border-radius: 16px;
           box-shadow: 0 10px 30px -5px rgba(0,0,0,0.2); opacity: 0; visibility: hidden;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none;
