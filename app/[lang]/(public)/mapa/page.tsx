@@ -11,6 +11,9 @@ export const metadata = {
   description: "Explore no mapa interativo todos os campos de férias em Portugal e no Mundo. Filtre por categoria e idade.",
 };
 
+// ═══════════════════════════════════════════
+// CACHE DE DADOS (24 HORAS) - ZERO EGRESS
+// ═══════════════════════════════════════════
 const getCamposMapaCache = unstable_cache(
   async () => {
     const { data } = await supabase
@@ -20,7 +23,7 @@ const getCamposMapaCache = unstable_cache(
     return data || [];
   },
   ['cache-mapa-campos'],
-  { revalidate: 86400 } 
+  { revalidate: 86400 } // 24h
 );
 
 export default async function PaginaMapa({
@@ -39,6 +42,7 @@ export default async function PaginaMapa({
   const idade = sp?.idade || "";
   const lingua = sp?.lingua || "";
 
+  // 1. CARREGAR DADOS DA CACHE (Ultra-Rápido)
   const todosOsCampos = await getCamposMapaCache();
 
   const categoriasMap = new Map<string, string>();
@@ -55,6 +59,7 @@ export default async function PaginaMapa({
   const idadesOpcoes = Array.from(idadesMap.entries()).map(([pt, en]) => ({ valor: pt, label: isEn ? en : pt }));
   const linguasUnicas = Array.from(linguasMap).sort();
 
+  // 2. FILTRAGEM INSTANTÂNEA NA RAM
   let camposExibidos = todosOsCampos;
 
   if (categoria) camposExibidos = camposExibidos.filter(c => c.categoria === categoria);
@@ -66,8 +71,8 @@ export default async function PaginaMapa({
   return (
     <main className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-50 font-sans overflow-hidden">
 
-      {/* BARRA LATERAL (APENAS FILTROS) */}
-      <aside className="w-full md:w-[320px] bg-white border-b md:border-b-0 md:border-r border-slate-200 p-6 md:p-8 flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 overflow-y-auto">
+      {/* BARRA LATERAL (SIDEBAR DE FILTROS) */}
+      <aside className="w-full md:w-[380px] bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-6 md:p-8 flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 max-h-[45vh] md:max-h-full">
 
         <Link
           href={`/${lang}`}
@@ -80,6 +85,9 @@ export default async function PaginaMapa({
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">
             {dict.mapa.filtros}
           </h2>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+            {camposExibidos.length} {dict.mapa.encontrados}
+          </span>
         </div>
 
         <form action={`/${lang}/mapa`} method="GET" className="flex flex-col gap-5">
@@ -118,6 +126,29 @@ export default async function PaginaMapa({
             )}
           </div>
         </form>
+
+        {camposExibidos && camposExibidos.length > 0 && (
+          <div className="mt-8 pt-6 border-t border-slate-100 flex-1 overflow-y-auto pr-2">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+              {isEn ? "Camps on Map" : "No Mapa"}
+            </p>
+            <div className="flex flex-col gap-2">
+              {camposExibidos.map((c: any) => {
+                const nome = isEn && c.nome_en ? c.nome_en : c.nome;
+                const temCoords = c.latitude != null && c.longitude != null;
+                return (
+                  <Link key={c.id} href={`/${lang}/campo/${c.id}`} className="group flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-[#e2a41d] hover:bg-white transition-all no-underline">
+                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${temCoords ? "bg-[#e2a41d] shadow-sm" : "bg-slate-300"}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-black text-slate-800 truncate group-hover:text-slate-900">{nome}</p>
+                    </div>
+                    <span className="text-slate-300 group-hover:text-[#e2a41d] text-sm font-bold">&rarr;</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* ÁREA DO MAPA */}
