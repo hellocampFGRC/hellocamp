@@ -1,8 +1,7 @@
 import { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import BotaoFavorito from "../../../components/BotaoFavorito";
-import Image from "next/image";
+import BotaoFavorito from "../../../../(public)/components/BotaoFavorito";
 import { unstable_cache } from "next/cache";
 
 export const dynamic = 'force-dynamic';
@@ -36,7 +35,7 @@ const getCamposPorPaisCache = unstable_cache(
 );
 
 // ==========================================
-// 1. SEO METADATA
+// 1. SEO METADATA (Com Tradução Segura)
 // ==========================================
 export async function generateMetadata({
   params
@@ -49,13 +48,18 @@ export async function generateMetadata({
 
   const pais = await getPaisCache(nomeLimpo);
 
+  // Fallback de Tradução Seguro
+  const fallbackEN: Record<string, string> = { "Reino Unido": "United Kingdom", "Espanha": "Spain", "França": "France", "Estados Unidos": "United States", "Portugal": "Portugal" };
+  const nomeIngles = fallbackEN[nomeLimpo] || nomeLimpo;
+  const nomeFinalApresentar = isEn ? (pais?.nome_en || nomeIngles) : (pais?.nome || nomeLimpo);
+
   if (!pais) {
-    return { title: isEn ? `Camps in ${nomeLimpo} | HelloCamp` : `Campos em ${nomeLimpo} | HelloCamp` };
+    return { title: isEn ? `Camps in ${nomeFinalApresentar} | HelloCamp` : `Campos em ${nomeFinalApresentar} | HelloCamp` };
   }
 
   const title = isEn
-    ? (pais.seo_titulo_en || `Summer Camps in ${pais.nome_en || pais.nome} | HelloCamp`)
-    : (pais.seo_titulo || `Campos de Férias em ${pais.nome} | HelloCamp`);
+    ? (pais.seo_titulo_en || `Summer Camps in ${nomeFinalApresentar} | HelloCamp`)
+    : (pais.seo_titulo || `Campos de Férias em ${nomeFinalApresentar} | HelloCamp`);
 
   const description = isEn ? pais.seo_descricao_en : pais.seo_descricao;
 
@@ -92,11 +96,9 @@ export default async function PesquisaPorPais({
 
   const mostrarDistritos = nomePaisInicial.toLowerCase() === "portugal";
 
-  // Buscar DADOS EM CACHE (24h) com a nova coluna rigorosa de país
   const dadosPais = await getPaisCache(nomePaisInicial);
   const todosOsCamposDoPais = await getCamposPorPaisCache(nomePaisInicial);
 
-  // FILTRAGEM INSTANTÂNEA EM MEMÓRIA (Server-Side)
   let resultados = todosOsCamposDoPais;
 
   if (categoriaParam) {
@@ -115,7 +117,10 @@ export default async function PesquisaPorPais({
     });
   }
 
-  const nomePaisApresentar = isEn && dadosPais?.nome_en ? dadosPais.nome_en : (dadosPais?.nome || nomePaisInicial);
+  // Fallback de Tradução Seguro para a Interface
+  const fallbackEN: Record<string, string> = { "Reino Unido": "United Kingdom", "Espanha": "Spain", "França": "France", "Estados Unidos": "United States", "Portugal": "Portugal" };
+  const nomeIngles = fallbackEN[nomePaisInicial] || nomePaisInicial;
+  const nomePaisApresentar = isEn ? (dadosPais?.nome_en || nomeIngles) : (dadosPais?.nome || nomePaisInicial);
 
   const descricaoPadrao = isEn
     ? `Explore premium holiday camps in ${nomePaisApresentar}. From thrilling outdoor adventures and intensive sports clubs to creative arts and language classes, discover handpicked programs.`
@@ -142,7 +147,6 @@ export default async function PesquisaPorPais({
     <main className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
 
-      {/* 1. CABEÇALHO EDITORIAL */}
       <section className="bg-white pt-10 pb-8 px-4 md:px-6 border-b border-slate-200 shadow-sm relative z-20">
         <div className="max-w-[1100px] mx-auto">
           <nav className="flex items-center gap-2 text-xs font-black text-slate-400 mb-6 tracking-widest uppercase">
@@ -167,7 +171,6 @@ export default async function PesquisaPorPais({
         </div>
       </section>
 
-      {/* 2. BARRA DE FILTROS */}
       <section className="bg-white border-b border-slate-200 py-4 px-4 md:px-6 sticky top-[72px] md:top-[80px] z-30 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
         <div className="max-w-[1100px] mx-auto">
           <form action={`/${lang}/pesquisa/pais/${encodeURIComponent(nomePaisInicial)}`} method="GET" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 items-center">
@@ -216,7 +219,6 @@ export default async function PesquisaPorPais({
         </div>
       </section>
 
-      {/* 3. RESULTADOS DA PESQUISA */}
       <section className="max-w-[1100px] mx-auto px-4 py-12 md:py-16">
         {!resultados || resultados.length === 0 ? (
           <div className="text-center p-12 bg-white rounded-[2rem] border border-slate-200 shadow-sm max-w-2xl mx-auto flex flex-col items-center gap-4">
@@ -295,7 +297,6 @@ export default async function PesquisaPorPais({
         )}
       </section>
 
-      {/* 4. CROSS-LINKING */}
       <section className="bg-white border-t border-slate-200 py-20 px-4 md:px-6">
         <div className="max-w-[1100px] mx-auto text-center md:text-left">
           <h3 className="text-2xl font-black text-slate-900 mb-8">{isEn ? `Explore more in ${nomePaisApresentar}` : `Explore mais em ${nomePaisApresentar}`}</h3>

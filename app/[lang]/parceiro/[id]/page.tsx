@@ -7,9 +7,6 @@ import { unstable_cache } from "next/cache";
 
 export const dynamic = 'force-dynamic';
 
-// ==========================================
-// CACHE DE DADOS (24 HORAS)
-// ==========================================
 const getPerfilCache = unstable_cache(
   async (id: string) => {
     const { data } = await supabase.from('perfis').select('*').eq('id', id).single();
@@ -33,9 +30,6 @@ const getCamposDoParceiroCache = unstable_cache(
   { revalidate: 86400 }
 );
 
-// ==========================================
-// 1. SEO METADATA
-// ==========================================
 export async function generateMetadata({
   params
 }: {
@@ -50,7 +44,7 @@ export async function generateMetadata({
     return { title: 'Parceiro não encontrado | HelloCamp' };
   }
 
-  const nome = parceiro.nome_empresa || 'Parceiro HelloCamp';
+  const nome = parceiro.empresa_nome || parceiro.nome_empresa || parceiro.nome_completo || 'Parceiro HelloCamp';
   const descricao = isEn ? parceiro.descricao_en : parceiro.descricao;
   const descCurta = descricao ? descricao.substring(0, 155) + '...' : `Explore os campos de férias organizados por ${nome}.`;
 
@@ -65,9 +59,6 @@ export async function generateMetadata({
   };
 }
 
-// ==========================================
-// 2. PÁGINA DO PARCEIRO
-// ==========================================
 export default async function PaginaParceiro({
   params
 }: {
@@ -92,6 +83,8 @@ export default async function PaginaParceiro({
   }
 
   const campos = await getCamposDoParceiroCache(id);
+  
+  const nomeSeguro = parceiro.empresa_nome || parceiro.nome_empresa || parceiro.nome_completo || 'Parceiro HelloCamp';
   const descricao = isEn && parceiro.descricao_en ? parceiro.descricao_en : parceiro.descricao;
 
   return (
@@ -102,15 +95,14 @@ export default async function PaginaParceiro({
         <nav className="flex items-center gap-2 text-[10px] font-black text-slate-400 mb-8 tracking-widest uppercase">
           <Link href={`/${lang}`} className="hover:text-[#0E3A68] transition-colors">{isEn ? 'Home' : 'Início'}</Link>
           <span>/</span>
-          <span className="text-slate-900">{parceiro.nome_empresa || 'Parceiro'}</span>
+          <span className="text-slate-900">{nomeSeguro}</span>
         </nav>
 
         <div className="bg-white rounded-[2rem] p-8 md:p-12 border border-slate-200 shadow-sm flex flex-col md:flex-row gap-8 md:gap-12 items-start">
           
-          {/* Logo da Empresa */}
           <div className="w-32 h-32 md:w-48 md:h-48 rounded-full bg-slate-50 border-4 border-white shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex-shrink-0 flex items-center justify-center p-6 mx-auto md:mx-0 overflow-hidden relative">
             {parceiro.logotipo_url ? (
-               <img src={parceiro.logotipo_url} alt={parceiro.nome_empresa} className="w-full h-full object-contain" />
+               <img src={parceiro.logotipo_url} alt={nomeSeguro} className="w-full h-full object-contain" />
             ) : (
                <span className="text-5xl">🏢</span>
             )}
@@ -121,13 +113,12 @@ export default async function PaginaParceiro({
             )}
           </div>
 
-          {/* Dados da Empresa */}
           <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left">
             <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest mb-3 border border-slate-200">
               {isEn ? 'Official Organizer' : 'Organizador Oficial'}
             </span>
             <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-4 tracking-tight leading-tight">
-              {parceiro.nome_empresa || 'Parceiro HelloCamp'}
+              {nomeSeguro}
             </h1>
             
             {descricao && (
@@ -156,7 +147,7 @@ export default async function PaginaParceiro({
       <div className="max-w-[1100px] mx-auto px-4 md:px-6">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-black text-slate-900">
-            {isEn ? `Camps by ${parceiro.nome_empresa}` : `Programas de ${parceiro.nome_empresa}`}
+            {isEn ? `Camps by ${nomeSeguro}` : `Programas de ${nomeSeguro}`}
           </h2>
           <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
             {campos.length} {isEn ? 'Programs' : 'Programas'}
