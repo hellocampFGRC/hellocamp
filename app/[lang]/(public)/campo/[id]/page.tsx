@@ -96,7 +96,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
 
   let parceiroInfo = null;
   if (campo.organizador_id) {
-    const { data: organizador } = await supabase.from("perfis").select("nome_empresa, logotipo_url, parceiro_verificado").eq("id", campo.organizador_id).single();
+    const { data: organizador } = await supabase.from("perfis").select("*").eq("id", campo.organizador_id).single();
     parceiroInfo = organizador;
   }
 
@@ -163,7 +163,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
     }),
     "organizer": {
       "@type": "Organization",
-      "name": parceiroInfo?.nome_empresa || "HelloCamp Partner"
+      "name": parceiroInfo ? (parceiroInfo.empresa_nome || parceiroInfo.nome_empresa || parceiroInfo.nome_completo) : "HelloCamp Partner"
     }
   };
 
@@ -179,6 +179,11 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
   };
 
   const heroImgUrl = campo.imagem?.startsWith('http') ? campo.imagem : '/og-image.jpg';
+  
+  // NOME FINAL DO PARCEIRO BLINDADO
+  const nomeExibicaoParceiro = parceiroInfo 
+    ? (parceiroInfo.empresa_nome || parceiroInfo.nome_empresa || parceiroInfo.nome_completo || 'Parceiro HelloCamp')
+    : 'Parceiro HelloCamp';
 
   return (
     <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24">
@@ -285,7 +290,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                     <div className="flex items-center gap-5">
                       <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-inner flex-shrink-0 p-3">
                         {parceiroInfo.logotipo_url ? (
-                          <img src={parceiroInfo.logotipo_url} alt={parceiroInfo.nome_empresa} className="w-full h-full object-contain" />
+                          <img src={parceiroInfo.logotipo_url} alt={nomeExibicaoParceiro} className="w-full h-full object-contain" />
                         ) : (
                           <span className="text-slate-300 text-3xl">🏢</span>
                         )}
@@ -293,7 +298,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className="text-xl font-black text-slate-900 m-0 leading-none">
-                            {parceiroInfo.nome_empresa || 'Parceiro HelloCamp'}
+                            {nomeExibicaoParceiro}
                           </h3>
                           {parceiroInfo.parceiro_verificado && (
                             <span className="bg-emerald-100 text-emerald-700 rounded-full p-1 shadow-sm" title={isEn ? "Verified Partner" : "Parceiro Verificado"}>
@@ -317,48 +322,50 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 </div>
               )}
 
-              {/* NAVEGAÇÃO INTELIGENTE (ZERO APIS - DEEP LINKS DE GPS) */}
-              {campo.latitude && campo.longitude && (
-                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    
-                    <div>
-                      <h2 className="text-xl font-black text-slate-900 mb-2">{isEn ? 'Location & Directions' : 'Localização e Como Chegar'}</h2>
-                      <p className="text-sm font-medium text-slate-500 flex items-center gap-2 leading-relaxed max-w-sm">
-                        <svg className="w-5 h-5 text-[#e2a41d] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                        {localCampo}
-                      </p>
-                    </div>
+              {/* NAVEGAÇÃO INTELIGENTE COM O MAPA INCORPORADO E BOTÕES NATIVOS */}
+              <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
+                <h2 className="text-xl font-black text-slate-900 mb-2">{isEn ? 'Location & Directions' : 'Localização e Como Chegar'}</h2>
+                <p className="text-sm font-medium text-slate-500 flex items-center gap-2 leading-relaxed mb-6">
+                  <svg className="w-5 h-5 text-[#e2a41d] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  {localCampo}
+                </p>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      <a 
-                        href={`https://maps.apple.com/?daddr=${campo.latitude},${campo.longitude}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-900 px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-slate-200 shadow-sm"
-                      >
-                        Apple Maps
-                      </a>
-                      <a 
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${campo.latitude},${campo.longitude}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#BBF7D0] shadow-sm"
-                      >
-                        Google Maps
-                      </a>
-                      <a 
-                        href={`https://waze.com/ul?ll=${campo.latitude},${campo.longitude}&navigate=yes`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4338CA] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#C7D2FE] shadow-sm"
-                      >
-                        Waze
-                      </a>
-                    </div>
-                  </div>
+                {/* O Teu Iframe Gracioso em Tons de Cinza */}
+                <div className="w-full h-64 md:h-80 bg-slate-100 rounded-2xl mb-6 overflow-hidden border border-slate-200 relative group shadow-inner">
+                  <iframe 
+                    width="100%" height="100%" frameBorder="0" scrolling="no" marginHeight={0} marginWidth={0} loading="lazy"
+                    src={`https://maps.google.com/maps?q=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : encodeURIComponent(localCampo)}&z=15&output=embed`}
+                    className="w-full h-full border-0 outline-none grayscale-[30%] contrast-[1.1] opacity-90 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
+                  ></iframe>
                 </div>
-              )}
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <a 
+                    href={`https://maps.apple.com/?daddr=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : encodeURIComponent(localCampo)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-900 px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-slate-200 shadow-sm"
+                  >
+                    Apple Maps
+                  </a>
+                  <a 
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : encodeURIComponent(localCampo)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#BBF7D0] shadow-sm"
+                  >
+                    Google Maps
+                  </a>
+                  <a 
+                    href={`https://waze.com/ul?ll=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : ''}&q=${encodeURIComponent(localCampo)}&navigate=yes`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4338CA] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#C7D2FE] shadow-sm"
+                  >
+                    Waze
+                  </a>
+                </div>
+              </div>
 
               {/* MOTOR DE RESERVA INTERATIVO */}
               <SeletorOpcoes />
@@ -432,7 +439,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-black text-slate-900 m-0">
-                      {isEn ? `More from ${parceiroInfo?.nome_empresa || 'this partner'}` : `Mais de ${parceiroInfo?.nome_empresa || 'este parceiro'}`}
+                      {isEn ? `More from ${nomeExibicaoParceiro}` : `Mais de ${nomeExibicaoParceiro}`}
                     </h2>
                     {campo.organizador_id && (
                       <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="text-[10px] font-black uppercase tracking-widest text-[#0E3A68] hover:underline">
