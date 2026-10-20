@@ -74,7 +74,6 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
       
-      {/* HEADER SEO */}
       <section className="bg-white border-b border-slate-200 pt-8 pb-10 px-4 md:px-6 shadow-sm">
         <div className="max-w-[1100px] mx-auto">
           <nav className="flex items-center gap-2 text-[10px] font-black text-slate-400 mb-6 tracking-widest uppercase">
@@ -98,7 +97,6 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
         </div>
       </section>
 
-      {/* RESULTADOS OU SMART EMPTY STATE */}
       <section className="max-w-[1100px] mx-auto px-4 py-12 md:py-16">
         {resultados.length === 0 ? (
           <div className="flex flex-col gap-16">
@@ -115,10 +113,10 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
                   : 'Estamos a adicionar parceiros todos os dias. Entretanto, veja estas alternativas incríveis que outras famílias estão a reservar.'}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 mt-6 w-full sm:w-auto">
-                <Link href={`/${lang}/pesquisa?categoria=${encodeURIComponent(catFormatada)}`} className="bg-[#0E3A68] text-white font-black px-8 py-4 rounded-xl hover:bg-[#0b2b4d] transition-all shadow-lg uppercase tracking-widest text-xs flex-1 text-center">
+                <Link href={`/${lang}/pesquisa?categoria=${encodeURIComponent(catFormatada)}`} className="bg-[#e2a41d] text-white font-black px-8 py-4 rounded-xl hover:bg-[#d4991b] transition-all shadow-lg uppercase tracking-widest text-xs flex-1 text-center">
                   {isEn ? `Search Anywhere` : `Procurar Noutros Locais`}
                 </Link>
-                <Link href={`/${lang}/pesquisa`} className="bg-slate-100 text-slate-700 font-black px-8 py-4 rounded-xl hover:bg-slate-200 transition-colors uppercase tracking-widest text-xs flex-1 text-center border border-slate-200">
+                <Link href={`/${lang}/pesquisa`} className="bg-[#0E3A68] text-white font-black px-8 py-4 rounded-xl hover:bg-[#0b2b4d] transition-all shadow-lg uppercase tracking-widest text-xs flex-1 text-center border border-[#0E3A68]">
                   {isEn ? 'View All Camps' : 'Ver Todos os Campos'}
                 </Link>
               </div>
@@ -138,7 +136,6 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
                   const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
                   const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
                   const localC = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
-                  
                   let precoVisivel = campo.preco || 0;
                   if (!precoVisivel && campo.pacotes?.length > 0) {
                     const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes?.map((v: any) => v.preco) || []);
@@ -151,15 +148,13 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
                     <div key={campo.id} className="group flex flex-col bg-white rounded-[2rem] overflow-hidden border border-slate-200 relative shadow-sm hover:shadow-[0_20px_60px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1">
                       <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
                       <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
-                      
                       <div className="relative h-60 w-full overflow-hidden bg-slate-100">
                         <div 
                           className="absolute inset-0 w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
                           style={{ backgroundImage: `url('${imgUrl}')` }}
                         />
-                        <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#0E3A68] rounded-lg z-0 shadow-sm">{catCampo}</div>
+                        <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#0E3A68] rounded-lg z-0">{catCampo}</div>
                       </div>
-                      
                       <div className="flex flex-col p-6 flex-1 pointer-events-none">
                         <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
                           <svg className="w-3 h-3 text-[#e2a41d]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
@@ -226,7 +221,7 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'Desde'}</p>
                         <p className="text-2xl font-black text-[#0E3A68] m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                       </div>
-                      <span className="bg-slate-100 text-[#0E3A68] px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#0E3A68] group-hover:text-white shadow-sm">
+                      <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#0E3A68] group-hover:text-white shadow-sm">
                         {isEn ? 'View Dates' : 'Ver Datas'}
                       </span>
                     </div>

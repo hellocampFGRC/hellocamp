@@ -179,7 +179,8 @@ export default async function PaginaPesquisa({
                 />
               </div>
 
-              <button type="submit" className="w-full py-3.5 bg-[#e2a41d] hover:bg-[#d4991b] text-[#0E3A68] font-black text-sm uppercase tracking-widest rounded-xl transition-all shadow-md mt-auto">
+              {/* BOTÃO CORRIGIDO PARA BRANCO */}
+              <button type="submit" className="w-full py-3.5 bg-[#e2a41d] hover:bg-[#d4991b] text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all shadow-md mt-auto">
                 {isEn ? 'Search' : 'Pesquisar'}
               </button>
             </div>
@@ -224,7 +225,7 @@ export default async function PaginaPesquisa({
                 if (todosPrecos.length > 0) precoVisivel = Math.min(...todosPrecos);
               }
 
-              // Prepara o URL da imagem com segurança
+              // SISTEMA ANTI-IMAGEM QUEBRADA
               const imgUrl = campo.imagem?.startsWith('http') ? campo.imagem : '/og-image.jpg';
 
               return (
@@ -232,7 +233,6 @@ export default async function PaginaPesquisa({
                   <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
                   <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
                   
-                  {/* IMAGEM COM TRUQUE CSS (BACKGROUND) PARA NUNCA QUEBRAR */}
                   <div className="relative h-60 w-full overflow-hidden bg-slate-100">
                     <div 
                       className="absolute inset-0 w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"

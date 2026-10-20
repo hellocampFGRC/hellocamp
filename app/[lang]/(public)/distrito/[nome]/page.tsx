@@ -2,14 +2,12 @@ import { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import BotaoFavorito from "../../components/BotaoFavorito";
-import Image from "next/image";
 import { unstable_cache } from "next/cache";
 
 export const dynamic = 'force-dynamic';
 
 const escapeOr = (str: string) => str.replace(/[,()]/g, ' ').trim();
 
-// ARRAY DE IMAGENS DE FALLBACK
 const IMAGENS_DISTRITOS: Record<string, string> = {
   "Lisboa": "https://images.unsplash.com/photo-1585208798174-6cedd86e019a?auto=format&fit=crop&q=80&w=1200",
   "Porto": "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=1200",
@@ -23,9 +21,6 @@ const IMAGENS_DISTRITOS: Record<string, string> = {
 
 const IMAGEM_GENERICA = "https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&q=80&w=1200";
 
-// ==========================================
-// CACHE DE DADOS (24 HORAS) - ZERO EGRESS
-// ==========================================
 const getDistritoCache = unstable_cache(
   async (nomeLimpo: string) => {
     const { data } = await supabase.from('distritos').select('*').ilike('nome', nomeLimpo).single();
@@ -49,9 +44,6 @@ const getCamposNoDistritoCache = unstable_cache(
   { revalidate: 86400 } // 24h
 );
 
-// ==========================================
-// 1. SEO METADATA
-// ==========================================
 export async function generateMetadata({ 
   params 
 }: { 
@@ -90,9 +82,6 @@ export async function generateMetadata({
   };
 }
 
-// ==========================================
-// 2. COMPONENTE PRINCIPAL
-// ==========================================
 export default async function PaginaDoDistrito({ 
   params 
 }: { 
@@ -103,18 +92,17 @@ export default async function PaginaDoDistrito({
   
   const nomeLimpo = decodeURIComponent(nome).replace(/[%_]/g, '');
   
-  // Buscar DADOS EM CACHE (24h)
   const distrito = await getDistritoCache(nomeLimpo);
   const camposNoDistrito = await getCamposNoDistritoCache(nomeLimpo);
 
   if (!distrito) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-center font-sans px-4">
-        <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-3xl shadow-sm border border-slate-200 mb-6">🕵️‍♂️</div>
+        <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-4xl shadow-sm border border-slate-200 mb-6">🕵️‍♂️</div>
         <h1 className="text-3xl font-black text-slate-900 tracking-tight">
           {isEn ? 'District not found' : 'Não foi possível encontrar este distrito'}
         </h1>
-        <Link href={`/${lang}`} className="mt-6 bg-slate-900 text-white font-bold px-6 py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-md">
+        <Link href={`/${lang}`} className="mt-6 bg-[#0E3A68] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#0b2b4d] transition-colors shadow-md">
           &larr; {isEn ? 'Back to home' : 'Voltar à página inicial'}
         </Link>
       </div>
@@ -131,7 +119,6 @@ export default async function PaginaDoDistrito({
     ? distrito.imagem_capa 
     : (IMAGENS_DISTRITOS[distrito.nome] || IMAGEM_GENERICA);
 
-  // SCHEMA MARKUP PARA BREADCRUMBS
   const baseUrl = "https://www.hellocamp.pt";
   const breadcrumbSchema = {
     "@context": "https://schema.org",
@@ -146,18 +133,16 @@ export default async function PaginaDoDistrito({
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
       
-      {/* SCRIPT SEO INVISÍVEL */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
 
-      {/* 2. HEADER HERO DO DISTRITO */}
+      {/* HEADER HERO DO DISTRITO */}
       <section className="bg-white border-b border-slate-200 pt-10 pb-12 px-4 md:px-6 shadow-sm relative z-20">
         <div className="max-w-[1100px] mx-auto">
           
-          {/* BREADCRUMBS VISUAIS */}
-          <nav className="flex items-center gap-2 text-xs font-black text-slate-400 mb-6 tracking-widest uppercase">
-            <Link href={`/${lang}`} className="hover:text-slate-900 transition-colors">{isEn ? 'Home' : 'Início'}</Link>
+          <nav className="flex items-center gap-2 text-[10px] font-black text-slate-400 mb-6 tracking-widest uppercase">
+            <Link href={`/${lang}`} className="hover:text-[#0E3A68] transition-colors">{isEn ? 'Home' : 'Início'}</Link>
             <span>/</span>
-            <Link href={`/${lang}/pesquisa/pais/Portugal`} className="hover:text-slate-900 transition-colors">Portugal</Link>
+            <Link href={`/${lang}/pesquisa/pais/Portugal`} className="hover:text-[#0E3A68] transition-colors">Portugal</Link>
             <span>/</span>
             <span className="text-slate-900">{nomeDistrito}</span>
           </nav>
@@ -175,21 +160,17 @@ export default async function PaginaDoDistrito({
               </p>
             </div>
             
-            <div className="w-full md:w-72 h-48 md:h-72 rounded-[2rem] overflow-hidden flex-shrink-0 shadow-lg relative hidden sm:block">
-              <Image 
-                src={imagemCapaFinal} 
-                alt={nomeDistrito} 
-                fill
-                priority
-                className="object-cover" 
-                sizes="(max-width: 768px) 100vw, 300px"
+            <div className="w-full md:w-72 h-48 md:h-72 rounded-[2rem] overflow-hidden flex-shrink-0 shadow-lg relative hidden sm:block bg-slate-200">
+              <div 
+                className="w-full h-full bg-cover bg-center"
+                style={{ backgroundImage: `url('${imagemCapaFinal}')` }}
               />
             </div>
           </div>
         </div>
       </section>
 
-      {/* 3. LISTAGEM DE CAMPOS NO DISTRITO */}
+      {/* LISTAGEM DE CAMPOS NO DISTRITO */}
       <section className="max-w-[1100px] mx-auto px-4 py-12 md:py-16">
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -201,7 +182,7 @@ export default async function PaginaDoDistrito({
               <span className="capitalize font-bold text-slate-700"> {nomeDistrito}</span>.
             </p>
           </div>
-          <span className="hidden sm:inline-block text-sm font-bold text-slate-500 uppercase tracking-widest bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
+          <span className="hidden sm:inline-block text-[10px] font-black text-slate-500 uppercase tracking-widest bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
             {camposNoDistrito.length} {isEn ? 'found' : 'encontrados'}
           </span>
         </div>
@@ -212,7 +193,7 @@ export default async function PaginaDoDistrito({
             <p className="text-lg text-slate-500 font-bold">
               {isEn ? 'There are no camps available for this district yet.' : 'Ainda não existem campos disponíveis para este distrito.'}
             </p>
-            <Link href={`/${lang}/pesquisa`} className="mt-4 bg-slate-900 text-white font-bold px-6 py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-lg">
+            <Link href={`/${lang}/pesquisa`} className="mt-4 bg-[#0E3A68] text-white font-black uppercase tracking-widest text-[10px] px-6 py-3 rounded-xl hover:bg-[#0b2b4d] transition-colors shadow-lg">
               {isEn ? 'Search all regions' : 'Ver todas as regiões'}
             </Link>
           </div>
@@ -232,6 +213,8 @@ export default async function PaginaDoDistrito({
                 if (todosPrecos.length > 0) precoVisivel = Math.min(...todosPrecos);
               }
 
+              const imgUrl = campo.imagem?.startsWith('http') ? campo.imagem : '/og-image.jpg';
+
               return (
                 <div key={campoId} className="group flex flex-col bg-white rounded-[2rem] overflow-hidden border border-slate-200 relative shadow-sm hover:shadow-[0_20px_60px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1">
                   
@@ -243,24 +226,19 @@ export default async function PaginaDoDistrito({
                     <BotaoFavorito campoId={campoId} />
                   </div>
 
-                  {/* NEXT/IMAGE LAZY LOADING */}
                   <div className="relative h-60 w-full overflow-hidden bg-slate-100">
-                    <Image 
-                      src={campo.imagem || '/og-image.jpg'} 
-                      alt={nomeCampo} 
-                      fill
-                      loading="lazy"
-                      className="object-cover transition-transform duration-700 group-hover:scale-105" 
-                      sizes="(max-width: 768px) 100vw, 33vw"
+                    <div 
+                      className="absolute inset-0 w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
+                      style={{ backgroundImage: `url('${imgUrl}')` }}
                     />
-                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-900 rounded-lg z-0 shadow-sm">
+                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#0E3A68] rounded-lg z-0 shadow-sm">
                       {catCampo}
                     </div>
                   </div>
                   
                   <div className="flex flex-col p-6 flex-1 pointer-events-none">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
-                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                      <svg className="w-3 h-3 text-[#e2a41d]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                       {localCampo}
                     </div>
                     <h3 className="text-xl font-black text-slate-900 leading-tight mb-2 line-clamp-2">{nomeCampo}</h3>
@@ -271,9 +249,9 @@ export default async function PaginaDoDistrito({
                     <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
-                        <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                        <p className="text-2xl font-black text-[#0E3A68] m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                       </div>
-                      <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors group-hover:bg-[#e2a41d] group-hover:text-white shadow-sm">
+                      <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#0E3A68] group-hover:text-white shadow-sm">
                         {isEn ? 'View Dates' : 'Ver Datas'}
                       </span>
                     </div>
@@ -285,7 +263,7 @@ export default async function PaginaDoDistrito({
         )}
       </section>
 
-      {/* 4. CROSS-LINKING SEO */}
+      {/* CROSS-LINKING SEO */}
       <section className="bg-white border-t border-slate-200 py-20 px-4 md:px-6">
          <div className="max-w-[1100px] mx-auto text-center md:text-left">
             <h3 className="text-2xl font-black text-slate-900 mb-8 capitalize">
