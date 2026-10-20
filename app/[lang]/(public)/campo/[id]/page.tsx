@@ -9,10 +9,7 @@ import FormContactoCampo from "../../components/FormContactoCampo";
 import DescricaoExpansivel from "../../components/DescricaoExpansivel";
 import { unstable_cache } from "next/cache";
 
-// ==========================================
-// CACHE GLOBAL DA PÁGINA DE DESTINO (24 HORAS)
-// ==========================================
-export const revalidate = 86400; // Mantém a página ultrarrápida na Edge Vercel
+export const revalidate = 86400;
 
 const getCampoCached = unstable_cache(
   async (id: string) => {
@@ -36,23 +33,13 @@ const getRelacionadosCached = unstable_cache(
   async (id: string, organizadorId: string | null, categoria: string | null) => {
     let outrosDoParceiro: any[] = [];
     if (organizadorId) {
-      const { data } = await supabase
-        .from('campos')
-        .select('id, nome, nome_en, imagem, distrito')
-        .eq('organizador_id', organizadorId)
-        .neq('id', id)
-        .limit(3);
+      const { data } = await supabase.from('campos').select('id, nome, nome_en, imagem, distrito').eq('organizador_id', organizadorId).neq('id', id).limit(3);
       outrosDoParceiro = data || [];
     }
 
     let semelhantes: any[] = [];
     if (categoria) {
-      const { data } = await supabase
-        .from('campos')
-        .select('id, nome, nome_en, imagem, distrito')
-        .eq('categoria', categoria)
-        .neq('id', id)
-        .limit(3);
+      const { data } = await supabase.from('campos').select('id, nome, nome_en, imagem, distrito').eq('categoria', categoria).neq('id', id).limit(3);
       semelhantes = data || [];
     }
 
@@ -79,9 +66,6 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
   };
 }
 
-// ==========================================
-// COMPONENTE PRINCIPAL (SERVER COMPONENT)
-// ==========================================
 export default async function DetalhesDoCampo({ params }: { params: Promise<{ lang: string; id: string }>; }) {
   const { lang, id } = await params;
 
@@ -193,18 +177,19 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
     ]
   };
 
+  // Garante que o URL existe antes de o colocar no background (Fallback robusto)
+  const heroImgUrl = campo.imagem?.startsWith('http') ? campo.imagem : '/og-image.jpg';
+
   return (
     <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }} />
 
-      {/* HERO SECTION - Imagem Nativa Segura e Fallback */}
+      {/* HERO SECTION - Background Seguro e Elegante */}
       <div className="relative w-full h-[40vh] min-h-[350px] md:h-[500px] bg-slate-900 overflow-hidden">
-        {/* Usamos <img> em vez de next/image para não quebrar estilos do browser */}
-        <img 
-          src={campo.imagem || '/og-image.jpg'} 
-          alt={nomeCampo}
-          className="absolute inset-0 w-full h-full object-cover opacity-90"
+        <div 
+          className="absolute inset-0 w-full h-full bg-cover bg-center opacity-90"
+          style={{ backgroundImage: `url('${heroImgUrl}')` }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-slate-900/60 via-transparent to-transparent"></div>
 
@@ -367,16 +352,17 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
                   <h2 className="text-xl font-black text-slate-900 mb-6">{isEn ? 'Photo Gallery' : 'Mais Fotografias'}</h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {campo.galeria.map((imgUrl: string, idx: number) => (
-                      <div key={idx} className="aspect-square rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 relative">
-                        <img
-                          src={imgUrl}
-                          alt={`${nomeCampo} Foto ${idx + 1}`}
-                          loading="lazy"
-                          className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
-                        />
-                      </div>
-                    ))}
+                    {campo.galeria.map((imgUrl: string, idx: number) => {
+                      const gImg = imgUrl.startsWith('http') ? imgUrl : '/og-image.jpg';
+                      return (
+                        <div key={idx} className="aspect-square rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 relative">
+                          <div 
+                            className="w-full h-full bg-cover bg-center hover:scale-110 transition-transform duration-500"
+                            style={{ backgroundImage: `url('${gImg}')` }}
+                          />
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -397,19 +383,22 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                     )}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {outrosDoParceiro.map((c: any) => (
-                      <Link key={c.id} href={`/${lang}/campo/${c.id}`} className="group flex flex-col gap-2 rounded-2xl bg-slate-50 p-2 border border-slate-100 hover:border-[#0E3A68]/30 transition-colors">
-                        <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-200 relative">
-                          <img src={c.imagem || '/og-image.jpg'} alt={isEn && c.nome_en ? c.nome_en : c.nome} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                        </div>
-                        <div className="px-2 pb-2 mt-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">{c.distrito}</p>
-                          <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68] transition-colors">
-                            {isEn && c.nome_en ? c.nome_en : c.nome}
-                          </h3>
-                        </div>
-                      </Link>
-                    ))}
+                    {outrosDoParceiro.map((c: any) => {
+                      const cImg = c.imagem?.startsWith('http') ? c.imagem : '/og-image.jpg';
+                      return (
+                        <Link key={c.id} href={`/${lang}/campo/${c.id}`} className="group flex flex-col gap-2 rounded-2xl bg-slate-50 p-2 border border-slate-100 hover:border-[#0E3A68]/30 transition-colors">
+                          <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-200 relative">
+                            <div className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url('${cImg}')` }} />
+                          </div>
+                          <div className="px-2 pb-2 mt-1">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">{c.distrito}</p>
+                            <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68] transition-colors">
+                              {isEn && c.nome_en ? c.nome_en : c.nome}
+                            </h3>
+                          </div>
+                        </Link>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -428,19 +417,22 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                     </Link>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {semelhantes.map((c: any) => (
-                      <Link key={c.id} href={`/${lang}/campo/${c.id}`} className="group flex flex-col gap-2 rounded-2xl bg-slate-50 p-2 border border-slate-100 hover:border-[#0E3A68]/30 transition-colors">
-                        <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-200 relative">
-                          <img src={c.imagem || '/og-image.jpg'} alt={isEn && c.nome_en ? c.nome_en : c.nome} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                        </div>
-                        <div className="px-2 pb-2 mt-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">{c.distrito}</p>
-                          <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68] transition-colors">
-                            {isEn && c.nome_en ? c.nome_en : c.nome}
-                          </h3>
-                        </div>
-                      </Link>
-                    ))}
+                    {semelhantes.map((c: any) => {
+                      const cImg = c.imagem?.startsWith('http') ? c.imagem : '/og-image.jpg';
+                      return (
+                        <Link key={c.id} href={`/${lang}/campo/${c.id}`} className="group flex flex-col gap-2 rounded-2xl bg-slate-50 p-2 border border-slate-100 hover:border-[#0E3A68]/30 transition-colors">
+                          <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-200 relative">
+                            <div className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url('${cImg}')` }} />
+                          </div>
+                          <div className="px-2 pb-2 mt-1">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">{c.distrito}</p>
+                            <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68] transition-colors">
+                              {isEn && c.nome_en ? c.nome_en : c.nome}
+                            </h3>
+                          </div>
+                        </Link>
+                      )
+                    })}
                   </div>
                 </div>
               )}

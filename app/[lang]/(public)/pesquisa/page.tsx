@@ -5,7 +5,7 @@ import { unstable_cache } from "next/cache";
 
 export const dynamic = 'force-dynamic';
 
-const escapeOr = (str: string) => str.replace(/[,()]/g, ' ').trim();
+const escapeOr = (str: any) => (typeof str === 'string' ? str.replace(/[,()]/g, ' ').trim() : '');
 
 // ═══════════════════════════════════════════
 // CACHE DE DADOS (24 HORAS) - ZERO EGRESS
@@ -224,19 +224,19 @@ export default async function PaginaPesquisa({
                 if (todosPrecos.length > 0) precoVisivel = Math.min(...todosPrecos);
               }
 
+              // Prepara o URL da imagem com segurança
+              const imgUrl = campo.imagem?.startsWith('http') ? campo.imagem : '/og-image.jpg';
+
               return (
                 <div key={campo.id} className="group flex flex-col bg-white rounded-[2rem] overflow-hidden border border-slate-200 relative shadow-sm hover:shadow-[0_20px_60px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1">
                   <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
                   <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
                   
-                  {/* IMAGEM COM FALLBACK AUTOMÁTICO */}
+                  {/* IMAGEM COM TRUQUE CSS (BACKGROUND) PARA NUNCA QUEBRAR */}
                   <div className="relative h-60 w-full overflow-hidden bg-slate-100">
-                    <img 
-                      src={campo.imagem || '/og-image.jpg'} 
-                      alt={nomeCampo} 
-                      loading="lazy"
-                      onError={(e) => { e.currentTarget.src = '/og-image.jpg' }}
-                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                    <div 
+                      className="absolute inset-0 w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
+                      style={{ backgroundImage: `url('${imgUrl}')` }}
                     />
                     <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#0E3A68] rounded-lg z-0 shadow-sm">
                       {catCampo}
