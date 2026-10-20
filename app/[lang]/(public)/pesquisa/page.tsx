@@ -20,7 +20,7 @@ const getCamposCacheados = unstable_cache(
     return data || [];
   },
   ['cache-pesquisa-campos'],
-  { revalidate: 86400 } // 24 horas
+  { revalidate: 1 } // 24 horas
 );
 
 // ==========================================
@@ -44,7 +44,7 @@ export default async function PaginaPesquisa({
   const paisParam = (resolvedSearchParams.pais as string) || "";
   const dataParam = (resolvedSearchParams.data as string) || "";
 
-  const mostrarDistritos = paisParam === "" || paisParam === "Portugal";
+  const mostrarDistritos = paisParam === "" || paisParam.toLowerCase() === "portugal";
   const filtrosAtivos = !!(qParam || catParam || distParam || idadeParam || paisParam || dataParam);
 
   const todosOsCampos = await getCamposCacheados();
@@ -65,7 +65,7 @@ export default async function PaginaPesquisa({
   if (qParam) {
     const termos = escapeOr(qParam).toLowerCase().split(/\s+/).filter(Boolean);
     resultados = resultados.filter(campo => {
-      const textoBuscavel = `${campo.nome || ''} ${campo.descricao || ''} ${campo.categoria || ''} ${campo.local || ''} ${campo.Distrito || ''} ${campo.nome_en || ''} ${campo.descricao_en || ''}`.toLowerCase();
+      const textoBuscavel = `${campo.nome || ''} ${campo.descricao || ''} ${campo.categoria || ''} ${campo.local || ''} ${campo.Distrito || ''} ${campo.pais || ''} ${campo.pais_en || ''} ${campo.nome_en || ''} ${campo.descricao_en || ''}`.toLowerCase();
       return termos.every(termo => textoBuscavel.includes(termo));
     });
   }
@@ -82,6 +82,7 @@ export default async function PaginaPesquisa({
     resultados = resultados.filter(c => c.idade === idadeParam);
   }
   
+  // FILTRAGEM RIGOROSA PELA COLUNA DE PAÍS (PT e EN)
   if (paisParam) {
     resultados = resultados.filter(c => {
       const p1 = (c.pais || '').toLowerCase();
@@ -101,12 +102,7 @@ export default async function PaginaPesquisa({
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
   const todayISO = new Date().toISOString().split('T')[0];
 
-  // ==========================================
-  // ESTILOS LIMPOS PARA OS INPUTS & DROPDOWNS
-  // ==========================================
   const baseInputClass = "w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors shadow-sm cursor-pointer hover:border-slate-300";
-  
-  // O "appearance-none" tira o estilo feio nativo. O "bg-[url...]" injeta a nossa seta minimalista!
   const customSelectClass = `${baseInputClass} pr-10 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1rem_center] bg-no-repeat`;
 
   return (
@@ -148,9 +144,9 @@ export default async function PaginaPesquisa({
                 <select name="pais" defaultValue={paisParam} className={customSelectClass}>
                   <option value="">{isEn ? 'All Countries' : 'Todos'}</option>
                   <option value="Portugal">Portugal</option>
-                  <option value="Espanha">{isEn ? 'Spain' : 'Espanha'}</option>
-                  <option value="Reino Unido">{isEn ? 'UK' : 'Reino Unido'}</option>
-                  <option value="França">{isEn ? 'France' : 'França'}</option>
+                  <option value="Espanha">Espanha</option>
+                  <option value="Reino Unido">Reino Unido</option>
+                  <option value="França">França</option>
                 </select>
               </div>
 
@@ -236,7 +232,6 @@ export default async function PaginaPesquisa({
                 if (todosPrecos.length > 0) precoVisivel = Math.min(...todosPrecos);
               }
 
-              // SISTEMA ANTI-IMAGEM QUEBRADA
               const imgUrl = campo.imagem?.startsWith('http') ? campo.imagem : '/og-image.jpg';
 
               return (
@@ -244,7 +239,6 @@ export default async function PaginaPesquisa({
                   <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
                   <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
                   
-                  {/* IMAGEM COM TRUQUE CSS (BACKGROUND) PARA NUNCA QUEBRAR */}
                   <div className="relative h-60 w-full overflow-hidden bg-slate-100">
                     <div 
                       className="absolute inset-0 w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
