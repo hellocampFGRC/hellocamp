@@ -10,8 +10,6 @@ const escapeOr = (str: string) => str.replace(/[,()]/g, ' ').trim();
 // ═══════════════════════════════════════════
 // CACHE DE DADOS (24 HORAS) - ZERO EGRESS
 // ═══════════════════════════════════════════
-// Vai ao Supabase apenas 1x a cada 24 horas (86400 segundos).
-// Todos os visitantes e pesquisas usam estes dados da memória ultra-rápida.
 const getCamposCacheados = unstable_cache(
   async () => {
     const { data } = await supabase
@@ -49,10 +47,8 @@ export default async function PaginaPesquisa({
   const mostrarDistritos = paisParam === "" || paisParam === "Portugal";
   const filtrosAtivos = !!(qParam || catParam || distParam || idadeParam || paisParam || dataParam);
 
-  // 1. CARREGAR DADOS DA CACHE (Demora ~2ms em vez de ~800ms)
   const todosOsCampos = await getCamposCacheados();
 
-  // 2. EXTRAIR FILTROS DIRETAMENTE DA CACHE
   const catSet = new Set<string>();
   const idadeSet = new Set<string>();
   
@@ -64,7 +60,6 @@ export default async function PaginaPesquisa({
   const categoriasDisponiveis = Array.from(catSet).sort();
   const idadesDisponiveis = Array.from(idadeSet).sort();
 
-  // 3. FILTRAGEM INSTANTÂNEA EM MEMÓRIA (Server-Side)
   let resultados = todosOsCampos;
 
   if (qParam) {
@@ -108,13 +103,11 @@ export default async function PaginaPesquisa({
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
-      {/* ═══════════════════════════════════════════ */}
-      {/* BARRA DE PESQUISA SUPERIOR (SEO & UX)       */}
-      {/* ═══════════════════════════════════════════ */}
+      {/* BARRA DE PESQUISA SUPERIOR */}
       <section className="bg-white border-b border-slate-200 pt-8 pb-10 px-4 md:px-6 shadow-sm">
         <div className="max-w-[1100px] mx-auto">
           <nav className="flex items-center gap-2 text-xs font-black text-slate-400 mb-6 tracking-widest uppercase">
-            <Link href={`/${lang}`} className="hover:text-[#167524] transition-colors">{isEn ? 'Home' : 'Início'}</Link>
+            <Link href={`/${lang}`} className="hover:text-[#0E3A68] transition-colors">{isEn ? 'Home' : 'Início'}</Link>
             <span>/</span>
             <span className="text-slate-900">{isEn ? 'Search' : 'Pesquisa'}</span>
           </nav>
@@ -133,14 +126,14 @@ export default async function PaginaPesquisa({
                 name="q"
                 defaultValue={qParam}
                 placeholder={isEn ? "Search by name, sport, or location (e.g., Surf in Porto)..." : "Pesquise por nome, desporto ou local (ex: Surf no Porto)..."}
-                className="w-full pl-14 pr-6 py-4 bg-white border border-slate-200 rounded-2xl text-base font-medium text-slate-900 outline-none focus:border-[#167524] focus:ring-4 focus:ring-[#167524]/10 transition-all shadow-[0_4px_20px_rgb(0,0,0,0.03)] placeholder:text-slate-400"
+                className="w-full pl-14 pr-6 py-4 bg-white border border-slate-200 rounded-2xl text-base font-medium text-slate-900 outline-none focus:border-[#0E3A68] focus:ring-4 focus:ring-[#0E3A68]/10 transition-all shadow-[0_4px_20px_rgb(0,0,0,0.03)] placeholder:text-slate-400"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Country' : 'País'}</label>
-                <select name="pais" defaultValue={paisParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#167524] cursor-pointer">
+                <select name="pais" defaultValue={paisParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer">
                   <option value="">{isEn ? 'All Countries' : 'Todos'}</option>
                   <option value="Portugal">Portugal</option>
                   <option value="Espanha">{isEn ? 'Spain' : 'Espanha'}</option>
@@ -151,7 +144,7 @@ export default async function PaginaPesquisa({
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Category' : 'Categoria'}</label>
-                <select name="categoria" defaultValue={catParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#167524] cursor-pointer">
+                <select name="categoria" defaultValue={catParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer">
                   <option value="">{isEn ? 'All Categories' : 'Todas'}</option>
                   {categoriasDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -160,7 +153,7 @@ export default async function PaginaPesquisa({
               {mostrarDistritos && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Distrito</label>
-                  <select name="distrito" defaultValue={distParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#167524] cursor-pointer">
+                  <select name="distrito" defaultValue={distParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer">
                     <option value="">{isEn ? 'All Districts' : 'Todos'}</option>
                     {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
@@ -169,7 +162,7 @@ export default async function PaginaPesquisa({
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Age Group' : 'Idade'}</label>
-                <select name="idade" defaultValue={idadeParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#167524] cursor-pointer">
+                <select name="idade" defaultValue={idadeParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer">
                   <option value="">{isEn ? 'All Ages' : 'Todas'}</option>
                   {idadesDisponiveis.map(i => <option key={i} value={i}>{i}</option>)}
                 </select>
@@ -182,12 +175,12 @@ export default async function PaginaPesquisa({
                   name="data"
                   defaultValue={dataParam}
                   min={todayISO}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#167524] cursor-pointer"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer"
                 />
               </div>
 
-              <button type="submit" className="w-full py-3.5 bg-[#e2a41d] hover:bg-[#d4991b] text-[#167524] font-black text-sm rounded-xl transition-all shadow-md mt-auto">
-                {isEn ? 'Update Search' : 'Atualizar Pesquisa'}
+              <button type="submit" className="w-full py-3.5 bg-[#e2a41d] hover:bg-[#d4991b] text-[#0E3A68] font-black text-sm uppercase tracking-widest rounded-xl transition-all shadow-md mt-auto">
+                {isEn ? 'Search' : 'Pesquisar'}
               </button>
             </div>
 
@@ -213,7 +206,7 @@ export default async function PaginaPesquisa({
             <p className="text-base text-slate-500 font-medium">
               {isEn ? 'Try adjusting your filters, selecting a different date, or searching for something more generic.' : 'Não encontrámos resultados exatos. Tente remover o filtro da data ou pesquisar de forma mais genérica (Ex: Futebol).'}
             </p>
-            <Link href={`/${lang}/pesquisa`} className="mt-4 bg-slate-900 text-white font-bold px-6 py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-lg">
+            <Link href={`/${lang}/pesquisa`} className="mt-4 bg-[#0E3A68] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#0b2b4d] transition-colors shadow-lg">
               {isEn ? 'Clear all filters' : 'Ver todos os programas'}
             </Link>
           </div>
@@ -236,22 +229,23 @@ export default async function PaginaPesquisa({
                   <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
                   <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
                   
-                  {/* IMAGEM NATIVA COM LAZY LOADING */}
+                  {/* IMAGEM COM FALLBACK AUTOMÁTICO */}
                   <div className="relative h-60 w-full overflow-hidden bg-slate-100">
                     <img 
                       src={campo.imagem || '/og-image.jpg'} 
                       alt={nomeCampo} 
                       loading="lazy"
+                      onError={(e) => { e.currentTarget.src = '/og-image.jpg' }}
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
                     />
-                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-900 rounded-lg z-0 shadow-sm">
+                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#0E3A68] rounded-lg z-0 shadow-sm">
                       {catCampo}
                     </div>
                   </div>
 
                   <div className="flex flex-col p-6 flex-1 pointer-events-none">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
-                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                      <svg className="w-3 h-3 text-[#e2a41d]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                       {localCampo}
                     </div>
                     <h3 className="text-xl font-black text-slate-900 leading-tight mb-2 line-clamp-2">{nomeCampo}</h3>
@@ -260,9 +254,9 @@ export default async function PaginaPesquisa({
                     <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
-                        <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                        <p className="text-2xl font-black text-[#0E3A68] m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                       </div>
-                      <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors group-hover:bg-[#167524] group-hover:text-white shadow-sm">
+                      <span className="bg-slate-100 text-[#0E3A68] px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#0E3A68] group-hover:text-white shadow-sm">
                         {isEn ? 'View Dates' : 'Ver Datas'}
                       </span>
                     </div>

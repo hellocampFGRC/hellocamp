@@ -27,13 +27,11 @@ const getCamposCacheados = unstable_cache(
 export async function generateMetadata({ params }: { params: Promise<{ lang: string, categoria: string, localizacao: string }> }) {
   const { lang, categoria, localizacao } = await params;
   
-  // Limpar os slugs do URL (ex: "futebol" -> "Futebol", "reino-unido" -> "Reino Unido")
   const catFormatada = decodeURIComponent(categoria).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const localFormatado = decodeURIComponent(localizacao).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   
   const isEn = lang === 'en';
 
-  // Contar campos reais para dar confiança na pesquisa do Google
   const todosOsCampos = await getCamposCacheados();
   const camposFiltrados = todosOsCampos.filter(c => {
     const matchCat = (c.categoria || '').toLowerCase().includes(catFormatada.toLowerCase()) || (c.categoria_en || '').toLowerCase().includes(catFormatada.toLowerCase());
@@ -43,7 +41,6 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
 
   const count = camposFiltrados.length;
   
-  // Se existirem campos, dizemos o número. Se não, usamos texto genérico persuasivo.
   const metaTitle = isEn 
     ? `Best ${catFormatada} Camps in ${localFormatado} | HelloCamp` 
     : `Campos de Férias de ${catFormatada} em ${localFormatado} | HelloCamp`;
@@ -77,7 +74,6 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
 
   const todosOsCampos = await getCamposCacheados();
   
-  // A Filtragem Pesada
   const resultados = todosOsCampos.filter(c => {
     const matchCat = (c.categoria || '').toLowerCase().includes(catFormatada.toLowerCase()) || (c.categoria_en || '').toLowerCase().includes(catFormatada.toLowerCase());
     const matchLoc = (c.Distrito || c.local || c.pais || c.pais_en || c.local_en || '').toLowerCase().includes(localFormatado.toLowerCase());
@@ -87,15 +83,13 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
       
-      {/* ═══════════════════════════════════════════ */}
-      {/* HEADER SEO                                  */}
-      {/* ═══════════════════════════════════════════ */}
+      {/* HEADER SEO */}
       <section className="bg-white border-b border-slate-200 pt-8 pb-10 px-4 md:px-6 shadow-sm">
         <div className="max-w-[1100px] mx-auto">
           <nav className="flex items-center gap-2 text-[10px] font-black text-slate-400 mb-6 tracking-widest uppercase">
-            <Link href={`/${lang}`} className="hover:text-[#124072] transition-colors">{isEn ? 'Home' : 'Início'}</Link>
+            <Link href={`/${lang}`} className="hover:text-[#0E3A68] transition-colors">{isEn ? 'Home' : 'Início'}</Link>
             <span>/</span>
-            <Link href={`/${lang}/pesquisa`} className="hover:text-[#124072] transition-colors">{isEn ? 'Search' : 'Pesquisa'}</Link>
+            <Link href={`/${lang}/pesquisa`} className="hover:text-[#0E3A68] transition-colors">{isEn ? 'Search' : 'Pesquisa'}</Link>
             <span>/</span>
             <span className="text-slate-900">{catFormatada}</span>
             <span>/</span>
@@ -113,15 +107,11 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* RESULTADOS OU SMART EMPTY STATE             */}
-      {/* ═══════════════════════════════════════════ */}
+      {/* RESULTADOS OU SMART EMPTY STATE */}
       <section className="max-w-[1100px] mx-auto px-4 py-12 md:py-16">
         {resultados.length === 0 ? (
-          // SMART EMPTY STATE COM CROSS-SELLING
           <div className="flex flex-col gap-16">
-            {/* Mensagem de Vazio */}
-            <div className="text-center p-12 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center gap-4 max-w-2xl mx-auto">
+            <div className="text-center p-12 bg-white rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center gap-4 max-w-2xl mx-auto">
               <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center text-4xl border border-amber-100 mb-2">
                 🗺️
               </div>
@@ -134,7 +124,7 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
                   : 'Estamos a adicionar parceiros todos os dias. Entretanto, veja estas alternativas incríveis que outras famílias estão a reservar.'}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 mt-6 w-full sm:w-auto">
-                <Link href={`/${lang}/pesquisa?categoria=${encodeURIComponent(catFormatada)}`} className="bg-[#124072] text-white font-black px-8 py-4 rounded-xl hover:bg-[#0a294b] transition-all shadow-lg uppercase tracking-widest text-xs flex-1 text-center">
+                <Link href={`/${lang}/pesquisa?categoria=${encodeURIComponent(catFormatada)}`} className="bg-[#0E3A68] text-white font-black px-8 py-4 rounded-xl hover:bg-[#0b2b4d] transition-all shadow-lg uppercase tracking-widest text-xs flex-1 text-center">
                   {isEn ? `Search Anywhere` : `Procurar Noutros Locais`}
                 </Link>
                 <Link href={`/${lang}/pesquisa`} className="bg-slate-100 text-slate-700 font-black px-8 py-4 rounded-xl hover:bg-slate-200 transition-colors uppercase tracking-widest text-xs flex-1 text-center border border-slate-200">
@@ -143,7 +133,7 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
               </div>
             </div>
 
-            {/* Alternativas (Pega nos 3 primeiros campos disponíveis da base de dados geral) */}
+            {/* Alternativas Recomendadas */}
             <div>
               <div className="flex items-center gap-4 mb-8">
                 <h4 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -168,21 +158,28 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
                       <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
                       <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
                       <div className="relative h-60 w-full overflow-hidden bg-slate-100">
-                        <img src={campo.imagem || '/og-image.jpg'} alt={nomeCampo} loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                        <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-900 rounded-lg z-0">{catCampo}</div>
+                        {/* Imagem com Fallback OnError puro HTML */}
+                        <img 
+                          src={campo.imagem || '/og-image.jpg'} 
+                          alt={nomeCampo} 
+                          loading="lazy" 
+                          onError={(e) => { e.currentTarget.src = '/og-image.jpg' }}
+                          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                        />
+                        <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#0E3A68] rounded-lg z-0">{catCampo}</div>
                       </div>
                       <div className="flex flex-col p-6 flex-1 pointer-events-none">
                         <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                          <svg className="w-3 h-3 text-[#e2a41d]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                           {localC}
                         </div>
                         <h3 className="text-xl font-black text-slate-900 leading-tight mb-2 line-clamp-2">{nomeCampo}</h3>
                         <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'Desde'}</p>
-                            <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                            <p className="text-2xl font-black text-[#0E3A68] m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                           </div>
-                          <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#124072] group-hover:text-white shadow-sm">
+                          <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#0E3A68] group-hover:text-white shadow-sm">
                             {isEn ? 'View Dates' : 'Ver Datas'}
                           </span>
                         </div>
@@ -194,7 +191,6 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
             </div>
           </div>
         ) : (
-          // GRID NORMAL DE RESULTADOS (Quando encontra a combinação exata)
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
             {resultados.map((campo) => {
               const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
@@ -218,16 +214,17 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
                       src={campo.imagem || '/og-image.jpg'} 
                       alt={nomeCampo} 
                       loading="lazy"
+                      onError={(e) => { e.currentTarget.src = '/og-image.jpg' }}
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
                     />
-                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-900 rounded-lg z-0 shadow-sm">
+                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#0E3A68] rounded-lg z-0 shadow-sm">
                       {catCampo}
                     </div>
                   </div>
 
                   <div className="flex flex-col p-6 flex-1 pointer-events-none">
                     <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                      <svg className="w-3 h-3 text-[#e2a41d]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                       {localCampo}
                     </div>
                     <h3 className="text-xl font-black text-slate-900 leading-tight mb-2 line-clamp-2">{nomeCampo}</h3>
@@ -236,9 +233,9 @@ export default async function CategoriaLocalizacaoPage({ params }: { params: Pro
                     <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'Desde'}</p>
-                        <p className="text-2xl font-black text-slate-900 m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                        <p className="text-2xl font-black text-[#0E3A68] m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
                       </div>
-                      <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#124072] group-hover:text-white shadow-sm">
+                      <span className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#0E3A68] group-hover:text-white shadow-sm">
                         {isEn ? 'View Dates' : 'Ver Datas'}
                       </span>
                     </div>
