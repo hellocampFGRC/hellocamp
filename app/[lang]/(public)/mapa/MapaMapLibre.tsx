@@ -73,9 +73,11 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   const camposValidos = useMemo<Campo[]>(() => {
     const lista = campos || [];
     return lista
-      .map((c): Campo | null => {
-        const lat = Number(c.latitude);
-        const lng = Number(c.longitude);
+      .map((c, index): Campo | null => {
+        // MICRO-DESVIO (SPIDERING) PARA IMPEDIR SOBREPOSIÇÃO EXATA NO MAPA
+        const lat = Number(c.latitude) + (index * 0.00005);
+        const lng = Number(c.longitude) + (index * 0.00005);
+        
         if (
           c.latitude == null || c.longitude == null ||
           c.latitude === "" || c.longitude === "" ||

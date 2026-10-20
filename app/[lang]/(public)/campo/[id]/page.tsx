@@ -177,7 +177,6 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
     ]
   };
 
-  // Garante que o URL existe antes de o colocar no background (Fallback robusto)
   const heroImgUrl = campo.imagem?.startsWith('http') ? campo.imagem : '/og-image.jpg';
 
   return (
