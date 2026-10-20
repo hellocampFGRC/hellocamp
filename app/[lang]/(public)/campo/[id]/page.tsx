@@ -9,7 +9,7 @@ import FormContactoCampo from "../../components/FormContactoCampo";
 import DescricaoExpansivel from "../../components/DescricaoExpansivel";
 import { unstable_cache } from "next/cache";
 
-export const revalidate = 86400;
+export const revalidate = 0;
 
 const getCampoCached = unstable_cache(
   async (id: string) => {
@@ -17,7 +17,7 @@ const getCampoCached = unstable_cache(
     return data;
   },
   ['cache-campo-detalhe'],
-  { revalidate: 86400 }
+  { revalidate: 0 }
 );
 
 const getReviewsCached = unstable_cache(
@@ -26,7 +26,7 @@ const getReviewsCached = unstable_cache(
     return data || [];
   },
   ['cache-campo-reviews'],
-  { revalidate: 86400 }
+  { revalidate: 0 }
 );
 
 const getRelacionadosCached = unstable_cache(
