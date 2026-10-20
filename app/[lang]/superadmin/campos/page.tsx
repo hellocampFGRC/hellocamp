@@ -11,11 +11,9 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
   const [campos, setCampos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal Comissão
   const [showModal, setShowModal] = useState(false);
   const [campoEmEdicao, setCampoEmEdicao] = useState<any>(null);
 
-  // Modal Partilha de Contrato
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareData, setShareData] = useState({ url: "", nome: "" });
   const [copied, setCopied] = useState(false);
@@ -30,9 +28,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
       let precoMinimo = campo.preco || 0;
       if (campo.pacotes && campo.pacotes.length > 0) {
         const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes?.map((v: any) => v.preco) || []);
-        if (todosPrecos.length > 0) {
-          precoMinimo = Math.min(...todosPrecos);
-        }
+        if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
       }
 
       return {
@@ -46,17 +42,13 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchCamposGerais();
-  }, []);
+  useEffect(() => { fetchCamposGerais(); }, []);
 
   const handleApagarCampo = async (id: string, nomeCampo: string) => {
     if (!window.confirm(`Tem a certeza que deseja apagar o campo "${nomeCampo}" permanentemente?`)) return;
     const { error } = await supabase.from('campos').delete().eq('id', id);
-    if (!error) {
-      alert("Campo removido com sucesso.");
-      fetchCamposGerais();
-    } else alert("Erro ao apagar: " + error.message);
+    if (!error) { alert("Campo removido com sucesso."); fetchCamposGerais(); } 
+    else alert("Erro ao apagar: " + error.message);
   };
 
   const handleSalvarComissao = async (e: React.FormEvent) => {
@@ -64,16 +56,10 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
     const taxa = campoEmEdicao.taxa_comissao === '' ? null : Number(campoEmEdicao.taxa_comissao);
     const base = campoEmEdicao.base_comissao === '' ? null : campoEmEdicao.base_comissao;
 
-    const { error } = await supabase.from('campos').update({
-      taxa_comissao: taxa,
-      base_comissao: base
-    }).eq('id', campoEmEdicao.id);
+    const { error } = await supabase.from('campos').update({ taxa_comissao: taxa, base_comissao: base }).eq('id', campoEmEdicao.id);
 
-    if (!error) {
-      alert("Comissão atualizada com sucesso no Programa!");
-      setShowModal(false);
-      fetchCamposGerais();
-    } else alert("Erro: " + error.message);
+    if (!error) { alert("Comissão atualizada com sucesso no Programa!"); setShowModal(false); fetchCamposGerais(); } 
+    else alert("Erro: " + error.message);
   };
 
   const handleGerarContrato = (campoId: string, nomeCampo: string) => {
@@ -84,182 +70,168 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
   };
 
   const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(shareData.url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch (err) {
-      alert("Erro ao copiar o link.");
-    }
+    try { await navigator.clipboard.writeText(shareData.url); setCopied(true); setTimeout(() => setCopied(false), 2500); } 
+    catch (err) { alert("Erro ao copiar o link."); }
   };
 
   const getStatusColor = (status: string, temContrato: boolean) => {
-    if (status === 'Aprovado' && temContrato) return { bg: '#dcfce7', text: '#059669', border: '#bbf7d0', label: 'Aprovado' };
-    if (status === 'Aprovado' && !temContrato) return { bg: '#fef3c7', text: '#b45309', border: '#fde68a', label: 'Aprovado (Sem Contrato)' };
-    if (status === 'Rejeitado') return { bg: '#fee2e2', text: '#dc2626', border: '#fecaca', label: 'Rejeitado' };
-    return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', label: status || 'Pendente' }; 
+    if (status === 'Aprovado' && temContrato) return { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', label: 'Aprovado' };
+    if (status === 'Aprovado' && !temContrato) return { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200', label: 'Aprov. S/ Contrato' };
+    if (status === 'Rejeitado') return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', label: 'Rejeitado' };
+    return { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', label: status || 'Pendente' }; 
   };
 
-  if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>A carregar programas do Quartel General...</div>;
+  if (loading) return <div className="p-12 text-center text-slate-500 font-bold animate-pulse">A carregar programas do Quartel General...</div>;
 
   return (
-    <div style={{ fontFamily: 'sans-serif', paddingBottom: '3rem' }}>
+    <div className="max-w-7xl mx-auto font-sans pb-16 px-4 md:px-0">
       
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#0f172a', margin: 0 }}>Gestão de Campos</h1>
-        <p style={{ color: '#64748b', marginTop: '0.25rem', fontSize: '13px' }}>Controlo absoluto sobre programas, comissões e listagens de mercado.</p>
+      <div className="mb-8">
+        <h1 className="text-2xl font-black text-slate-900 m-0 tracking-tight">Gestão de Campos</h1>
+        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Controlo absoluto sobre programas, comissões e listagens.</p>
       </div>
 
       {/* MODAL DE AJUSTE DE COMISSÃO */}
       {showModal && campoEmEdicao && (
-        <div style={modalOverlayStyle}>
-          <div style={modalContentStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0, fontWeight: '900', fontSize: '1.125rem' }}>Ajustar Comissão: {campoEmEdicao.nome}</h2>
-              <button onClick={() => setShowModal(false)} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer' }}>×</button>
-            </div>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[2rem] p-8 shadow-2xl relative">
+            <button onClick={() => setShowModal(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 flex items-center justify-center font-black transition-colors">&times;</button>
+            <h2 className="text-xl font-black text-slate-900 mb-6 tracking-tight">Ajustar Comissão do Programa</h2>
             
-            <form onSubmit={handleSalvarComissao} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '0.5rem' }}>
-                Se vazio, usa a comissão geral do parceiro ({campoEmEdicao.perfis?.taxa_comissao || 12}%).
-              </p>
-              <div>
-                <label style={labelStyle}>Taxa de Comissão (%)</label>
-                <input type="number" step="0.1" value={campoEmEdicao.taxa_comissao || ''} onChange={e => setCampoEmEdicao({...campoEmEdicao, taxa_comissao: e.target.value})} style={inputStyle} placeholder="Ex: 15" />
+            <form onSubmit={handleSalvarComissao} className="flex flex-col gap-5">
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                <p className="text-xs font-bold text-blue-800 m-0">Se deixar vazio, aplicará a comissão global do parceiro <span className="font-black">({campoEmEdicao.perfis?.taxa_comissao || 12}%)</span>.</p>
               </div>
               <div>
-                <label style={labelStyle}>Base de Incidência</label>
-                <select value={campoEmEdicao.base_comissao || ''} onChange={e => setCampoEmEdicao({...campoEmEdicao, base_comissao: e.target.value})} style={selectStyle}>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Taxa de Comissão (%)</label>
+                <input type="number" step="0.1" value={campoEmEdicao.taxa_comissao || ''} onChange={e => setCampoEmEdicao({...campoEmEdicao, taxa_comissao: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-blue-600 transition-colors shadow-sm" placeholder="Ex: 15" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Base de Incidência</label>
+                <select value={campoEmEdicao.base_comissao || ''} onChange={e => setCampoEmEdicao({...campoEmEdicao, base_comissao: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-blue-600 transition-colors shadow-sm appearance-none cursor-pointer">
                   <option value="">-- Usar regra do Parceiro --</option>
                   <option value="total">Sobre Valor Total</option>
                   <option value="apenas_programa">Apenas sobre Programa</option>
                   <option value="sem_comissao">Isento (0%)</option>
                 </select>
               </div>
-              <button type="submit" style={btnSubmitStyle}>Guardar Exceção no Programa</button>
+              <button type="submit" className="w-full py-4 mt-2 bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest text-xs rounded-xl shadow-lg transition-transform hover:-translate-y-0.5 cursor-pointer">
+                Guardar Exceção no Programa
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL DE PARTILHA DE CONTRATO (QUANDO NECESSÁRIO) */}
+      {/* MODAL DE PARTILHA DE CONTRATO */}
       {showShareModal && (
-        <div style={modalOverlayStyle}>
-          <div style={modalContentStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <div>
-                <h2 style={{ margin: 0, fontWeight: '900', fontSize: '1.125rem', color: '#0f172a' }}>Link de Assinatura</h2>
-                <p style={{ margin: '0.25rem 0 0 0', fontSize: '12px', color: '#64748b' }}>O Parceiro deste programa não assinou o contrato global. Envie-lhe este link.</p>
-              </div>
-              <button onClick={() => setShowShareModal(false)} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '1rem', cursor: 'pointer', color: '#64748b', fontWeight: 'bold' }}>×</button>
-            </div>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[2rem] p-8 shadow-2xl relative">
+            <button onClick={() => setShowShareModal(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 flex items-center justify-center font-black transition-colors">&times;</button>
+            <h2 className="text-xl font-black text-slate-900 mb-2 tracking-tight">Link de Assinatura</h2>
+            <p className="text-sm font-medium text-slate-500 mb-6">O Parceiro deste programa não assinou o contrato global. Envie-lhe este link exclusivo para aprovação.</p>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input 
-                  readOnly 
-                  value={shareData.url} 
-                  style={{ ...inputStyle, flex: 1, backgroundColor: '#f1f5f9', color: '#334155', cursor: 'text' }} 
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
-                />
-                <button 
-                  onClick={copyToClipboard}
-                  style={{ padding: '0 1rem', backgroundColor: copied ? '#10b981' : '#0f172a', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s', whiteSpace: 'nowrap' }}
-                >
-                  {copied ? '✓ Copiado' : 'Copiar'}
+            <div className="flex flex-col gap-5">
+              <div className="flex gap-2">
+                <input readOnly value={shareData.url} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none shadow-inner" onClick={(e) => (e.target as HTMLInputElement).select()} />
+                <button onClick={copyToClipboard} className={`px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-colors shadow-md ${copied ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
+                  {copied ? 'Copiado' : 'Copiar'}
                 </button>
               </div>
-              <div style={{ borderTop: '1px dashed #e2e8f0', margin: '0.5rem 0' }}></div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <a href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue o link para validação e assinatura digital do contrato do programa "${shareData.nome}" na plataforma HelloCamp:\n\n${shareData.url}`)}`} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: '0.8rem', backgroundColor: '#25D366', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', textDecoration: 'none', textAlign: 'center', display: 'block' }}>WhatsApp</a>
-                <a href={`mailto:?subject=${encodeURIComponent(`Assinatura de Contrato HelloCamp - ${shareData.nome}`)}&body=${encodeURIComponent(`Olá,\n\nSegue o link para validação e assinatura digital do contrato referente ao programa "${shareData.nome}".\n\nAceda através deste link seguro:\n${shareData.url}\n\nObrigado,\nEquipa HelloCamp`)}`} style={{ flex: 1, padding: '0.8rem', backgroundColor: '#3b82f6', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', textDecoration: 'none', textAlign: 'center', display: 'block' }}>E-mail</a>
+              <div className="border-t border-slate-100 my-2"></div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <a href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue o link para validação e assinatura digital do contrato do programa "${shareData.nome}" na plataforma HelloCamp:\n\n${shareData.url}`)}`} target="_blank" rel="noopener noreferrer" className="flex-1 py-3.5 bg-[#25D366] hover:bg-[#20bd5a] text-white font-black text-xs uppercase tracking-widest rounded-xl text-center shadow-md transition-colors no-underline">
+                  💬 WhatsApp
+                </a>
+                <a href={`mailto:?subject=${encodeURIComponent(`Assinatura de Contrato HelloCamp - ${shareData.nome}`)}&body=${encodeURIComponent(`Olá,\n\nSegue o link para validação e assinatura digital do contrato referente ao programa "${shareData.nome}".\n\nAceda através deste link seguro:\n${shareData.url}\n\nObrigado,\nEquipa HelloCamp`)}`} className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest rounded-xl text-center shadow-md transition-colors no-underline">
+                  ✉️ E-mail
+                </a>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      <div style={{ backgroundColor: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', overflowX: 'auto', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px' }}>
-          <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-x-auto shadow-sm">
+        <table className="w-full text-left min-w-[800px]">
+          <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th style={thStyle}>PROGRAMA</th>
-              <th style={thStyle}>PARCEIRO</th>
-              <th style={thStyle}>LOGÍSTICA & STATUS</th>
-              <th style={thStyle}>PREÇO & COMISSÃO</th>
-              <th style={thStyle}>AÇÕES E CONTRATO</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Programa</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Parceiro</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Logística & Status</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Preço & Comissão</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ações e Contrato</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {campos.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>Sem programas registados.</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold text-sm">Sem programas registados.</td></tr>
             ) : (
               campos.map((campo) => {
                 const isCustom = campo.taxa_comissao !== null && campo.taxa_comissao !== undefined;
                 const taxaVisual = isCustom ? campo.taxa_comissao : (campo.perfis?.taxa_comissao || 12);
                 
-                // O campo é considerado como tendo contrato se o próprio campo tiver ou se o perfil global do organizador tiver o status Aprovado.
                 const temContrato = !!campo.contrato_parceiro_url || campo.perfis?.status_contrato === 'Aprovado';
                 const statusColor = getStatusColor(campo.status_aprovacao, temContrato);
                 
                 return (
-                  <tr key={campo.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <tr key={campo.id} className="hover:bg-slate-50 transition-colors">
                     
                     {/* PROGRAMA */}
-                    <td style={{ ...tdStyle, color: '#0f172a' }}>
-                      <div style={{ fontWeight: '900', fontSize: '12px' }}>{campo.nome}</div>
-                      <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold', marginTop: '0.25rem' }}>📍 {campo.local?.split(',')[0]}</div>
-                      <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '0.15rem' }}>{campo.categoria}</div>
+                    <td className="px-6 py-4">
+                      <div className="font-black text-sm text-slate-900 leading-tight">{campo.nome}</div>
+                      <div className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-widest">📍 {campo.local?.split(',')[0]}</div>
+                      <div className="text-[10px] font-bold text-slate-400 mt-0.5">{campo.categoria}</div>
                     </td>
                     
                     {/* PARCEIRO */}
-                    <td style={{ ...tdStyle, fontSize: '11px' }}>
-                      <span style={{ fontWeight: 'bold', color: '#334155' }}>{campo.perfis?.empresa_nome}</span>
-                      <span style={{ display: 'block', color: '#94a3b8', fontSize: '9px', marginTop: '2px' }}>Estado Global: {campo.perfis?.status_contrato || 'N/A'}</span>
+                    <td className="px-6 py-4">
+                      <span className="font-bold text-slate-700 text-xs block truncate max-w-[150px]">{campo.perfis?.empresa_nome}</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1 block">Global: {campo.perfis?.status_contrato || 'N/A'}</span>
                     </td>
                     
                     {/* LOGÍSTICA & STATUS */}
-                    <td style={tdStyle}>
-                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
-                        <span style={{ fontSize: '9px', padding: '0.15rem 0.35rem', backgroundColor: statusColor.bg, color: statusColor.text, borderRadius: '0.25rem', fontWeight: 'bold', border: `1px solid ${statusColor.border}` }}>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-2 flex-wrap mb-2">
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border shadow-sm ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
                           {statusColor.label}
                         </span>
-                        <span style={{ fontSize: '9px', padding: '0.15rem 0.35rem', backgroundColor: '#eef2ff', color: '#4f46e5', borderRadius: '0.25rem', fontWeight: 'bold' }}>
-                          {campo.modalidade_reserva === 'link_externo' ? '🔗 Ext.' : (campo.modalidade_reserva === 'email' ? '✉️ Cons.' : '🛒 Check.')}
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border shadow-sm bg-indigo-50 text-indigo-700 border-indigo-200">
+                          {campo.modalidade_reserva === 'link_externo' ? '🔗 Ext.' : (campo.modalidade_reserva === 'email' ? '✉️ Cons.' : '🛒 Checkout')}
                         </span>
                       </div>
-                      <span style={{ display: 'block', fontSize: '10px', fontWeight: 'bold', color: '#64748b' }}>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                         {campo.vagas_totais || 0} Vagas • {campo.pacotes?.length || 0} Pacotes
                       </span>
                     </td>
                     
                     {/* PREÇO E COMISSÃO */}
-                    <td style={tdStyle}>
-                      <span style={{ display: 'block', fontSize: '12px', fontWeight: '900', color: '#0f172a', marginBottom: '0.25rem' }}>
-                         a partir de €{campo.precoCalculado}
+                    <td className="px-6 py-4">
+                      <span className="block text-sm font-black text-slate-900 mb-1.5">
+                         €{campo.precoCalculado} <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Base</span>
                       </span>
-                      <span style={{ backgroundColor: isCustom ? '#fef3c7' : '#f8fafc', color: isCustom ? '#b45309' : '#475569', padding: '0.15rem 0.3rem', borderRadius: '0.25rem', fontSize: '9px', fontWeight: 'bold', border: `1px solid ${isCustom ? '#fde68a' : '#e2e8f0'}` }}>
-                        Comissão: {taxaVisual}%
+                      <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border shadow-sm ${isCustom ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                        Fee: {taxaVisual}%
                       </span>
                     </td>
                     
                     {/* AÇÕES E CONTRATOS */}
-                    <td style={tdStyle}>
-                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', maxWidth: '250px' }}>
-                        <Link href={`/${lang}/campo/${campo.id}`} target="_blank" style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Ver Perfil</Link>
-                        <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Editar HQ</Link>
-                        <button onClick={() => { setCampoEmEdicao(campo); setShowModal(true); }} style={btnActionStyle('#f8fafc', '#0f172a', '#e2e8f0')}>Comissão</button>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2 flex-wrap max-w-[280px] ml-auto">
+                        <Link href={`/${lang}/campo/${campo.id}`} target="_blank" className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-slate-50 shadow-sm transition-colors">Ver Perfil</Link>
+                        <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} className="px-3 py-1.5 bg-slate-900 text-white font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-slate-800 shadow-sm transition-colors">Editar HQ</Link>
+                        <button onClick={() => { setCampoEmEdicao(campo); setShowModal(true); }} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-slate-50 shadow-sm transition-colors">Fee%</button>
                         
                         {/* Lógica Inteligente de Contrato */}
                         {campo.contrato_parceiro_url ? (
-                          <a href={campo.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" style={btnActionStyle('#ecfdf5', '#059669', '#a7f3d0')}>Contrato Anexo</a>
+                          <a href={campo.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-emerald-100 shadow-sm transition-colors no-underline">Contrato Anexo</a>
                         ) : (campo.perfis?.status_contrato === 'Aprovado' ? (
-                          <span style={{...btnActionStyle('#f0fdfa', '#0369a1', '#ccfbf1'), cursor: 'default'}}>✅ Coberto por Contrato Global</span>
+                          <span className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] uppercase tracking-widest rounded-lg shadow-sm cursor-default">✅ Coberto (Global)</span>
                         ) : (
-                          <button onClick={() => handleGerarContrato(campo.id, campo.nome)} style={btnActionStyle('#eff6ff', '#2563eb', '#bfdbfe')}>Pedir Assinatura</button>
+                          <button onClick={() => handleGerarContrato(campo.id, campo.nome)} className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-blue-100 shadow-sm transition-colors">Pedir Assinatura</button>
                         ))}
 
-                        <button onClick={() => handleApagarCampo(campo.id, campo.nome)} style={btnActionStyle('#fef2f2', '#dc2626', '#fecaca')}>Apagar</button>
+                        <button onClick={() => handleApagarCampo(campo.id, campo.nome)} className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-red-100 shadow-sm transition-colors">Apagar</button>
                       </div>
                     </td>
 
@@ -273,27 +245,3 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
     </div>
   );
 }
-
-// ESTILOS GERAIS
-const modalOverlayStyle = { position: 'fixed' as const, inset: 0, backgroundColor: 'rgba(15,23,42,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: '1rem' };
-const modalContentStyle = { backgroundColor: 'white', width: '100%', maxWidth: '400px', borderRadius: '1rem', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' };
-const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#334155', textTransform: 'uppercase' as const, marginBottom: '0.3rem' };
-const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '13px', color: '#0f172a', outline: 'none' };
-const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const };
-const btnSubmitStyle = { width: '100%', padding: '1rem', backgroundColor: '#0f172a', color: 'white', fontWeight: 'bold', fontSize: '12px', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', marginTop: '0.5rem' };
-const thStyle = { padding: '1rem 1rem', fontSize: '10px', fontWeight: '800', color: '#64748b', letterSpacing: '0.05em' };
-const tdStyle = { padding: '0.85rem 1rem', color: '#334155', verticalAlign: 'middle' };
-
-const btnActionStyle = (bg: string, color: string, border: string) => ({ 
-  padding: '0.35rem 0.6rem', 
-  backgroundColor: bg, 
-  color: color, 
-  borderRadius: '0.4rem', 
-  textDecoration: 'none' as const, 
-  fontWeight: 'bold', 
-  fontSize: '10px', 
-  cursor: 'pointer', 
-  border: `1px solid ${border}`, 
-  display: 'inline-flex',
-  alignItems: 'center'
-});

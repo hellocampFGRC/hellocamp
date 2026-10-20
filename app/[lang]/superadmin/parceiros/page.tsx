@@ -1,353 +1,221 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
-import { supabase } from "@/lib/supabase";
-import React from "react";
+import React, { use } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
-export default function GestaoParceirosHQ({ params }: { params: Promise<{ lang: string }> }) {
+export default function ParceirosLandingPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = use(params);
   const isEn = lang === 'en';
-  
-  const [parceiros, setParceiros] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  // Modal de Criação / Edição
-  const [showModal, setShowModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  
-  // Dados do Formulário
-  const [form, setForm] = useState({
-    id: "",
-    nome_completo: "",
-    email: "",
-    password: "", // Apenas na criação
-    empresa_nome: "",
-    nif_empresa: "",
-    telefone: ""
-  });
-
-  // Modal de Sucesso / Partilha
-  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [welcomeData, setWelcomeData] = useState({ nome: "", email: "", password: "", empresa: "" });
-
-  const labelClass = "text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1 block";
-  const inputClass = "w-full py-2 px-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 outline-none focus:border-gray-800 transition-all shadow-sm";
-
-  const fetchParceiros = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('perfis')
-      .select('id, empresa_nome, nome_completo, nif_empresa, email, telefone, status_contrato, created_at')
-      .eq('role', 'organizador')
-      .order('created_at', { ascending: false });
-      
-    if (error) {
-      console.error("Erro ao ler parceiros:", error);
-      alert("Erro ao ler a base de dados: " + error.message);
-    } else {
-      setParceiros(data || []);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchParceiros(); }, []);
-
-  const abrirModalNovo = () => {
-    // Gerar uma password segura aleatória por defeito
-    const randomPass = Math.random().toString(36).slice(-8) + "Hk!";
-    setForm({ id: "", nome_completo: "", email: "", password: randomPass, empresa_nome: "", nif_empresa: "", telefone: "" });
-    setIsEditing(false);
-    setShowModal(true);
-  };
-
-  const abrirModalEditar = (p: any) => {
-    setForm({
-      id: p.id,
-      nome_completo: p.nome_completo || "",
-      email: p.email || "",
-      password: "", // Não editamos password aqui
-      empresa_nome: p.empresa_nome || "",
-      nif_empresa: p.nif_empresa || "",
-      telefone: p.telefone || ""
-    });
-    setIsEditing(true);
-    setShowModal(true);
-  };
-
-  const handleSubmeter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.nome_completo || !form.email || (!isEditing && !form.password)) {
-      alert("Preencha os campos obrigatórios (Nome, Email e Password).");
-      return;
-    }
-
-    setSaving(true);
-
-    if (isEditing) {
-      // ATUALIZAR PARCEIRO EXISTENTE
-      const { error } = await supabase
-        .from('perfis')
-        .update({
-          nome_completo: form.nome_completo,
-          empresa_nome: form.empresa_nome || null,
-          nif_empresa: form.nif_empresa || null,
-          telefone: form.telefone || null
-        })
-        .eq('id', form.id);
-
-      if (error) alert("Erro ao atualizar: " + error.message);
-      else {
-        alert("Parceiro atualizado com sucesso!");
-        setShowModal(false);
-        fetchParceiros();
-      }
-    } else {
-      // CRIAR NOVO PARCEIRO (Auth + Perfil)
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: {
-          data: {
-            nome_completo: form.nome_completo,
-            empresa_nome: form.empresa_nome || null,
-            nif_empresa: form.nif_empresa || null,
-            telefone: form.telefone || null,
-            role: 'organizador'
-          }
-        }
-      });
-
-      if (authError) {
-        alert("Erro ao criar credenciais: " + authError.message);
-      } else if (authData.user) {
-        // Sucesso!
-        setShowModal(false);
-        setWelcomeData({
-          nome: form.nome_completo,
-          email: form.email,
-          password: form.password,
-          empresa: form.empresa_nome
-        });
-        setShowWelcomeModal(true);
-        fetchParceiros();
-      }
-    }
-    setSaving(false);
-  };
-
-  const handleRecuperarPassword = async (email: string) => {
-    if (!window.confirm(`Enviar link de recuperação de password para ${email}?`)) return;
-    
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/${lang}/admin/redefinir-password`,
-    });
-
-    if (error) alert("Erro ao enviar e-mail: " + error.message);
-    else alert("E-mail de recuperação enviado com sucesso para o parceiro!");
-  };
-
-  // Texto gerado automaticamente para enviar por E-mail ou WhatsApp
-  const textoMensagem = `Olá ${welcomeData.nome.split(' ')[0]}! 🎉\n\nA tua conta de parceiro na plataforma HelloCamp já foi criada com sucesso.\n\nPara acederes ao teu painel de controlo, completares as tuas informações e reveres o teu Contrato Global, utiliza os seguintes dados temporários:\n\n🔗 Link de Acesso: https://hellocamp.pt/${lang}/admin/login\n✉️ E-mail: ${welcomeData.email}\n🔑 Password: ${welcomeData.password}\n\nRecomendamos que alteres a password no teu perfil assim que entrares.\n\nQualquer dúvida, estamos por aqui!\nEquipa HelloCamp`;
 
   return (
-    <div className="max-w-7xl mx-auto font-sans pb-16">
+    <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 selection:bg-emerald-200">
       
-      {/* HEADER DA PÁGINA */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight m-0">Gestão de Parceiros</h1>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Criação de Contas B2B e Acessos</p>
-        </div>
-        <button onClick={abrirModalNovo} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-md hover:bg-emerald-700 transition-colors flex items-center gap-2">
-          <span>+</span> Criar Novo Parceiro
-        </button>
-      </div>
-
-      {/* TABELA DE PARCEIROS */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
-        <table className="w-full text-left min-w-[800px]">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Empresa / NIF</th>
-              <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Contacto Responsável</th>
-              <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Status B2B</th>
-              <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Ações de Conta</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={4} className="p-8 text-center text-gray-400 font-bold text-sm animate-pulse">A carregar parceiros...</td></tr>
-            ) : parceiros.length === 0 ? (
-              <tr><td colSpan={4} className="p-8 text-center text-gray-400 font-bold text-sm">Nenhum parceiro organizador registado.</td></tr>
-            ) : parceiros.map(p => {
-              
-              let statusLabel = "Sem Contrato";
-              let statusColor = "bg-gray-100 text-gray-600 border-gray-200";
-              if (p.status_contrato === 'Aprovado') { statusLabel = "Aprovado"; statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200"; }
-              else if (p.status_contrato === 'Pendente de Revisão' || p.status_contrato === 'Pendente') { statusLabel = "Pendente"; statusColor = "bg-amber-100 text-amber-800 border-amber-200"; }
-              else if (p.status_contrato === 'Rejeitado') { statusLabel = "Rejeitado"; statusColor = "bg-red-100 text-red-800 border-red-200"; }
-
-              return (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-4">
-                    <div className="font-black text-sm text-gray-900">{p.empresa_nome || <span className="text-gray-400 italic">Por definir</span>}</div>
-                    <div className="text-[10px] font-mono text-gray-500 mt-1">{p.nif_empresa ? `NIF: ${p.nif_empresa}` : 'NIF não preenchido'}</div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="text-sm font-bold text-gray-800">{p.nome_completo || 'Sem Nome'}</div>
-                    <div className="text-[10px] font-medium text-blue-600 mt-1 break-all">{p.email}</div>
-                    {p.telefone && <div className="text-[10px] font-bold text-gray-500 mt-0.5">📞 {p.telefone}</div>}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border shadow-sm ${statusColor}`}>
-                      {statusLabel}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <div className="flex justify-end gap-2 flex-wrap">
-                      <button onClick={() => abrirModalEditar(p)} className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-gray-50 transition-colors shadow-sm">
-                        Editar Info
-                      </button>
-                      <button onClick={() => handleRecuperarPassword(p.email)} className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-blue-100 transition-colors shadow-sm">
-                        Reset Pass
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* MODAL CRIAR/EDITAR PARCEIRO */}
-      {showModal && (
-        <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl border border-gray-200">
-            <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center bg-gray-50 flex-shrink-0">
-              <h2 className="text-lg font-black text-gray-900 m-0 uppercase tracking-wide">
-                {isEditing ? 'Editar Informações do Parceiro' : 'Criar Nova Conta de Parceiro'}
-              </h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-900 text-2xl font-bold">&times;</button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto flex-1">
-              <form id="partner-form" onSubmit={handleSubmeter} className="space-y-6">
-                
-                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                  <h3 className="text-xs font-black text-blue-800 uppercase tracking-widest mb-4 border-b border-blue-100 pb-2">Credenciais de Acesso (Obrigatório)</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>Nome do Responsável *</label>
-                      <input required className={inputClass} value={form.nome_completo} onChange={e => setForm({...form, nome_completo: e.target.value})} placeholder="Ex: João Silva" />
-                    </div>
-                    <div>
-                      <label className={labelClass}>E-mail de Login *</label>
-                      <input type="email" required disabled={isEditing} className={`${inputClass} ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`} value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="geral@empresa.pt" />
-                    </div>
-                    {!isEditing && (
-                      <div className="md:col-span-2">
-                        <label className={labelClass}>Password Temporária *</label>
-                        <input required minLength={6} className={inputClass} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-                        <p className="text-[10px] text-gray-500 mt-1">O parceiro poderá alterar esta password depois de fazer login.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                  <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-2">
-                     <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest m-0">Informações Fiscais e Empresa</h3>
-                     <span className="text-[10px] font-bold text-gray-400 uppercase">Opcional</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                      <label className={labelClass}>Nome da Empresa / Marca</label>
-                      <input className={inputClass} value={form.empresa_nome} onChange={e => setForm({...form, empresa_nome: e.target.value})} placeholder="Ex: Surf Camp Lda" />
-                    </div>
-                    <div>
-                      <label className={labelClass}>NIF da Empresa</label>
-                      <input className={inputClass} value={form.nif_empresa} onChange={e => setForm({...form, nif_empresa: e.target.value})} placeholder="Ex: 500000000" />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Telefone / Telemóvel</label>
-                      <input className={inputClass} value={form.telefone} onChange={e => setForm({...form, telefone: e.target.value})} placeholder="Ex: +351 910 000 000" />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-gray-500 mt-3 text-center">O parceiro poderá preencher ou retificar estes dados quando assinar o Contrato Global no portal dele.</p>
-                </div>
-              </form>
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 flex-shrink-0">
-              <button onClick={() => setShowModal(false)} className="bg-white border border-gray-300 text-gray-700 font-bold px-5 py-2 rounded-lg text-sm hover:bg-gray-100 transition-colors">Cancelar</button>
-              <button type="submit" form="partner-form" disabled={saving} className="bg-gray-900 text-white font-black px-6 py-2 rounded-lg text-sm shadow-md hover:bg-gray-800 disabled:opacity-50 transition-colors">
-                {saving ? 'A guardar...' : isEditing ? 'Guardar Alterações' : 'Criar Conta de Parceiro'}
-              </button>
-            </div>
+      {/* ═══════════════════════════════════════════ */}
+      {/* HERO SECTION B2B - VERDE CORPORATIVO        */}
+      {/* ═══════════════════════════════════════════ */}
+      <section className="relative overflow-hidden pt-28 pb-36 md:pt-40 md:pb-48 px-4 md:px-8 bg-[#167524] bg-gradient-to-br from-[#167524] via-[#10561a] to-[#06280b]">
+        {/* Efeitos de Luz no Fundo */}
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-emerald-400/10 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-[-20%] left-[-10%] w-[400px] h-[400px] bg-[#e2a41d]/10 rounded-full blur-[100px] pointer-events-none"></div>
+        
+        <div className="max-w-5xl mx-auto text-center relative z-10">
+          
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-emerald-100 mb-8 backdrop-blur-md shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-[#e2a41d] animate-pulse"></span>
+            {isEn ? "HelloCamp for Organizers" : "Portal B2B de Organizadores"}
+          </div>
+          
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight mb-6 leading-[1.1] text-white">
+            {isEn ? "Fill your camps with families from all over Europe." : "Encha os seus programas com famílias de toda a Europa."}
+          </h1>
+          
+          <p className="text-lg md:text-xl text-emerald-100/90 font-medium mb-12 max-w-3xl mx-auto leading-relaxed">
+            {isEn 
+              ? "Join the ultimate search engine and booking management platform for summer camps, language schools, and youth sports clinics. Zero setup fees." 
+              : "Junte-se ao maior motor de busca e plataforma de gestão de reservas para campos de férias, escolas de línguas e academias desportivas. Sem custos de adesão."}
+          </p>
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Link 
+              href={`/${lang}/admin/registo`}
+              className="w-full sm:w-auto bg-[#e2a41d] hover:bg-[#d4991b] text-[#06280b] font-black uppercase tracking-widest text-sm px-10 py-5 rounded-xl shadow-[0_0_40px_-10px_rgba(226,164,29,0.5)] transition-all hover:-translate-y-1 no-underline border border-[#e2a41d]"
+            >
+              {isEn ? "Create Partner Account" : "Registar Entidade Grátis"}
+            </Link>
+            <Link 
+              href={`/${lang}/admin/login`}
+              className="w-full sm:w-auto bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-sm px-10 py-5 rounded-xl transition-all backdrop-blur-md no-underline hover:-translate-y-1"
+            >
+              {isEn ? "Access Dashboard" : "Entrar no Dashboard"}
+            </Link>
+          </div>
+          
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-4 md:gap-8 text-xs md:text-sm font-bold text-emerald-200">
+            <div className="flex items-center gap-2"><span className="text-[#e2a41d]">✓</span> {isEn ? "No setup fees" : "Sem custos fixos"}</div>
+            <div className="flex items-center gap-2"><span className="text-[#e2a41d]">✓</span> {isEn ? "Full transparency" : "Transparência total"}</div>
+            <div className="flex items-center gap-2"><span className="text-[#e2a41d]">✓</span> {isEn ? "Secure payments" : "Pagamentos Seguros"}</div>
           </div>
         </div>
-      )}
+      </section>
 
-      {/* MODAL DE SUCESSO - MENSAGEM */}
-      {showWelcomeModal && (
-        <div className="fixed inset-0 bg-gray-900/80 z-[60] flex items-center justify-center p-4 backdrop-blur-md">
-          <div className="bg-white w-full max-w-2xl rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-            <div className="bg-emerald-500 p-6 text-center">
-              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-3xl mx-auto mb-3 shadow-lg">🎉</div>
-              <h2 className="text-xl font-black text-white m-0">Conta Criada com Sucesso!</h2>
-              <p className="text-emerald-100 text-sm mt-1">O parceiro {welcomeData.empresa || welcomeData.nome} já tem acesso.</p>
-            </div>
-            
-            <div className="p-6">
-              <p className="text-sm font-bold text-gray-700 mb-3 text-center">
-                Envie as credenciais ao parceiro para que ele possa entrar na plataforma:
-              </p>
-              
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 relative group">
-                <textarea 
-                  readOnly 
-                  className="w-full h-48 bg-transparent border-none resize-none text-sm text-gray-700 outline-none leading-relaxed" 
-                  value={textoMensagem}
-                />
-              </div>
-
-              <div className="mt-6 flex flex-col sm:flex-row gap-3">
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(textoMensagem);
-                    alert("Mensagem copiada para a área de transferência!");
-                  }} 
-                  className="flex-1 bg-gray-900 text-white font-black px-4 py-3 rounded-xl shadow-md hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-                >
-                  📋 Copiar Texto
-                </button>
-                <a 
-                  href={`mailto:${welcomeData.email}?subject=${encodeURIComponent('Acesso ao Portal de Parceiros HelloCamp')}&body=${encodeURIComponent(textoMensagem)}`}
-                  className="flex-1 bg-blue-600 text-white font-black px-4 py-3 rounded-xl shadow-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-center decoration-transparent"
-                >
-                  ✉️ E-mail
-                </a>
-                <a 
-                  href={`https://wa.me/?text=${encodeURIComponent(textoMensagem)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 bg-[#25D366] text-white font-black px-4 py-3 rounded-xl shadow-md hover:bg-[#20bd5a] transition-colors flex items-center justify-center gap-2 text-center decoration-transparent"
-                >
-                  💬 WhatsApp
-                </a>
-              </div>
-            </div>
-
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 text-center">
-              <button onClick={() => setShowWelcomeModal(false)} className="text-gray-500 hover:text-gray-900 text-sm font-bold underline">Fechar e voltar à gestão</button>
-            </div>
+      {/* ═══════════════════════════════════════════ */}
+      {/* STATS SECTION                               */}
+      {/* ═══════════════════════════════════════════ */}
+      <section className="max-w-5xl mx-auto px-4 -mt-12 relative z-20 hidden md:block">
+        <div className="bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100 p-8 grid grid-cols-3 gap-8 text-center divide-x divide-slate-100">
+          <div>
+            <div className="text-4xl font-black text-slate-900 mb-1">+50.000</div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isEn ? 'Monthly Searches' : 'Pesquisas Mensais'}</div>
+          </div>
+          <div>
+            <div className="text-4xl font-black text-slate-900 mb-1">5</div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isEn ? 'Supported Languages' : 'Idiomas Suportados'}</div>
+          </div>
+          <div>
+            <div className="text-4xl font-black text-[#167524] mb-1">€0</div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isEn ? 'Registration Cost' : 'Custo de Adesão'}</div>
           </div>
         </div>
-      )}
+      </section>
 
-    </div>
+      {/* ═══════════════════════════════════════════ */}
+      {/* BENEFÍCIOS E PROPOSTA DE VALOR              */}
+      {/* ═══════════════════════════════════════════ */}
+      <section className="max-w-7xl mx-auto px-4 md:px-8 py-20 md:py-32">
+        <div className="text-center mb-16 md:mb-24">
+          <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 mb-4">
+            {isEn ? "Why partner with HelloCamp?" : "Porquê ser um Parceiro HelloCamp?"}
+          </h2>
+          <p className="text-slate-500 font-medium text-base md:text-lg max-w-2xl mx-auto">
+            {isEn 
+              ? "We don't just list your camps. We provide the technology to manage bookings, medical files, and international payments." 
+              : "Não somos apenas uma montra. Fornecemos a tecnologia para gerir inscrições, fichas médicas, pagamentos e apoio ao cliente de forma centralizada."}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+          
+          <div className="bg-white p-8 md:p-12 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
+            <div className="w-16 h-16 bg-emerald-50 text-[#167524] rounded-2xl flex items-center justify-center text-3xl mb-8 border border-emerald-100 shadow-inner">🌍</div>
+            <h3 className="text-2xl font-black text-slate-900 mb-4">{isEn ? "Free Global Visibility" : "Visibilidade Global Gratuita"}</h3>
+            <p className="text-slate-600 font-medium leading-relaxed">
+              {isEn 
+                ? "List your organization and all your programs completely free of charge. Your website, phone number, and brand are always visible. We believe in total transparency, not hiding behind paywalls." 
+                : "Registe a sua entidade e todos os seus programas sem qualquer custo de adesão ou avença mensal. O seu website, e-mail e marca estão sempre visíveis. Acreditamos na transparência e no acesso direto à sua organização."}
+            </p>
+          </div>
+
+          <div className="bg-white p-8 md:p-12 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-3xl mb-8 border border-blue-100 shadow-inner">💻</div>
+            <h3 className="text-2xl font-black text-slate-900 mb-4">{isEn ? "Smart Admin Dashboard" : "Software de Gestão Inteligente"}</h3>
+            <p className="text-slate-600 font-medium leading-relaxed">
+              {isEn 
+                ? "Say goodbye to endless email threads and Excel sheets. Our platform automatically collects health records, dietary restrictions, and emergency contacts into a single dashboard for every booking." 
+                : "Diga adeus a dezenas de e-mails, folhas de Excel confusas e comprovativos de transferência perdidos. A plataforma centraliza o controlo de vagas, fichas médicas e alergias num dashboard unificado."}
+            </p>
+          </div>
+
+          <div className="bg-white p-8 md:p-12 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
+            <div className="w-16 h-16 bg-amber-50 text-[#e2a41d] rounded-2xl flex items-center justify-center text-3xl mb-8 border border-amber-100 shadow-inner">💳</div>
+            <h3 className="text-2xl font-black text-slate-900 mb-4">{isEn ? "Frictionless Payments" : "Pagamentos e Faturação"}</h3>
+            <p className="text-slate-600 font-medium leading-relaxed">
+              {isEn 
+                ? "Parents can pay securely via Credit Card, Debit, or local methods. The funds are routed directly to your connected Stripe account. You can offer 100% upfront or 50% deposit payment plans." 
+                : "Os pais pagam de forma 100% segura por MB WAY, Cartão de Crédito ou Débito. Os fundos são canalizados diretamente para a sua conta Stripe associada. Ofereça opções de pagamento a pronto ou reserva com sinal (50%)."}
+            </p>
+          </div>
+
+          <div className="bg-white p-8 md:p-12 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
+            <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-3xl mb-8 border border-purple-100 shadow-inner">🤝</div>
+            <h3 className="text-2xl font-black text-slate-900 mb-4">{isEn ? "Flexible Booking Models" : "Modelos Flexíveis à sua Medida"}</h3>
+            <p className="text-slate-600 font-medium leading-relaxed">
+              {isEn 
+                ? "Choose how you want to receive clients: Direct Checkout via HelloCamp, Email inquiries only, or redirect traffic to your own external booking website. You are in full control." 
+                : "Escolha como prefere trabalhar: Reserva Direta no nosso Checkout (com comissões reduzidas), Inscrição sob Consulta por E-mail, ou encaminhamento direto de tráfego para o seu Formulário/Link Externo."}
+            </p>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════ */}
+      {/* TRUST BANNER                                */}
+      {/* ═══════════════════════════════════════════ */}
+      <section className="bg-slate-900 py-16 md:py-20 text-center px-4">
+        <div className="max-w-4xl mx-auto">
+          <span className="text-5xl block mb-6">🏕️</span>
+          <h2 className="text-2xl md:text-4xl font-black text-white mb-6 leading-tight">
+            {isEn 
+              ? "From local surf schools to prestigious international academies like Studio Cambridge, the best organizers trust HelloCamp." 
+              : "Desde escolas de surf locais até às mais prestigiadas academias internacionais como a Studio Cambridge, os melhores organizadores confiam na HelloCamp."}
+          </h2>
+          <p className="text-slate-400 font-medium text-base md:text-lg">
+            {isEn ? "Join our network and start receiving qualified leads today." : "Junte-se à nossa rede e comece a receber inscrições de imediato."}
+          </p>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════ */}
+      {/* FAQ B2B                                     */}
+      {/* ═══════════════════════════════════════════ */}
+      <section className="max-w-4xl mx-auto px-4 md:px-8 py-20 md:py-32">
+         <div className="text-center mb-12 md:mb-16">
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-4">
+              {isEn ? "Frequently Asked Questions" : "Perguntas Frequentes (B2B)"}
+            </h2>
+         </div>
+         
+         <div className="space-y-6">
+            <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+               <h4 className="text-lg font-black text-slate-900 mb-3">{isEn ? "How much does it cost to list my camps?" : "Quanto custa ter os meus programas listados?"}</h4>
+               <p className="text-slate-600 font-medium text-sm md:text-base leading-relaxed m-0">
+                 {isEn 
+                   ? "Creating a partner account and listing your programs is 100% free. We do not charge monthly fees or setup costs. We only charge a small, agreed-upon commission on successful bookings processed through our platform." 
+                   : "A criação de conta e a listagem dos seus programas para gerar visibilidade é 100% gratuita. Não existem custos fixos nem avenças. Apenas aplicamos a nossa comissão sobre as reservas que forem efetivamente concluídas e pagas através do nosso motor de Checkout."}
+               </p>
+            </div>
+            <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+               <h4 className="text-lg font-black text-slate-900 mb-3">{isEn ? "Do you hide my contact information?" : "A plataforma oculta os contactos da minha empresa?"}</h4>
+               <p className="text-slate-600 font-medium text-sm md:text-base leading-relaxed m-0">
+                 {isEn 
+                   ? "Never. Your brand is the protagonist. Your official website, email, and phone number are fully visible to parents. We prioritize transparency." 
+                   : "Nunca. Ao contrário de outros diretórios, o seu logótipo, website oficial e contactos telefónicos estão sempre visíveis. A sua marca é a protagonista, se os pais quiserem tirar dúvidas diretamente consigo, são livres de o fazer."}
+               </p>
+            </div>
+            <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+               <h4 className="text-lg font-black text-slate-900 mb-3">{isEn ? "Is there an exclusivity contract?" : "Existe algum contrato de exclusividade?"}</h4>
+               <p className="text-slate-600 font-medium text-sm md:text-base leading-relaxed m-0">
+                 {isEn 
+                   ? "No. You can continue to sell your programs on your website and other channels simultaneously. We simply act as an additional, high-performing sales channel." 
+                   : "Não. Pode continuar a vender os seus programas no seu próprio site e noutros canais ao mesmo tempo. Nós funcionamos apenas como um canal de vendas extra, otimizado para o ajudar a escalar."}
+               </p>
+            </div>
+         </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════ */}
+      {/* FINAL CTA                                   */}
+      {/* ═══════════════════════════════════════════ */}
+      <section className="bg-white border-t border-slate-200 py-24 text-center px-4">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-8 tracking-tight">
+            {isEn ? "Ready to scale your enrollments?" : "Pronto para revolucionar as suas inscrições?"}
+          </h2>
+          <p className="text-slate-500 font-medium text-base md:text-lg mb-10">
+            {isEn ? "Create your free partner account in less than 5 minutes." : "Crie a sua conta de organizador e tenha os seus primeiros programas online ainda hoje."}
+          </p>
+          <div className="flex justify-center">
+            <Link 
+              href={`/${lang}/admin/registo`}
+              className="bg-[#167524] hover:bg-[#10561a] text-white font-black uppercase tracking-widest text-sm px-12 py-5 rounded-xl shadow-xl shadow-emerald-900/20 transition-all hover:-translate-y-1 no-underline"
+            >
+              {isEn ? "Create Partner Account" : "Começar Agora Gratuitamente"}
+            </Link>
+          </div>
+        </div>
+      </section>
+
+    </main>
   );
 }
