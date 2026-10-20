@@ -72,16 +72,32 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
   const camposValidos = useMemo<Campo[]>(() => {
     const lista = campos || [];
+    const contagemCoords: Record<string, number> = {};
+
     return lista
       .map((c): Campo | null => {
-        const lat = Number(c.latitude);
-        const lng = Number(c.longitude);
+        const latBase = Number(c.latitude);
+        const lngBase = Number(c.longitude);
         if (
           c.latitude == null || c.longitude == null ||
           c.latitude === "" || c.longitude === "" ||
-          isNaN(lat) || isNaN(lng) ||
-          lat === 0 || lng === 0
+          isNaN(latBase) || isNaN(lngBase) ||
+          latBase === 0 || lngBase === 0
         ) return null;
+
+        // Se dois campos tiverem exatamente a mesma coordenada, afasta-os ligeiramente em círculo (~35m)
+        const chave = `${latBase.toFixed(4)},${lngBase.toFixed(4)}`;
+        const ocorrencia = contagemCoords[chave] || 0;
+        contagemCoords[chave] = ocorrencia + 1;
+
+        let lat = latBase;
+        let lng = lngBase;
+        if (ocorrencia > 0) {
+          const angulo = (ocorrencia * 2 * Math.PI) / 6;
+          const raio = 0.00035 * Math.ceil(ocorrencia / 6);
+          lat = latBase + Math.sin(angulo) * raio;
+          lng = lngBase + Math.cos(angulo) * raio;
+        }
 
         return {
           id: c.id,
@@ -101,10 +117,10 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
     const instance = new maplibregl.Map({
       container: mapContainer.current,
-      style: esriRasterStyle, // Injetamos o mapa ESRI
+      style: esriRasterStyle,
       center: [-8.2245, 39.3999],
-      zoom: 6,
-      minZoom: 4,
+      zoom: 5,
+      minZoom: 3,
       maxZoom: 19,
       attributionControl: { compact: true },
     });
@@ -146,48 +162,52 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
       const newMarkers: maplibregl.Marker[] = [];
 
       camposValidos.forEach((c) => {
+        // IMPORTANTE: 'el' é o contentor gerido pelo MapLibre (tem de ser position: absolute; top: 0; left: 0;)
         const el = document.createElement("div");
-        el.className = "hc-marker-container";
+        el.className = "hc-marker-root";
         
-        // Z-Index dinâmico para garantir que o hover fica por cima dos outros pinos
+        // Z-Index dinâmico no elemento raiz para garantir que o hover fica por cima dos outros pinos
         el.addEventListener('mouseenter', () => { el.style.zIndex = "999"; });
         el.addEventListener('mouseleave', () => { el.style.zIndex = ""; });
 
-        // Pino Gota Laranja (#e2a41d) com Pop-up integrado no Hover
+        // O '.hc-marker-container' com position: relative vai DENTRO de 'el' para não estragar a posição geográfica!
         el.innerHTML = `
-          <div class="hc-pin-svg">
-            <svg viewBox="0 0 24 24" width="36" height="36" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#e2a41d" stroke="#ffffff" stroke-width="1.5"/>
-            </svg>
-          </div>
-
-          <!-- Ponte invisível para o rato não perder o hover entre o pino e o card -->
-          <div class="hc-hover-bridge"></div>
-
-          <!-- O Card do Campo (Pop-up via CSS Hover) -->
-          <div class="hc-hover-popup">
-            <div class="hc-popup-img-wrap">
-              <img src="${c.imagem || FALLBACK_IMG}" alt="${escapeHtml(c.nome)}" class="hc-popup-img" loading="lazy" onerror="this.src='${FALLBACK_IMG}'"/>
-              ${c.categoria ? `<span class="hc-popup-badge">${escapeHtml(c.categoria)}</span>` : ""}
+          <div class="hc-marker-container">
+            <div class="hc-pin-svg">
+              <svg viewBox="0 0 24 24" width="36" height="36" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#e2a41d" stroke="#ffffff" stroke-width="1.5"/>
+              </svg>
             </div>
-            <div class="hc-popup-body">
-              <h3 class="hc-popup-title">${escapeHtml(c.nome)}</h3>
-              <div class="hc-popup-footer">
-                ${c.preco != null && c.preco > 0 ? `
-                  <div>
-                    <span class="hc-popup-from">${isEn ? 'From' : 'Desde'}</span>
-                    <p class="hc-popup-price">${c.preco}€</p>
-                  </div>
-                ` : '<div></div>'}
-                <a href="/${lang}/campo/${c.id}" class="hc-popup-cta">
-                  ${isEn ? "View Dates" : "Ver Datas"}
-                </a>
+
+            <!-- Ponte invisível para o rato não perder o hover entre o pino e o card -->
+            <div class="hc-hover-bridge"></div>
+
+            <!-- O Card do Campo (Pop-up via CSS Hover) -->
+            <div class="hc-hover-popup">
+              <div class="hc-popup-img-wrap">
+                <img src="${c.imagem || FALLBACK_IMG}" alt="${escapeHtml(c.nome)}" class="hc-popup-img" loading="lazy" onerror="this.src='${FALLBACK_IMG}'"/>
+                ${c.categoria ? `<span class="hc-popup-badge">${escapeHtml(c.categoria)}</span>` : ""}
+              </div>
+              <div class="hc-popup-body">
+                <h3 class="hc-popup-title">${escapeHtml(c.nome)}</h3>
+                <div class="hc-popup-footer">
+                  ${c.preco != null && c.preco > 0 ? `
+                    <div>
+                      <span class="hc-popup-from">${isEn ? 'From' : 'Desde'}</span>
+                      <p class="hc-popup-price">${c.preco}€</p>
+                    </div>
+                  ` : '<div></div>'}
+                  <a href="/${lang}/campo/${c.id}" class="hc-popup-cta">
+                    ${isEn ? "View Dates" : "Ver Datas"}
+                  </a>
+                </div>
               </div>
             </div>
           </div>
         `;
 
-        const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
+        // offset: [0, 3] compensa a margem interna inferior do viewBox 24x24 do SVG para cravar o bico na coordenada
+        const marker = new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, 3] })
           .setLngLat([c.longitude, c.latitude])
           .addTo(instance);
 
@@ -212,7 +232,17 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
   return (
     <>
       <style>{`
-        /* O Contentor Geral do Pino */
+        /* Garante que o marcador raiz do MapLibre NUNCA entra em fluxo normal de blocos */
+        .maplibregl-marker.hc-marker-root {
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: 36px;
+          height: 36px;
+          pointer-events: auto;
+        }
+
+        /* O Contentor Interno do Pino */
         .hc-marker-container { 
           position: relative; 
           width: 36px; height: 36px; 
@@ -222,6 +252,8 @@ export default function MapaMapLibre({ campos, lang }: MapaMapLibreProps) {
 
         /* O SVG do Pino em si */
         .hc-pin-svg {
+          display: flex;
+          transform-origin: bottom center;
           transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
           filter: drop-shadow(0px 4px 6px rgba(226, 164, 29, 0.4));
         }

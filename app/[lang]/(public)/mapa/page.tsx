@@ -19,10 +19,11 @@ const getCamposMapaCache = unstable_cache(
     const { data } = await supabase
       .from("campos")
       .select("id, nome, nome_en, categoria, categoria_en, idade, idade_en, linguas_faladas, preco, imagem, latitude, longitude")
+      .eq("ativo", true)
       .not("contrato_parceiro_url", "is", null);
     return data || [];
   },
-  ['cache-mapa-campos'],
+  ['cache-mapa-campos-v2'],
   { revalidate: 86400 } // 24h
 );
 
@@ -126,29 +127,6 @@ export default async function PaginaMapa({
             )}
           </div>
         </form>
-
-        {camposExibidos && camposExibidos.length > 0 && (
-          <div className="mt-8 pt-6 border-t border-slate-100 flex-1 overflow-y-auto pr-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-              {isEn ? "Camps on Map" : "No Mapa"}
-            </p>
-            <div className="flex flex-col gap-2">
-              {camposExibidos.map((c: any) => {
-                const nome = isEn && c.nome_en ? c.nome_en : c.nome;
-                const temCoords = c.latitude != null && c.longitude != null;
-                return (
-                  <Link key={c.id} href={`/${lang}/campo/${c.id}`} className="group flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-[#e2a41d] hover:bg-white transition-all no-underline">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${temCoords ? "bg-[#e2a41d] shadow-sm" : "bg-slate-300"}`} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-black text-slate-800 truncate group-hover:text-slate-900">{nome}</p>
-                    </div>
-                    <span className="text-slate-300 group-hover:text-[#e2a41d] text-sm font-bold">&rarr;</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </aside>
 
       {/* ÁREA DO MAPA */}
