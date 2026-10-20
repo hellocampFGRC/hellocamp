@@ -18,7 +18,7 @@ const getPaisCache = unstable_cache(
     return data;
   },
   ['cache-pais-detalhe'],
-  { revalidate: 86400 }
+  { revalidate: 1 }
 );
 
 const getCamposPorPaisCache = unstable_cache(
@@ -32,7 +32,7 @@ const getCamposPorPaisCache = unstable_cache(
     return data || [];
   },
   ['cache-campos-pais'],
-  { revalidate: 86400 }
+  { revalidate: 1 }
 );
 
 // ==========================================
