@@ -106,6 +106,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
   const descCampo = isEn && campo.descricao_en ? campo.descricao_en : campo.descricao;
   const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
   const localCampo = isEn && campo.local_en ? campo.local_en : (isEn && campo.Distrito_en ? campo.Distrito_en : (campo.Distrito || campo.distrito || campo.local));
+  
   const racioCampo = isEn && campo.racio_monitores_en ? campo.racio_monitores_en : campo.racio_monitores;
   const alimentacaoCampo = isEn && campo.alimentacao_en ? campo.alimentacao_en : campo.alimentacao;
   const alojamentoCampo = isEn && campo.alojamento_en ? campo.alojamento_en : campo.alojamento;
@@ -237,7 +238,10 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 <h1 className="text-3xl md:text-5xl font-black text-slate-900 leading-tight mb-4 tracking-tight">{nomeCampo}</h1>
 
                 <div className="flex items-center gap-3">
-                  <span className="text-slate-900 bg-amber-100 px-2 py-1 rounded-md text-sm font-black">★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : 'Novo'}</span>
+                  {/* TRADUÇÃO DO NOVO/NEW AQUI */}
+                  <span className="text-slate-900 bg-amber-100 px-2 py-1 rounded-md text-sm font-black">
+                    ★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : (isEn ? 'New' : 'Novo')}
+                  </span>
                   <span className="text-slate-500 text-xs font-bold">
                     ({totalAvaliacoes} {isEn ? 'reviews' : 'avaliações'})
                   </span>
@@ -317,7 +321,10 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
                   <h2 className="text-xl font-black text-slate-900 m-0">{isEn ? 'Reviews' : 'Avaliações'}</h2>
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-900 bg-amber-100 px-2 py-1 rounded-md text-sm font-black">★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : 'Novo'}</span>
+                    {/* TRADUÇÃO DO NOVO/NEW AQUI */}
+                    <span className="text-slate-900 bg-amber-100 px-2 py-1 rounded-md text-sm font-black">
+                      ★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : (isEn ? 'New' : 'Novo')}
+                    </span>
                   </div>
                 </div>
 
@@ -366,9 +373,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 </div>
               )}
 
-              {/* ========================================== */}
-              {/* CROSS SELLING: OUTROS CAMPOS DO PARCEIRO     */}
-              {/* ========================================== */}
+              {/* CROSS SELLING: OUTROS CAMPOS DO PARCEIRO */}
               {outrosDoParceiro.length > 0 && (
                 <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
                   <div className="flex items-center justify-between mb-6">
@@ -402,9 +407,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 </div>
               )}
 
-              {/* ========================================== */}
-              {/* CROSS SELLING: CAMPOS SEMELHANTES          */}
-              {/* ========================================== */}
+              {/* CROSS SELLING: CAMPOS SEMELHANTES */}
               {semelhantes.length > 0 && (
                 <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
                   <div className="flex items-center justify-between mb-6">
