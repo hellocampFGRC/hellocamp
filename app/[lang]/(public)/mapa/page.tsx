@@ -24,7 +24,7 @@ const getCamposMapaCache = unstable_cache(
     return data || [];
   },
   ['cache-mapa-campos-v2'],
-  { revalidate: 0 } // 24h
+  { revalidate: 86400 } // 24h
 );
 
 export default async function PaginaMapa({
