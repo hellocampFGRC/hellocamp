@@ -4,8 +4,8 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-interface Variante { nome: string; preco: number; }
-interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; }
+interface Variante { nome: string; preco: number; nome_en?: string; }
+interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; titulo_en?: string; }
 
 const ReservaContext = createContext<any>(null);
 
@@ -175,7 +175,9 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   const bloqueioData = !escolhasCompletas;
   const disabledReserva = !pacoteSelecionado || !varianteSelecionada || precoBase === 0 || isEsgotado || bloqueioData;
 
-  const nomeProgramaCompleto = `${pacoteSelecionado?.titulo || ''} ${((pacoteSelecionado?.variantes?.length || 0) > 1 && varianteSelecionada) ? `(${varianteSelecionada.nome})` : ''}`.trim();
+  const tituloPacoteLocal = isEn && pacoteSelecionado?.titulo_en ? pacoteSelecionado.titulo_en : pacoteSelecionado?.titulo;
+  const nomeVarLocal = isEn && varianteSelecionada?.nome_en ? varianteSelecionada.nome_en : varianteSelecionada?.nome;
+  const nomeProgramaCompleto = `${tituloPacoteLocal || ''} ${((pacoteSelecionado?.variantes?.length || 0) > 1 && varianteSelecionada) ? `(${nomeVarLocal})` : ''}`.trim();
 
   const handleReservar = () => {
     if (disabledReserva) return;
@@ -329,9 +331,15 @@ export function SeletorOpcoes() {
     if (escolhasFeitas === ctx.quantPacote) {
       return <span className="text-emerald-700 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">✓ {ctx.isEn ? 'All selected!' : 'Completo!'}</span>;
     }
+
+    const tipoNomeEn = ctx.pacoteSelecionado?.tipo === 'semana' ? 'week(s)' : 'day(s)';
+    const tipoNomePt = ctx.pacoteSelecionado?.tipo === 'semana' ? 'semana(s)' : 'dia(s)';
+
     return (
       <span className="text-slate-600 font-bold bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-        {ctx.isEn ? `Select ${ctx.quantPacote - escolhasFeitas} more ${ctx.pacoteSelecionado?.tipo}(s)` : `Falta selecionar ${ctx.quantPacote - escolhasFeitas} ${ctx.pacoteSelecionado?.tipo}(s)`}
+        {ctx.isEn 
+          ? `Select ${ctx.quantPacote - escolhasFeitas} more ${tipoNomeEn}` 
+          : `Falta selecionar ${ctx.quantPacote - escolhasFeitas} ${tipoNomePt}`}
       </span>
     );
   };
@@ -351,14 +359,15 @@ export function SeletorOpcoes() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {ctx.pacotes.map((pac: any) => {
             const isActive = ctx.pacoteSelecionado?.id === pac.id;
+            const tituloPacoteLista = ctx.isEn && pac.titulo_en ? pac.titulo_en : pac.titulo;
             return (
               <div key={pac.id} onClick={() => ctx.setPacoteSelecionado(pac)}
                 className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${isActive ? 'bg-blue-50/50 border-[#0E3A68] shadow-md' : 'bg-white border-slate-200 hover:border-slate-300'}`}
               >
                 <div>
-                  <span className={`block text-base font-black mb-1 ${isActive ? 'text-[#0E3A68]' : 'text-slate-900'}`}>{pac.titulo}</span>
+                  <span className={`block text-base font-black mb-1 ${isActive ? 'text-[#0E3A68]' : 'text-slate-900'}`}>{tituloPacoteLista}</span>
                   <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-blue-700' : 'text-slate-400'}`}>
-                    {pac.tipo === 'semana' ? `${pac.quantidade} Semana(s)` : `${pac.quantidade} Dia(s)`}
+                    {pac.tipo === 'semana' ? `${pac.quantidade} ${ctx.isEn ? 'Week(s)' : 'Semana(s)'}` : `${pac.quantidade} ${ctx.isEn ? 'Day(s)' : 'Dia(s)'}`}
                   </span>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isActive ? 'border-[#0E3A68] bg-[#0E3A68]' : 'border-slate-300'}`}>
@@ -442,13 +451,16 @@ export function SeletorOpcoes() {
             {ctx.isEn ? 'Food / Sleepover Options' : 'Opções (Alimentação / Dormida)'}
           </label>
           <div className="flex flex-col gap-3">
-            {ctx.pacoteSelecionado.variantes.map((varia: Variante) => (
-              <button key={varia.nome} onClick={() => ctx.setVarianteSelecionada(varia)}
-                className={`w-full px-6 py-4 rounded-2xl text-sm font-black border-2 transition-all flex justify-between items-center ${ctx.varianteSelecionada?.nome === varia.nome ? 'bg-blue-50/50 border-[#0E3A68] text-[#0E3A68] shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 shadow-sm'}`}>
-                <span>{varia.nome}</span>
-                <span className={ctx.varianteSelecionada?.nome === varia.nome ? 'text-[#0E3A68]' : 'text-slate-400'}>{varia.preco}€</span>
-              </button>
-            ))}
+            {ctx.pacoteSelecionado.variantes.map((varia: Variante) => {
+              const nomeVariaLista = ctx.isEn && varia.nome_en ? varia.nome_en : varia.nome;
+              return (
+                <button key={varia.nome} onClick={() => ctx.setVarianteSelecionada(varia)}
+                  className={`w-full px-6 py-4 rounded-2xl text-sm font-black border-2 transition-all flex justify-between items-center ${ctx.varianteSelecionada?.nome === varia.nome ? 'bg-blue-50/50 border-[#0E3A68] text-[#0E3A68] shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 shadow-sm'}`}>
+                  <span>{nomeVariaLista}</span>
+                  <span className={ctx.varianteSelecionada?.nome === varia.nome ? 'text-[#0E3A68]' : 'text-slate-400'}>{varia.preco}€</span>
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -524,6 +536,9 @@ export function CaixaResumo() {
   if (ctx.isExternalLinkMode) textoBotao = ctx.isEn ? 'Go to Official Form' : 'Ir para Formulário Oficial';
 
   const baseCalculado = ctx.precoBase * (ctx.diasSelecionados.length === 0 ? 1 : ctx.multiplicadorPrecoBase);
+  
+  const tituloPacoteResumo = ctx.isEn && ctx.pacoteSelecionado?.titulo_en ? ctx.pacoteSelecionado.titulo_en : ctx.pacoteSelecionado?.titulo;
+  const nomeVariaResumo = ctx.isEn && ctx.varianteSelecionada?.nome_en ? ctx.varianteSelecionada.nome_en : ctx.varianteSelecionada?.nome;
 
   return (
     <>
@@ -543,11 +558,11 @@ export function CaixaResumo() {
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{ctx.isEn ? 'Selected Program' : 'Programa Selecionado'}</p>
                 <p className="text-sm font-black text-slate-900 m-0 leading-tight pr-2">
-                  {ctx.pacoteSelecionado?.titulo || '--'}
+                  {tituloPacoteResumo || '--'}
                 </p>
                 {((ctx.pacoteSelecionado?.variantes?.length || 0) > 1) && (
                   <p className="text-[10px] font-black text-[#0E3A68] mt-2 mb-0 bg-blue-50 border border-blue-100 inline-block px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm">
-                    {ctx.varianteSelecionada?.nome}
+                    {nomeVariaResumo}
                   </p>
                 )}
               </div>
@@ -563,9 +578,9 @@ export function CaixaResumo() {
                 <p className="text-sm font-bold text-slate-900 m-0">
                   {ctx.escolhasCompletas
                     ? (ctx.isDiaAvulsoFlexivel
-                        ? `${ctx.diasSelecionados.length} Dia(s) Solto(s)`
-                        : `${ctx.pacoteSelecionado?.quantidade} ${ctx.pacoteSelecionado?.tipo}(s) Selecionadas`)
-                    : <span className="text-[#e2a41d] font-bold text-[10px] bg-[#e2a41d]/10 px-2 py-1 rounded-md border border-[#e2a41d]/20 uppercase tracking-widest shadow-sm">Aguardando Seleção</span>}
+                        ? `${ctx.diasSelecionados.length} ${ctx.isEn ? 'Flexible Day(s)' : 'Dia(s) Solto(s)'}`
+                        : `${ctx.pacoteSelecionado?.quantidade} ${ctx.pacoteSelecionado?.tipo === 'semana' ? (ctx.isEn ? 'Week(s)' : 'Semana(s)') : (ctx.isEn ? 'Day(s)' : 'Dia(s)')} ${ctx.isEn ? 'Selected' : 'Selecionadas'}`)
+                    : <span className="text-[#e2a41d] font-bold text-[10px] bg-[#e2a41d]/10 px-2 py-1 rounded-md border border-[#e2a41d]/20 uppercase tracking-widest shadow-sm">{ctx.isEn ? 'Waiting for Selection' : 'Aguardando Seleção'}</span>}
                 </p>
               </div>
             </div>
@@ -575,13 +590,13 @@ export function CaixaResumo() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">{ctx.isEn ? 'Extras' : 'Suplementos Extras'}</p>
                 {ctx.extraSeguro && (
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5"><span className="text-sm">🛡️</span> Seguro</span>
+                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5"><span className="text-sm">🛡️</span> {ctx.isEn ? 'Insurance' : 'Seguro'}</span>
                     <span className="text-xs font-black text-slate-900">+{ctx.custoSeguro}€</span>
                   </div>
                 )}
                 {ctx.extraTransporte && (
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5"><span className="text-sm">🚌</span> Transporte</span>
+                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5"><span className="text-sm">🚌</span> {ctx.isEn ? 'Transport' : 'Transporte'}</span>
                     <span className="text-xs font-black text-slate-900">+{ctx.custoTransporte}€</span>
                   </div>
                 )}
@@ -605,7 +620,7 @@ export function CaixaResumo() {
 
         {/* BOTÃO PRINCIPAL (LARANJA PARA ALTA CONVERSÃO) */}
         {ctx.isEsgotado ? (
-          <button disabled className="w-full py-5 rounded-xl bg-slate-100 text-slate-400 font-black uppercase tracking-widest border border-slate-200">Esgotado</button>
+          <button disabled className="w-full py-5 rounded-xl bg-slate-100 text-slate-400 font-black uppercase tracking-widest border border-slate-200">{ctx.isEn ? 'Sold Out' : 'Esgotado'}</button>
         ) : (
           <button
             onClick={ctx.handleReservar}
@@ -623,7 +638,7 @@ export function CaixaResumo() {
         {!ctx.disabledReserva && (
           <div className="text-center mt-5">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
-              {ctx.isExternalLinkMode ? '🔗 Redirecionamento Seguro' : '🔒 Pagamento Seguro Garantido'}
+              {ctx.isExternalLinkMode ? (ctx.isEn ? '🔗 Secure Redirect' : '🔗 Redirecionamento Seguro') : (ctx.isEn ? '🔒 Guaranteed Secure Payment' : '🔒 Pagamento Seguro Garantido')}
             </span>
           </div>
         )}
@@ -637,7 +652,7 @@ export function CaixaResumo() {
 
             <div className="p-8 md:p-10">
               <div className="w-16 h-16 bg-blue-50 text-[#0E3A68] rounded-full flex items-center justify-center text-3xl mb-6 border border-blue-100 shadow-inner">🚀</div>
-              <h2 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">Quase lá!</h2>
+              <h2 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">{ctx.isEn ? 'Almost there!' : 'Quase lá!'}</h2>
               <p className="text-sm font-medium text-slate-500 leading-relaxed mb-8">
                 {ctx.isEn
                   ? "You will be redirected to the partner's official form. Leave your contact details so the organizer knows you came from HelloCamp."
@@ -663,7 +678,9 @@ export function CaixaResumo() {
                     {ctx.submittingLead ? (ctx.isEn ? 'Redirecting...' : 'A redirecionar...') : (ctx.isEn ? 'Continue to Official Form' : 'Avançar para o Formulário')}
                     <span className="text-xl leading-none">&rarr;</span>
                   </button>
-                  <p className="text-center text-[10px] font-bold text-slate-400 mt-5 uppercase tracking-widest">Ao avançar, aceita a Política de Privacidade.</p>
+                  <p className="text-center text-[10px] font-bold text-slate-400 mt-5 uppercase tracking-widest">
+                    {ctx.isEn ? 'By continuing, you agree to the Privacy Policy.' : 'Ao avançar, aceita a Política de Privacidade.'}
+                  </p>
                 </div>
               </form>
             </div>
