@@ -73,7 +73,6 @@ export async function POST(req: Request) {
 
       const stripeCustomerId = typeof session.customer === 'string' ? session.customer : null;
 
-      // CAPTURA INTELIGENTE DOS DADOS DE PAGAMENTO PARA PREENCHER A LINHA DE LOG DA TABELA
       const stripeMetodo = session.payment_method_types?.[0] || 'card';
       const metodoFormatado = stripeMetodo === 'mb_way' ? 'MB WAY' : stripeMetodo === 'card' ? 'Cartão' : stripeMetodo.toUpperCase();
 
@@ -81,12 +80,11 @@ export async function POST(req: Request) {
       const emailEncarregado = session.customer_email || session.customer_details?.email || '';
       const telefoneEncarregado = session.customer_details?.phone || '';
 
-      // 1. ATUALIZAR STATUS FINANCEIRO COM TODOS OS CAMPOS POPULADOS
       const { error: updateError } = await supabase
         .from('reservas')
         .update({ 
           status_pagamento: novoStatus,
-          status: novoStatus, // Sincroniza a coluna status genérica
+          status: novoStatus,
           valor_pago: valorPagoBaseDeDados,
           valor_em_falta: valorEmFalta,
           stripe_customer_id: stripeCustomerId,
@@ -102,7 +100,6 @@ export async function POST(req: Request) {
         return new NextResponse('Erro na Base de Dados', { status: 500 });
       }
 
-      // 2. RECOLHER DADOS EXAUSTIVOS PARA ENVIO DE EMAILS
       const { data: reservasData } = await supabase
         .from('reservas')
         .select(`
@@ -118,7 +115,6 @@ export async function POST(req: Request) {
         const campoLocal = Array.isArray(campoObj) ? campoObj[0]?.local : campoObj?.local || 'Localização a designar';
         const turnoNome = reservasData[0].turno_nome || 'Programa Base';
 
-        // Ir buscar o NIF guardado no perfil interno da HelloCamp para sincronizar na tabela de reservas
         const { data: perfilPaiData } = await supabase
           .from('perfis')
           .select('nome_completo, telefone, nif')
@@ -198,12 +194,10 @@ export async function POST(req: Request) {
           statusTextoPai = `<p style="font-size: 15px; line-height: 1.6; color: #475569;">O pagamento da segunda tranche da sua reserva para o programa <strong>${campoNome}</strong> foi liquidado com sucesso.</p>`;
         }
 
-        // AQUI ESTÁ A VARIÁVEL FINANCEIRA ADICIONADA:
         const financeiroOrg = isSinal
           ? `<tr><td style="padding: 4px 0; color: #64748b;">Sinal Recebido (50%):</td><td style="font-weight: bold; color: #059669;">${valorCobradoAgora.toFixed(2)}€</td></tr><tr><td style="padding: 4px 0; color: #64748b;">Valor Pendente:</td><td style="font-weight: bold; color: #eab308;">${valorEmFalta.toFixed(2)}€</td></tr>`
           : `<tr><td style="padding: 4px 0; color: #64748b;">Valor Pago Agora:</td><td style="font-weight: bold; color: #059669;">${valorCobradoAgora.toFixed(2)}€</td></tr><tr><td style="padding: 4px 0; color: #64748b;">Situação:</td><td style="font-weight: bold; color: #059669;">100% Pago</td></tr>`;
 
-        // A. EMAIL PAI
         if (emailPai && !isPagamentoFinal) {
           await resend.emails.send({
             from: 'HelloCamp Reservas <info@hellocamp.pt>', 
@@ -230,7 +224,6 @@ export async function POST(req: Request) {
           });
         }
 
-        // B. EMAIL ORGANIZADOR
         if (isPagamentoFinal) {
           await resend.emails.send({
             from: 'HelloCamp Parceiros <info@hellocamp.pt>',
@@ -259,11 +252,13 @@ export async function POST(req: Request) {
           });
         }
 
-        // C. EMAIL ADMIN
+        // CORREÇÃO CRÍTICA DO CÓDIGO (Concatenação de string formatada para evitar quebras)
+        const assuntoAdmin = `[VENDA] ${valorCobradoAgora.toFixed(2)}€ ${isSinal ? '(SINAL)' : isPagamentoFinal ? '(2ª TRANCHE)' : '(100%)'} | ${campoNome}`;
+        
         await resend.emails.send({
           from: 'HelloCamp Control <info@hellocamp.pt>',
           to: 'info@hellocamp.pt',
-          subject: `[VENDA] ${valorCobradoAgora.toFixed(2)}€ ${isSinal ? '(SINAL)' : isPagamentoFinal ? '(2ª TRANCHE)' : '(100%)'} - ${campoNome}`,
+          subject: assuntoAdmin,
           html: `<div style="font-family: monospace; font-size: 14px; padding: 20px;"><h2>Transação HelloCamp</h2><p>Recebido: ${valorCobradoAgora}€ | Falta: ${valorEmFalta}€</p><p>Método: ${metodoFormatado}</p></div>`,
         });
       }

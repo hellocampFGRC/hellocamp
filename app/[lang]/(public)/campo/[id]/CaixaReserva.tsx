@@ -145,11 +145,8 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   };
 
   const precoBase = varianteSelecionada?.preco || 0;
-
   let multiplicadorPrecoBase = 1;
-  if (isDiaAvulsoFlexivel) {
-    multiplicadorPrecoBase = Math.max(1, diasSelecionados.length);
-  }
+  if (isDiaAvulsoFlexivel) multiplicadorPrecoBase = Math.max(1, diasSelecionados.length);
 
   const totalDiasExtras = diasSelecionados.length;
 
@@ -206,6 +203,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     if (extraSeguro) params.set("ext_seguro", "true");
     if (extraTransporte) params.set("ext_transporte", "true");
     if (isEmailMode) params.set("modo", "email");
+    
     router.push(`/${lang}/checkout/${campo.id}?${params.toString()}`);
   };
 
@@ -215,7 +213,11 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     if (!externalLinkUrl) return;
 
     setSubmittingLead(true);
-    const newWindow = window.open('about:blank', '_blank');
+    // Para contornar bloqueadores de pop-ups em mobile, atualizamos a janela principal se falhar
+    let newWindow: Window | null = null;
+    try {
+      newWindow = window.open('about:blank', '_blank');
+    } catch(err) {}
 
     try {
       await supabase.from('leads_externas').insert([{
@@ -250,11 +252,8 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
   const prevMonth = () => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() - 1, 1));
 
   const gerarGrelhaMes = () => {
-    const year = mesAtual.getFullYear();
-    const month = mesAtual.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-
+    const year = mesAtual.getFullYear(); const month = mesAtual.getMonth();
+    const firstDay = new Date(year, month, 1); const lastDay = new Date(year, month + 1, 0);
     const startingDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
     const daysInMonth = lastDay.getDate();
 
@@ -275,10 +274,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
 
       currentRow.push({ dia: i, dataCompleta: dateString, isPast: isPast, disponivel: !isPast && isAvailableDay });
 
-      if (currentRow.length === 7) {
-        grelha.push(currentRow);
-        currentRow = [];
-      }
+      if (currentRow.length === 7) { grelha.push(currentRow); currentRow = []; }
     }
 
     if (currentRow.length > 0) {
@@ -325,13 +321,13 @@ export function SeletorOpcoes() {
 
     if (ctx.isDiaAvulsoFlexivel) {
       if (ctx.diasSelecionados.length > 0) {
-        return <span className="text-blue-600 font-bold bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">{ctx.diasSelecionados.length} {ctx.isEn ? 'Days selected' : 'Dia(s) selecionado(s)'}</span>;
+        return <span className="text-[#0E3A68] font-bold bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">{ctx.diasSelecionados.length} {ctx.isEn ? 'Days selected' : 'Dia(s) selecionado(s)'}</span>;
       }
       return <span className="text-slate-600 font-bold bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">{ctx.isEn ? 'Select your dates' : 'Selecione os dias'}</span>;
     }
 
     if (escolhasFeitas === ctx.quantPacote) {
-      return <span className="text-blue-600 font-bold bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">✓ {ctx.isEn ? 'All selected!' : 'Completo!'}</span>;
+      return <span className="text-emerald-700 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">✓ {ctx.isEn ? 'All selected!' : 'Completo!'}</span>;
     }
     return (
       <span className="text-slate-600 font-bold bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
@@ -342,7 +338,7 @@ export function SeletorOpcoes() {
 
   return (
     <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10" id="reserva">
-      <h2 className="text-2xl font-black text-slate-900 mb-8 pb-5 border-b border-slate-100">
+      <h2 className="text-2xl font-black text-slate-900 mb-8 pb-5 border-b border-slate-100 tracking-tight">
         {ctx.isEn ? 'Configure your Booking' : 'Configurar Inscrição'}
       </h2>
 
@@ -357,15 +353,15 @@ export function SeletorOpcoes() {
             const isActive = ctx.pacoteSelecionado?.id === pac.id;
             return (
               <div key={pac.id} onClick={() => ctx.setPacoteSelecionado(pac)}
-                className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${isActive ? 'bg-blue-50/50 border-blue-600 shadow-md' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${isActive ? 'bg-blue-50/50 border-[#0E3A68] shadow-md' : 'bg-white border-slate-200 hover:border-slate-300'}`}
               >
                 <div>
-                  <span className={`block text-base font-black mb-1 ${isActive ? 'text-blue-900' : 'text-slate-900'}`}>{pac.titulo}</span>
-                  <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-blue-600' : 'text-slate-400'}`}>
+                  <span className={`block text-base font-black mb-1 ${isActive ? 'text-[#0E3A68]' : 'text-slate-900'}`}>{pac.titulo}</span>
+                  <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-blue-700' : 'text-slate-400'}`}>
                     {pac.tipo === 'semana' ? `${pac.quantidade} Semana(s)` : `${pac.quantidade} Dia(s)`}
                   </span>
                 </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isActive ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isActive ? 'border-[#0E3A68] bg-[#0E3A68]' : 'border-slate-300'}`}>
                   {isActive && <span className="text-white text-[10px] font-bold">✓</span>}
                 </div>
               </div>
@@ -384,13 +380,13 @@ export function SeletorOpcoes() {
           <div className="text-[10px]">{getSubtituloCalendario()}</div>
         </div>
 
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
+        <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <button type="button" onClick={ctx.prevMonth} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 font-black border border-slate-200 transition-colors">&larr;</button>
+            <button type="button" onClick={ctx.prevMonth} className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-slate-500 hover:text-[#0E3A68] hover:bg-slate-100 font-black border border-slate-200 transition-colors shadow-sm">&larr;</button>
             <span className="text-sm font-black uppercase tracking-widest text-slate-900">
               {ctx.capitalize(ctx.mesAtual.toLocaleDateString(ctx.isEn ? 'en-US' : 'pt-PT', { month: 'long', year: 'numeric' }))}
             </span>
-            <button type="button" onClick={ctx.nextMonth} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 font-black border border-slate-200 transition-colors">&rarr;</button>
+            <button type="button" onClick={ctx.nextMonth} className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-slate-500 hover:text-[#0E3A68] hover:bg-slate-100 font-black border border-slate-200 transition-colors shadow-sm">&rarr;</button>
           </div>
 
           <div className="grid grid-cols-7 gap-2 mb-3">
@@ -401,7 +397,7 @@ export function SeletorOpcoes() {
 
           <div className="flex flex-col gap-2">
             {ctx.grelhaDias.map((semana: any[], rowIdx: number) => (
-              <div key={rowIdx} className="grid grid-cols-7 gap-2">
+              <div key={rowIdx} className="grid grid-cols-7 gap-1 md:gap-2">
                 {semana.map((diaInfo, colIdx) => {
                   if (!diaInfo) return <div key={colIdx} className="w-full aspect-square"></div>;
 
@@ -411,13 +407,13 @@ export function SeletorOpcoes() {
                   let buttonClasses = "w-full aspect-square flex items-center justify-center rounded-xl text-sm font-bold transition-all ";
 
                   if (isPast) {
-                    buttonClasses += "bg-slate-50 text-slate-300 cursor-not-allowed opacity-50 border border-slate-100";
+                    buttonClasses += "bg-white text-slate-300 cursor-not-allowed opacity-50 border border-slate-100";
                   } else if (!disponivel) {
-                    buttonClasses += "bg-slate-50 text-red-300 cursor-not-allowed border border-slate-100 line-through decoration-red-200";
+                    buttonClasses += "bg-white text-red-300 cursor-not-allowed border border-slate-100 line-through decoration-red-200";
                   } else if (isSelected) {
-                    buttonClasses += "bg-blue-600 text-white shadow-md border border-blue-700 font-black scale-105";
+                    buttonClasses += "bg-[#0E3A68] text-white shadow-md border border-[#0E3A68] font-black scale-105";
                   } else {
-                    buttonClasses += "bg-white text-slate-700 border border-slate-200 hover:border-slate-400 cursor-pointer hover:bg-slate-50";
+                    buttonClasses += "bg-white text-slate-700 border border-slate-200 hover:border-[#0E3A68] cursor-pointer hover:bg-blue-50 shadow-sm";
                   }
 
                   return (
@@ -448,9 +444,9 @@ export function SeletorOpcoes() {
           <div className="flex flex-col gap-3">
             {ctx.pacoteSelecionado.variantes.map((varia: Variante) => (
               <button key={varia.nome} onClick={() => ctx.setVarianteSelecionada(varia)}
-                className={`w-full px-6 py-4 rounded-2xl text-sm font-black border-2 transition-all flex justify-between items-center ${ctx.varianteSelecionada?.nome === varia.nome ? 'bg-blue-50/50 border-blue-600 text-blue-900 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>
+                className={`w-full px-6 py-4 rounded-2xl text-sm font-black border-2 transition-all flex justify-between items-center ${ctx.varianteSelecionada?.nome === varia.nome ? 'bg-blue-50/50 border-[#0E3A68] text-[#0E3A68] shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 shadow-sm'}`}>
                 <span>{varia.nome}</span>
-                <span className={ctx.varianteSelecionada?.nome === varia.nome ? 'text-blue-600' : 'text-slate-400'}>{varia.preco}€</span>
+                <span className={ctx.varianteSelecionada?.nome === varia.nome ? 'text-[#0E3A68]' : 'text-slate-400'}>{varia.preco}€</span>
               </button>
             ))}
           </div>
@@ -466,29 +462,29 @@ export function SeletorOpcoes() {
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {ctx.valSeguro > 0 && (
-              <div onClick={() => ctx.setExtraSeguro(!ctx.extraSeguro)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraSeguro ? 'bg-blue-50/50 border-blue-600 shadow-md' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+              <div onClick={() => ctx.setExtraSeguro(!ctx.extraSeguro)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraSeguro ? 'bg-blue-50/50 border-[#0E3A68] shadow-md' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'}`}>
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">🛡️</span>
                   <div>
-                    <span className={`block text-sm font-black mb-1 ${ctx.extraSeguro ? 'text-blue-900' : 'text-slate-700'}`}>{ctx.isEn ? 'Insurance' : 'Seguro Extra'}</span>
+                    <span className={`block text-sm font-black mb-1 ${ctx.extraSeguro ? 'text-[#0E3A68]' : 'text-slate-700'}`}>{ctx.isEn ? 'Insurance' : 'Seguro Extra'}</span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoSeguro}€</span>
                   </div>
                 </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${ctx.extraSeguro ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${ctx.extraSeguro ? 'border-[#0E3A68] bg-[#0E3A68]' : 'border-slate-300'}`}>
                   {ctx.extraSeguro && <span className="text-white text-[10px] font-bold">✓</span>}
                 </div>
               </div>
             )}
             {ctx.valTransporte > 0 && (
-              <div onClick={() => ctx.setExtraTransporte(!ctx.extraTransporte)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraTransporte ? 'bg-blue-50/50 border-blue-600 shadow-md' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+              <div onClick={() => ctx.setExtraTransporte(!ctx.extraTransporte)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraTransporte ? 'bg-blue-50/50 border-[#0E3A68] shadow-md' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'}`}>
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">🚌</span>
                   <div>
-                    <span className={`block text-sm font-black mb-1 ${ctx.extraTransporte ? 'text-blue-900' : 'text-slate-700'}`}>{ctx.isEn ? 'Transport' : 'Transporte'}</span>
+                    <span className={`block text-sm font-black mb-1 ${ctx.extraTransporte ? 'text-[#0E3A68]' : 'text-slate-700'}`}>{ctx.isEn ? 'Transport' : 'Transporte'}</span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoTransporte}€</span>
                   </div>
                 </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${ctx.extraTransporte ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${ctx.extraTransporte ? 'border-[#0E3A68] bg-[#0E3A68]' : 'border-slate-300'}`}>
                   {ctx.extraTransporte && <span className="text-white text-[10px] font-bold">✓</span>}
                 </div>
               </div>
@@ -506,9 +502,9 @@ export function SeletorOpcoes() {
           {ctx.isEn ? 'Number of Participants' : 'Número de Participantes'}
         </label>
         <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-2 w-max shadow-sm">
-          <button type="button" onClick={() => ctx.setQuantidade((q: number) => Math.max(1, q - 1))} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-100 font-black transition-colors">-</button>
-          <span className="text-lg font-black text-slate-900 w-10 text-center">{ctx.quantidade}</span>
-          <button type="button" onClick={() => ctx.setQuantidade((q: number) => Math.min(ctx.campo.vagas_totais || 99, q + 1))} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-100 font-black transition-colors">+</button>
+          <button type="button" onClick={() => ctx.setQuantidade((q: number) => Math.max(1, q - 1))} className="w-12 h-12 rounded-xl bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-100 font-black transition-colors">-</button>
+          <span className="text-xl font-black text-slate-900 w-10 text-center">{ctx.quantidade}</span>
+          <button type="button" onClick={() => ctx.setQuantidade((q: number) => Math.min(ctx.campo.vagas_totais || 99, q + 1))} className="w-12 h-12 rounded-xl bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-100 font-black transition-colors">+</button>
         </div>
       </div>
 
@@ -532,7 +528,7 @@ export function CaixaResumo() {
   return (
     <>
       <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-[0_20px_60px_rgb(0,0,0,0.06)] w-full relative">
-        <h3 className="text-xl font-black text-slate-900 mb-6 border-b border-slate-100 pb-5">
+        <h3 className="text-xl font-black text-slate-900 mb-6 border-b border-slate-100 pb-5 tracking-tight">
           {ctx.isEn ? 'Booking Summary' : 'Resumo da Reserva'}
         </h3>
 
@@ -546,18 +542,18 @@ export function CaixaResumo() {
             <div className="flex justify-between items-start border-b border-slate-100 pb-5">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{ctx.isEn ? 'Selected Program' : 'Programa Selecionado'}</p>
-                <p className="text-sm font-black text-slate-900 m-0 leading-tight">
+                <p className="text-sm font-black text-slate-900 m-0 leading-tight pr-2">
                   {ctx.pacoteSelecionado?.titulo || '--'}
                 </p>
                 {((ctx.pacoteSelecionado?.variantes?.length || 0) > 1) && (
-                  <p className="text-[10px] font-black text-blue-700 mt-2 mb-0 bg-blue-50 border border-blue-100 inline-block px-2.5 py-1 rounded-md uppercase tracking-widest">
+                  <p className="text-[10px] font-black text-[#0E3A68] mt-2 mb-0 bg-blue-50 border border-blue-100 inline-block px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm">
                     {ctx.varianteSelecionada?.nome}
                   </p>
                 )}
               </div>
               <div className="text-right">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{ctx.isEn ? 'Base Price' : 'Valor Base'}</p>
-                <span className="text-base font-black text-slate-900">{baseCalculado > 0 ? `${baseCalculado}€` : '--'}</span>
+                <span className="text-base font-black text-[#0E3A68]">{baseCalculado > 0 ? `${baseCalculado}€` : '--'}</span>
               </div>
             </div>
 
@@ -569,7 +565,7 @@ export function CaixaResumo() {
                     ? (ctx.isDiaAvulsoFlexivel
                         ? `${ctx.diasSelecionados.length} Dia(s) Solto(s)`
                         : `${ctx.pacoteSelecionado?.quantidade} ${ctx.pacoteSelecionado?.tipo}(s) Selecionadas`)
-                    : <span className="text-[#e2a41d] font-bold text-xs bg-amber-50 px-2 py-1 rounded-md border border-amber-100">Aguardando Seleção...</span>}
+                    : <span className="text-[#e2a41d] font-bold text-[10px] bg-[#e2a41d]/10 px-2 py-1 rounded-md border border-[#e2a41d]/20 uppercase tracking-widest shadow-sm">Aguardando Seleção</span>}
                 </p>
               </div>
             </div>
@@ -594,20 +590,20 @@ export function CaixaResumo() {
 
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{ctx.isEn ? 'Participants' : 'Participantes'}</span>
-              <span className="text-base font-black text-slate-900 bg-slate-100 px-3 py-1 rounded-lg">x{ctx.quantidade}</span>
+              <span className="text-base font-black text-[#0E3A68] bg-blue-50 px-4 py-1.5 rounded-lg border border-blue-100">x{ctx.quantidade}</span>
             </div>
           </div>
         )}
 
         {/* TOTAL BOX */}
-        <div className="bg-slate-900 p-6 rounded-2xl mb-6 flex justify-between items-center shadow-lg">
-          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Total</span>
+        <div className="bg-[#0E3A68] p-6 rounded-[1.5rem] mb-6 flex justify-between items-center shadow-lg shadow-[#0E3A68]/20">
+          <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Total</span>
           <span className="text-4xl font-black text-white">
             {ctx.escolhasCompletas ? `${ctx.precoTotal}€` : '--'}
           </span>
         </div>
 
-        {/* BOTÃO PRINCIPAL (CORRIGIDO: LARANJA COM TEXTO BRANCO) */}
+        {/* BOTÃO PRINCIPAL (LARANJA PARA ALTA CONVERSÃO) */}
         {ctx.isEsgotado ? (
           <button disabled className="w-full py-5 rounded-xl bg-slate-100 text-slate-400 font-black uppercase tracking-widest border border-slate-200">Esgotado</button>
         ) : (
@@ -617,7 +613,7 @@ export function CaixaResumo() {
             className={`w-full py-5 rounded-xl text-sm font-black uppercase tracking-widest transition-all ${
               ctx.disabledReserva
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                : 'bg-[#e2a41d] hover:bg-[#d4991b] text-white shadow-lg shadow-[#e2a41d]/30 hover:-translate-y-1'
+                : 'bg-[#e2a41d] hover:bg-[#d4991b] text-white shadow-xl shadow-[#e2a41d]/30 hover:-translate-y-1'
             }`}
           >
             {textoBotao}
@@ -626,7 +622,7 @@ export function CaixaResumo() {
 
         {!ctx.disabledReserva && (
           <div className="text-center mt-5">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
               {ctx.isExternalLinkMode ? '🔗 Redirecionamento Seguro' : '🔒 Pagamento Seguro Garantido'}
             </span>
           </div>
@@ -635,12 +631,12 @@ export function CaixaResumo() {
 
       {/* MODAL DE LEAD EXTERNO */}
       {ctx.showLeadModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden relative">
-            <button onClick={() => ctx.setShowLeadModal(false)} className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 hover:text-slate-900 font-black transition-colors">&times;</button>
+            <button onClick={() => ctx.setShowLeadModal(false)} className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-[#0E3A68] hover:text-white font-black transition-colors">&times;</button>
 
             <div className="p-8 md:p-10">
-              <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-2xl mb-6 border border-blue-100">🚀</div>
+              <div className="w-16 h-16 bg-blue-50 text-[#0E3A68] rounded-full flex items-center justify-center text-3xl mb-6 border border-blue-100 shadow-inner">🚀</div>
               <h2 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">Quase lá!</h2>
               <p className="text-sm font-medium text-slate-500 leading-relaxed mb-8">
                 {ctx.isEn
@@ -651,21 +647,21 @@ export function CaixaResumo() {
               <form onSubmit={ctx.submitExternalLead} className="space-y-5">
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">{ctx.isEn ? 'Parent / Guardian Name' : 'Nome do Encarregado'}</label>
-                  <input required type="text" value={ctx.leadForm.nome} onChange={e => ctx.setLeadForm({...ctx.leadForm, nome: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-5 py-4 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-blue-500 focus:bg-white transition-colors placeholder:text-slate-400" placeholder={ctx.isEn ? "John Doe" : "Ex: Rui Silva"} />
+                  <input required type="text" value={ctx.leadForm.nome} onChange={e => ctx.setLeadForm({...ctx.leadForm, nome: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-5 py-4 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors placeholder:text-slate-400" placeholder={ctx.isEn ? "John Doe" : "Ex: Rui Silva"} />
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">{ctx.isEn ? 'E-mail Address' : 'E-mail'}</label>
-                  <input required type="email" value={ctx.leadForm.email} onChange={e => ctx.setLeadForm({...ctx.leadForm, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-5 py-4 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-blue-500 focus:bg-white transition-colors placeholder:text-slate-400" placeholder="email@exemplo.pt" />
+                  <input required type="email" value={ctx.leadForm.email} onChange={e => ctx.setLeadForm({...ctx.leadForm, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-5 py-4 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors placeholder:text-slate-400" placeholder="email@exemplo.pt" />
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">{ctx.isEn ? 'Phone Number' : 'Telefone'}</label>
-                  <input required type="tel" value={ctx.leadForm.telefone} onChange={e => ctx.setLeadForm({...ctx.leadForm, telefone: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-5 py-4 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-blue-500 focus:bg-white transition-colors placeholder:text-slate-400" placeholder="912 345 678" />
+                  <input required type="tel" value={ctx.leadForm.telefone} onChange={e => ctx.setLeadForm({...ctx.leadForm, telefone: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-5 py-4 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors placeholder:text-slate-400" placeholder="912 345 678" />
                 </div>
 
                 <div className="pt-6">
-                  <button type="submit" disabled={ctx.submittingLead} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black px-6 py-4 rounded-xl transition-all shadow-lg shadow-blue-600/30 flex items-center justify-center gap-3">
+                  <button type="submit" disabled={ctx.submittingLead} className="w-full bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black uppercase tracking-widest text-[11px] px-6 py-5 rounded-xl transition-all shadow-lg shadow-[#0E3A68]/30 flex items-center justify-center gap-3">
                     {ctx.submittingLead ? (ctx.isEn ? 'Redirecting...' : 'A redirecionar...') : (ctx.isEn ? 'Continue to Official Form' : 'Avançar para o Formulário')}
-                    <span className="text-lg leading-none">&rarr;</span>
+                    <span className="text-xl leading-none">&rarr;</span>
                   </button>
                   <p className="text-center text-[10px] font-bold text-slate-400 mt-5 uppercase tracking-widest">Ao avançar, aceita a Política de Privacidade.</p>
                 </div>
