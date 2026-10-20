@@ -20,7 +20,7 @@ const getCamposCacheados = unstable_cache(
     return data || [];
   },
   ['cache-pesquisa-campos'],
-  { revalidate: 1 } // 24 horas
+  { revalidate: 86400 } // 24 horas
 );
 
 // ==========================================
@@ -144,9 +144,9 @@ export default async function PaginaPesquisa({
                 <select name="pais" defaultValue={paisParam} className={customSelectClass}>
                   <option value="">{isEn ? 'All Countries' : 'Todos'}</option>
                   <option value="Portugal">Portugal</option>
-                  <option value="Espanha">Espanha</option>
-                  <option value="Reino Unido">Reino Unido</option>
-                  <option value="França">França</option>
+                  <option value="Espanha">{isEn ? 'Spain' : 'Espanha'}</option>
+                  <option value="Reino Unido">{isEn ? 'United Kingdom' : 'Reino Unido'}</option>
+                  <option value="França">{isEn ? 'France' : 'França'}</option>
                 </select>
               </div>
 
