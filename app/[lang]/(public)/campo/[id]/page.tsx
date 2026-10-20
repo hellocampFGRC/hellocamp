@@ -9,7 +9,7 @@ import FormContactoCampo from "../../components/FormContactoCampo";
 import DescricaoExpansivel from "../../components/DescricaoExpansivel";
 import { unstable_cache } from "next/cache";
 
-export const revalidate = 1;
+export const dynamic = 'force-dynamic';
 
 const getCampoCached = unstable_cache(
   async (id: string) => {
@@ -17,7 +17,7 @@ const getCampoCached = unstable_cache(
     return data;
   },
   ['cache-campo-detalhe'],
-  { revalidate: 1 }
+  { revalidate: 86400 }
 );
 
 const getReviewsCached = unstable_cache(
@@ -26,7 +26,7 @@ const getReviewsCached = unstable_cache(
     return data || [];
   },
   ['cache-campo-reviews'],
-  { revalidate: 1 }
+  { revalidate: 86400 }
 );
 
 const getRelacionadosCached = unstable_cache(
@@ -46,7 +46,7 @@ const getRelacionadosCached = unstable_cache(
     return { outrosDoParceiro, semelhantes };
   },
   ['cache-campo-relacionados'],
-  { revalidate: 1 } 
+  { revalidate: 86400 } 
 );
 
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; id: string }> }): Promise<Metadata> {
@@ -238,7 +238,6 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 <h1 className="text-3xl md:text-5xl font-black text-slate-900 leading-tight mb-4 tracking-tight">{nomeCampo}</h1>
 
                 <div className="flex items-center gap-3">
-                  {/* TRADUÇÃO DO NOVO/NEW AQUI */}
                   <span className="text-slate-900 bg-amber-100 px-2 py-1 rounded-md text-sm font-black">
                     ★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : (isEn ? 'New' : 'Novo')}
                   </span>
@@ -248,38 +247,12 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 </div>
               </div>
 
-              {/* DESCRIÇÃO E PERFIL DO ORGANIZADOR */}
+              {/* DESCRIÇÃO */}
               <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
                 <h2 className="text-xl font-black text-slate-900 mb-4">{dict.detalhe.sobre_programa}</h2>
                 <div className="text-sm">
                   <DescricaoExpansivel texto={descCampo} isEn={isEn} />
                 </div>
-
-                {campo.organizador_id && parceiroInfo && (
-                  <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="mt-8 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl hover:border-[#0E3A68]/30 transition-colors no-underline group shadow-sm">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm flex-shrink-0">
-                        {parceiroInfo.logotipo_url ? (
-                          <img src={parceiroInfo.logotipo_url} alt="Logo" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-slate-400 text-lg">🏢</span>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0 mb-0.5">{isEn ? 'Organized by' : 'Organizado por'}</p>
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-black text-slate-900 m-0 group-hover:text-[#0E3A68] transition-colors">
-                            {parceiroInfo.nome_empresa || 'Parceiro HelloCamp'}
-                          </p>
-                          {parceiroInfo.parceiro_verificado && (
-                            <span className="bg-blue-100 text-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[10px]" title="Parceiro Verificado">✓</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-slate-400 font-bold group-hover:text-[#0E3A68] transition-colors">&rarr;</span>
-                  </Link>
-                )}
               </div>
 
               {/* INFORMAÇÕES LOGÍSTICAS IMPORTANTES */}
@@ -305,6 +278,88 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 </div>
               </div>
 
+              {/* CROSS-LINKING DE AUTORIDADE: PERFIL DO ORGANIZADOR */}
+              {campo.organizador_id && parceiroInfo && (
+                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10 hover:border-[#0E3A68]/20 transition-colors">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                    <div className="flex items-center gap-5">
+                      <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-inner flex-shrink-0 p-3">
+                        {parceiroInfo.logotipo_url ? (
+                          <img src={parceiroInfo.logotipo_url} alt={parceiroInfo.nome_empresa} className="w-full h-full object-contain" />
+                        ) : (
+                          <span className="text-slate-300 text-3xl">🏢</span>
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-xl font-black text-slate-900 m-0 leading-none">
+                            {parceiroInfo.nome_empresa || 'Parceiro HelloCamp'}
+                          </h3>
+                          {parceiroInfo.parceiro_verificado && (
+                            <span className="bg-emerald-100 text-emerald-700 rounded-full p-1 shadow-sm" title={isEn ? "Verified Partner" : "Parceiro Verificado"}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+                          {isEn ? 'Official Organizer' : 'Organizador Oficial'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <Link 
+                      href={`/${lang}/parceiro/${campo.organizador_id}`} 
+                      className="w-full sm:w-auto text-center bg-slate-50 hover:bg-slate-100 text-slate-900 border border-slate-200 font-black text-[10px] uppercase tracking-widest px-6 py-4 rounded-xl transition-all shadow-sm hover:shadow-md"
+                    >
+                      {isEn ? 'View Profile & Camps' : 'Ver Perfil e Campos'}
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* NAVEGAÇÃO INTELIGENTE (ZERO APIS - DEEP LINKS DE GPS) */}
+              {campo.latitude && campo.longitude && (
+                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    
+                    <div>
+                      <h2 className="text-xl font-black text-slate-900 mb-2">{isEn ? 'Location & Directions' : 'Localização e Como Chegar'}</h2>
+                      <p className="text-sm font-medium text-slate-500 flex items-center gap-2 leading-relaxed max-w-sm">
+                        <svg className="w-5 h-5 text-[#e2a41d] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        {localCampo}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <a 
+                        href={`https://maps.apple.com/?daddr=${campo.latitude},${campo.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-900 px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-slate-200 shadow-sm"
+                      >
+                        Apple Maps
+                      </a>
+                      <a 
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${campo.latitude},${campo.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#BBF7D0] shadow-sm"
+                      >
+                        Google Maps
+                      </a>
+                      <a 
+                        href={`https://waze.com/ul?ll=${campo.latitude},${campo.longitude}&navigate=yes`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4338CA] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#C7D2FE] shadow-sm"
+                      >
+                        Waze
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* MOTOR DE RESERVA INTERATIVO */}
               <SeletorOpcoes />
 
@@ -321,7 +376,6 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
                   <h2 className="text-xl font-black text-slate-900 m-0">{isEn ? 'Reviews' : 'Avaliações'}</h2>
                   <div className="flex items-center gap-2">
-                    {/* TRADUÇÃO DO NOVO/NEW AQUI */}
                     <span className="text-slate-900 bg-amber-100 px-2 py-1 rounded-md text-sm font-black">
                       ★ {scoreAvaliacoes > 0 ? scoreAvaliacoes.toFixed(1) : (isEn ? 'New' : 'Novo')}
                     </span>
@@ -440,7 +494,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
               )}
 
               {/* FORMULÁRIO DE CONTACTO */}
-              <div id="duvidas" className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10 scroll-mt-24 mt-4">
+              <div id="duvidas" className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10 scroll-mt-24">
                 <h3 className="text-xl font-black text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
                 <p className="text-sm text-slate-500 font-medium mb-6">{dict.detalhe.duvidas_sub}</p>
 
