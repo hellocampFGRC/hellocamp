@@ -101,12 +101,23 @@ export default async function PaginaPesquisa({
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
   const todayISO = new Date().toISOString().split('T')[0];
 
+  // ==========================================
+  // ESTILOS LIMPOS PARA OS INPUTS & DROPDOWNS
+  // ==========================================
+  const baseInputClass = "w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors shadow-sm cursor-pointer hover:border-slate-300";
+  
+  // O "appearance-none" tira o estilo feio nativo. O "bg-[url...]" injeta a nossa seta minimalista!
+  const customSelectClass = `${baseInputClass} pr-10 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1rem_center] bg-no-repeat`;
+
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
-      {/* BARRA DE PESQUISA SUPERIOR */}
-      <section className="bg-white border-b border-slate-200 pt-8 pb-10 px-4 md:px-6 shadow-sm">
+      
+      {/* ═══════════════════════════════════════════ */}
+      {/* BARRA DE PESQUISA SUPERIOR (FILTROS)        */}
+      {/* ═══════════════════════════════════════════ */}
+      <section className="bg-white border-b border-slate-200 pt-8 pb-10 px-4 md:px-6 shadow-sm relative z-20">
         <div className="max-w-[1100px] mx-auto">
-          <nav className="flex items-center gap-2 text-xs font-black text-slate-400 mb-6 tracking-widest uppercase">
+          <nav className="flex items-center gap-2 text-[10px] font-black text-slate-400 mb-6 tracking-widest uppercase">
             <Link href={`/${lang}`} className="hover:text-[#0E3A68] transition-colors">{isEn ? 'Home' : 'Início'}</Link>
             <span>/</span>
             <span className="text-slate-900">{isEn ? 'Search' : 'Pesquisa'}</span>
@@ -116,7 +127,8 @@ export default async function PaginaPesquisa({
             {filtrosAtivos ? (isEn ? 'Search Results' : 'Resultados da Pesquisa') : (isEn ? 'Explore All Camps' : 'Explorar Todos os Campos')}
           </h1>
 
-          <form method="GET" action={`/${lang}/pesquisa`} className="flex flex-col gap-5">
+          <form method="GET" action={`/${lang}/pesquisa`} className="flex flex-col gap-6">
+            
             <div className="relative w-full">
               <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
                 <svg className="w-5 h-5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -126,14 +138,14 @@ export default async function PaginaPesquisa({
                 name="q"
                 defaultValue={qParam}
                 placeholder={isEn ? "Search by name, sport, or location (e.g., Surf in Porto)..." : "Pesquise por nome, desporto ou local (ex: Surf no Porto)..."}
-                className="w-full pl-14 pr-6 py-4 bg-white border border-slate-200 rounded-2xl text-base font-medium text-slate-900 outline-none focus:border-[#0E3A68] focus:ring-4 focus:ring-[#0E3A68]/10 transition-all shadow-[0_4px_20px_rgb(0,0,0,0.03)] placeholder:text-slate-400"
+                className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-base font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white focus:ring-4 focus:ring-[#0E3A68]/10 transition-all shadow-sm placeholder:text-slate-400 placeholder:font-medium hover:border-slate-300"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Country' : 'País'}</label>
-                <select name="pais" defaultValue={paisParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer">
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Country' : 'País'}</label>
+                <select name="pais" defaultValue={paisParam} className={customSelectClass}>
                   <option value="">{isEn ? 'All Countries' : 'Todos'}</option>
                   <option value="Portugal">Portugal</option>
                   <option value="Espanha">{isEn ? 'Spain' : 'Espanha'}</option>
@@ -142,52 +154,51 @@ export default async function PaginaPesquisa({
                 </select>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Category' : 'Categoria'}</label>
-                <select name="categoria" defaultValue={catParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer">
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Category' : 'Categoria'}</label>
+                <select name="categoria" defaultValue={catParam} className={customSelectClass}>
                   <option value="">{isEn ? 'All Categories' : 'Todas'}</option>
                   {categoriasDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
 
               {mostrarDistritos && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Distrito</label>
-                  <select name="distrito" defaultValue={distParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Distrito</label>
+                  <select name="distrito" defaultValue={distParam} className={customSelectClass}>
                     <option value="">{isEn ? 'All Districts' : 'Todos'}</option>
                     {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
               )}
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Age Group' : 'Idade'}</label>
-                <select name="idade" defaultValue={idadeParam} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer">
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Age Group' : 'Idade'}</label>
+                <select name="idade" defaultValue={idadeParam} className={customSelectClass}>
                   <option value="">{isEn ? 'All Ages' : 'Todas'}</option>
                   {idadesDisponiveis.map(i => <option key={i} value={i}>{i}</option>)}
                 </select>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Start Date' : 'Data Início'}</label>
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Start Date' : 'Data Início'}</label>
                 <input
                   type="date"
                   name="data"
                   defaultValue={dataParam}
                   min={todayISO}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] cursor-pointer"
+                  className={baseInputClass}
                 />
               </div>
 
-              {/* BOTÃO CORRIGIDO PARA BRANCO */}
-              <button type="submit" className="w-full py-3.5 bg-[#e2a41d] hover:bg-[#d4991b] text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all shadow-md mt-auto">
+              <button type="submit" className="w-full py-3.5 bg-[#e2a41d] hover:bg-[#d4991b] text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md mt-auto hover:-translate-y-0.5">
                 {isEn ? 'Search' : 'Pesquisar'}
               </button>
             </div>
 
             {filtrosAtivos && (
-              <div className="text-right mt-2">
-                <Link href={`/${lang}/pesquisa`} className="text-xs font-bold text-red-600 hover:text-red-700 transition-colors uppercase tracking-widest bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 inline-block">
+              <div className="text-right mt-1">
+                <Link href={`/${lang}/pesquisa`} className="text-[10px] font-black text-red-600 hover:text-red-700 transition-colors uppercase tracking-widest bg-red-50 hover:bg-red-100 px-4 py-2 rounded-lg border border-red-100 inline-block shadow-sm">
                   ✕ {isEn ? 'Clear filters' : 'Limpar filtros'}
                 </Link>
               </div>
@@ -201,13 +212,13 @@ export default async function PaginaPesquisa({
       {/* ═══════════════════════════════════════════ */}
       <section className="max-w-[1100px] mx-auto px-4 py-12 md:py-16">
         {(!resultados || resultados.length === 0) ? (
-          <div className="text-center p-12 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center gap-4 max-w-2xl mx-auto">
+          <div className="text-center p-12 bg-white rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center gap-4 max-w-2xl mx-auto">
             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl border border-slate-100 mb-2">🏕️</div>
-            <h3 className="text-2xl font-black text-slate-900">{isEn ? 'No camps found' : 'Nenhum programa encontrado'}</h3>
-            <p className="text-base text-slate-500 font-medium">
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight">{isEn ? 'No camps found' : 'Nenhum programa encontrado'}</h3>
+            <p className="text-sm text-slate-500 font-medium">
               {isEn ? 'Try adjusting your filters, selecting a different date, or searching for something more generic.' : 'Não encontrámos resultados exatos. Tente remover o filtro da data ou pesquisar de forma mais genérica (Ex: Futebol).'}
             </p>
-            <Link href={`/${lang}/pesquisa`} className="mt-4 bg-[#0E3A68] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#0b2b4d] transition-colors shadow-lg">
+            <Link href={`/${lang}/pesquisa`} className="mt-4 bg-[#0E3A68] text-white font-black uppercase tracking-widest text-[10px] px-8 py-4 rounded-xl hover:bg-[#0b2b4d] transition-colors shadow-lg">
               {isEn ? 'Clear all filters' : 'Ver todos os programas'}
             </Link>
           </div>
@@ -233,6 +244,7 @@ export default async function PaginaPesquisa({
                   <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
                   <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
                   
+                  {/* IMAGEM COM TRUQUE CSS (BACKGROUND) PARA NUNCA QUEBRAR */}
                   <div className="relative h-60 w-full overflow-hidden bg-slate-100">
                     <div 
                       className="absolute inset-0 w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
@@ -244,7 +256,7 @@ export default async function PaginaPesquisa({
                   </div>
 
                   <div className="flex flex-col p-6 flex-1 pointer-events-none">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
+                    <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
                       <svg className="w-3 h-3 text-[#e2a41d]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                       {localCampo}
                     </div>
