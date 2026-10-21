@@ -77,12 +77,13 @@ function RegistoForm({ lang }: { lang: string }) {
   const [isSubmittingLink, setIsSubmittingLink] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // 1. Lógica do Registo Manual
+  // 1. Lógica do Registo Manual (Corrigida para Perfil rigoroso)
   const handleRegisto = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
+    // O Metadata interno do utilizador também reflete a distinção
     const payloadMetadata = role === 'cliente' 
       ? { nome_completo: nome, role: 'cliente' } 
       : { empresa_nome: nome, role: 'organizador' };
@@ -97,12 +98,14 @@ function RegistoForm({ lang }: { lang: string }) {
       return;
     }
 
+    // AQUI GARANTIMOS A ESCRITA PERFEITA NA TABELA PERFIS
     const perfilData = { 
       id: authData.user.id, 
       email: email, 
       role: role,
       nome_completo: role === 'cliente' ? nome : null,
       empresa_nome: role === 'organizador' ? nome : null,
+      nome_empresa: role === 'organizador' ? nome : null, // Mapeamento extra por segurança
       parceiro_verificado: role === 'organizador' ? false : null 
     };
 
