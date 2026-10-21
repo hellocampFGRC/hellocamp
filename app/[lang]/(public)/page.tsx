@@ -6,7 +6,7 @@ import BotaoFavorito from "./components/BotaoFavorito";
 // ==========================================
 // CONFIGURAÇÃO DE CACHE DE ELITE (Vercel ISR)
 // ==========================================
-export const revalidate = 86400; // 24 horas
+export const revalidate = 1; // 24 horas
 
 const PAISES_DESTAQUE = [
   { nome: "Portugal", nome_en: "Portugal", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=800", desc: "Aventura e Sol", desc_en: "Adventure and Sun" },
