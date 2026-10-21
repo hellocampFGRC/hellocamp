@@ -8,9 +8,9 @@ import React from "react";
 // ==========================================
 // 1. TIPAGEM TYPESCRIPT (STRICT MODE)
 // ==========================================
-interface Variante { nome: string; preco: number; }
-interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; }
-interface Desconto { id: string; nome: string; percentagem: number; acumulavel: boolean; }
+interface Variante { nome: string; preco: number; nome_en?: string; }
+interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; titulo_en?: string; }
+interface Desconto { id: string; nome: string; percentagem: number; acumulavel: boolean; nome_en?: string; }
 interface GaleriaUpload { id: string; file?: File; previewUrl: string; isCapa: boolean; }
 interface PerguntaUI { id: string; tipo: 'texto' | 'escolha'; titulo: string; opcoes: string; }
 
@@ -41,7 +41,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   const [deleting, setDeleting] = useState(false);
   const [statusText, setStatusText] = useState("");
 
-  const [organizador, setOrganizador] = useState<any>(null); // Estado para guardar a info do perfil (Contratos)
+  const [organizador, setOrganizador] = useState<any>(null);
 
   // Dropdowns Customizados States
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
@@ -74,8 +74,8 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     extra_seguro: 0, tipo_extra_seguro: "fixo",
     extra_transporte: 0, tipo_extra_transporte: "diario",
 
-    status_aprovacao: "Pendente", // Usado para a lógica de bypass
-    contrato_parceiro_url: ""     // Usado para a lógica de bypass
+    status_aprovacao: "Pendente",
+    contrato_parceiro_url: ""
   });
 
   const [galeria, setGaleria] = useState<GaleriaUpload[]>([]);
@@ -101,7 +101,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         return;
       }
       if (data) {
-        // Carregar Perfil do Parceiro (Para saber o Status do Contrato Global)
         if (data.organizador_id) {
           const { data: orgData } = await supabase.from('perfis').select('*').eq('id', data.organizador_id).single();
           setOrganizador(orgData);
@@ -234,6 +233,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, dias_semana: dias } });
   };
 
+  // LÓGICA DIAS FECHADOS
   const adicionarDiaFechado = () => {
     if (!novoDiaFechado) return;
     const diasAtuais = formData.calendario_funcionamento.dias_fechados || [];
@@ -291,6 +291,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
   const eliminarDesconto = (id: string) => setFormData(prev => ({ ...prev, descontos: prev.descontos.filter(d => d.id !== id) }));
 
+  // HANDLERS DO NOVO CONSTRUTOR DE FORMULÁRIO (OPÇÕES DE ESCOLHA)
   const adicionarPergunta = (tipo: 'texto' | 'escolha') => {
     setFormData(prev => ({ ...prev, perguntasUI: [...prev.perguntasUI, { id: Math.random().toString(), tipo, titulo: "", opcoes: "" }] }));
   };
@@ -329,6 +330,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
       const uploadedUrls: string[] = [];
       let capaUrl = "";
 
+      // Upload de Imagens
       for (const img of galeria) {
         if (img.file) {
           const fileExt = img.file.name.split('.').pop();
@@ -348,17 +350,20 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
       if (!capaUrl && uploadedUrls.length > 0) capaUrl = uploadedUrls[0];
 
-      setStatusText("A traduzir textos (IA)...");
+      setStatusText("A traduzir textos globais (IA)...");
 
       // Tradução Estática Principal
       const [
         nome_en, categoria_en, local_en, descricao_en,
-        alimentacao_en, alojamento_en, seguro_en, regras_termos_en
+        alimentacao_en, alojamento_en, seguro_en, regras_termos_en, politica_cancelamento_en
       ] = await Promise.all([
         traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
         traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
-        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.regras_termos)
+        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), 
+        traduzirParaIngles(formData.regras_termos), traduzirParaIngles(formData.politica_cancelamento)
       ]);
+
+      setStatusText("A traduzir pacotes e formulários (IA)...");
 
       // Tradução Dinâmica das Perguntas e Opções Múltiplas Customizadas
       const perguntasPtLimpas = formData.perguntasUI.filter(p => p.titulo.trim() !== "");
@@ -380,11 +385,25 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         }
       }
 
+      // Tradução Pacotes e Variantes
+      const pacotesFormatados = await Promise.all(formData.pacotes.map(async (pac) => {
+        const titulo_en = await traduzirParaIngles(pac.titulo);
+        const variantes_en = await Promise.all(pac.variantes.map(async (varis) => {
+          const var_nome_en = await traduzirParaIngles(varis.nome);
+          return { ...varis, nome_en: var_nome_en };
+        }));
+        return { ...pac, titulo_en, variantes: variantes_en };
+      }));
+
+      // Tradução Descontos
+      const descontosFormatados = await Promise.all(formData.descontos.map(async (desc) => {
+        const nome_en = await traduzirParaIngles(desc.nome);
+        return { ...desc, nome_en };
+      }));
+
       setStatusText("A guardar dados...");
 
-      // ========================================================
-      // LÓGICA DE BYPASS DE APROVAÇÃO (SE CONTRATO ESTIVER ATIVO)
-      // ========================================================
+      // Lógica de Bypass de Aprovação
       const temContratoValido = !!formData.contrato_parceiro_url || organizador?.status_contrato === 'Aprovado';
       const statusFinal = (formData.status_aprovacao === 'Aprovado' && temContratoValido) ? 'Aprovado' : 'Pendente';
 
@@ -399,6 +418,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         categoria: formData.categoria,
         categoria_en: categoria_en,
         politica_cancelamento: formData.politica_cancelamento,
+        politica_cancelamento_en: politica_cancelamento_en,
         descricao: formData.descricao,
         descricao_en: descricao_en,
         regras_termos: formData.regras_termos,
@@ -410,10 +430,10 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         perguntas_customizadas_en: perguntasFormatadasEN,
         
         calendario_funcionamento: formData.calendario_funcionamento,
-        pacotes: formData.pacotes,
-        descontos: formData.descontos,
+        pacotes: pacotesFormatados,
+        descontos: descontosFormatados,
         
-        status_aprovacao: statusFinal, // Atualizado com Lógica de Bypass
+        status_aprovacao: statusFinal, 
 
         racio_monitores: formData.racio_monitores,
         racio_monitores_en: formData.racio_monitores,
@@ -835,6 +855,12 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Cobertura de Seguros (Texto)</label>
                   <input type="text" placeholder='Ex: "Seguro Acidentes Pessoais incluído"' value={formData.seguro} onChange={e => setFormData({...formData, seguro: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
+              </div>
+
+              {/* REGRAS E TERMOS */}
+              <div className="mt-6">
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Regras e Termos Específicos do Campo</label>
+                <textarea rows={4} placeholder="Regras de comportamento, vestuário necessário, etc. Este texto será mostrado no checkout." value={formData.regras_termos} onChange={e => setFormData({...formData, regras_termos: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-[#167524] focus:bg-white resize-none leading-relaxed transition-colors" />
               </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mt-6">
