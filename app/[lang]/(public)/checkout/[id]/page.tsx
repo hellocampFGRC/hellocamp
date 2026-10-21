@@ -15,6 +15,13 @@ const IconShield = ({ className = "w-4 h-4" }: { className?: string }) => (
   </svg>
 );
 
+const IconCreditCard = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+    <line x1="1" y1="10" x2="23" y2="10" />
+  </svg>
+);
+
 const calcularIdade = (dataNasc: string) => {
   if (!dataNasc) return 0;
   const hoje = new Date();
@@ -25,6 +32,9 @@ const calcularIdade = (dataNasc: string) => {
   return idade;
 };
 
+// ==========================================
+// COMPONENTE PRINCIPAL DE CHECKOUT
+// ==========================================
 export default function CheckoutPage({ params }: { params: Promise<{ lang: string; id: string }> }) {
   const { lang, id } = use(params);
   const router = useRouter();
@@ -55,7 +65,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     
     const opcoesParam = searchParams.get("opcoes_participantes");
     if (opcoesParam) opcoesParticipantesUrl = JSON.parse(opcoesParam);
-  } catch (e) { console.error("Erro a parsear parametros URL:", e); }
+  } catch (e) { 
+    console.error("Erro a parsear parametros URL:", e); 
+  }
 
   const isDiaSolto = turnoSelecionado?.tipo === 'dia';
   const numDiasSoltos = turnoSelecionado?.dias_soltos?.length || 1;
@@ -101,6 +113,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     sabe_andar_bicicleta: '', tamanho_tshirt: ''
   });
 
+  // ==========================================
+  // BUSCAR DADOS (ON MOUNT)
+  // ==========================================
   useEffect(() => {
     const fetchDados = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -128,6 +143,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     fetchDados();
   }, [id, lang, router]);
 
+  // ==========================================
+  // LÓGICA DE CRIANÇAS
+  // ==========================================
   const openNewChildModal = (index: number) => {
     setNewChild({
       nome: '', nif: '', data_nascimento: '', sexo: '', restricoes_alimentares: '', tipo_sanguineo: '', doencas_cronicas: '',
@@ -175,7 +193,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     await supabase.from('criancas').update({ [campoTabela]: valor }).eq('id', idDaCrianca);
   };
 
+  // ==========================================
   // SUBMISSÃO & CHECKOUT STRIPE
+  // ==========================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!concordaTermos) return alert(isEn ? "You must accept the Terms and Conditions to proceed." : "Tem de aceitar os Termos e Condições para avançar.");
@@ -185,15 +205,16 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     setProcessingStripe(true);
 
     try {
+      // 1. Agrega as escolhas múltiplas do URL à ficha de cada criança para gravação no DB via Webhook
       const criancasParaEnviar = selecoesCriancas.map((id, index) => {
         const c = criancas.find(cr => cr.id === id);
         return {
           ...c,
-          // AGREGAR AS ESCOLHAS MÚLTIPLAS FEITAS NA PÁGINA ANTERIOR
           escolhas_multiplas_url: opcoesParticipantesUrl[index + 1] || {}
         };
       });
 
+      // 2. Prepara o Payload final
       const payloadCheckout = {
         totalAmount: precoFinalTotal,
         userEmail: isGuest ? guestData.email : user.email,
@@ -356,7 +377,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                 const childId = selecoesCriancas[i];
                 const childInfo = criancas.find(c => c.id === childId);
                 const participantNumber = i + 1;
-                const escolhasUrlLocais = opcoesParticipantesUrl[participantNumber]; // AS ESCOLHAS MÚLTIPLAS DESTE FILHO
+                const escolhasUrlLocais = opcoesParticipantesUrl[participantNumber]; // AS ESCOLHAS DESTE FILHO
 
                 return (
                   <div key={i} className={i !== quantidade - 1 ? "mb-10 pb-10 border-b-2 border-dashed border-slate-100" : ""}>
@@ -402,7 +423,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                       </div>
                     )}
 
-                    {/* MOSTRAR AS OPÇÕES ESCOLHIDAS DA PÁGINA ANTERIOR (LOCK) */}
+                    {/* MOSTRAR AS OPÇÕES DE PROGRAMA ESCOLHIDAS NA PÁGINA ANTERIOR */}
                     {childInfo && escolhasUrlLocais && Object.keys(escolhasUrlLocais).length > 0 && (
                       <div className="mt-4 bg-emerald-50 p-6 rounded-2xl border border-emerald-200 shadow-sm flex flex-col gap-3">
                         <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest m-0">✓ Opções de Programa</h4>
@@ -417,20 +438,32 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                       </div>
                     )}
 
-                    {/* PERGUNTAS DE TEXTO LIVRE */}
+                    {/* PERGUNTAS DE TEXTO LIVRE COM TRADUÇÃO INTELIGENTE */}
                     {childInfo && perguntasDeTexto.length > 0 && (
                       <div className="mt-4 bg-blue-50 p-6 md:p-8 rounded-2xl border border-blue-200 shadow-sm">
                         <h4 className="text-[10px] font-black text-[#0E3A68] uppercase tracking-widest mb-5">{isEn ? 'Specific Questions' : 'Perguntas do Organizador'}</h4>
                         <div className="grid gap-6">
                           {perguntasDeTexto.map((pOriginal: string, pIdx: number) => {
-                            const pTitulo = pOriginal.startsWith('TEXTO|') ? pOriginal.split('|')[1] : pOriginal;
+                            // 1. Extrair o Título Original (Português)
+                            const pTituloPt = pOriginal.startsWith('TEXTO|') ? pOriginal.split('|')[1] : pOriginal;
+                            
+                            // 2. Procurar a tradução inglesa, mantendo o ID original
+                            const originalIndex = campo.perguntas_customizadas.indexOf(pOriginal);
+                            const pEnRaw = campo.perguntas_customizadas_en?.[originalIndex];
+                            const pTituloEn = pEnRaw ? (pEnRaw.startsWith('TEXTO|') ? pEnRaw.split('|')[1] : pEnRaw) : pTituloPt;
+                            
+                            // 3. Decidir o que mostrar ao Pai
+                            const pVisivel = isEn ? pTituloEn : pTituloPt;
+
                             return (
                               <div key={pIdx}>
-                                <label className={`${labelClass} !text-[#0E3A68] mb-2 block`}>{pTitulo} *</label>
+                                <label className={`${labelClass} !text-[#0E3A68] mb-2 block`}>{pVisivel} *</label>
                                 <input
-                                  type="text" required value={respostasCustomizadas[i]?.[pTitulo] || ''}
-                                  onChange={e => setRespostasCustomizadas(prev => ({...prev, [i]: {...(prev[i]||{}), [pTitulo]: e.target.value}}))}
-                                  className={`${inputClass} !border-blue-200 focus:!border-[#0E3A68]`} placeholder={isEn ? 'Your answer...' : 'A sua resposta...'}
+                                  type="text" required 
+                                  value={respostasCustomizadas[i]?.[pTituloPt] || ''}
+                                  onChange={e => setRespostasCustomizadas(prev => ({...prev, [i]: {...(prev[i]||{}), [pTituloPt]: e.target.value}}))}
+                                  className={`${inputClass} !border-blue-200 focus:!border-[#0E3A68]`} 
+                                  placeholder={isEn ? 'Your answer...' : 'A sua resposta...'}
                                 />
                               </div>
                             );
@@ -458,6 +491,25 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                   <p className="text-sm font-medium text-[#059669]/80 m-0 leading-relaxed">{isEn ? `Full payment of ${valorACobrarAgora.toFixed(2)}€ is required today.` : `O campo exige o pagamento total (${valorACobrarAgora.toFixed(2)}€) para garantir e bloquear a vaga no sistema imediatamente.`}</p>
                 </div>
               )}
+
+              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between flex-wrap gap-4 mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md flex-shrink-0">
+                    <IconCreditCard className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="font-black text-slate-900 m-0 mb-1">Stripe Checkout</p>
+                    <p className="text-xs font-bold text-slate-500 m-0">
+                      {isEn ? 'Pay securely via Card.' : 'MB WAY, Cartão de Crédito ou Débito.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3 items-center font-black text-slate-900 text-sm opacity-80">
+                  <span className="italic text-[#0E3A68]">MB WAY</span> 
+                  <span>VISA</span> 
+                  <span>MASTERCARD</span>
+                </div>
+              </div>
 
               <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
                 <label className="flex items-start gap-4 cursor-pointer group">
@@ -520,6 +572,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                     {extSeguro && <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-600 flex items-center gap-2">🛡️ {isEn ? 'Insurance' : 'Seguro'}</span><span className="font-black text-slate-900">{(custoSeguroUnit * quantidade).toFixed(2)}€</span></div>}
                     {extTransporte && <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-600 flex items-center gap-2">🚌 {isEn ? 'Transport' : 'Transporte'}</span><span className="font-black text-slate-900">{(custoTransporteUnit * quantidade).toFixed(2)}€</span></div>}
                   </div>
+                </div>
+              )}
+
+              {/* TAG INFORMATIVA SE HOUVER OPÇÕES MÚLTIPLAS ESCOLHIDAS OU RESPOSTAS DE TEXTO */}
+              {(Object.keys(opcoesParticipantesUrl).length > 0 || Object.keys(respostasCustomizadas).length > 0) && (
+                <div className="mt-2 text-[9px] font-bold text-emerald-600 uppercase tracking-widest text-right">
+                  ✓ Personalização Confirmada
                 </div>
               )}
             </div>
