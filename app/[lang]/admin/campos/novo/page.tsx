@@ -8,9 +8,9 @@ import React from "react";
 // ==========================================
 // 1. TIPAGEM TYPESCRIPT (STRICT MODE)
 // ==========================================
-interface Variante { nome: string; preco: number; }
-interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; }
-interface Desconto { id: string; nome: string; percentagem: number; acumulavel: boolean; }
+interface Variante { nome: string; preco: number; nome_en?: string; }
+interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; titulo_en?: string; }
+interface Desconto { id: string; nome: string; percentagem: number; acumulavel: boolean; nome_en?: string; }
 interface GaleriaUpload { id: string; file?: File; previewUrl: string; isCapa: boolean; }
 interface PerguntaUI { id: string; tipo: 'texto' | 'escolha'; titulo: string; opcoes: string; }
 
@@ -61,8 +61,8 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     pacotes: [] as Pacote[],
     descontos: [] as Desconto[],
     descricao: "", 
-    regras_termos: "", // INCLUÍDO REGRAS & TERMOS
-    perguntasUI: [] as PerguntaUI[], // SISTEMA DE FORMULÁRIO (Opções + Texto)
+    regras_termos: "",
+    perguntasUI: [] as PerguntaUI[], 
 
     // TEXTOS DESCRITIVOS LOGÍSTICOS
     racio_monitores: "",
@@ -188,7 +188,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
   const eliminarPacote = (id: string) => setFormData(prev => ({ ...prev, pacotes: prev.pacotes.filter(p => p.id !== id) }));
   const eliminarDesconto = (id: string) => setFormData(prev => ({ ...prev, descontos: prev.descontos.filter(d => d.id !== id) }));
 
-  // HANDLERS DO NOVO CONSTRUTOR DE FORMULÁRIO (OPÇÕES DE ESCOLHA)
   const adicionarPergunta = (tipo: 'texto' | 'escolha') => {
     setFormData(prev => ({ ...prev, perguntasUI: [...prev.perguntasUI, { id: Math.random().toString(), tipo, titulo: "", opcoes: "" }] }));
   };
@@ -241,19 +240,22 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
       }
       if (!capaUrl && uploadedUrls.length > 0) capaUrl = uploadedUrls[0];
 
-      setStatusText("A traduzir textos (IA)...");
+      setStatusText("A traduzir textos globais (IA)...");
 
       // 2. Tradução Estática Principal
       const [
         nome_en, categoria_en, local_en, descricao_en,
-        alimentacao_en, alojamento_en, seguro_en, regras_termos_en
+        alimentacao_en, alojamento_en, seguro_en, regras_termos_en, politica_cancelamento_en
       ] = await Promise.all([
         traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
         traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
-        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.regras_termos)
+        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), 
+        traduzirParaIngles(formData.regras_termos), traduzirParaIngles(formData.politica_cancelamento)
       ]);
 
-      // 3. Tradução Dinâmica das Perguntas e Opções Múltiplas Customizadas (MUITO IMPORTANTE!)
+      setStatusText("A traduzir pacotes e formulários (IA)...");
+
+      // 3. Tradução Dinâmica das Perguntas e Opções Múltiplas Customizadas
       const perguntasPtLimpas = formData.perguntasUI.filter(p => p.titulo.trim() !== "");
       const perguntasFormatadasPT: string[] = [];
       const perguntasFormatadasEN: string[] = [];
@@ -262,7 +264,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         const titulo_en = await traduzirParaIngles(p.titulo.trim());
         
         if (p.tipo === 'escolha') {
-          // Se for opção múltipla, tem de traduzir a string das opções separadas por vírgula
           const opcoesArray = p.opcoes.split(',').map(o => o.trim());
           const opcoesArray_en = await Promise.all(opcoesArray.map(o => traduzirParaIngles(o)));
           
@@ -274,9 +275,25 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         }
       }
 
-      setStatusText("A gravar campo...");
+      // 4. Traduzir Pacotes e Variantes
+      const pacotesFormatados = await Promise.all(formData.pacotes.map(async (pac) => {
+        const titulo_en = await traduzirParaIngles(pac.titulo);
+        const variantes_en = await Promise.all(pac.variantes.map(async (varis) => {
+          const var_nome_en = await traduzirParaIngles(varis.nome);
+          return { ...varis, nome_en: var_nome_en };
+        }));
+        return { ...pac, titulo_en, variantes: variantes_en };
+      }));
 
-      // 4. Gravação na Base de Dados
+      // 5. Traduzir Nomes dos Descontos
+      const descontosFormatados = await Promise.all(formData.descontos.map(async (desc) => {
+        const nome_en = await traduzirParaIngles(desc.nome);
+        return { ...desc, nome_en };
+      }));
+
+      setStatusText("A guardar dados...");
+
+      // 6. Gravação na Base de Dados
       const { error } = await supabase.from('campos').insert({
         organizador_id: session.user.id,
         nome: formData.nome,
@@ -289,6 +306,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         categoria: formData.categoria,
         categoria_en,
         politica_cancelamento: formData.politica_cancelamento,
+        politica_cancelamento_en,
         descricao: formData.descricao,
         descricao_en,
         regras_termos: formData.regras_termos,
@@ -296,13 +314,12 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         imagem: capaUrl,
         galeria: uploadedUrls,
         
-        // As perguntas perfeitamente mapeadas para Inglês e Português
         perguntas_customizadas: perguntasFormatadasPT,
         perguntas_customizadas_en: perguntasFormatadasEN,
-
+        
         calendario_funcionamento: formData.calendario_funcionamento,
-        pacotes: formData.pacotes,
-        descontos: formData.descontos,
+        pacotes: pacotesFormatados,
+        descontos: descontosFormatados,
         status_aprovacao: 'Pendente',
 
         // Logística
@@ -351,19 +368,17 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     <div className="max-w-[1000px] mx-auto p-4 md:p-8 font-sans pb-24">
 
       {/* HEADER & PROGRESS BAR */}
-      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-        <div className="w-full sm:w-auto flex-1">
-          <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Create New Camp' : 'Configurar Novo Campo'}</h1>
-          <div className="flex items-center gap-2 mt-6 max-w-md">
-            {[1, 2, 3].map((num) => (
-              <div key={num} className="flex-1 flex flex-col gap-2">
-                <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-[#167524]' : 'bg-slate-200'}`}></div>
-                <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-[#167524]' : 'text-slate-400'}`}>
-                  {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual e Opções'}
-                </span>
-              </div>
-            ))}
-          </div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Create New Camp' : 'Configurar Novo Campo'}</h1>
+        <div className="flex items-center gap-2 mt-6">
+          {[1, 2, 3].map((num) => (
+            <div key={num} className="flex-1 flex flex-col gap-2">
+              <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-[#167524]' : 'bg-slate-200'}`}></div>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-[#167524]' : 'text-slate-400'}`}>
+                {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual e Opções'}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -467,7 +482,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         )}
 
         {/* ========================================== */}
-        {/* PASSO 2: O MOTOR DE PREÇOS E EXTRAS FINANCEIROS */}
+        {/* PASSO 2: O MOTOR DE PREÇOS INTELIGENTE */}
         {/* ========================================== */}
         {step === 2 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-10">
@@ -486,7 +501,8 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                   <input type="date" value={formData.calendario_funcionamento.data_fim} onChange={e => setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, data_fim: e.target.value}})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-[#167524] focus:bg-white" />
                 </div>
               </div>
-              <div>
+
+              <div className="mb-6">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Dias da Semana Ativos</label>
                 <div className="flex flex-wrap gap-2">
                   {DIAS_SEMANA.map(dia => {
@@ -501,7 +517,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               </div>
 
               {/* DIAS DE ENCERRAMENTO (EXCEÇÕES) */}
-              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl mt-6">
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
                 <label className="block text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">
                   Dias de Encerramento (Exceções / Esgotado)
                 </label>
@@ -578,7 +594,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               )}
             </div>
 
-            {/* EXTRAS FINANCEIROS SEM DROPDOWNS NATIVOS */}
+            {/* EXTRAS FINANCEIROS: APENAS SEGURO E TRANSPORTE (Custom Dropdowns) */}
             <div className="pt-8 border-t border-slate-100">
               <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>💰</span> {isEn ? 'Optional Extras' : '3. Configurar Extras Opcionais'}</h2>
               <p className="text-xs text-slate-500 mb-6">A alimentação e o alojamento já são mapeados em variantes. Aqui configura apenas os suplementos isolados.</p>
@@ -692,24 +708,24 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400 m-0">Textos Informativos Importantes (Logística)</p>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Rácio de Monitores</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Rácio de Monitores (Texto)</label>
                   <input type="text" placeholder='Ex: "1 monitor para 6 crianças"' value={formData.racio_monitores} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alimentação</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alimentação (Texto)</label>
                   <input type="text" placeholder='Ex: "Almoço e lanches incluídos"' value={formData.alimentacao} onChange={e => setFormData({...formData, alimentacao: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alojamento / Dormida</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alojamento / Dormida (Texto)</label>
                   <input type="text" placeholder='Ex: "Regime Diurno (sem dormida)"' value={formData.alojamento} onChange={e => setFormData({...formData, alojamento: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Cobertura de Seguros</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Cobertura de Seguros (Texto)</label>
                   <input type="text" placeholder='Ex: "Seguro Acidentes Pessoais incluído"' value={formData.seguro} onChange={e => setFormData({...formData, seguro: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
               </div>
 
-              {/* NOVO INPUT: REGRAS E TERMOS */}
+              {/* REGRAS E TERMOS */}
               <div className="mt-6">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Regras e Termos Específicos do Campo</label>
                 <textarea rows={4} placeholder="Regras de comportamento, vestuário necessário, etc. Este texto será mostrado no checkout." value={formData.regras_termos} onChange={e => setFormData({...formData, regras_termos: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-[#167524] focus:bg-white resize-none leading-relaxed transition-colors" />
@@ -837,10 +853,10 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         ) : <div></div>}
 
         {step < 3 ? (
-          <button onClick={nextStep} className="bg-[#167524] text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-[#115a1b] uppercase tracking-widest text-sm">Próximo Passo →</button>
+          <button onClick={nextStep} className="bg-[#167524] text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all uppercase tracking-widest text-sm">Próximo Passo →</button>
         ) : (
-          <button onClick={handleGravarCampo} disabled={saving} className="bg-[#167524] text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-[#115a1b] transition-all disabled:opacity-50 uppercase tracking-widest">
-            {saving ? statusText || 'A Processar...' : '✓ Finalizar Criação do Campo'}
+          <button onClick={handleGravarCampo} disabled={saving} className="bg-[#167524] text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all disabled:opacity-50 uppercase tracking-widest">
+            {saving ? statusText || 'A Guardar...' : '✓ Finalizar & Guardar'}
           </button>
         )}
       </div>
@@ -854,8 +870,8 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h3 className="font-black text-slate-900 text-lg m-0">Construir Pacote de Venda</h3>
-              <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold transition-colors">&times;</button>
+              <h3 className="font-black text-slate-900 text-lg m-0">{novoPacote.id ? 'Editar Pacote' : 'Construir Pacote de Venda'}</h3>
+              <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-black transition-colors">&times;</button>
             </div>
 
             <div className="p-6 overflow-y-auto flex flex-col gap-6">
@@ -904,7 +920,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
             </div>
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
               <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
-              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">✓ Adicionar à Montra</button>
+              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">✓ Guardar Pacote</button>
             </div>
           </div>
         </div>
@@ -918,6 +934,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               <h3 className="font-black text-slate-900 text-lg m-0">Nova Regra de Desconto</h3>
               <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold transition-colors">×</button>
             </div>
+
             <div className="p-6 flex flex-col gap-6 bg-slate-50">
               <div>
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Nome do Desconto (Visível no Carrinho)</label>
@@ -942,7 +959,8 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 </div>
               </div>
             </div>
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
+
+            <div className="px-6 py-5 border-t border-slate-200 bg-white flex justify-end gap-3 flex-shrink-0">
               <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="px-6 py-3 rounded-xl font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors text-sm shadow-sm">Cancelar</button>
               <button type="button" onClick={guardarDesconto} className="px-8 py-3 rounded-xl font-black border-none bg-[#167524] text-white hover:bg-[#115a1b] shadow-md transition-colors text-sm">Validar Desconto</button>
             </div>
