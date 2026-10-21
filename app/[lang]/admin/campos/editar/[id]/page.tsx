@@ -41,6 +41,8 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   const [deleting, setDeleting] = useState(false);
   const [statusText, setStatusText] = useState("");
 
+  const [organizador, setOrganizador] = useState<any>(null); // Estado para guardar a info do perfil (Contratos)
+
   // Dropdowns Customizados States
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
   const [isPolDropdownOpen, setIsPolDropdownOpen] = useState(false);
@@ -68,17 +70,12 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     regras_termos: "",
     perguntasUI: [] as PerguntaUI[], 
 
-    // TEXTOS DESCRITIVOS LOGÍSTICOS
-    racio_monitores: "",
-    alimentacao: "",
-    alojamento: "",
-    seguro: "",
+    racio_monitores: "", alimentacao: "", alojamento: "", seguro: "",
+    extra_seguro: 0, tipo_extra_seguro: "fixo",
+    extra_transporte: 0, tipo_extra_transporte: "diario",
 
-    // VALORES FINANCEIROS EXTRAS OTIMIZADOS
-    extra_seguro: 0,
-    tipo_extra_seguro: "fixo",
-    extra_transporte: 0,
-    tipo_extra_transporte: "diario"
+    status_aprovacao: "Pendente", // Usado para a lógica de bypass
+    contrato_parceiro_url: ""     // Usado para a lógica de bypass
   });
 
   const [galeria, setGaleria] = useState<GaleriaUpload[]>([]);
@@ -104,6 +101,12 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         return;
       }
       if (data) {
+        // Carregar Perfil do Parceiro (Para saber o Status do Contrato Global)
+        if (data.organizador_id) {
+          const { data: orgData } = await supabase.from('perfis').select('*').eq('id', data.organizador_id).single();
+          setOrganizador(orgData);
+        }
+
         // PARSE DAS PERGUNTAS E OPÇÕES DA BASE DE DADOS
         const parsedPerguntas: PerguntaUI[] = (data.perguntas_customizadas || []).map((p: string) => {
           if (p.startsWith('ESCOLHA|')) {
@@ -142,7 +145,9 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           extra_seguro: data.extra_seguro || 0,
           tipo_extra_seguro: data.tipo_extra_seguro || "fixo",
           extra_transporte: data.extra_transporte || 0,
-          tipo_extra_transporte: data.tipo_extra_transporte || "diario"
+          tipo_extra_transporte: data.tipo_extra_transporte || "diario",
+          status_aprovacao: data.status_aprovacao || "Pendente",
+          contrato_parceiro_url: data.contrato_parceiro_url || ""
         });
 
         const loadedImages: GaleriaUpload[] = [];
@@ -229,7 +234,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, dias_semana: dias } });
   };
 
-  // LÓGICA DIAS FECHADOS
   const adicionarDiaFechado = () => {
     if (!novoDiaFechado) return;
     const diasAtuais = formData.calendario_funcionamento.dias_fechados || [];
@@ -287,7 +291,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
   const eliminarDesconto = (id: string) => setFormData(prev => ({ ...prev, descontos: prev.descontos.filter(d => d.id !== id) }));
 
-  // HANDLERS DO NOVO CONSTRUTOR DE FORMULÁRIO (OPÇÕES DE ESCOLHA)
   const adicionarPergunta = (tipo: 'texto' | 'escolha') => {
     setFormData(prev => ({ ...prev, perguntasUI: [...prev.perguntasUI, { id: Math.random().toString(), tipo, titulo: "", opcoes: "" }] }));
   };
@@ -379,6 +382,12 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
       setStatusText("A guardar dados...");
 
+      // ========================================================
+      // LÓGICA DE BYPASS DE APROVAÇÃO (SE CONTRATO ESTIVER ATIVO)
+      // ========================================================
+      const temContratoValido = !!formData.contrato_parceiro_url || organizador?.status_contrato === 'Aprovado';
+      const statusFinal = (formData.status_aprovacao === 'Aprovado' && temContratoValido) ? 'Aprovado' : 'Pendente';
+
       const { error } = await supabase.from('campos').update({
         nome: formData.nome,
         nome_en: nome_en,
@@ -403,7 +412,8 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         calendario_funcionamento: formData.calendario_funcionamento,
         pacotes: formData.pacotes,
         descontos: formData.descontos,
-        status_aprovacao: 'Pendente',
+        
+        status_aprovacao: statusFinal, // Atualizado com Lógica de Bypass
 
         racio_monitores: formData.racio_monitores,
         racio_monitores_en: formData.racio_monitores,
@@ -422,7 +432,10 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
       if (error) throw error;
 
-      alert(isEn ? "Camp updated successfully! It's under review." : "Campo atualizado com sucesso! Foi enviado para revisão.");
+      alert(statusFinal === 'Aprovado' 
+        ? (isEn ? "Camp updated and live immediately!" : "Campo atualizado com sucesso!")
+        : (isEn ? "Camp updated! It's under review." : "Campo atualizado com sucesso! Foi enviado para revisão."));
+        
       router.push(`/${lang}/admin/campos`);
 
     } catch (err: any) {
@@ -693,7 +706,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               )}
             </div>
 
-            {/* EXTRAS FINANCEIROS: APENAS SEGURO E TRANSPORTE */}
+            {/* EXTRAS FINANCEIROS: APENAS SEGURO E TRANSPORTE (Custom Dropdowns) */}
             <div className="pt-8 border-t border-slate-100">
               <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>💰</span> {isEn ? 'Optional Extras' : '3. Configurar Extras Opcionais'}</h2>
               <p className="text-xs text-slate-500 mb-6">A alimentação e o alojamento já são mapeados em variantes. Aqui configura apenas os suplementos isolados.</p>
@@ -807,27 +820,21 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400 m-0">Textos Informativos Importantes (Logística)</p>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Rácio de Monitores</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Rácio de Monitores (Texto)</label>
                   <input type="text" placeholder='Ex: "1 monitor para 6 crianças"' value={formData.racio_monitores} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alimentação</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alimentação (Texto)</label>
                   <input type="text" placeholder='Ex: "Almoço e lanches incluídos"' value={formData.alimentacao} onChange={e => setFormData({...formData, alimentacao: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alojamento / Dormida</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alojamento / Dormida (Texto)</label>
                   <input type="text" placeholder='Ex: "Regime Diurno (sem dormida)"' value={formData.alojamento} onChange={e => setFormData({...formData, alojamento: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Cobertura de Seguros</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Cobertura de Seguros (Texto)</label>
                   <input type="text" placeholder='Ex: "Seguro Acidentes Pessoais incluído"' value={formData.seguro} onChange={e => setFormData({...formData, seguro: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
-              </div>
-
-              {/* REGRAS E TERMOS */}
-              <div className="mt-6">
-                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Regras e Termos Específicos do Campo</label>
-                <textarea rows={4} placeholder="Regras de comportamento, vestuário necessário, etc. Este texto será mostrado no checkout." value={formData.regras_termos} onChange={e => setFormData({...formData, regras_termos: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-[#167524] focus:bg-white resize-none leading-relaxed transition-colors" />
               </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mt-6">
@@ -1017,10 +1024,9 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 </div>
               </div>
             </div>
-
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
               <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
-              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">✓ Adicionar à Montra</button>
+              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">✓ Guardar Pacote</button>
             </div>
           </div>
         </div>
@@ -1034,7 +1040,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               <h3 className="font-black text-slate-900 text-lg m-0">Nova Regra de Desconto</h3>
               <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold transition-colors">×</button>
             </div>
-
             <div className="p-6 flex flex-col gap-6 bg-slate-50">
               <div>
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Nome do Desconto (Visível no Carrinho)</label>
@@ -1059,7 +1064,6 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 </div>
               </div>
             </div>
-
             <div className="px-6 py-5 border-t border-slate-200 bg-white flex justify-end gap-3 flex-shrink-0">
               <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="px-6 py-3 rounded-xl font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors text-sm shadow-sm">Cancelar</button>
               <button type="button" onClick={guardarDesconto} className="px-8 py-3 rounded-xl font-black border-none bg-[#167524] text-white hover:bg-[#115a1b] shadow-md transition-colors text-sm">Validar Desconto</button>
