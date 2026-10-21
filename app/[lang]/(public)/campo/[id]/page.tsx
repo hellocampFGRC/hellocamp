@@ -17,7 +17,7 @@ const getCampoCached = unstable_cache(
     return data;
   },
   ['cache-campo-detalhe'],
-  { revalidate: 86400 }
+  { revalidate: 1 }
 );
 
 const getReviewsCached = unstable_cache(
@@ -26,7 +26,7 @@ const getReviewsCached = unstable_cache(
     return data || [];
   },
   ['cache-campo-reviews'],
-  { revalidate: 86400 }
+  { revalidate: 1 }
 );
 
 const getRelacionadosCached = unstable_cache(
