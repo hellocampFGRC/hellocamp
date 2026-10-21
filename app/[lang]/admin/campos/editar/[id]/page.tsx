@@ -39,6 +39,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [statusText, setStatusText] = useState("");
 
   // Dropdowns Customizados States
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
@@ -64,7 +65,8 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     pacotes: [] as Pacote[],
     descontos: [] as Desconto[],
     descricao: "", 
-    perguntasUI: [] as PerguntaUI[], // NOVO SISTEMA DE PERGUNTAS E OPÇÕES MÚLTIPLAS
+    regras_termos: "",
+    perguntasUI: [] as PerguntaUI[], 
 
     // TEXTOS DESCRITIVOS LOGÍSTICOS
     racio_monitores: "",
@@ -131,6 +133,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           pacotes: data.pacotes || [],
           descontos: data.descontos || [],
           descricao: data.descricao || "",
+          regras_termos: data.regras_termos || "",
           perguntasUI: parsedPerguntas,
           racio_monitores: data.racio_monitores || "",
           alimentacao: data.alimentacao || "",
@@ -294,6 +297,18 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   };
 
   // ==========================================
+  // FUNÇÃO DE TRADUÇÃO AUTOMÁTICA
+  // ==========================================
+  const traduzirParaIngles = async (texto: string) => {
+    if (!texto) return "";
+    try {
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=pt|en`);
+      const data = await res.json();
+      return data.responseData.translatedText;
+    } catch (e) { return texto; }
+  };
+
+  // ==========================================
   // 5. GUARDAR ALTERAÇÕES (UPDATE)
   // ==========================================
   const handleGravarCampo = async () => {
@@ -302,6 +317,8 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
     if (galeria.length === 0) return alert("Adicione pelo menos 1 fotografia ao campo.");
 
     setSaving(true);
+    setStatusText("A processar imagens...");
+    
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada");
@@ -328,26 +345,61 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
       if (!capaUrl && uploadedUrls.length > 0) capaUrl = uploadedUrls[0];
 
-      // SERIALIZAÇÃO DAS PERGUNTAS E ESCOLHAS PARA A BASE DE DADOS
-      const perguntasFormatadas = formData.perguntasUI.filter(p => p.titulo.trim() !== "").map(p => {
-        if (p.tipo === 'escolha') return `ESCOLHA|${p.titulo.trim()}|${p.opcoes.trim()}`;
-        return `TEXTO|${p.titulo.trim()}`;
-      });
+      setStatusText("A traduzir textos (IA)...");
+
+      // Tradução Estática Principal
+      const [
+        nome_en, categoria_en, local_en, descricao_en,
+        alimentacao_en, alojamento_en, seguro_en, regras_termos_en
+      ] = await Promise.all([
+        traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
+        traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
+        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.regras_termos)
+      ]);
+
+      // Tradução Dinâmica das Perguntas e Opções Múltiplas Customizadas
+      const perguntasPtLimpas = formData.perguntasUI.filter(p => p.titulo.trim() !== "");
+      const perguntasFormatadasPT: string[] = [];
+      const perguntasFormatadasEN: string[] = [];
+
+      for (const p of perguntasPtLimpas) {
+        const titulo_en = await traduzirParaIngles(p.titulo.trim());
+        
+        if (p.tipo === 'escolha') {
+          const opcoesArray = p.opcoes.split(',').map(o => o.trim());
+          const opcoesArray_en = await Promise.all(opcoesArray.map(o => traduzirParaIngles(o)));
+          
+          perguntasFormatadasPT.push(`ESCOLHA|${p.titulo.trim()}|${p.opcoes.trim()}`);
+          perguntasFormatadasEN.push(`ESCOLHA|${titulo_en}|${opcoesArray_en.join(',')}`);
+        } else {
+          perguntasFormatadasPT.push(`TEXTO|${p.titulo.trim()}`);
+          perguntasFormatadasEN.push(`TEXTO|${titulo_en}`);
+        }
+      }
+
+      setStatusText("A guardar dados...");
 
       const { error } = await supabase.from('campos').update({
         nome: formData.nome,
-        nome_en: formData.nome,
+        nome_en: nome_en,
         local: formData.local,
-        local_en: formData.local,
+        local_en: local_en,
         idade_min: formData.idade_min,
         idade_max: formData.idade_max,
         vagas_totais: formData.vagas_totais,
         categoria: formData.categoria,
+        categoria_en: categoria_en,
         politica_cancelamento: formData.politica_cancelamento,
         descricao: formData.descricao,
+        descricao_en: descricao_en,
+        regras_termos: formData.regras_termos,
+        regras_termos_en: regras_termos_en,
         imagem: capaUrl,
         galeria: uploadedUrls,
-        perguntas_customizadas: perguntasFormatadas,
+        
+        perguntas_customizadas: perguntasFormatadasPT,
+        perguntas_customizadas_en: perguntasFormatadasEN,
+        
         calendario_funcionamento: formData.calendario_funcionamento,
         pacotes: formData.pacotes,
         descontos: formData.descontos,
@@ -356,11 +408,11 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
         racio_monitores: formData.racio_monitores,
         racio_monitores_en: formData.racio_monitores,
         alimentacao: formData.alimentacao,
-        alimentacao_en: formData.alimentacao,
+        alimentacao_en: alimentacao_en,
         alojamento: formData.alojamento,
-        alojamento_en: formData.alojamento,
+        alojamento_en: alojamento_en,
         seguro: formData.seguro,
-        seguro_en: formData.seguro,
+        seguro_en: seguro_en,
 
         extra_seguro: formData.extra_seguro,
         tipo_extra_seguro: formData.tipo_extra_seguro,
@@ -375,8 +427,10 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
     } catch (err: any) {
       alert("Erro ao atualizar campo: " + err.message);
+    } finally {
+      setSaving(false);
+      setStatusText("");
     }
-    setSaving(false);
   };
 
   const nextStep = () => {
@@ -392,7 +446,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
   };
 
   if (loading) {
-    return <div className="text-center p-8 text-slate-500">A carregar...</div>;
+    return <div className="text-center p-8 text-slate-500 font-bold">A carregar dados do campo...</div>;
   }
 
   // ==========================================
@@ -410,7 +464,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               <div key={num} className="flex-1 flex flex-col gap-2">
                 <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-[#167524]' : 'bg-slate-200'}`}></div>
                 <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-[#167524]' : 'text-slate-400'}`}>
-                  {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual'}
+                  {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual e Opções'}
                 </span>
               </div>
             ))}
@@ -639,7 +693,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
               )}
             </div>
 
-            {/* EXTRAS FINANCEIROS: APENAS SEGURO E TRANSPORTE (Custom Dropdowns) */}
+            {/* EXTRAS FINANCEIROS: APENAS SEGURO E TRANSPORTE */}
             <div className="pt-8 border-t border-slate-100">
               <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>💰</span> {isEn ? 'Optional Extras' : '3. Configurar Extras Opcionais'}</h2>
               <p className="text-xs text-slate-500 mb-6">A alimentação e o alojamento já são mapeados em variantes. Aqui configura apenas os suplementos isolados.</p>
@@ -770,6 +824,12 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
                 </div>
               </div>
 
+              {/* REGRAS E TERMOS */}
+              <div className="mt-6">
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Regras e Termos Específicos do Campo</label>
+                <textarea rows={4} placeholder="Regras de comportamento, vestuário necessário, etc. Este texto será mostrado no checkout." value={formData.regras_termos} onChange={e => setFormData({...formData, regras_termos: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-[#167524] focus:bg-white resize-none leading-relaxed transition-colors" />
+              </div>
+
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mt-6">
                 <div className="flex justify-between items-center mb-4">
                   <div>
@@ -895,7 +955,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
           <button onClick={nextStep} className="bg-[#167524] text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all uppercase tracking-widest text-sm">Próximo Passo →</button>
         ) : (
           <button onClick={handleGravarCampo} disabled={saving} className="bg-[#167524] text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all disabled:opacity-50 uppercase tracking-widest">
-            {saving ? 'A Guardar...' : '✓ Finalizar & Guardar'}
+            {saving ? statusText || 'A Guardar...' : '✓ Finalizar & Guardar'}
           </button>
         )}
       </div>
@@ -960,7 +1020,7 @@ export default function EditarCampoParceiro({ params }: { params: Promise<{ lang
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
               <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
-              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">✓ Guardar Pacote</button>
+              <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">✓ Adicionar à Montra</button>
             </div>
           </div>
         </div>
