@@ -26,8 +26,19 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
       const organizador = perfisData?.find(p => p.id === campo.organizador_id);
       
       let precoMinimo = campo.preco || 0;
-      if (campo.pacotes && campo.pacotes.length > 0) {
-        const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes?.map((v: any) => v.preco) || []);
+      
+      // BLINDAGEM DE PREVENÇÃO DE ERRO DE MAPPING (Q.map is not a function)
+      let pacotesArray = [];
+      if (typeof campo.pacotes === 'string') {
+        try { pacotesArray = JSON.parse(campo.pacotes); } catch(e) { pacotesArray = []; }
+      } else if (Array.isArray(campo.pacotes)) {
+        pacotesArray = campo.pacotes;
+      }
+
+      if (pacotesArray.length > 0) {
+        const todosPrecos = pacotesArray.flatMap((p: any) => 
+          (Array.isArray(p.variantes) ? p.variantes : []).map((v: any) => Number(v.preco) || 0)
+        );
         if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
       }
 
