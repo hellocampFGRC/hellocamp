@@ -25,7 +25,38 @@ export default function FormContactoCampo({
     setLoading(true);
 
     try {
-      // Usamos FormData para corresponder ao que a tua API espera
+      // 1. VERIFICAR SESSÃO DO UTILIZADOR PARA O SENDER_ID
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id || null;
+
+      // 2. PREPARAR O TEXTO DA MENSAGEM PARA A BASE DE DADOS
+      // Agrupamos os dados de contacto no texto, já que a tabela não tem colunas para nome/email
+      const textoMensagem = `Formulário de Contacto: ${nomeCampo}
+Nome: ${form.nome} ${form.apelido}
+Email: ${form.email}
+Telefone: ${form.telefone}
+Idade do Participante: ${form.idade}
+
+Mensagem:
+${form.mensagem}`;
+
+      // 3. GUARDAR A MENSAGEM NA TABELA "mensagens" NO SUPABASE
+      const { error: dbError } = await supabase.from('mensagens').insert([
+        {
+          campo_id: campoId || null,
+          receiver_id: organizadorId || null,
+          sender_id: userId,
+          texto: textoMensagem,
+          lida: false
+        }
+      ]);
+
+      if (dbError) {
+        console.error("Erro ao guardar na base de dados:", dbError);
+        throw new Error("Erro a guardar mensagem na base de dados.");
+      }
+
+      // 4. ENVIAR O EMAIL VIA API
       const formData = new FormData();
       formData.append('First_Name', form.nome);
       formData.append('Last_Name', form.apelido);
@@ -44,22 +75,17 @@ export default function FormContactoCampo({
       });
 
       if (!response.ok) {
-        throw new Error("Erro no servidor");
+        throw new Error("Erro no servidor de email");
       }
 
       setSucesso(true);
       
-      // VERIFICAÇÃO DE SESSÃO: Só reencaminha se o utilizador estiver autenticado
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      // 5. REENCAMINHAR SE TIVER SESSÃO
       if (session) {
-        // Encaminha para a nova rota correta da área de cliente
         setTimeout(() => {
           router.push(`/${lang}/cliente/mensagens`);
         }, 2500);
       }
-      // Se não tiver sessão (session for nulo), o código não faz nada 
-      // e o utilizador fica simplesmente a ver a mensagem de sucesso.
 
     } catch (err) {
       console.error(err);
@@ -79,7 +105,7 @@ export default function FormContactoCampo({
         <p className="text-emerald-700 font-medium">
           {isEn 
             ? 'The camp organizer will review your question. They will reply to your email shortly.' 
-            : 'A sua mensagem foi enviada diretamente para o Organizador. Responderão para o seu e-mail o mais breve possível.'}
+            : 'A sua mensagem foi guardada e enviada diretamente para o Organizador. Responderão para o seu e-mail o mais breve possível.'}
         </p>
       </div>
     );
