@@ -31,11 +31,13 @@ export default function ChatCliente({ params }: { params: Promise<{ lang: string
     const uid = session.user.id;
     setUserId(uid);
 
+    // 1. Vai buscar todas as reservas do cliente
     const { data: reservasData } = await supabase
       .from('reservas')
       .select('*, criancas(*)')
       .eq('cliente_id', uid);
 
+    // 2. Vai buscar todas as mensagens enviadas/recebidas por este cliente
     const { data: msgs } = await supabase
       .from('mensagens')
       .select('*, campos(id, nome, nome_en, organizador_id, local, imagem, preco)')
@@ -45,11 +47,13 @@ export default function ChatCliente({ params }: { params: Promise<{ lang: string
     if (!msgs) { setLoading(false); return; }
 
     const threadsMap: any = {};
+    
     msgs.forEach(m => {
       const campId = m.campo_id;
       if (!campId) return;
 
       if (!threadsMap[campId]) {
+        // Agrupa as reservas do campo, mas não falha se não existirem
         const reservasDoCampo = reservasData?.filter(r => r.campo_id === campId) || [];
 
         threadsMap[campId] = {
@@ -61,6 +65,7 @@ export default function ChatCliente({ params }: { params: Promise<{ lang: string
           lastMsg: null
         };
       }
+      
       threadsMap[campId].mensagens.push(m);
       threadsMap[campId].lastMsg = m;
       if (!m.lida && m.receiver_id === uid) threadsMap[campId].unread++;
@@ -102,7 +107,8 @@ export default function ChatCliente({ params }: { params: Promise<{ lang: string
       campo_id: threadAtiva.campo.id, 
       sender_id: userId, 
       receiver_id: threadAtiva.partner_id, 
-      texto: msgTexto 
+      texto: msgTexto,
+      lida: false
     }]);
   };
 
@@ -162,7 +168,7 @@ export default function ChatCliente({ params }: { params: Promise<{ lang: string
                 const isMine = msg.sender_id === userId;
                 return (
                   <div key={msg.id || i} className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                    <div className={`max-w-[85%] md:max-w-[70%] p-4 md:p-5 rounded-[1.5rem] text-[15px] font-medium leading-relaxed shadow-sm ${isMine ? 'bg-[#0E3A68] text-white rounded-br-sm' : 'bg-white text-slate-800 border border-slate-200 rounded-bl-sm'}`}>
+                    <div className={`max-w-[85%] md:max-w-[70%] p-4 md:p-5 rounded-[1.5rem] text-[15px] font-medium leading-relaxed shadow-sm whitespace-pre-wrap ${isMine ? 'bg-[#0E3A68] text-white rounded-br-sm' : 'bg-white text-slate-800 border border-slate-200 rounded-bl-sm'}`}>
                       {msg.texto}
                       <div className={`text-[10px] mt-2 text-right font-black uppercase tracking-wider ${isMine ? 'text-white/50' : 'text-slate-400'}`}>
                         {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}

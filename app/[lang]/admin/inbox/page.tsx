@@ -27,38 +27,50 @@ export default function InboxParceiro({ params }: { params: Promise<{ lang: stri
     const uid = session.user.id;
     setPartnerId(uid);
 
+    // 1. Vai buscar os campos deste organizador
     const { data: camposData } = await supabase.from("campos").select("id").eq("organizador_id", uid);
     if (!camposData || camposData.length === 0) { setLoading(false); return; }
     const camposIds = camposData.map(c => c.id);
 
+    // 2. Vai buscar TODAS as reservas feitas nos campos deste organizador
     const { data: reservasData } = await supabase
       .from("reservas")
       .select(`*, criancas(*)`)
       .in("campo_id", camposIds);
 
+    // 3. Vai buscar TODAS as mensagens recebidas ou enviadas por este parceiro
     const { data: msgs } = await supabase
       .from('mensagens')
-      .select('*, campos(id, nome, nome_en), perfis!mensagens_sender_id_fkey(id, nome_completo, email, telefone, contacto_emergencia), perfis2:perfis!mensagens_receiver_id_fkey(id, nome_completo, email, telefone, contacto_emergencia)')
+      .select(`
+        *, 
+        campos(id, nome, nome_en), 
+        perfis_sender:perfis!mensagens_sender_id_fkey(id, nome_completo, email, telefone, contacto_emergencia), 
+        perfis_receiver:perfis!mensagens_receiver_id_fkey(id, nome_completo, email, telefone, contacto_emergencia)
+      `)
       .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`)
       .order('created_at', { ascending: true });
 
     if (!msgs) { setLoading(false); return; }
 
+    // 4. Agrupamento por (Pai/Cliente + Campo) - INDEPENDENTE de existir reserva!
     const threadsMap: any = {};
+    
     msgs.forEach((m: any) => {
       if (!m.campo_id) return; 
       
       const clientId = m.sender_id === uid ? m.receiver_id : m.sender_id;
-      const clientProfile = m.sender_id === uid ? m.perfis2 : m.perfis;
+      const clientProfile = m.sender_id === uid ? m.perfis_receiver : m.perfis_sender;
       const key = `${clientId}_${m.campo_id}`;
 
       if (!threadsMap[key]) {
+        // Verifica se existem reservas formais, mas se não existirem, não bloqueia a criação do Chat!
         const inscricoesDestePai = reservasData?.filter(r => r.cliente_id === clientId && r.campo_id === m.campo_id) || [];
 
         threadsMap[key] = {
           chave: key,
           campo: m.campos,
           cliente_id: clientId,
+          cliente_nome: clientProfile?.nome_completo || 'Cliente HelloCamp',
           cliente: clientProfile,
           reservas: inscricoesDestePai,
           mensagens: [],
@@ -66,6 +78,7 @@ export default function InboxParceiro({ params }: { params: Promise<{ lang: stri
           lastMsg: null
         };
       }
+      
       threadsMap[key].mensagens.push(m);
       threadsMap[key].lastMsg = m;
       if (!m.lida && m.receiver_id === uid) threadsMap[key].unread++;
@@ -108,7 +121,8 @@ export default function InboxParceiro({ params }: { params: Promise<{ lang: stri
       campo_id: threadAtiva.campo.id, 
       sender_id: partnerId, 
       receiver_id: threadAtiva.cliente_id, 
-      texto: msgTexto 
+      texto: msgTexto,
+      lida: false
     }]);
   };
 
@@ -206,7 +220,7 @@ export default function InboxParceiro({ params }: { params: Promise<{ lang: stri
 
                 return (
                   <div key={msg.id || i} className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                    <div className={`max-w-[85%] md:max-w-[70%] p-4 md:p-5 rounded-[1.5rem] text-sm md:text-[15px] font-medium leading-relaxed shadow-sm ${isMine ? 'bg-[#167524] text-white rounded-br-sm' : 'bg-white text-slate-800 border border-slate-200 rounded-bl-sm'}`}>
+                    <div className={`max-w-[85%] md:max-w-[70%] p-4 md:p-5 rounded-[1.5rem] text-sm md:text-[15px] font-medium leading-relaxed shadow-sm whitespace-pre-wrap ${isMine ? 'bg-[#167524] text-white rounded-br-sm' : 'bg-white text-slate-800 border border-slate-200 rounded-bl-sm'}`}>
                       {msg.texto}
                       <div className={`text-[10px] mt-2 text-right font-black uppercase tracking-wider ${isMine ? 'text-white/60' : 'text-slate-400'}`}>
                         {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
