@@ -180,7 +180,6 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
 
   const heroImgUrl = campo.imagem?.startsWith('http') ? campo.imagem : '/og-image.jpg';
   
-  // NOME FINAL DO PARCEIRO BLINDADO
   const nomeExibicaoParceiro = parceiroInfo 
     ? (parceiroInfo.empresa_nome || parceiroInfo.nome_empresa || parceiroInfo.nome_completo || 'Parceiro HelloCamp')
     : 'Parceiro HelloCamp';
@@ -190,7 +189,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }} />
 
-      {/* HERO SECTION - Background Seguro e Elegante */}
+      {/* HERO SECTION */}
       <div className="relative w-full h-[40vh] min-h-[350px] md:h-[500px] bg-slate-900 overflow-hidden">
         <div 
           className="absolute inset-0 w-full h-full bg-cover bg-center opacity-90"
@@ -340,30 +339,9 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <a 
-                    href={`https://maps.apple.com/?daddr=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : encodeURIComponent(localCampo)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-900 px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-slate-200 shadow-sm"
-                  >
-                    Apple Maps
-                  </a>
-                  <a 
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : encodeURIComponent(localCampo)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#BBF7D0] shadow-sm"
-                  >
-                    Google Maps
-                  </a>
-                  <a 
-                    href={`https://waze.com/ul?ll=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : ''}&q=${encodeURIComponent(localCampo)}&navigate=yes`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4338CA] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#C7D2FE] shadow-sm"
-                  >
-                    Waze
-                  </a>
+                  <a href={`https://maps.apple.com/?daddr=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : encodeURIComponent(localCampo)}`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-900 px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-slate-200 shadow-sm">Apple Maps</a>
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : encodeURIComponent(localCampo)}`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#BBF7D0] shadow-sm">Google Maps</a>
+                  <a href={`https://waze.com/ul?ll=${(campo.latitude && campo.longitude) ? `${campo.latitude},${campo.longitude}` : ''}&q=${encodeURIComponent(localCampo)}&navigate=yes`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4338CA] px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-[#C7D2FE] shadow-sm">Waze</a>
                 </div>
               </div>
 
@@ -438,14 +416,8 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
               {outrosDoParceiro.length > 0 && (
                 <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-black text-slate-900 m-0">
-                      {isEn ? `More from ${nomeExibicaoParceiro}` : `Mais de ${nomeExibicaoParceiro}`}
-                    </h2>
-                    {campo.organizador_id && (
-                      <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="text-[10px] font-black uppercase tracking-widest text-[#0E3A68] hover:underline">
-                        {isEn ? 'View all' : 'Ver todos'}
-                      </Link>
-                    )}
+                    <h2 className="text-xl font-black text-slate-900 m-0">{isEn ? `More from ${nomeExibicaoParceiro}` : `Mais de ${nomeExibicaoParceiro}`}</h2>
+                    {campo.organizador_id && <Link href={`/${lang}/parceiro/${campo.organizador_id}`} className="text-[10px] font-black uppercase tracking-widest text-[#0E3A68] hover:underline">{isEn ? 'View all' : 'Ver todos'}</Link>}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {outrosDoParceiro.map((c: any) => {
@@ -457,9 +429,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                           </div>
                           <div className="px-2 pb-2 mt-1">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">{c.distrito}</p>
-                            <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68] transition-colors">
-                              {isEn && c.nome_en ? c.nome_en : c.nome}
-                            </h3>
+                            <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68] transition-colors">{isEn && c.nome_en ? c.nome_en : c.nome}</h3>
                           </div>
                         </Link>
                       )
@@ -472,12 +442,8 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
               {semelhantes.length > 0 && (
                 <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-black text-slate-900 m-0">
-                      {isEn ? 'Similar Camps' : 'Campos Semelhantes'}
-                    </h2>
-                    <Link href={`/${lang}/pesquisa?categoria=${encodeURIComponent(campo.categoria || '')}`} className="text-[10px] font-black uppercase tracking-widest text-[#0E3A68] hover:underline">
-                      {isEn ? 'View all' : 'Ver mais'}
-                    </Link>
+                    <h2 className="text-xl font-black text-slate-900 m-0">{isEn ? 'Similar Camps' : 'Campos Semelhantes'}</h2>
+                    <Link href={`/${lang}/pesquisa?categoria=${encodeURIComponent(campo.categoria || '')}`} className="text-[10px] font-black uppercase tracking-widest text-[#0E3A68] hover:underline">{isEn ? 'View all' : 'Ver mais'}</Link>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {semelhantes.map((c: any) => {
@@ -489,9 +455,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
                           </div>
                           <div className="px-2 pb-2 mt-1">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">{c.distrito}</p>
-                            <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68] transition-colors">
-                              {isEn && c.nome_en ? c.nome_en : c.nome}
-                            </h3>
+                            <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68] transition-colors">{isEn && c.nome_en ? c.nome_en : c.nome}</h3>
                           </div>
                         </Link>
                       )
@@ -504,15 +468,7 @@ export default async function DetalhesDoCampo({ params }: { params: Promise<{ la
               <div id="duvidas" className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-10 scroll-mt-24">
                 <h3 className="text-xl font-black text-slate-900 mb-2">{dict.detalhe.duvidas_titulo}</h3>
                 <p className="text-sm text-slate-500 font-medium mb-6">{dict.detalhe.duvidas_sub}</p>
-
-                <FormContactoCampo
-                  campoId={campo.id}
-                  organizadorId={campo.organizador_id}
-                  nomeCampo={nomeCampo}
-                  dict={dict}
-                  isEn={isEn}
-                  lang={lang}
-                />
+                <FormContactoCampo campoId={campo.id} organizadorId={campo.organizador_id} nomeCampo={nomeCampo} dict={dict} isEn={isEn} lang={lang} />
               </div>
 
             </div>

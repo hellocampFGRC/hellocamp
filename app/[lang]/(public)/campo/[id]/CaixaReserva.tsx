@@ -47,7 +47,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
         if (!newOpcoes[i]) {
           newOpcoes[i] = {};
           perguntasParsed.forEach((p: any) => {
-            newOpcoes[i][p.titulo] = p.opcoes[0]; // Predefine a 1ª opção
+            newOpcoes[i][p.titulo] = p.opcoes[0]; 
           });
         }
       }
@@ -242,7 +242,7 @@ export function ReservaProvider({ children, campo, lang }: { children: React.Rea
     if (extraTransporte) params.set("ext_transporte", "true");
     if (isEmailMode) params.set("modo", "email");
     
-    // ANEXAR AS ESCOLHAS CUSTOMIZADAS DO PROGRAMA PARA O CHECKOUT!
+    // ANEXAR AS ESCOLHAS CUSTOMIZADAS PARA O CHECKOUT!
     if (perguntasParsed.length > 0) {
       params.set("opcoes_participantes", JSON.stringify(opcoesParticipantes));
     }
@@ -394,7 +394,7 @@ export function SeletorOpcoes() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-5 gap-3">
           <label className="flex items-center gap-3 text-xs font-black text-slate-400 uppercase tracking-widest m-0">
             <span className="bg-slate-100 text-slate-500 w-6 h-6 rounded-full flex items-center justify-center text-[10px]">{stepCount++}</span>
-            {ctx.pacoteSelecionado?.tipo === 'dia' ? (ctx.isEn ? 'Select Days' : 'Selecione as Datas') : (ctx.isEn ? 'Select Week(s)' : 'Selecione a(s) Semana(s)')}
+            {ctx.pacoteSelecionado?.tipo === 'dia' ? (ctx.isEn ? 'Select Dates' : 'Selecione as Datas') : (ctx.isEn ? 'Select Week(s)' : 'Selecione a(s) Semana(s)')}
           </label>
           <div className="text-[10px]">{getSubtituloCalendario()}</div>
         </div>
@@ -458,13 +458,17 @@ export function SeletorOpcoes() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {ctx.valSeguro > 0 && (
               <div onClick={() => ctx.setExtraSeguro(!ctx.extraSeguro)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraSeguro ? 'bg-blue-50/50 border-[#0E3A68] shadow-md' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'}`}>
-                <div className="flex items-center gap-3"><span className="text-2xl">🛡️</span><div><span className={`block text-sm font-black mb-1 ${ctx.extraSeguro ? 'text-[#0E3A68]' : 'text-slate-700'}`}>{ctx.isEn ? 'Insurance' : 'Seguro Extra'}</span><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoSeguro}€</span></div></div>
+                <div className="flex items-center gap-3">
+                  <div><span className={`block text-sm font-black mb-1 ${ctx.extraSeguro ? 'text-[#0E3A68]' : 'text-slate-700'}`}>{ctx.isEn ? 'Insurance' : 'Seguro Extra'}</span><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoSeguro}€</span></div>
+                </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${ctx.extraSeguro ? 'border-[#0E3A68] bg-[#0E3A68]' : 'border-slate-300'}`}>{ctx.extraSeguro && <span className="text-white text-[10px] font-bold">✓</span>}</div>
               </div>
             )}
             {ctx.valTransporte > 0 && (
               <div onClick={() => ctx.setExtraTransporte(!ctx.extraTransporte)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex justify-between items-center ${ctx.extraTransporte ? 'bg-blue-50/50 border-[#0E3A68] shadow-md' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'}`}>
-                <div className="flex items-center gap-3"><span className="text-2xl">🚌</span><div><span className={`block text-sm font-black mb-1 ${ctx.extraTransporte ? 'text-[#0E3A68]' : 'text-slate-700'}`}>{ctx.isEn ? 'Transport' : 'Transporte'}</span><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoTransporte}€</span></div></div>
+                <div className="flex items-center gap-3">
+                  <div><span className={`block text-sm font-black mb-1 ${ctx.extraTransporte ? 'text-[#0E3A68]' : 'text-slate-700'}`}>{ctx.isEn ? 'Transport' : 'Transporte'}</span><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+{ctx.custoTransporte}€</span></div>
+                </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${ctx.extraTransporte ? 'border-[#0E3A68] bg-[#0E3A68]' : 'border-slate-300'}`}>{ctx.extraTransporte && <span className="text-white text-[10px] font-bold">✓</span>}</div>
               </div>
             )}
@@ -473,7 +477,7 @@ export function SeletorOpcoes() {
       )}
 
       {/* 5. QUANTIDADE */}
-      <div>
+      <div className={ctx.perguntasParsed.length > 0 ? "mb-10" : ""}>
         <label className="flex items-center gap-3 text-xs font-black text-slate-400 uppercase tracking-widest mb-5">
           <span className="bg-slate-100 text-slate-500 w-6 h-6 rounded-full flex items-center justify-center text-[10px]">{stepCount++}</span>
           {ctx.isEn ? 'Number of Participants' : 'Número de Participantes'}
@@ -485,22 +489,22 @@ export function SeletorOpcoes() {
         </div>
       </div>
 
-      {/* 6. OPÇÕES DE PERSONALIZAÇÃO POR PARTICIPANTE (NOVO) */}
+      {/* 6. OPÇÕES DE PERSONALIZAÇÃO POR PARTICIPANTE */}
       {ctx.perguntasParsed.length > 0 && (
-        <div className="mt-10 pt-10 border-t border-slate-100">
+        <div className="pt-8 border-t border-slate-100">
           <label className="flex items-center gap-3 text-xs font-black text-slate-400 uppercase tracking-widest mb-5">
             <span className="bg-slate-100 text-slate-500 w-6 h-6 rounded-full flex items-center justify-center text-[10px]">{stepCount++}</span>
-            {ctx.isEn ? 'Participant Customization' : 'Personalização do Participante'}
+            {ctx.isEn ? 'Participant Customization' : 'Personalização Opcional'}
           </label>
-          <p className="text-xs text-slate-500 mb-6">Pode escolher opções diferentes para cada participante inscrito.</p>
+          <p className="text-xs font-medium text-slate-500 mb-6">Indique as opções do programa ou atividades pretendidas para cada participante inscrito.</p>
 
           <div className="flex flex-col gap-5">
             {Array.from({ length: ctx.quantidade }).map((_, idx) => {
               const partNum = idx + 1;
               return (
                 <div key={partNum} className="bg-slate-50 p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-[#e2a41d]"></div>
-                  <h4 className="text-sm font-black text-slate-900 mb-5 flex items-center gap-2">👦 Participante {partNum}</h4>
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-[#0E3A68]"></div>
+                  <h4 className="text-sm font-black text-slate-900 mb-5 flex items-center gap-2">Participante {partNum}</h4>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {ctx.perguntasParsed.map((perg: any) => (
@@ -549,7 +553,7 @@ export function CaixaResumo() {
 
         {ctx.pacotes.length === 0 ? (
           <div className="text-center text-sm font-bold text-slate-400 py-6 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
-            🗓️ {ctx.isEn ? 'No packages available' : 'Nenhum pacote disponível'}
+            {ctx.isEn ? 'No packages available' : 'Nenhum pacote disponível'}
           </div>
         ) : (
           <div className="flex flex-col gap-5 mb-8">
@@ -583,13 +587,13 @@ export function CaixaResumo() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">{ctx.isEn ? 'Extras' : 'Suplementos Extras'}</p>
                 {ctx.extraSeguro && (
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5"><span className="text-sm">🛡️</span> {ctx.isEn ? 'Insurance' : 'Seguro'}</span>
+                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">{ctx.isEn ? 'Insurance' : 'Seguro'}</span>
                     <span className="text-xs font-black text-slate-900">+{ctx.custoSeguro}€</span>
                   </div>
                 )}
                 {ctx.extraTransporte && (
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5"><span className="text-sm">🚌</span> {ctx.isEn ? 'Transport' : 'Transporte'}</span>
+                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">{ctx.isEn ? 'Transport' : 'Transporte'}</span>
                     <span className="text-xs font-black text-slate-900">+{ctx.custoTransporte}€</span>
                   </div>
                 )}
@@ -604,7 +608,7 @@ export function CaixaResumo() {
             {/* TAG INFORMATIVA SE TIVER OPÇÕES ESCOLHIDAS */}
             {ctx.perguntasParsed.length > 0 && (
               <div className="mt-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">
-                ✓ Personalização Selecionada
+                ✓ Personalização Adicionada
               </div>
             )}
           </div>
@@ -627,7 +631,7 @@ export function CaixaResumo() {
         {!ctx.disabledReserva && (
           <div className="text-center mt-5">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
-              {ctx.isExternalLinkMode ? (ctx.isEn ? '🔗 Secure Redirect' : '🔗 Redirecionamento Seguro') : (ctx.isEn ? '🔒 Guaranteed Secure Payment' : '🔒 Pagamento Seguro Garantido')}
+              {ctx.isExternalLinkMode ? (ctx.isEn ? 'Secure Redirect' : 'Redirecionamento Seguro') : (ctx.isEn ? 'Guaranteed Secure Payment' : 'Pagamento Seguro Garantido')}
             </span>
           </div>
         )}
@@ -638,7 +642,6 @@ export function CaixaResumo() {
           <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden relative">
             <button onClick={() => ctx.setShowLeadModal(false)} className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-[#0E3A68] hover:text-white font-black transition-colors">&times;</button>
             <div className="p-8 md:p-10">
-              <div className="w-16 h-16 bg-blue-50 text-[#0E3A68] rounded-full flex items-center justify-center text-3xl mb-6 border border-blue-100 shadow-inner">🚀</div>
               <h2 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">{ctx.isEn ? 'Almost there!' : 'Quase lá!'}</h2>
               <p className="text-sm font-medium text-slate-500 leading-relaxed mb-8">{ctx.isEn ? "You will be redirected to the partner's official form. Leave your contact details so the organizer knows you came from HelloCamp." : "Vai ser reencaminhado para o formulário oficial do parceiro. Indique o seu contacto para que a organização saiba que vem através da HelloCamp e lhe dê prioridade."}</p>
               <form onSubmit={ctx.submitExternalLead} className="space-y-5">
@@ -656,7 +659,7 @@ export function CaixaResumo() {
                 </div>
                 <div className="pt-6">
                   <button type="submit" disabled={ctx.submittingLead} className="w-full bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black uppercase tracking-widest text-[11px] px-6 py-5 rounded-xl transition-all shadow-lg shadow-[#0E3A68]/30 flex items-center justify-center gap-3">
-                    {ctx.submittingLead ? (ctx.isEn ? 'Redirecting...' : 'A redirecionar...') : (ctx.isEn ? 'Continue to Official Form' : 'Avançar para o Formulário')} <span className="text-xl leading-none">&rarr;</span>
+                    {ctx.submittingLead ? (ctx.isEn ? 'Redirecting...' : 'A redirecionar...') : (ctx.isEn ? 'Continue to Official Form' : 'Avançar para o Formulário')}
                   </button>
                 </div>
               </form>

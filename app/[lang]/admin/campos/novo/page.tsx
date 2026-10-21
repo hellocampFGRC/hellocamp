@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, use } from "react";
+import { useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import React from "react";
@@ -12,6 +12,7 @@ interface Variante { nome: string; preco: number; }
 interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; }
 interface Desconto { id: string; nome: string; percentagem: number; acumulavel: boolean; }
 interface GaleriaUpload { id: string; file?: File; previewUrl: string; isCapa: boolean; }
+interface PerguntaUI { id: string; tipo: 'texto' | 'escolha'; titulo: string; opcoes: string; }
 
 const DIAS_SEMANA = [
   { id: 1, pt: 'Seg', en: 'Mon' }, { id: 2, pt: 'Ter', en: 'Tue' },
@@ -36,6 +37,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
 
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [statusText, setStatusText] = useState("");
 
   // Estados de Controlo dos Dropdowns Customizados
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
@@ -59,7 +61,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     pacotes: [] as Pacote[],
     descontos: [] as Desconto[],
     descricao: "", 
-    perguntas: [] as string[],
+    perguntasUI: [] as PerguntaUI[], // NOVO SISTEMA DE FORMULÁRIO
 
     // TEXTOS DESCRITIVOS LOGÍSTICOS
     racio_monitores: "",
@@ -67,7 +69,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     alojamento: "",
     seguro: "",
 
-    // VALORES FINANCEIROS EXTRAS OTIMIZADOS
+    // VALORES FINANCEIROS EXTRAS
     extra_seguro: 0,
     tipo_extra_seguro: "fixo",
     extra_transporte: 0,
@@ -88,14 +90,11 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
   // ==========================================
   const handleSelectCategoria = (catId: string) => {
     setFormData(prev => {
-      let novasPerguntas = [...prev.perguntas];
-      if (catId === 'Surf' && !novasPerguntas.includes("O participante sabe nadar de forma autónoma?")) {
-        novasPerguntas.push("O participante sabe nadar de forma autónoma?");
+      const novasPerguntas = [...prev.perguntasUI];
+      if (catId === 'Surf' && !novasPerguntas.some(p => p.titulo === "O participante sabe nadar de forma autónoma?")) {
+        novasPerguntas.push({ id: Math.random().toString(), tipo: 'texto', titulo: "O participante sabe nadar de forma autónoma?", opcoes: "" });
       }
-      if (catId === 'Robotica' && !novasPerguntas.includes("Qual o nível de experiência com computadores/programação?")) {
-        novasPerguntas.push("Qual o nível de experiência com computadores/programação?");
-      }
-      return { ...prev, categoria: catId, perguntas: novasPerguntas };
+      return { ...prev, categoria: catId, perguntasUI: novasPerguntas };
     });
     setIsCatDropdownOpen(false);
   };
@@ -186,10 +185,28 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
   const adicionarVariante = () => setNovoPacote(prev => ({ ...prev, variantes: [...prev.variantes, { nome: "", preco: 0 }] }));
   const removerVariante = (index: number) => setNovoPacote(prev => ({ ...prev, variantes: prev.variantes.filter((_, i) => i !== index) }));
   const eliminarPacote = (id: string) => setFormData(prev => ({ ...prev, pacotes: prev.pacotes.filter(p => p.id !== id) }));
+  const eliminarDesconto = (id: string) => setFormData(prev => ({ ...prev, descontos: prev.descontos.filter(d => d.id !== id) }));
 
-  const addPergunta = () => setFormData(prev => ({ ...prev, perguntas: [...prev.perguntas, ""] }));
-  const removePergunta = (index: number) => setFormData(prev => ({ ...prev, perguntas: prev.perguntas.filter((_, i) => i !== index) }));
-  const updatePergunta = (index: number, value: string) => setFormData(prev => ({ ...prev, perguntas: prev.perguntas.map((p, i) => i === index ? value : p) }));
+  // HANDLERS DO NOVO CONSTRUTOR DE FORMULÁRIO (OPÇÕES DE ESCOLHA)
+  const adicionarPergunta = (tipo: 'texto' | 'escolha') => {
+    setFormData(prev => ({ ...prev, perguntasUI: [...prev.perguntasUI, { id: Math.random().toString(), tipo, titulo: "", opcoes: "" }] }));
+  };
+  const removerPergunta = (id: string) => setFormData(prev => ({ ...prev, perguntasUI: prev.perguntasUI.filter(p => p.id !== id) }));
+  const atualizarPergunta = (id: string, campo: 'titulo' | 'opcoes', valor: string) => {
+    setFormData(prev => ({ ...prev, perguntasUI: prev.perguntasUI.map(p => p.id === id ? { ...p, [campo]: valor } : p) }));
+  };
+
+  // ==========================================
+  // FUNÇÃO DE TRADUÇÃO AUTOMÁTICA
+  // ==========================================
+  const traduzirParaIngles = async (texto: string) => {
+    if (!texto) return "";
+    try {
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=pt|en`);
+      const data = await res.json();
+      return data.responseData.translatedText;
+    } catch (e) { return texto; } // Fallback para o texto original se falhar
+  };
 
   // ==========================================
   // GUARDA FINAL NA BASE DE DADOS
@@ -200,6 +217,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     if (galeria.length === 0) return alert("Adicione pelo menos 1 fotografia ao campo.");
 
     setSaving(true);
+    setStatusText("A processar imagens...");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada");
@@ -212,10 +230,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
           const fileExt = img.file.name.split('.').pop();
           const fileName = `${session.user.id}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
 
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('campos-imagens')
-            .upload(fileName, img.file);
-
+          const { error: uploadError } = await supabase.storage.from('campos-imagens').upload(fileName, img.file);
           if (uploadError) throw new Error(`Erro ao enviar foto: ${uploadError.message}`);
 
           const { data: { publicUrl } } = supabase.storage.from('campos-imagens').getPublicUrl(fileName);
@@ -226,23 +241,39 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
 
       if (!capaUrl && uploadedUrls.length > 0) capaUrl = uploadedUrls[0];
 
-      const perguntasLimpas = formData.perguntas.filter(p => p.trim() !== "");
+      setStatusText("A traduzir textos (IA)...");
+      const [
+        nome_en, categoria_en, local_en, descricao_en,
+        alimentacao_en, alojamento_en, seguro_en
+      ] = await Promise.all([
+        traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
+        traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
+        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro)
+      ]);
 
+      const perguntasFormatadas = formData.perguntasUI.filter(p => p.titulo.trim() !== "").map(p => {
+        if (p.tipo === 'escolha') return `ESCOLHA|${p.titulo.trim()}|${p.opcoes.trim()}`;
+        return `TEXTO|${p.titulo.trim()}`;
+      });
+
+      setStatusText("A guardar dados...");
       const { error } = await supabase.from('campos').insert({
         organizador_id: session.user.id,
         nome: formData.nome,
-        nome_en: formData.nome, 
+        nome_en, 
         local: formData.local,
-        local_en: formData.local, 
+        local_en, 
         idade_min: formData.idade_min,
         idade_max: formData.idade_max,
         vagas_totais: formData.vagas_totais,
         categoria: formData.categoria,
+        categoria_en,
         politica_cancelamento: formData.politica_cancelamento,
         descricao: formData.descricao,
+        descricao_en,
         imagem: capaUrl,
         galeria: uploadedUrls,
-        perguntas_customizadas: perguntasLimpas,
+        perguntas_customizadas: perguntasFormatadas,
         calendario_funcionamento: formData.calendario_funcionamento,
         pacotes: formData.pacotes,
         descontos: formData.descontos,
@@ -252,11 +283,11 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         racio_monitores: formData.racio_monitores,
         racio_monitores_en: formData.racio_monitores,
         alimentacao: formData.alimentacao,
-        alimentacao_en: formData.alimentacao,
+        alimentacao_en,
         alojamento: formData.alojamento,
-        alojamento_en: formData.alojamento,
+        alojamento_en,
         seguro: formData.seguro,
-        seguro_en: formData.seguro,
+        seguro_en,
 
         // Extras Estruturados
         extra_seguro: formData.extra_seguro,
@@ -267,13 +298,15 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
 
       if (error) throw error;
 
-      alert(isEn ? "Camp created successfully! It's under review." : "Campo criado com sucesso! Foi enviado para revisão.");
+      alert(isEn ? "Camp created successfully! It's under review." : "Campo criado com sucesso! O sistema está agora a rever os dados.");
       router.push(`/${lang}/admin/campos`);
 
     } catch (err: any) {
       alert("Erro ao criar campo: " + err.message);
+    } finally {
+      setSaving(false);
+      setStatusText("");
     }
-    setSaving(false);
   };
 
   const nextStep = () => {
@@ -299,7 +332,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
             <div key={num} className="flex-1 flex flex-col gap-2">
               <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-[#167524]' : 'bg-slate-200'}`}></div>
               <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-[#167524]' : 'text-slate-400'}`}>
-                {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual'}
+                {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual e Opções'}
               </span>
             </div>
           ))}
@@ -321,7 +354,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 <input type="text" required placeholder="Ex: Surf Camp de Verão Caparica" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] focus:bg-white transition-colors" />
               </div>
 
-              {/* DROPDOWN CUSTOMIZADO: CATEGORIA */}
               <div className="relative">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Categoria Temática *</label>
                 <div onClick={() => setIsCatDropdownOpen(!isCatDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-[#167524]/50 transition-colors">
@@ -342,7 +374,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 )}
               </div>
 
-              {/* DROPDOWN CUSTOMIZADO: POLÍTICA CANCELAMENTO */}
               <div className="relative">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Política de Cancelamento</label>
                 <div onClick={() => setIsPolDropdownOpen(!isPolDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-[#167524]/50 transition-colors">
@@ -404,7 +435,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         )}
 
         {/* ========================================== */}
-        {/* PASSO 2: O MOTOR DE PREÇOS E EXTRAS FINANCEIROS */}
+        {/* PASSO 2: O MOTOR DE PREÇOS E EXTRAS */}
         {/* ========================================== */}
         {step === 2 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-10">
@@ -442,22 +473,11 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 <label className="block text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">
                   Dias de Encerramento (Exceções / Esgotado)
                 </label>
-                <p className="text-xs text-amber-700 mb-4">Adicione datas específicas (ex: feriados) em que o campo estará fechado. Estes dias não aparecerão disponíveis para reserva nas pesquisas.</p>
+                <p className="text-xs text-amber-700 mb-4">Adicione datas específicas (ex: feriados) em que o campo estará fechado.</p>
 
                 <div className="flex gap-2 mb-4">
-                  <input 
-                    type="date" 
-                    value={novoDiaFechado} 
-                    onChange={e => setNovoDiaFechado(e.target.value)} 
-                    className="flex-1 p-3 bg-white border border-amber-300 rounded-lg text-sm outline-none focus:border-amber-500" 
-                  />
-                  <button 
-                    type="button" 
-                    onClick={adicionarDiaFechado} 
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 rounded-lg transition-colors text-xs"
-                  >
-                    Bloquear Dia
-                  </button>
+                  <input type="date" value={novoDiaFechado} onChange={e => setNovoDiaFechado(e.target.value)} className="flex-1 p-3 bg-white border border-amber-300 rounded-lg text-sm outline-none focus:border-amber-500" />
+                  <button type="button" onClick={adicionarDiaFechado} className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 rounded-lg transition-colors text-xs">Bloquear Dia</button>
                 </div>
 
                 {formData.calendario_funcionamento.dias_fechados?.length > 0 && (
@@ -494,7 +514,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                   {formData.pacotes.map((pacote, idx) => (
                     <div key={idx} className="bg-white border-2 border-slate-100 rounded-2xl p-5 relative group hover:border-[#167524]/30 transition-colors shadow-sm">
                       <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button type="button" onClick={() => { setNovoPacote(pacote); setIsPacoteModalOpen(true); }} className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs hover:bg-[#167524] hover:text-white transition-colors">✏️</button>
                         <button type="button" onClick={() => eliminarPacote(pacote.id)} className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center font-bold text-xs hover:bg-red-100">🗑️</button>
                       </div>
                       <div className="inline-block px-2 py-1 bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded mb-2">
@@ -521,7 +540,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               <p className="text-xs text-slate-500 mb-6">A alimentação e o alojamento já são mapeados em variantes. Aqui configura apenas os suplementos isolados.</p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-
                 {/* EXTRA CUSTOMIZADO: SEGURO */}
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor do Seguro (€)</label>
@@ -571,7 +589,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                     </>
                   )}
                 </div>
-
               </div>
             </div>
 
@@ -599,7 +616,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                           {desc.percentagem}% • {desc.acumulavel ? 'Acumulável ✅' : 'Não Acumulável 🚫'}
                         </p>
                       </div>
-                      <button type="button" onClick={() => setFormData({...formData, descontos: formData.descontos.filter(d => d.id !== desc.id)})} className="w-8 h-8 rounded-full bg-red-50 text-red-500 font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100">×</button>
+                      <button type="button" onClick={() => eliminarDesconto(desc.id)} className="w-8 h-8 rounded-full bg-red-50 text-red-500 font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100">×</button>
                     </div>
                   ))}
                 </div>
@@ -610,13 +627,13 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         )}
 
         {/* ========================================== */}
-        {/* PASSO 3: DESCRIÇÃO, LOGÍSTICA E GALERIA */}
+        {/* PASSO 3: DESCRIÇÃO, LOGÍSTICA E FORMULÁRIOS DINÂMICOS */}
         {/* ========================================== */}
         {step === 3 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-10">
 
-            <div className="mb-10 space-y-6">
-              <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><span>📸</span> {isEn ? 'Media & Forms' : '1. Apresentação Editorial e Logística'}</h2>
+            <div>
+              <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><span>📸</span> {isEn ? 'Media & Description' : '1. Apresentação Editorial e Logística'}</h2>
 
               <div>
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição Longa do Programa *</label>
@@ -624,7 +641,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               </div>
 
               {/* INPUTS DE TEXTOS DESCRITIVOS LOGÍSTICOS */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-200 mt-6">
                 <div className="sm:col-span-2 mb-2">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400 m-0">Textos Informativos Importantes (Logística)</p>
                 </div>
@@ -646,14 +663,14 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 </div>
               </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mt-6">
                 <div className="flex justify-between items-center mb-4">
                   <div>
                     <label className="block text-[11px] font-black text-slate-800 uppercase tracking-widest m-0">Galeria de Fotografias *</label>
                     <p className="text-[10px] text-slate-500 m-0 mt-1">Adicione fotos do campo. A imagem com ⭐ será a Capa.</p>
                   </div>
                   <label className="bg-[#167524] text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer hover:bg-[#115a1b] transition-colors shadow-sm">
-                    + Escolher Ficheiros
+                    + Adicionar Fotos
                     <input type="file" multiple accept="image/*" onChange={handleFileUpload} className="hidden" />
                   </label>
                 </div>
@@ -692,27 +709,64 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               </div>
             </div>
 
-            {/* FORMULÁRIO DE PERGUNTAS */}
+            {/* O NOVO CONSTRUTOR DE FORMULÁRIOS DINÂMICOS */}
             <div className="pt-8 border-t border-slate-100">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>📋</span> {isEn ? 'Custom Forms' : '2. Perguntas aos Pais'}</h2>
-                  <p className="text-[10px] text-slate-500 m-0 mt-1 max-w-sm">NIF, Alergias e Doenças já são recolhidos. Adicione perguntas específicas se necessário.</p>
+                  <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>📋</span> {isEn ? 'Registration Form & Options' : '2. Opções e Perguntas de Inscrição'}</h2>
+                  <p className="text-[10px] text-slate-500 m-0 mt-1 max-w-sm leading-relaxed">
+                    Crie perguntas abertas ou opções de escolha múltipla (ex: Língua da Manhã, Modalidade, etc.). <b>As opções de escolha vão aparecer na página principal para cada participante selecionar!</b>
+                  </p>
                 </div>
-                <button type="button" onClick={addPergunta} className="text-[10px] font-black uppercase tracking-widest text-[#167524] bg-[#167524]/10 px-4 py-2.5 rounded-xl hover:bg-[#167524]/20 transition-colors">
-                  + Pergunta
-                </button>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => adicionarPergunta('texto')} className="text-[10px] font-black uppercase tracking-widest text-[#167524] bg-[#167524]/10 px-3 py-2.5 rounded-xl hover:bg-[#167524]/20 transition-colors whitespace-nowrap">
+                    + Pergunta Aberta
+                  </button>
+                  <button type="button" onClick={() => adicionarPergunta('escolha')} className="text-[10px] font-black uppercase tracking-widest text-white bg-[#167524] px-3 py-2.5 rounded-xl hover:bg-[#115a1b] transition-colors whitespace-nowrap shadow-sm">
+                    + Opção Múltipla
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-3">
-                {formData.perguntas.map((pergunta, i) => (
-                  <div key={i} className="flex gap-2">
-                    <input type="text" placeholder="Ex: Qual o tamanho da T-Shirt do Participante?" value={pergunta} onChange={e => updatePergunta(i, e.target.value)} className="flex-1 p-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#167524] shadow-sm" />
-                    <button type="button" onClick={() => removePergunta(i)} className="w-12 h-12 flex items-center justify-center bg-red-50 text-red-500 rounded-xl hover:bg-red-100 font-bold transition-colors">×</button>
+              <div className="space-y-4">
+                {formData.perguntasUI.map((p) => (
+                  <div key={p.id} className={`p-5 rounded-2xl border shadow-sm relative transition-all ${p.tipo === 'escolha' ? 'bg-emerald-50/30 border-emerald-200' : 'bg-white border-slate-200'}`}>
+                    <button type="button" onClick={() => removerPergunta(p.id)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-full hover:bg-red-100 font-bold transition-colors">×</button>
+                    
+                    <div className="pr-10 mb-4">
+                      <span className={`inline-block px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest mb-3 ${p.tipo === 'escolha' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                        {p.tipo === 'escolha' ? '▼ Opção de Escolha (Mostrada na Página)' : '📝 Pergunta Aberta (Respondida no Checkout)'}
+                      </span>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5">{p.tipo === 'escolha' ? 'Título da Opção' : 'A sua Pergunta'}</label>
+                      <input 
+                        type="text" 
+                        placeholder={p.tipo === 'escolha' ? "Ex: Que modalidade prefere de manhã?" : "Ex: Qual o tamanho da t-shirt?"}
+                        value={p.titulo} 
+                        onChange={e => atualizarPergunta(p.id, 'titulo', e.target.value)} 
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#167524] shadow-sm" 
+                      />
+                    </div>
+
+                    {p.tipo === 'escolha' && (
+                      <div className="bg-white p-4 rounded-xl border border-emerald-100">
+                        <label className="block text-[11px] font-black text-emerald-700 uppercase tracking-widest mb-1.5">Opções Disponíveis (Separadas por vírgula)</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Inglês, Espanhol, Francês"
+                          value={p.opcoes} 
+                          onChange={e => atualizarPergunta(p.id, 'opcoes', e.target.value)} 
+                          className="w-full p-3 bg-slate-50 border border-emerald-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-emerald-500" 
+                        />
+                        <p className="text-[10px] text-emerald-600 font-bold mt-2 m-0">O pai verá um menu dropdown com estas opções exatas para selecionar para cada filho.</p>
+                      </div>
+                    )}
                   </div>
                 ))}
-                {formData.perguntas.length === 0 && (
-                  <div className="p-6 bg-slate-50 rounded-xl text-xs font-bold text-slate-400 text-center border border-dashed border-slate-200">Não exige informações adicionais aos pais no checkout.</div>
+                
+                {formData.perguntasUI.length === 0 && (
+                  <div className="p-8 bg-slate-50 rounded-2xl text-xs font-bold text-slate-400 text-center border border-dashed border-slate-200">
+                    O seu formulário base (Nome, Idade, Restrições Alimentares e Doenças) já está incluído nativamente.<br/>Adicione opções extra aqui, caso necessite.
+                  </div>
                 )}
               </div>
             </div>
@@ -732,7 +786,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
           <button onClick={nextStep} className="bg-[#167524] text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all uppercase tracking-widest text-sm">Próximo Passo →</button>
         ) : (
           <button onClick={handleGravarCampo} disabled={saving} className="bg-[#167524] text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all disabled:opacity-50 uppercase tracking-widest">
-            {saving ? 'A Fazer Upload...' : '✓ Finalizar Criação do Campo'}
+            {saving ? statusText || 'A Guardar...' : '✓ Finalizar Criação do Campo'}
           </button>
         )}
       </div>
@@ -746,8 +800,8 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h3 className="font-black text-slate-900 text-lg m-0">{novoPacote.id ? 'Editar Pacote' : 'Construir Pacote de Venda'}</h3>
-              <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold flex items-center justify-center">×</button>
+              <h3 className="font-black text-slate-900 text-lg m-0">Construir Pacote de Venda</h3>
+              <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold transition-colors">&times;</button>
             </div>
 
             <div className="p-6 overflow-y-auto flex flex-col gap-6">
@@ -770,15 +824,15 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 </div>
               </div>
 
-              <div className="border-t border-slate-100 pt-6">
-                <div className="flex justify-between items-center mb-3">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest m-0">C. Variantes e Preços</label>
-                  <button type="button" onClick={adicionarVariante} className="text-[10px] font-black uppercase tracking-widest text-[#167524] bg-[#167524]/10 px-3 py-1.5 rounded-lg hover:bg-[#167524]/20 transition-colors">+ Variante</button>
+              <div className="border-t-2 border-slate-200 pt-6">
+                <div className="flex justify-between items-center mb-4">
+                  <label className="text-sm font-black text-slate-900 m-0">C. Variantes e Preços</label>
+                  <button type="button" onClick={adicionarVariante} className="text-[10px] font-black uppercase tracking-widest text-[#167524] bg-[#167524]/10 hover:bg-[#167524]/20 px-3 py-1.5 rounded-lg transition-colors">+ Variante</button>
                 </div>
                 <p className="text-[11px] text-slate-500 mb-4 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                   Tem preços diferentes para este passe (ex: <i>Com Almoço vs Sem Almoço</i>)? Crie variantes. Se tiver apenas 1 preço fixo, deixe apenas o <b>Bilhete Base</b>.
                 </p>
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-3">
                   {novoPacote.variantes.map((v, i) => (
                     <div key={i} className="flex gap-2 items-center bg-white border border-slate-200 p-2 rounded-xl group hover:border-[#167524]/50 transition-colors">
                       <input type="text" placeholder="Nome (Ex: Pack c/ Almoço)" value={v.nome} onChange={e => atualizarVariante(i, 'nome', e.target.value)} className="flex-1 p-2 text-sm font-bold outline-none bg-transparent placeholder-slate-300" />
@@ -794,7 +848,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 </div>
               </div>
             </div>
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
               <button type="button" onClick={() => setIsPacoteModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
               <button type="button" onClick={guardarPacote} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">✓ Adicionar à Montra</button>
             </div>
@@ -808,35 +862,35 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
           <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-black text-slate-900 text-lg m-0">Nova Regra de Desconto</h3>
-              <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold flex items-center justify-center">×</button>
+              <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white font-bold transition-colors">×</button>
             </div>
-            <div className="p-6 flex flex-col gap-5">
+            <div className="p-6 flex flex-col gap-6 bg-slate-50">
               <div>
-                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Nome do Desconto (Visível no Checkout)</label>
-                <input type="text" placeholder='Ex: "Desconto Sócio Clube"' value={novoDesconto.nome} onChange={e => setNovoDesconto({...novoDesconto, nome: e.target.value})} className="w-full p-3.5 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-[#167524] bg-slate-50" />
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Nome do Desconto (Visível no Carrinho)</label>
+                <input type="text" value={novoDesconto.nome} onChange={e => setNovoDesconto({...novoDesconto, nome: e.target.value})} className="w-full p-3.5 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-[#167524] bg-white shadow-sm" placeholder="Ex: Desconto Irmãos" />
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex-1">
-                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Percentagem a Retirar</label>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:border-[#167524] transition-colors">
+                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Percentagem a Retirar (%)</label>
+                  <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden focus-within:border-[#167524] transition-colors shadow-sm">
                     <input type="number" min="1" max="100" value={novoDesconto.percentagem} onChange={e => setNovoDesconto({...novoDesconto, percentagem: Number(e.target.value)})} className="w-full p-3.5 text-base font-black outline-none bg-transparent" />
                     <span className="bg-slate-100 text-slate-400 px-4 py-3.5 text-sm font-black border-l border-slate-200">%</span>
                   </div>
                 </div>
               </div>
-              <div className="bg-[#167524]/5 border border-[#167524]/20 p-4 rounded-xl flex items-center justify-between cursor-pointer" onClick={() => setNovoDesconto({...novoDesconto, acumulavel: !novoDesconto.acumulavel})}>
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center cursor-pointer hover:border-[#167524]/50 transition-colors" onClick={() => setNovoDesconto({...novoDesconto, acumulavel: !novoDesconto.acumulavel})}>
                 <div>
-                  <p className="text-xs font-black text-[#167524] mb-0.5">É Acumulável?</p>
-                  <p className="text-[10px] text-[#167524]/80 font-bold m-0 leading-tight max-w-[200px]">Se ativo, este desconto soma-se a outros descontos no carrinho.</p>
+                  <p className="m-0 mb-1 font-black text-slate-900 text-sm">É Acumulável?</p>
+                  <p className="m-0 text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-tight">Soma com outros códigos no carrinho.</p>
                 </div>
-                <div className={`w-10 h-5 rounded-full relative transition-colors ${novoDesconto.acumulavel ? 'bg-[#167524]' : 'bg-slate-300'}`}>
-                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${novoDesconto.acumulavel ? 'translate-x-5' : ''}`}></div>
+                <div className={`w-12 h-6 rounded-full relative transition-colors ${novoDesconto.acumulavel ? 'bg-[#167524]' : 'bg-slate-200'}`}>
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${novoDesconto.acumulavel ? 'left-7' : 'left-1'}`}></div>
                 </div>
               </div>
             </div>
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-              <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors text-sm bg-white border border-slate-200 shadow-sm">Cancelar</button>
-              <button type="button" onClick={guardarDesconto} className="px-6 py-2.5 font-bold text-white bg-[#167524] rounded-xl hover:bg-[#115a1b] shadow-md text-sm transition-colors">Gravar Regra</button>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
+              <button type="button" onClick={() => setIsDescontoModalOpen(false)} className="px-6 py-3 rounded-xl font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors text-sm shadow-sm">Cancelar</button>
+              <button type="button" onClick={guardarDesconto} className="px-8 py-3 rounded-xl font-black border-none bg-[#167524] text-white hover:bg-[#115a1b] shadow-md transition-colors text-sm">Validar Desconto</button>
             </div>
           </div>
         </div>
