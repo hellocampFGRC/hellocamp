@@ -6,7 +6,7 @@ import BotaoFavorito from "./components/BotaoFavorito";
 // ==========================================
 // CONFIGURAÇÃO DE CACHE DE ELITE (Vercel ISR)
 // ==========================================
-export const revalidate = 1; // 24 horas
+export const revalidate = 1; // Atualiza a cada segundo para refletir mudanças na BD rapidamente
 
 const PAISES_DESTAQUE = [
   { nome: "Portugal", nome_en: "Portugal", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=800", desc: "Aventura e Sol", desc_en: "Adventure and Sun" },
@@ -48,10 +48,29 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
 
   const todayISO = new Date().toISOString().split('T')[0];
 
+  // ==========================================
+  // CHAMADAS À BASE DE DADOS COM PROTEÇÃO ATIVA
+  // ==========================================
   const [resCampos, resInst, resFiltros] = await Promise.all([
-    supabase.from('campos').select('*').not('contrato_parceiro_url', 'is', null).limit(6).order('created_at', { ascending: false }),
-    supabase.from('programas_institucionais').select('*').eq('is_active', true).limit(3).order('created_at', { ascending: false }),
-    supabase.from('campos').select('categoria, categoria_en, idade, idade_en, Distrito, Distrito_en, pais, pais_en').not('contrato_parceiro_url', 'is', null)
+    supabase.from('campos')
+      .select('*')
+      .eq('ativo', true)
+      .eq('status_aprovacao', 'Aprovado')
+      .not('contrato_parceiro_url', 'is', null)
+      .limit(6)
+      .order('created_at', { ascending: false }),
+
+    supabase.from('programas_institucionais')
+      .select('*')
+      .eq('is_active', true)
+      .limit(3)
+      .order('created_at', { ascending: false }),
+
+    supabase.from('campos')
+      .select('categoria, categoria_en, idade, idade_en, Distrito, Distrito_en, pais, pais_en')
+      .eq('ativo', true)
+      .eq('status_aprovacao', 'Aprovado')
+      .not('contrato_parceiro_url', 'is', null)
   ]);
 
   const camposDeFerias = resCampos.data || [];
