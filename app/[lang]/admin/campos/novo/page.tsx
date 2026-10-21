@@ -61,7 +61,8 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     pacotes: [] as Pacote[],
     descontos: [] as Desconto[],
     descricao: "", 
-    perguntasUI: [] as PerguntaUI[], // NOVO SISTEMA DE FORMULÁRIO
+    regras_termos: "", // INCLUÍDO REGRAS & TERMOS
+    perguntasUI: [] as PerguntaUI[], // SISTEMA DE FORMULÁRIO (Opções + Texto)
 
     // TEXTOS DESCRITIVOS LOGÍSTICOS
     racio_monitores: "",
@@ -209,7 +210,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
   };
 
   // ==========================================
-  // GUARDA FINAL NA BASE DE DADOS
+  // GUARDA FINAL NA BASE DE DADOS (COM 100% TRADUÇÕES)
   // ==========================================
   const handleGravarCampo = async () => {
     if (!formData.nome || !formData.local || !formData.descricao) return alert("Preencha o nome, local e descrição.");
@@ -222,6 +223,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada");
 
+      // 1. Upload de Imagens
       const uploadedUrls: string[] = [];
       let capaUrl = "";
 
@@ -229,7 +231,6 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         if (img.file) {
           const fileExt = img.file.name.split('.').pop();
           const fileName = `${session.user.id}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-
           const { error: uploadError } = await supabase.storage.from('campos-imagens').upload(fileName, img.file);
           if (uploadError) throw new Error(`Erro ao enviar foto: ${uploadError.message}`);
 
@@ -238,25 +239,44 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
           if (img.isCapa) capaUrl = publicUrl;
         }
       }
-
       if (!capaUrl && uploadedUrls.length > 0) capaUrl = uploadedUrls[0];
 
       setStatusText("A traduzir textos (IA)...");
+
+      // 2. Tradução Estática Principal
       const [
         nome_en, categoria_en, local_en, descricao_en,
-        alimentacao_en, alojamento_en, seguro_en
+        alimentacao_en, alojamento_en, seguro_en, regras_termos_en
       ] = await Promise.all([
         traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
         traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
-        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro)
+        traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.regras_termos)
       ]);
 
-      const perguntasFormatadas = formData.perguntasUI.filter(p => p.titulo.trim() !== "").map(p => {
-        if (p.tipo === 'escolha') return `ESCOLHA|${p.titulo.trim()}|${p.opcoes.trim()}`;
-        return `TEXTO|${p.titulo.trim()}`;
-      });
+      // 3. Tradução Dinâmica das Perguntas e Opções Múltiplas Customizadas (MUITO IMPORTANTE!)
+      const perguntasPtLimpas = formData.perguntasUI.filter(p => p.titulo.trim() !== "");
+      const perguntasFormatadasPT: string[] = [];
+      const perguntasFormatadasEN: string[] = [];
 
-      setStatusText("A guardar dados...");
+      for (const p of perguntasPtLimpas) {
+        const titulo_en = await traduzirParaIngles(p.titulo.trim());
+        
+        if (p.tipo === 'escolha') {
+          // Se for opção múltipla, tem de traduzir a string das opções separadas por vírgula
+          const opcoesArray = p.opcoes.split(',').map(o => o.trim());
+          const opcoesArray_en = await Promise.all(opcoesArray.map(o => traduzirParaIngles(o)));
+          
+          perguntasFormatadasPT.push(`ESCOLHA|${p.titulo.trim()}|${p.opcoes.trim()}`);
+          perguntasFormatadasEN.push(`ESCOLHA|${titulo_en}|${opcoesArray_en.join(',')}`);
+        } else {
+          perguntasFormatadasPT.push(`TEXTO|${p.titulo.trim()}`);
+          perguntasFormatadasEN.push(`TEXTO|${titulo_en}`);
+        }
+      }
+
+      setStatusText("A gravar campo...");
+
+      // 4. Gravação na Base de Dados
       const { error } = await supabase.from('campos').insert({
         organizador_id: session.user.id,
         nome: formData.nome,
@@ -271,9 +291,15 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         politica_cancelamento: formData.politica_cancelamento,
         descricao: formData.descricao,
         descricao_en,
+        regras_termos: formData.regras_termos,
+        regras_termos_en,
         imagem: capaUrl,
         galeria: uploadedUrls,
-        perguntas_customizadas: perguntasFormatadas,
+        
+        // As perguntas perfeitamente mapeadas para Inglês e Português
+        perguntas_customizadas: perguntasFormatadasPT,
+        perguntas_customizadas_en: perguntasFormatadasEN,
+
         calendario_funcionamento: formData.calendario_funcionamento,
         pacotes: formData.pacotes,
         descontos: formData.descontos,
@@ -325,17 +351,19 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
     <div className="max-w-[1000px] mx-auto p-4 md:p-8 font-sans pb-24">
 
       {/* HEADER & PROGRESS BAR */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Create New Camp' : 'Configurar Novo Campo'}</h1>
-        <div className="flex items-center gap-2 mt-6">
-          {[1, 2, 3].map((num) => (
-            <div key={num} className="flex-1 flex flex-col gap-2">
-              <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-[#167524]' : 'bg-slate-200'}`}></div>
-              <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-[#167524]' : 'text-slate-400'}`}>
-                {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual e Opções'}
-              </span>
-            </div>
-          ))}
+      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <div className="w-full sm:w-auto flex-1">
+          <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">{isEn ? 'Create New Camp' : 'Configurar Novo Campo'}</h1>
+          <div className="flex items-center gap-2 mt-6 max-w-md">
+            {[1, 2, 3].map((num) => (
+              <div key={num} className="flex-1 flex flex-col gap-2">
+                <div className={`h-2.5 rounded-full transition-all duration-500 ${step >= num ? 'bg-[#167524]' : 'bg-slate-200'}`}></div>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${step >= num ? 'text-[#167524]' : 'text-slate-400'}`}>
+                  {num === 1 ? '1. Básicos' : num === 2 ? '2. Preços' : '3. Visual e Opções'}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -354,6 +382,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 <input type="text" required placeholder="Ex: Surf Camp de Verão Caparica" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] focus:bg-white transition-colors" />
               </div>
 
+              {/* DROPDOWN CUSTOMIZADO: CATEGORIA */}
               <div className="relative">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Categoria Temática *</label>
                 <div onClick={() => setIsCatDropdownOpen(!isCatDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-[#167524]/50 transition-colors">
@@ -374,6 +403,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 )}
               </div>
 
+              {/* DROPDOWN CUSTOMIZADO: POLÍTICA CANCELAMENTO */}
               <div className="relative">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Política de Cancelamento</label>
                 <div onClick={() => setIsPolDropdownOpen(!isPolDropdownOpen)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer flex justify-between items-center hover:border-[#167524]/50 transition-colors">
@@ -412,7 +442,9 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
 
               <div className="md:col-span-2 border-t border-slate-100 pt-8 mt-2">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Localização (Morada Completa) *</label>
-                <input type="text" required placeholder="Ex: Praia da Caparica, Rua X, Setúbal" value={formData.local} onChange={e => setFormData({...formData, local: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] focus:bg-white transition-colors mb-4" />
+                <input type="text" required placeholder="Ex: Praia da Caparica, Rua X, Setúbal" value={formData.local} onChange={e => {
+                  setFormData({...formData, local: e.target.value});
+                }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] focus:bg-white transition-colors mb-4" />
 
                 <div className="w-full h-48 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative flex items-center justify-center">
                   {!formData.local ? (
@@ -435,7 +467,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         )}
 
         {/* ========================================== */}
-        {/* PASSO 2: O MOTOR DE PREÇOS E EXTRAS */}
+        {/* PASSO 2: O MOTOR DE PREÇOS E EXTRAS FINANCEIROS */}
         {/* ========================================== */}
         {step === 2 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-10">
@@ -473,11 +505,22 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                 <label className="block text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">
                   Dias de Encerramento (Exceções / Esgotado)
                 </label>
-                <p className="text-xs text-amber-700 mb-4">Adicione datas específicas (ex: feriados) em que o campo estará fechado.</p>
+                <p className="text-xs text-amber-700 mb-4">Adicione datas específicas (ex: feriados) em que o campo estará fechado. Estes dias não aparecerão disponíveis para reserva nas pesquisas.</p>
 
                 <div className="flex gap-2 mb-4">
-                  <input type="date" value={novoDiaFechado} onChange={e => setNovoDiaFechado(e.target.value)} className="flex-1 p-3 bg-white border border-amber-300 rounded-lg text-sm outline-none focus:border-amber-500" />
-                  <button type="button" onClick={adicionarDiaFechado} className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 rounded-lg transition-colors text-xs">Bloquear Dia</button>
+                  <input 
+                    type="date" 
+                    value={novoDiaFechado} 
+                    onChange={e => setNovoDiaFechado(e.target.value)} 
+                    className="flex-1 p-3 bg-white border border-amber-300 rounded-lg text-sm outline-none focus:border-amber-500" 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={adicionarDiaFechado} 
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 rounded-lg transition-colors text-xs"
+                  >
+                    Bloquear Dia
+                  </button>
                 </div>
 
                 {formData.calendario_funcionamento.dias_fechados?.length > 0 && (
@@ -514,6 +557,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                   {formData.pacotes.map((pacote, idx) => (
                     <div key={idx} className="bg-white border-2 border-slate-100 rounded-2xl p-5 relative group hover:border-[#167524]/30 transition-colors shadow-sm">
                       <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button type="button" onClick={() => { setNovoPacote(pacote); setIsPacoteModalOpen(true); }} className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs hover:bg-[#167524] hover:text-white transition-colors">✏️</button>
                         <button type="button" onClick={() => eliminarPacote(pacote.id)} className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center font-bold text-xs hover:bg-red-100">🗑️</button>
                       </div>
                       <div className="inline-block px-2 py-1 bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded mb-2">
@@ -540,6 +584,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               <p className="text-xs text-slate-500 mb-6">A alimentação e o alojamento já são mapeados em variantes. Aqui configura apenas os suplementos isolados.</p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
                 {/* EXTRA CUSTOMIZADO: SEGURO */}
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor do Seguro (€)</label>
@@ -589,6 +634,7 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                     </>
                   )}
                 </div>
+
               </div>
             </div>
 
@@ -646,21 +692,27 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400 m-0">Textos Informativos Importantes (Logística)</p>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Rácio de Monitores (Texto)</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Rácio de Monitores</label>
                   <input type="text" placeholder='Ex: "1 monitor para 6 crianças"' value={formData.racio_monitores} onChange={e => setFormData({...formData, racio_monitores: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alimentação (Texto)</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alimentação</label>
                   <input type="text" placeholder='Ex: "Almoço e lanches incluídos"' value={formData.alimentacao} onChange={e => setFormData({...formData, alimentacao: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alojamento / Dormida (Texto)</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Regime de Alojamento / Dormida</label>
                   <input type="text" placeholder='Ex: "Regime Diurno (sem dormida)"' value={formData.alojamento} onChange={e => setFormData({...formData, alojamento: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Cobertura de Seguros (Texto)</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Cobertura de Seguros</label>
                   <input type="text" placeholder='Ex: "Seguro Acidentes Pessoais incluído"' value={formData.seguro} onChange={e => setFormData({...formData, seguro: e.target.value})} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524] transition-colors" />
                 </div>
+              </div>
+
+              {/* NOVO INPUT: REGRAS E TERMOS */}
+              <div className="mt-6">
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Regras e Termos Específicos do Campo</label>
+                <textarea rows={4} placeholder="Regras de comportamento, vestuário necessário, etc. Este texto será mostrado no checkout." value={formData.regras_termos} onChange={e => setFormData({...formData, regras_termos: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-[#167524] focus:bg-white resize-none leading-relaxed transition-colors" />
               </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mt-6">
@@ -709,7 +761,9 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
               </div>
             </div>
 
-            {/* O NOVO CONSTRUTOR DE FORMULÁRIOS DINÂMICOS */}
+            {/* ========================================== */}
+            {/* O NOVO CONSTRUTOR DE FORMULÁRIOS           */}
+            {/* ========================================== */}
             <div className="pt-8 border-t border-slate-100">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <div>
@@ -783,10 +837,10 @@ export default function NovoCampoParceiro({ params }: { params: Promise<{ lang: 
         ) : <div></div>}
 
         {step < 3 ? (
-          <button onClick={nextStep} className="bg-[#167524] text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all uppercase tracking-widest text-sm">Próximo Passo →</button>
+          <button onClick={nextStep} className="bg-[#167524] text-white font-bold px-8 py-3.5 rounded-xl shadow-md hover:bg-[#115a1b] uppercase tracking-widest text-sm">Próximo Passo →</button>
         ) : (
-          <button onClick={handleGravarCampo} disabled={saving} className="bg-[#167524] text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-[#115a1b] hover:shadow-[#167524]/30 transition-all disabled:opacity-50 uppercase tracking-widest">
-            {saving ? statusText || 'A Guardar...' : '✓ Finalizar Criação do Campo'}
+          <button onClick={handleGravarCampo} disabled={saving} className="bg-[#167524] text-white font-black px-10 py-4 rounded-xl shadow-lg hover:bg-[#115a1b] transition-all disabled:opacity-50 uppercase tracking-widest">
+            {saving ? statusText || 'A Processar...' : '✓ Finalizar Criação do Campo'}
           </button>
         )}
       </div>
