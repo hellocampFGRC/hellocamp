@@ -43,13 +43,13 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       return;
     }
 
-    // 2. Pesquisar Campos (Apenas para resgatar os PDFs assinados, evitando erros de JOIN de Schema no Supabase)
+    // 2. Pesquisar Campos para resgatar os PDFs assinados
     const { data: camposData } = await supabase
       .from('campos')
       .select('organizador_id, contrato_parceiro_url')
       .not('contrato_parceiro_url', 'is', null);
 
-    // 3. Mapeamento Manual e Seguro
+    // 3. Mapeamento Seguro
     const organizadores = (perfisData || []).map(perfil => {
       const camposDoPerfil = (camposData || []).filter(c => c.organizador_id === perfil.id);
       return {
@@ -138,7 +138,6 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
   const handleGuardarEdicao = async () => {
     setSavingEdit(true);
-    // Aqui HQ apenas guarda as suas variáveis de controlo!
     const novoJsonContrato = { ...modalPerfil.contrato_dados, ...editForm };
 
     const { data: updatedPerfil, error: perfilError } = await supabase
@@ -172,19 +171,24 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   };
 
   const tabs = ['Preparação HQ', 'Pendentes de Revisão', 'Aprovado', 'Rejeitado', 'Todos'];
+  
   const contratosFiltrados = contratos.filter(c => {
+    const temAssinaturaReal = Boolean(c.contrato_dados && c.contrato_dados.assinaturaNome);
     let statusReal = c.status_contrato;
-    // Se o parceiro ainda não assinou (assinaturaNome undefined), está na fase de preparação ou aguardando.
-    if (!c.contrato_dados || !c.contrato_dados.assinaturaNome) statusReal = 'Preparação HQ';
-    else if (!statusReal || statusReal === 'Pendente' || statusReal === 'Pendente de Revisão') statusReal = 'Pendentes de Revisão';
+
+    if (!temAssinaturaReal) {
+      statusReal = 'Preparação HQ';
+    } else if (!statusReal || statusReal === 'Pendente' || statusReal === 'Pendente de Revisão') {
+      statusReal = 'Pendentes de Revisão';
+    }
 
     if (filtroStatus === 'Todos') return true;
     if (filtroStatus === 'Preparação HQ') return statusReal === 'Preparação HQ';
     if (filtroStatus === 'Pendentes de Revisão') return statusReal === 'Pendentes de Revisão';
-    return c.status_contrato === filtroStatus && c.contrato_dados?.assinaturaNome;
+    return c.status_contrato === filtroStatus && temAssinaturaReal;
   });
 
-  // Extrair PDF da Tabela Campos para o botão de visualização
+  // Extrair PDF da Tabela Campos para visualização HQ
   let pdfGlobalUrl = null;
   if (modalPerfil?.campos && Array.isArray(modalPerfil.campos)) {
     const campoComPdf = modalPerfil.campos.find((c: any) => c.contrato_parceiro_url);
@@ -205,14 +209,19 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       <div className="flex flex-wrap gap-2 mb-6">
         {tabs.map(tab => {
           const count = contratos.filter(c => {
+            const temAssinaturaReal = Boolean(c.contrato_dados && c.contrato_dados.assinaturaNome);
             let statusReal = c.status_contrato;
-            if (!c.contrato_dados || !c.contrato_dados.assinaturaNome) statusReal = 'Preparação HQ';
-            else if (!statusReal || statusReal === 'Pendente' || statusReal === 'Pendente de Revisão') statusReal = 'Pendentes de Revisão';
-            
+
+            if (!temAssinaturaReal) {
+              statusReal = 'Preparação HQ';
+            } else if (!statusReal || statusReal === 'Pendente' || statusReal === 'Pendente de Revisão') {
+              statusReal = 'Pendentes de Revisão';
+            }
+
             if (tab === 'Todos') return true;
             if (tab === 'Preparação HQ') return statusReal === 'Preparação HQ';
             if (tab === 'Pendentes de Revisão') return statusReal === 'Pendentes de Revisão';
-            return c.status_contrato === tab && c.contrato_dados?.assinaturaNome;
+            return c.status_contrato === tab && temAssinaturaReal;
           }).length;
 
           return (
@@ -239,7 +248,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
               <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold text-sm">Sem parceiros encontrados nesta categoria.</td></tr>
             ) : contratosFiltrados.map(c => {
               const dados = c.contrato_dados || {};
-              const temContrato = !!c.contrato_dados?.assinaturaNome;
+              const temContrato = Boolean(dados.assinaturaNome);
               
               let statusColor = "bg-slate-100 text-slate-600 border-slate-200";
               let statusLabel = "Preparação HQ";
@@ -468,29 +477,29 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
             <div className="px-8 py-5 border-t border-slate-200 bg-white flex flex-wrap gap-4 justify-between items-center flex-shrink-0">
               <div>
                 {!isEditing && modalPerfil.status_contrato === 'Aprovado' && (
-                  <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Pendente de Revisão')} className="text-xs font-bold text-slate-400 hover:text-slate-800 underline">Desfazer Aprovação (Reverter)</button>
+                  <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Pendente de Revisão')} className="text-xs font-bold text-slate-400 hover:text-slate-800 underline cursor-pointer">Desfazer Aprovação (Reverter)</button>
                 )}
               </div>
               
               <div className="flex gap-3 w-full sm:w-auto">
                 {isEditing ? (
                   <>
-                    <button onClick={() => setIsEditing(false)} className="flex-1 sm:flex-none bg-white border border-slate-300 text-slate-700 font-bold px-6 py-3 rounded-xl text-sm hover:bg-slate-50 transition-colors shadow-sm">Cancelar</button>
-                    <button onClick={handleGuardarEdicao} disabled={savingEdit} className="flex-1 sm:flex-none bg-[#0E3A68] text-white font-black uppercase tracking-widest px-8 py-3 rounded-xl text-[10px] shadow-lg hover:bg-[#0b2b4d] disabled:opacity-50 transition-colors">Guardar Setup (HQ)</button>
+                    <button onClick={() => setIsEditing(false)} className="flex-1 sm:flex-none bg-white border border-slate-300 text-slate-700 font-bold px-6 py-3 rounded-xl text-sm hover:bg-slate-50 transition-colors shadow-sm cursor-pointer">Cancelar</button>
+                    <button onClick={handleGuardarEdicao} disabled={savingEdit} className="flex-1 sm:flex-none bg-[#0E3A68] text-white font-black uppercase tracking-widest px-8 py-3 rounded-xl text-[10px] shadow-lg hover:bg-[#0b2b4d] disabled:opacity-50 transition-colors cursor-pointer">Guardar Setup (HQ)</button>
                   </>
                 ) : (
                   <>
                     {!modalPerfil.contrato_dados?.assinaturaNome ? (
-                      <button onClick={gerarLinkAssinatura} className="bg-slate-900 text-white font-black uppercase tracking-widest px-6 py-3 rounded-xl text-xs shadow-lg hover:bg-slate-800 transition-colors">
+                      <button onClick={gerarLinkAssinatura} className="bg-slate-900 text-white font-black uppercase tracking-widest px-6 py-3 rounded-xl text-xs shadow-lg hover:bg-slate-800 transition-colors cursor-pointer">
                          🔗 Obter Link de Assinatura
                       </button>
                     ) : (
                       <>
                         {modalPerfil.status_contrato !== 'Rejeitado' && (
-                          <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Rejeitado')} className="bg-white border border-red-200 text-red-600 font-bold px-6 py-3 rounded-xl text-sm hover:bg-red-50 transition-colors shadow-sm">Rejeitar Acordo</button>
+                          <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Rejeitado')} className="bg-white border border-red-200 text-red-600 font-bold px-6 py-3 rounded-xl text-sm hover:bg-red-50 transition-colors shadow-sm cursor-pointer">Rejeitar Acordo</button>
                         )}
                         {modalPerfil.status_contrato !== 'Aprovado' && (
-                          <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Aprovado')} className="bg-emerald-600 text-white font-black uppercase tracking-widest px-8 py-3 rounded-xl text-xs shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 transition-colors ml-4">
+                          <button onClick={() => handleAcaoContrato(modalPerfil.id, 'Aprovado')} className="bg-emerald-600 text-white font-black uppercase tracking-widest px-8 py-3 rounded-xl text-xs shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 transition-colors ml-4 cursor-pointer">
                             Validar e Aprovar Parceiro
                           </button>
                         )}
@@ -508,14 +517,14 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
       {showShareModal && (
         <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-4 backdrop-blur-md">
           <div className="bg-white w-full max-w-lg rounded-[2rem] flex flex-col overflow-hidden shadow-2xl p-8 relative">
-            <button onClick={() => setShowShareModal(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 flex items-center justify-center font-black transition-colors">&times;</button>
+            <button onClick={() => setShowShareModal(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 flex items-center justify-center font-black transition-colors cursor-pointer">&times;</button>
             <h2 className="text-xl font-black text-slate-900 mb-2 tracking-tight">Link de Assinatura Único</h2>
             <p className="text-sm font-medium text-slate-500 mb-6">Envie este link seguro para o Parceiro rever as condições operacionais fixadas, adicionar a morada/NIF da empresa e assinar o Acordo Digitalmente.</p>
             
             <div className="flex flex-col gap-5">
               <div className="flex gap-2">
                 <input readOnly value={shareUrl} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none shadow-inner" onClick={(e) => (e.target as HTMLInputElement).select()} />
-                <button onClick={copyToClipboard} className={`px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-colors shadow-md ${copied ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
+                <button onClick={copyToClipboard} className={`px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-colors shadow-md cursor-pointer ${copied ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
                   {copied ? 'Copiado' : 'Copiar'}
                 </button>
               </div>
@@ -524,7 +533,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                 <a href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue o link exclusivo para validação e assinatura digital do Acordo Operacional HelloCamp:\n\n${shareUrl}`)}`} target="_blank" rel="noopener noreferrer" className="flex-1 py-3.5 bg-[#25D366] hover:bg-[#20bd5a] text-white font-black text-xs uppercase tracking-widest rounded-xl text-center shadow-md transition-colors no-underline">
                   💬 WhatsApp
                 </a>
-                <a href={`mailto:?subject=${encodeURIComponent(`Assinatura de Acordo Operacional HelloCamp`)}&body=${encodeURIComponent(`Olá,\n\nSegue o link seguro para validação e assinatura digital do Acordo Operacional com a HelloCamp.\n\nAceda através deste link:\n${shareUrl}\n\nObrigado,\nEquipa HelloCamp`)}`} className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest rounded-xl text-center shadow-md transition-colors no-underline">
+                <a href={`mailto:?subject=${encodeURIComponent(`Assinatura de Acordo Operacional HelloCamp`)}&body=${encodeURIComponent(`Olá,\n\nSegue o link seguro para validação e assinatura digital do Acordo Operacional com a HelloCamp.\n\nAceda através deste link:\n${shareUrl}\n\nObrigado,\nEquipa HelloCamp`)}` } className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest rounded-xl text-center shadow-md transition-colors no-underline">
                   ✉️ E-mail
                 </a>
               </div>
