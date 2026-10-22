@@ -15,6 +15,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [perfil, setPerfil] = useState<any>(null);
+  const [campoNome, setCampoNome] = useState<string>("Vários Programas");
   const [jaAssinado, setJaAssinado] = useState(false);
   const [pdfGeradoUrl, setPdfGeradoUrl] = useState<string | null>(null);
 
@@ -35,6 +36,10 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
   const [assinaturaNome, setAssinaturaNome] = useState("");
   const [assinaturaCargo, setAssinaturaCargo] = useState("");
   const [concordaTermos, setConcordaTermos] = useState(false);
+
+  // Novos campos para a password final da conta
+  const [novaPassword, setNovaPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [taxaComissao, setTaxaComissao] = useState(12);
   const [baseComissao, setBaseComissao] = useState("total");
@@ -62,6 +67,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
 
       const { data: campoData } = await supabase.from("campos").select("nome, contrato_parceiro_url").eq("organizador_id", id);
       if (campoData && campoData.length > 0) {
+        setCampoNome(campoData[0].nome);
         const campoComPdf = campoData.find(c => c.contrato_parceiro_url);
         if (campoComPdf && data.contrato_dados?.assinaturaNome) {
            setJaAssinado(true);
@@ -231,6 +237,8 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     if (!concordaTermos) return alert(contractLang === 'pt' ? "Tem de aceitar os termos do contrato." : "You must accept the terms of the contract.");
     if (!assinaturaNome || !assinaturaCargo) return alert(contractLang === 'pt' ? "A assinatura digital é obrigatória." : "The digital signature is mandatory.");
     if (!empresaNome || !nif || !morada) return alert(contractLang === 'pt' ? "Dados Fiscais incompletos." : "Incomplete Fiscal Data.");
+    if (novaPassword.length < 6) return alert(contractLang === 'pt' ? "A password deve ter pelo menos 6 caracteres." : "The password must be at least 6 characters long.");
+    if (novaPassword !== confirmPassword) return alert(contractLang === 'pt' ? "As passwords não coincidem." : "The passwords do not match.");
 
     if (modalidadeReserva === 'link_externo' && !linkExternoReserva) {
       alert(contractLang === 'pt' ? "Por favor preencha o Link Externo Oficial." : "Please fill in the Official External Link.");
@@ -259,19 +267,17 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     };
 
     try {
-      // 1. Gera PDF em formato Blob e converte para File
       const pdfBlob = await gerarEGuardarPDF(userIP, timestampAtual);
       const pdfFile = new File([pdfBlob], `contrato.pdf`, { type: "application/pdf" });
 
-      // 2. Prepara o FormData para enviar de forma segura à API interna
       const formData = new FormData();
       formData.append('id', id);
       formData.append('email', inputEmail);
       formData.append('lang', contractLang);
       formData.append('contratoDados', JSON.stringify(contratoFinal));
+      formData.append('password', novaPassword);
       formData.append('pdf', pdfFile);
 
-      // 3. Submete o pedido à API Backend (que agora Aprova a conta automaticamente)
       const response = await fetch('/api/contratos/assinar', {
         method: 'POST',
         body: formData,
@@ -283,9 +289,20 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
         throw new Error(result.error || "Ocorreu um erro ao processar a assinatura.");
       }
 
-      setJaAssinado(true);
-      setPdfGeradoUrl(result.url);
-      alert(contractLang === 'pt' ? "Contrato assinado com sucesso! A sua conta e programas estão agora ativos." : "Contract signed successfully! Your account and programs are now active.");
+      // LOGIN AUTOMÁTICO SE TUDO CORRER BEM
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: inputEmail,
+        password: novaPassword,
+      });
+
+      if (signInError) {
+        // Se falhar o login, mas assinou com sucesso, redireciona para a página de login
+        alert(contractLang === 'pt' ? "Contrato assinado! Redirecionando para login." : "Contract signed! Redirecting to login.");
+        router.push(`/${lang}/admin/login`);
+      } else {
+        // Se fizer login com sucesso, atira direto para o Dashboard!
+        router.push(`/${lang}/admin/dashboard`);
+      }
       
     } catch (err: any) {
       alert("Erro: " + err.message);
@@ -358,7 +375,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     <main className="min-h-screen bg-slate-50 py-12 px-4 font-sans text-slate-900 selection:bg-yellow-200">
       <div className="max-w-4xl mx-auto bg-white rounded-[2rem] shadow-xl border border-slate-200 overflow-hidden relative">
         
-        {/* CABEÇALHO DO CONTRATO */}
+        {/* CABEÇALHO DO CONTRATO COM TOGGLE DE LÍNGUA */}
         <div className="bg-[#0E3A68] p-10 md:p-12 text-center relative overflow-hidden">
           <div className="absolute top-4 right-6 z-20 flex bg-blue-900/50 p-1 rounded-lg border border-blue-400/30">
             <button onClick={() => setContractLang('pt')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${contractLang === 'pt' ? 'bg-white text-[#0E3A68]' : 'text-white hover:bg-blue-800'}`}>PT</button>
@@ -590,9 +607,24 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
               </div>
             </section>
 
-            {/* 4. ASSINATURA DIGITAL E ACEITAÇÃO */}
+            {/* 4. CONFIGURAÇÃO DE PASSWORD E ASSINATURA */}
             <section className="mb-8 font-sans">
               <div className="bg-[#059669]/5 border-2 border-[#059669]/20 rounded-[2rem] p-6 md:p-8">
+                
+                <h2 className="text-xl font-black text-emerald-900 mb-2 tracking-tight flex items-center gap-2"><span>🔑</span> {contractLang === 'pt' ? 'Crie a sua Palavra-Passe' : 'Create your Password'}</h2>
+                <p className="text-xs font-medium text-emerald-700/80 mb-6">{contractLang === 'pt' ? 'Ao definir a sua palavra-passe e assinar, fará login automático no seu painel de gestão privado.' : 'By setting your password and signing, you will be automatically logged into your private dashboard.'}</p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10 pb-10 border-b border-emerald-200/50">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-emerald-800 mb-2">{contractLang === 'pt' ? 'Palavra-Passe *' : 'Password *'}</label>
+                    <input required type="password" minLength={6} value={novaPassword} onChange={e => setNovaPassword(e.target.value)} className="w-full p-4 bg-white border border-emerald-200 rounded-xl text-sm font-bold text-emerald-900 outline-none focus:border-emerald-500 shadow-sm" placeholder="••••••••" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-emerald-800 mb-2">{contractLang === 'pt' ? 'Confirmar Palavra-Passe *' : 'Confirm Password *'}</label>
+                    <input required type="password" minLength={6} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full p-4 bg-white border border-emerald-200 rounded-xl text-sm font-bold text-emerald-900 outline-none focus:border-emerald-500 shadow-sm" placeholder="••••••••" />
+                  </div>
+                </div>
+
                 <h2 className="text-xl font-black text-emerald-900 mb-2 tracking-tight flex items-center gap-2"><span>✍️</span> {contractLang === 'pt' ? 'Assinatura Digital' : 'Digital Signature'}</h2>
                 <p className="text-xs font-medium text-emerald-700/80 mb-6">{contractLang === 'pt' ? 'A assinatura deste documento tem validade legal probatória através da gravação de Timestamp e Endereço IP do signatário.' : 'The signature of this document has evidential legal validity through the recording of the signatory’s Timestamp and IP Address.'}</p>
 
@@ -625,7 +657,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
             </section>
 
             <button type="submit" disabled={submitting} className="w-full py-5 text-sm uppercase tracking-widest font-black rounded-2xl border-none text-white bg-[#0E3A68] hover:bg-[#0b2b4d] transition-all shadow-xl shadow-[#0E3A68]/30 hover:-translate-y-1 cursor-pointer disabled:opacity-50 font-sans">
-              {submitting ? (contractLang === 'pt' ? 'A Processar Documento Legal...' : 'Processing Legal Document...') : (contractLang === 'pt' ? 'Assinar Digitalmente Acordo' : 'Digitally Sign Agreement')}
+              {submitting ? (contractLang === 'pt' ? 'A Processar Documento e Criar Conta...' : 'Processing Document & Creating Account...') : (contractLang === 'pt' ? 'Assinar Digitalmente e Aceder ao Painel' : 'Digitally Sign and Access Dashboard')}
             </button>
           </form>
         )}

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Usar o Service Role Key para ignorar o RLS e garantir o upload do PDF
+// Usar o Service Role Key para ignorar o RLS e garantir o upload do PDF e gestão Auth
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -66,9 +66,10 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const id = formData.get('id') as string;
-    const emailAcesso = formData.get('email') as string; // O e-mail usado no Gatekeeper
+    const emailAcesso = formData.get('email') as string; 
     const lang = formData.get('lang') as string || 'en';
     const contratoDadosStr = formData.get('contratoDados') as string;
+    const passwordNova = formData.get('password') as string; // Nova password definida pelo parceiro
     const pdfFile = formData.get('pdf') as File;
 
     if (!id || !emailAcesso || !contratoDadosStr || !pdfFile) {
@@ -91,7 +92,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Tentativa de submissão não autorizada. O e-mail não corresponde.' }, { status: 403 });
     }
 
-    // 2. Upload do PDF
+    // 2. Atualizar Palavra-Passe no Supabase Auth
+    if (passwordNova) {
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        password: passwordNova,
+        email_confirm: true // Garante que a conta fica verificada para login imediato
+      });
+      if (authError) throw new Error(`Erro ao configurar palavra-passe: ${authError.message}`);
+    }
+
+    // 3. Upload do PDF
     const fileName = `contrato_global_${id}_${Date.now()}.pdf`;
     const arrayBuffer = await pdfFile.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -106,13 +116,13 @@ export async function POST(request: Request) {
       .from('campos-documentos').getPublicUrl(fileName);
     const contratoUrl = publicUrlData.publicUrl;
 
-    // 3. Atualizar Tabela Perfis (Aprova a Conta IMEDIATAMENTE)
+    // 4. Atualizar Tabela Perfis (Aprova a Conta IMEDIATAMENTE)
     await supabaseAdmin.from('perfis').update({
       empresa_nome: contratoDados.empresaNome,
       nif_empresa: contratoDados.nif,
       nome_completo: contratoDados.pessoaContacto,
       telefone: contratoDados.telefone,
-      status_contrato: 'Aprovado', // APROVAÇÃO AUTOMÁTICA
+      status_contrato: 'Aprovado',
       parceiro_verificado: true,
       contrato_dados: contratoDados,
       modalidade_reserva: contratoDados.modalidadeReserva,
@@ -120,10 +130,10 @@ export async function POST(request: Request) {
       base_comissao: contratoDados.baseComissao
     }).eq('id', id);
 
-    // 4. Atualizar Tabela Campos (Ativa os campos na plataforma instantaneamente)
+    // 5. Atualizar Tabela Campos (Ativa os campos instantaneamente)
     await supabaseAdmin.from('campos').update({
-      status_aprovacao: 'Aprovado', // APROVAÇÃO AUTOMÁTICA
-      ativo: true, // METE LOGO ONLINE
+      status_aprovacao: 'Aprovado',
+      ativo: true,
       contrato_dados: contratoDados,
       contrato_parceiro_url: contratoUrl,
       modalidade_reserva: contratoDados.modalidadeReserva,
@@ -133,7 +143,7 @@ export async function POST(request: Request) {
       base_comissao: contratoDados.baseComissao
     }).eq('organizador_id', id);
 
-    // 5. Enviar Email de Boas-Vindas ao Parceiro com o PDF
+    // 6. Enviar Email de Boas-Vindas ao Parceiro com o PDF
     await enviarEmailBoasVindas(contratoDados.emailContacto || emailAcesso, contratoDados.empresaNome, contratoUrl, lang);
 
     return NextResponse.json({ success: true, url: contratoUrl });
