@@ -7,14 +7,27 @@ import Link from "next/link";
 import imageCompression from 'browser-image-compression';
 import React from "react";
 
+// ==========================================
+// 1. TIPAGENS E CONSTANTES
+// ==========================================
 type ImagePreview = { file?: File; url?: string; preview: string; isMain: boolean; };
-interface Variante { nome: string; preco: number; }
-interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; }
-interface Desconto { id: string; nome: string; percentagem: number; acumulavel: boolean; }
+interface Variante { nome: string; preco: number; nome_en?: string; }
+interface Pacote { id: string; titulo: string; tipo: 'semana' | 'dia'; quantidade: number; variantes: Variante[]; titulo_en?: string; }
+interface Desconto { id: string; nome: string; percentagem: number; acumulavel: boolean; nome_en?: string; }
+interface PerguntaUI { id: string; tipo: 'texto' | 'escolha'; titulo: string; opcoes: string; }
 
 const DIAS_SEMANA = [
   { id: 1, pt: 'Seg' }, { id: 2, pt: 'Ter' }, { id: 3, pt: 'Qua' }, 
   { id: 4, pt: 'Qui' }, { id: 5, pt: 'Sex' }, { id: 6, pt: 'Sáb' }, { id: 0, pt: 'Dom' }
+];
+
+const CATEGORIAS = [
+  { id: 'Desporto', icon: '⚽', pt: 'Desporto Geral', en: 'Sports' },
+  { id: 'Surf', icon: '🏄', pt: 'Surf / Desportos Aquáticos', en: 'Surf & Water Sports' },
+  { id: 'Robotica', icon: '🤖', pt: 'Tecnologia & Robótica', en: 'Tech & Robotics' },
+  { id: 'Aventura', icon: '⛺', pt: 'Natureza & Aventura', en: 'Nature & Adventure' },
+  { id: 'Artes', icon: '🎨', pt: 'Artes & Teatro', en: 'Arts & Theater' },
+  { id: 'Linguas', icon: '🇬🇧', pt: 'Línguas', en: 'Languages' },
 ];
 
 const sanitizeFileName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.\-]/g, "_");
@@ -43,15 +56,12 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
   const [pais, setPais] = useState("Portugal");
   const [linguas, setLinguas] = useState({ pt: false, en: false, es: false, fr: false, de: false });
 
-  const [pacotes, setPacotes] = useState<Pacote[]>([]);
-  const [descontos, setDescontos] = useState<Desconto[]>([]);
-  const [perguntas, setPerguntas] = useState<string[]>([]);
-
   const [isPacoteModalOpen, setIsPacoteModalOpen] = useState(false);
   const [novoPacote, setNovoPacote] = useState<Pacote>({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
 
   const [isDescontoModalOpen, setIsDescontoModalOpen] = useState(false);
   const [novoDesconto, setNovoDesconto] = useState<Desconto>({ id: "", nome: "", percentagem: 10, acumulavel: false });
+  const [novoDiaFechado, setNovoDiaFechado] = useState("");
 
   const [formData, setFormData] = useState({
     nome: "", categoria: "", local: "", Distrito: "", 
@@ -64,16 +74,35 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     status_aprovacao: "Pendente de Revisão", 
     modalidade_reserva: "direta", link_externo_reserva: "",
     tipo_pagamento: "100_total", politica_cancelamento: "Moderada (Reembolso a 50% até 15 dias antes)",
-    calendario_funcionamento: { data_inicio: "", data_fim: "", dias_semana: [1, 2, 3, 4, 5] }
+    calendario_funcionamento: { data_inicio: "", data_fim: "", dias_semana: [1, 2, 3, 4, 5], dias_fechados: [] as string[] },
+    pacotes: [] as Pacote[],
+    descontos: [] as Desconto[],
+    perguntasUI: [] as PerguntaUI[]
   });
 
   const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
   const paises = [{ pt: "Portugal", en: "Portugal" }, { pt: "Espanha", en: "Spain" }, { pt: "França", en: "France" }, { pt: "Reino Unido", en: "United Kingdom" }, { pt: "Brasil", en: "Brazil" }, { pt: "Estados Unidos", en: "United States" }, { pt: "Outro", en: "Other" }];
 
+  // ==========================================
+  // 2. CARREGAR DADOS INICIAIS
+  // ==========================================
   useEffect(() => {
     const fetchCampo = async () => {
       const { data, error } = await supabase.from('campos').select('*').eq('id', id).single();
       if (data) {
+        
+        // Parse de Perguntas para o construtor UI
+        const parsedPerguntas: PerguntaUI[] = (data.perguntas_customizadas || []).map((p: string) => {
+          if (p.startsWith('ESCOLHA|')) {
+            const parts = p.split('|');
+            return { id: Math.random().toString(), tipo: 'escolha', titulo: parts[1] || '', opcoes: parts[2] || '' };
+          } else if (p.startsWith('TEXTO|')) {
+            return { id: Math.random().toString(), tipo: 'texto', titulo: p.split('|')[1] || '', opcoes: '' };
+          } else {
+            return { id: Math.random().toString(), tipo: 'texto', titulo: p, opcoes: '' };
+          }
+        });
+
         setFormData({ 
           nome: data.nome || "", categoria: data.categoria || "", local: data.local || "", Distrito: data.Distrito || "",
           idade_min: data.idade_min || 6, idade_max: data.idade_max || 14, vagas_totais: data.vagas_totais || 50,
@@ -85,27 +114,35 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
           contrato_parceiro_url: data.contrato_parceiro_url || '', modalidade_reserva: data.modalidade_reserva || 'direta',
           link_externo_reserva: data.link_externo_reserva || '', tipo_pagamento: data.tipo_pagamento || '100_total',
           politica_cancelamento: data.politica_cancelamento || 'Moderada (Reembolso a 50% até 15 dias antes)',
-          calendario_funcionamento: data.calendario_funcionamento || { data_inicio: "", data_fim: "", dias_semana: [1, 2, 3, 4, 5] },
+          calendario_funcionamento: { 
+            data_inicio: data.calendario_funcionamento?.data_inicio || "", 
+            data_fim: data.calendario_funcionamento?.data_fim || "", 
+            dias_semana: data.calendario_funcionamento?.dias_semana || [1, 2, 3, 4, 5],
+            dias_fechados: data.calendario_funcionamento?.dias_fechados || []
+          },
           status_aprovacao: data.status_aprovacao || 'Pendente de Revisão',
+          pacotes: data.pacotes || [],
+          descontos: data.descontos || [],
+          perguntasUI: parsedPerguntas
         });
         
         setOrganizadorId(data.organizador_id);
-        
         if (data.organizador_id) {
           const { data: perfilData } = await supabase.from('perfis').select('status_contrato').eq('id', data.organizador_id).single();
           if (perfilData) setStatusContratoGlobal(perfilData.status_contrato);
         }
 
-        setPacotes(data.pacotes || []); setDescontos(data.descontos || []); setPerguntas(data.perguntas_customizadas || []);
         if (data.pais) setPais(data.pais);
         if (data.latitude && data.longitude) setMapPreview({ lat: data.latitude, lon: data.longitude });
         if (data.linguas_faladas) {
           setLinguas({ pt: data.linguas_faladas.includes("Português"), en: data.linguas_faladas.includes("Inglês"), es: data.linguas_faladas.includes("Espanhol"), fr: data.linguas_faladas.includes("Francês"), de: data.linguas_faladas.includes("Alemão") });
         }
+        
         const loadedImages: ImagePreview[] = [];
         if (data.imagem) loadedImages.push({ url: data.imagem, preview: data.imagem, isMain: true });
         if (data.galeria && Array.isArray(data.galeria)) data.galeria.forEach((url: string) => loadedImages.push({ url, preview: url, isMain: false }));
         setImages(loadedImages);
+        
         if (data.programas_pdf && Array.isArray(data.programas_pdf)) setDocumentosExistentes(data.programas_pdf);
       }
       setLoading(false);
@@ -113,13 +150,15 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     fetchCampo();
   }, [id]);
 
+  // ==========================================
+  // 3. HANDLERS GERAIS E MULTIMÉDIA
+  // ==========================================
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newImages = Array.from(e.target.files).map((file, index) => ({ file, preview: URL.createObjectURL(file), isMain: images.length === 0 && index === 0 }));
       setImages(prev => [...prev, ...newImages]);
     }
   };
-
   const removeImage = (indexToRemove: number) => {
     setImages(prev => {
       const newImages = prev.filter((_, idx) => idx !== indexToRemove);
@@ -132,7 +171,6 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
   const handleDocSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) setDocumentos(prev => [...prev, ...Array.from(e.target.files as FileList)]); };
   const removeNovoDoc = (indexToRemove: number) => setDocumentos(prev => prev.filter((_, idx) => idx !== indexToRemove));
   const removeDocExistente = (indexToRemove: number) => setDocumentosExistentes(prev => prev.filter((_, idx) => idx !== indexToRemove));
-
   const handleContratoSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files.length > 0) setContratoFile(e.target.files[0]); };
 
   const handleLinguasChange = (langKey: keyof typeof linguas) => setLinguas(prev => ({ ...prev, [langKey]: !prev[langKey] }));
@@ -141,43 +179,6 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     if (linguas.pt) ativas.push("Português"); if (linguas.en) ativas.push("Inglês"); if (linguas.es) ativas.push("Espanhol"); if (linguas.fr) ativas.push("Francês"); if (linguas.de) ativas.push("Alemão");
     return ativas.join(", ");
   };
-
-  const toggleDiaSemana = (diaId: number) => {
-    const dias = formData.calendario_funcionamento.dias_semana.includes(diaId)
-      ? formData.calendario_funcionamento.dias_semana.filter((d: number) => d !== diaId)
-      : [...formData.calendario_funcionamento.dias_semana, diaId].sort();
-    setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, dias_semana: dias } });
-  };
-
-  const addPergunta = () => setPerguntas([...perguntas, ""]);
-  const removePergunta = (index: number) => setPerguntas(perguntas.filter((_, i) => i !== index));
-  const updatePergunta = (index: number, value: string) => setPerguntas(perguntas.map((p, i) => i === index ? value : p));
-
-  const atualizarVariante = (index: number, campo: 'nome' | 'preco', valor: string | number) => {
-    const novasVariantes = [...novoPacote.variantes];
-    novasVariantes[index] = { ...novasVariantes[index], [campo]: valor } as Variante;
-    setNovoPacote({ ...novoPacote, variantes: novasVariantes });
-  };
-  const adicionarVariante = () => setNovoPacote(prev => ({ ...prev, variantes: [...prev.variantes, { nome: "", preco: 0 }] }));
-  const removerVariante = (index: number) => setNovoPacote(prev => ({ ...prev, variantes: prev.variantes.filter((_, i) => i !== index) }));
-
-  const guardarPacote = () => {
-    if (!novoPacote.titulo || novoPacote.variantes.length === 0) return alert("Preencha o título e pelo menos 1 preço.");
-    const pacoteFinal: Pacote = { ...novoPacote, id: novoPacote.id || Math.random().toString(36).substring(2, 9) };
-    const novosPacotes = novoPacote.id ? pacotes.map((p: Pacote) => p.id === novoPacote.id ? pacoteFinal : p) : [...pacotes, pacoteFinal];
-    setPacotes(novosPacotes); setIsPacoteModalOpen(false);
-    setNovoPacote({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
-  };
-  const eliminarPacote = (id: string) => setPacotes(pacotes.filter(p => p.id !== id));
-
-  const guardarDesconto = () => {
-    if (!novoDesconto.nome || novoDesconto.percentagem <= 0) return alert("Preencha o nome e um valor superior a 0.");
-    const descontoFinal = { ...novoDesconto, id: novoDesconto.id || Math.random().toString(36).substring(2, 9) };
-    const novosDescontos = novoDesconto.id ? descontos.map((d: Desconto) => d.id === novoDesconto.id ? descontoFinal : d) : [...descontos, descontoFinal];
-    setDescontos(novosDescontos); setIsDescontoModalOpen(false);
-    setNovoDesconto({ id: "", nome: "", percentagem: 10, acumulavel: false });
-  };
-  const eliminarDesconto = (id: string) => setDescontos(descontos.filter(d => d.id !== id));
 
   const buscarNoMapaManual = async () => {
     if (formData.local.length < 3) return;
@@ -191,6 +192,69 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     setAddressSuggestions([]);
   };
 
+  // ==========================================
+  // 4. HANDLERS DE CALENDÁRIO, PACOTES E PERGUNTAS
+  // ==========================================
+  const toggleDiaSemana = (diaId: number) => {
+    const dias = formData.calendario_funcionamento.dias_semana.includes(diaId)
+      ? formData.calendario_funcionamento.dias_semana.filter((d: number) => d !== diaId)
+      : [...formData.calendario_funcionamento.dias_semana, diaId].sort();
+    setFormData({ ...formData, calendario_funcionamento: { ...formData.calendario_funcionamento, dias_semana: dias } });
+  };
+
+  const adicionarDiaFechado = () => {
+    if (!novoDiaFechado) return;
+    const diasAtuais = formData.calendario_funcionamento.dias_fechados || [];
+    if (!diasAtuais.includes(novoDiaFechado)) {
+      setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, dias_fechados: [...diasAtuais, novoDiaFechado].sort() }});
+    }
+    setNovoDiaFechado("");
+  };
+
+  const removerDiaFechado = (diaParaRemover: string) => {
+    const diasAtuais = formData.calendario_funcionamento.dias_fechados || [];
+    setFormData({...formData, calendario_funcionamento: {...formData.calendario_funcionamento, dias_fechados: diasAtuais.filter(d => d !== diaParaRemover) }});
+  };
+
+  const atualizarVariante = (index: number, campo: 'nome' | 'preco', valor: string | number) => {
+    const novasVariantes = [...novoPacote.variantes];
+    novasVariantes[index] = { ...novasVariantes[index], [campo]: valor } as Variante;
+    setNovoPacote({ ...novoPacote, variantes: novasVariantes });
+  };
+  const adicionarVariante = () => setNovoPacote(prev => ({ ...prev, variantes: [...prev.variantes, { nome: "", preco: 0 }] }));
+  const removerVariante = (index: number) => setNovoPacote(prev => ({ ...prev, variantes: prev.variantes.filter((_, i) => i !== index) }));
+
+  const guardarPacote = () => {
+    if (!novoPacote.titulo || novoPacote.variantes.length === 0) return alert("Preencha o título e pelo menos 1 preço.");
+    const pacoteFinal: Pacote = { ...novoPacote, id: novoPacote.id || Math.random().toString(36).substring(2, 9) };
+    const novosPacotes = novoPacote.id ? formData.pacotes.map((p: Pacote) => p.id === novoPacote.id ? pacoteFinal : p) : [...formData.pacotes, pacoteFinal];
+    setFormData({ ...formData, pacotes: novosPacotes });
+    setIsPacoteModalOpen(false);
+    setNovoPacote({ id: "", titulo: "", tipo: "semana", quantidade: 1, variantes: [{ nome: "Bilhete Base", preco: 0 }] });
+  };
+  const eliminarPacote = (id: string) => setFormData(prev => ({...prev, pacotes: prev.pacotes.filter(p => p.id !== id)}));
+
+  const guardarDesconto = () => {
+    if (!novoDesconto.nome || novoDesconto.percentagem <= 0) return alert("Preencha o nome e um valor superior a 0.");
+    const descontoFinal = { ...novoDesconto, id: novoDesconto.id || Math.random().toString(36).substring(2, 9) };
+    const novosDescontos = novoDesconto.id ? formData.descontos.map((d: Desconto) => d.id === novoDesconto.id ? descontoFinal : d) : [...formData.descontos, descontoFinal];
+    setFormData({ ...formData, descontos: novosDescontos });
+    setIsDescontoModalOpen(false);
+    setNovoDesconto({ id: "", nome: "", percentagem: 10, acumulavel: false });
+  };
+  const eliminarDesconto = (id: string) => setFormData(prev => ({...prev, descontos: prev.descontos.filter(d => d.id !== id)}));
+
+  const adicionarPergunta = (tipo: 'texto' | 'escolha') => {
+    setFormData(prev => ({ ...prev, perguntasUI: [...prev.perguntasUI, { id: Math.random().toString(), tipo, titulo: "", opcoes: "" }] }));
+  };
+  const removerPergunta = (id: string) => setFormData(prev => ({ ...prev, perguntasUI: prev.perguntasUI.filter(p => p.id !== id) }));
+  const atualizarPergunta = (id: string, campo: 'titulo' | 'opcoes', valor: string) => {
+    setFormData(prev => ({ ...prev, perguntasUI: prev.perguntasUI.map(p => p.id === id ? { ...p, [campo]: valor } : p) }));
+  };
+
+  // ==========================================
+  // TRADUÇÃO IA
+  // ==========================================
   const traduzirParaIngles = async (texto: string) => {
     if (!texto) return "";
     try {
@@ -200,14 +264,18 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
     } catch (e) { return texto; }
   };
 
+  // ==========================================
+  // 5. ATUALIZAÇÃO E GRAVAÇÃO GLOBAL NA DB
+  // ==========================================
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    
     if (images.length === 0) { alert("Adicione pelo menos uma fotografia."); setSaving(false); return; }
 
     try {
       setStatusText("A processar media...");
+      
+      // Upload de Imagens
       const uploadedImages = await Promise.all(images.map(async (img) => {
         if (!img.file) return { url: img.url, isMain: img.isMain };
         const compressedFile = await imageCompression(img.file, { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true });
@@ -221,6 +289,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       const mainImageUrl = uploadedImages.find(i => i.isMain)?.url || uploadedImages[0]?.url;
       const galeriaUrls = uploadedImages.filter(i => !i.isMain).map(i => i.url);
 
+      // Upload de Documentos Anexos
       const novosDocs = await Promise.all(documentos.map(async (doc) => {
         const fileName = `${Date.now()}-${sanitizeFileName(doc.name)}`;
         const { error } = await supabase.storage.from('campos-documentos').upload(fileName, doc);
@@ -230,6 +299,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       }));
       const programasDocsFinais = [...documentosExistentes, ...novosDocs];
 
+      // Upload do Contrato (Se HQ adicionar um novo)
       let urlContratoFinal = formData.contrato_parceiro_url;
       if (contratoFile) {
         const fileContratoName = `contrato-${Date.now()}-${sanitizeFileName(contratoFile.name)}`;
@@ -238,52 +308,116 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         urlContratoFinal = supabase.storage.from('campos-documentos').getPublicUrl(fileContratoName).data.publicUrl;
       }
 
-      setStatusText("A traduzir textos...");
+      setStatusText("A traduzir textos globais...");
       const linguasFinais = getLinguasString();
 
+      // Tradução Estática
       const [
         nome_en, categoria_en, local_en, descricao_en,
-        alimentacao_en, alojamento_en, seguro_en, Distrito_en, regras_termos_en
+        alimentacao_en, alojamento_en, seguro_en, Distrito_en, 
+        regras_termos_en, politica_cancelamento_en
       ] = await Promise.all([
         traduzirParaIngles(formData.nome), traduzirParaIngles(formData.categoria), traduzirParaIngles(formData.local),
         traduzirParaIngles(formData.descricao), traduzirParaIngles(formData.alimentacao),
         traduzirParaIngles(formData.alojamento), traduzirParaIngles(formData.seguro), traduzirParaIngles(formData.Distrito),
-        traduzirParaIngles(formData.regras_termos)
+        traduzirParaIngles(formData.regras_termos), traduzirParaIngles(formData.politica_cancelamento)
       ]);
+
+      setStatusText("A traduzir pacotes, perguntas e opções...");
+
+      // Tradução Dinâmica Perguntas / Opções
+      const perguntasPtLimpas = formData.perguntasUI.filter(p => p.titulo.trim() !== "");
+      const perguntasFormatadasPT: string[] = [];
+      const perguntasFormatadasEN: string[] = [];
+
+      for (const p of perguntasPtLimpas) {
+        const titulo_en = await traduzirParaIngles(p.titulo.trim());
+        if (p.tipo === 'escolha') {
+          const opcoesArray = p.opcoes.split(',').map(o => o.trim());
+          const opcoesArray_en = await Promise.all(opcoesArray.map(o => traduzirParaIngles(o)));
+          perguntasFormatadasPT.push(`ESCOLHA|${p.titulo.trim()}|${p.opcoes.trim()}`);
+          perguntasFormatadasEN.push(`ESCOLHA|${titulo_en}|${opcoesArray_en.join(',')}`);
+        } else {
+          perguntasFormatadasPT.push(`TEXTO|${p.titulo.trim()}`);
+          perguntasFormatadasEN.push(`TEXTO|${titulo_en}`);
+        }
+      }
+
+      // Tradução Dinâmica Pacotes / Variantes
+      const pacotesFormatados = await Promise.all(formData.pacotes.map(async (pac) => {
+        const titulo_en = await traduzirParaIngles(pac.titulo);
+        const variantes_en = await Promise.all(pac.variantes.map(async (varis) => {
+          const var_nome_en = await traduzirParaIngles(varis.nome);
+          return { ...varis, nome_en: var_nome_en };
+        }));
+        return { ...pac, titulo_en, variantes: variantes_en };
+      }));
+
+      // Tradução Descontos
+      const descontosFormatados = await Promise.all(formData.descontos.map(async (desc) => {
+        const nome_en = await traduzirParaIngles(desc.nome);
+        return { ...desc, nome_en };
+      }));
 
       const taxaFinal = formData.taxa_comissao === '' ? null : Number(formData.taxa_comissao);
       const baseFinal = formData.base_comissao === '' ? null : formData.base_comissao;
-      const perguntasLimpas = perguntas.filter(p => p.trim() !== "");
 
       let precoMinimo = 0;
-      if (pacotes && pacotes.length > 0) {
-        const todosPrecos = pacotes.flatMap((p: Pacote) => p.variantes.map((v: Variante) => v.preco));
+      if (formData.pacotes.length > 0) {
+        const todosPrecos = formData.pacotes.flatMap(p => p.variantes.map(v => v.preco));
         if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
       }
 
-      setStatusText("A sincronizar com a Base de Dados...");
+      setStatusText("A sincronizar dados...");
 
+      // LÓGICA DE BYPASS: Se HQ já aprovou e há contrato, não volta a pendente
+      const temContratoValido = !!urlContratoFinal || statusContratoGlobal === 'Aprovado';
+      const statusFinal = (formData.status_aprovacao === 'Aprovado' && temContratoValido) ? 'Aprovado' : formData.status_aprovacao;
+
+      // Update do Campo Base
       const { error } = await supabase.from("campos").update({
-        nome: formData.nome, nome_en, categoria: formData.categoria, categoria_en, local: formData.local, local_en, Distrito: formData.Distrito, Distrito_en,
+        nome: formData.nome, nome_en, 
+        categoria: formData.categoria, categoria_en, 
+        local: formData.local, local_en, 
+        Distrito: formData.Distrito, Distrito_en,
         idade_min: formData.idade_min, idade_max: formData.idade_max, vagas_totais: formData.vagas_totais,
+        
         racio_monitores: formData.racio_monitores, racio_monitores_en: formData.racio_monitores,
-        alimentacao: formData.alimentacao, alimentacao_en, alojamento: formData.alojamento, alojamento_en, seguro: formData.seguro, seguro_en,
-        descricao: formData.descricao, descricao_en, regras_termos: formData.regras_termos, regras_termos_en, perguntas_customizadas: perguntasLimpas,
+        alimentacao: formData.alimentacao, alimentacao_en, 
+        alojamento: formData.alojamento, alojamento_en, 
+        seguro: formData.seguro, seguro_en,
+        descricao: formData.descricao, descricao_en, 
+        regras_termos: formData.regras_termos, regras_termos_en, 
+        
+        perguntas_customizadas: perguntasFormatadasPT,
+        perguntas_customizadas_en: perguntasFormatadasEN,
+        
         extra_seguro: formData.extra_seguro, tipo_extra_seguro: formData.tipo_extra_seguro,
         extra_transporte: formData.extra_transporte, tipo_extra_transporte: formData.tipo_extra_transporte,
-        preco: precoMinimo, pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais,
+        preco: precoMinimo, 
+        pais, pais_en: isEn ? 'United Kingdom' : 'Reino Unido', 
+        linguas_faladas: linguasFinais, linguas_faladas_en: linguasFinais,
         latitude: mapPreview ? mapPreview.lat : null, longitude: mapPreview ? mapPreview.lon : null, 
-        descontos: descontos, pacotes: pacotes, calendario_funcionamento: formData.calendario_funcionamento,
+        
+        calendario_funcionamento: formData.calendario_funcionamento,
+        pacotes: pacotesFormatados, 
+        descontos: descontosFormatados, 
+        
         imagem: mainImageUrl, galeria: galeriaUrls, programas_pdf: programasDocsFinais, 
+        
+        // Settings SuperAdmin HQ
         taxa_comissao: taxaFinal, base_comissao: baseFinal, contrato_parceiro_url: urlContratoFinal,
-        status_aprovacao: formData.status_aprovacao, modalidade_reserva: formData.modalidade_reserva,
-        link_externo_reserva: formData.link_externo_reserva, tipo_pagamento: formData.tipo_pagamento,
-        politica_cancelamento: formData.politica_cancelamento, ativo: formData.status_aprovacao === 'Aprovado'
+        status_aprovacao: statusFinal, 
+        modalidade_reserva: formData.modalidade_reserva, link_externo_reserva: formData.link_externo_reserva, 
+        tipo_pagamento: formData.tipo_pagamento, 
+        politica_cancelamento: formData.politica_cancelamento, politica_cancelamento_en: politica_cancelamento_en,
+        ativo: statusFinal === 'Aprovado'
       }).eq('id', id);
 
       if (error) throw error;
 
-      if (organizadorId && formData.status_aprovacao !== 'Pendente de Revisão') {
+      // Update Parcial do Perfil B2B para o Modo de Reserva Global
+      if (organizadorId && statusFinal !== 'Pendente de Revisão') {
          const { error: perfilErr } = await supabase.from('perfis').update({
              modalidade_reserva: formData.modalidade_reserva,
              link_externo_reserva: formData.modalidade_reserva === 'link_externo' ? formData.link_externo_reserva : null,
@@ -291,7 +425,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
          if (perfilErr) console.warn("Aviso Sincronia Perfil: ", perfilErr.message);
       }
 
-      alert("Campo atualizado com sucesso (Sincronizado com Nova Estrutura Partner).");
+      alert("Campo atualizado e sincronizado com sucesso na Base de Dados HQ.");
       router.push(`/${lang}/superadmin/campos`);
     } catch (error: any) { alert("Erro: " + error.message); } finally { setSaving(false); setStatusText(""); }
   };
@@ -313,8 +447,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
       </Link>
 
       <h1 className="text-2xl md:text-3xl font-black mb-8 text-slate-900 tracking-tight flex flex-wrap items-center gap-3">
-        Editar Campo: {formData.nome} 
-        <span className="text-[10px] font-black uppercase tracking-widest bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg border border-amber-200 shadow-sm">HQ Sync</span>
+        Editar Campo HQ: {formData.nome} 
       </h1>
 
       <form onSubmit={handleUpdate} className="flex flex-col gap-10">
@@ -398,7 +531,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
               )}
               {statusContratoGlobal === 'Aprovado' && !formData.contrato_parceiro_url && (
                 <div className="mb-4 p-4 bg-emerald-50 rounded-xl text-xs font-bold text-emerald-800 border border-emerald-200 shadow-sm flex items-center gap-3">
-                  <span className="text-xl">✅</span> Este programa está legalmente protegido e coberto pelo Contrato Global do Parceiro. Não precisa de anexar outro documento.
+                  <span className="text-xl">✅</span> Este programa está coberto pelo Contrato Global do Parceiro.
                 </div>
               )}
               <input type="file" accept=".pdf" onChange={handleContratoSelect} className="w-full p-4 bg-white rounded-xl border border-dashed border-amber-300 font-bold text-slate-500 cursor-pointer" />
@@ -410,7 +543,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         {/* 2. INFORMAÇÕES BÁSICAS                     */}
         {/* ========================================== */}
         <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900 border-b border-slate-100 pb-4 mb-6 tracking-tight">1. Informações Básicas</h2>
+          <h2 className="text-lg font-black text-slate-900 border-b border-slate-100 pb-4 mb-6 tracking-tight">Informações Básicas</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="sm:col-span-2"><label className={labelClass}>Nome do Campo</label><input type="text" required value={formData.nome || ''} onChange={e => setFormData({...formData, nome: e.target.value})} className={inputClass} /></div>
             <div>
@@ -509,17 +642,32 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
             </div>
           </div>
 
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl mb-8">
+            <label className="block text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">Dias de Encerramento (Exceções / Esgotado)</label>
+            <div className="flex gap-2 mb-4">
+              <input type="date" value={novoDiaFechado} onChange={e => setNovoDiaFechado(e.target.value)} className="flex-1 p-3 bg-white border border-amber-300 rounded-lg text-sm outline-none focus:border-amber-500" />
+              <button type="button" onClick={adicionarDiaFechado} className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 rounded-lg transition-colors text-xs">Bloquear Dia</button>
+            </div>
+            {formData.calendario_funcionamento.dias_fechados?.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {formData.calendario_funcionamento.dias_fechados.map(dia => (
+                  <div key={dia} className="flex items-center gap-2 bg-white border border-amber-300 text-amber-900 px-3 py-1.5 rounded-lg text-xs font-bold"><span className="line-through opacity-80">{new Date(dia).toLocaleDateString('pt-PT')}</span><button type="button" onClick={() => removerDiaFechado(dia)} className="text-amber-500 hover:text-red-500 text-sm ml-1">×</button></div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* PACOTES EDITÁVEIS HQ */}
           <div className="p-6 bg-slate-50 rounded-[1.5rem] border border-slate-200 mb-8 shadow-inner">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <p className="text-xs font-black text-slate-500 uppercase tracking-widest m-0">Pacotes Configurados ({pacotes.length})</p>
+              <p className="text-xs font-black text-slate-500 uppercase tracking-widest m-0">Pacotes Configurados ({formData.pacotes.length})</p>
               <button type="button" onClick={() => setIsPacoteModalOpen(true)} className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-colors shadow-sm">
                 + Adicionar Pacote
               </button>
             </div>
-            {pacotes.length === 0 ? <p className="text-sm font-bold text-slate-400 italic bg-white p-6 rounded-xl border border-dashed border-slate-200 text-center">Nenhum pacote definido.</p> : (
+            {formData.pacotes.length === 0 ? <p className="text-sm font-bold text-slate-400 italic bg-white p-6 rounded-xl border border-dashed border-slate-200 text-center">Nenhum pacote definido.</p> : (
               <div className="flex flex-col gap-4">
-                {pacotes.map((pac: any, idx: number) => (
+                {formData.pacotes.map((pac: any, idx: number) => (
                   <div key={idx} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div>
                       <strong className="text-slate-900 text-base font-black">{pac.titulo}</strong> 
@@ -546,9 +694,9 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
                 + Adicionar Desconto
               </button>
             </div>
-            {descontos.length === 0 ? <p className="text-sm font-bold text-slate-400 italic bg-slate-50 p-6 rounded-xl border border-dashed border-slate-200 text-center">Nenhum desconto configurado.</p> : (
+            {formData.descontos.length === 0 ? <p className="text-sm font-bold text-slate-400 italic bg-slate-50 p-6 rounded-xl border border-dashed border-slate-200 text-center">Nenhum desconto configurado.</p> : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {descontos.map((desc, idx) => (
+                {formData.descontos.map((desc, idx) => (
                   <div key={idx} className="p-5 bg-emerald-50 border-2 border-emerald-200 rounded-xl relative shadow-sm hover:-translate-y-1 transition-transform">
                     <p className="m-0 mb-2 font-black text-sm text-emerald-900">{desc.nome}</p>
                     <p className="m-0 text-xs font-bold text-emerald-700 bg-white inline-block px-2 py-1 rounded-md border border-emerald-100">{desc.percentagem}% | {desc.acumulavel ? 'Acumulável' : 'Único'}</p>
@@ -597,7 +745,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         </div>
 
         {/* ========================================== */}
-        {/* 6. GALERIA E PERGUNTAS                     */}
+        {/* 6. GALERIA E PERGUNTAS E PDFS              */}
         {/* ========================================== */}
         <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm">
           <h2 className="text-lg font-black text-slate-900 border-b border-slate-100 pb-4 mb-6 tracking-tight">5. Media e Formulários</h2>
@@ -622,22 +770,42 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
           <div className="border-t-2 border-slate-100 pt-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <div>
-                <label className="block text-sm font-black text-slate-900 mb-1">Perguntas Personalizadas ao Pai</label>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest m-0">Aparecem obrigatoriamente no momento do checkout.</p>
+                <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2"><span>📋</span> Formulário do Participante</h2>
+                <p className="text-[10px] text-slate-500 m-0 mt-1 max-w-sm leading-relaxed">
+                  Crie perguntas abertas ou opções de escolha múltipla. As opções vão aparecer na página pública para cada participante selecionar.
+                </p>
               </div>
-              <button type="button" onClick={addPergunta} className="w-full sm:w-auto bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-sm transition-colors">+ Adicionar Pergunta</button>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => adicionarPergunta('texto')} className="text-[10px] font-black uppercase tracking-widest text-[#167524] bg-[#167524]/10 px-3 py-2.5 rounded-xl hover:bg-[#167524]/20 transition-colors whitespace-nowrap">+ Pergunta Aberta</button>
+                <button type="button" onClick={() => adicionarPergunta('escolha')} className="text-[10px] font-black uppercase tracking-widest text-white bg-[#167524] px-3 py-2.5 rounded-xl hover:bg-[#115a1b] transition-colors whitespace-nowrap shadow-sm">+ Opção Múltipla</button>
+              </div>
             </div>
+            
             <div className="flex flex-col gap-4">
-              {perguntas.map((p, i) => (
-                <div key={i} className="flex gap-3 items-center">
-                  <input type="text" value={p || ''} onChange={e => updatePergunta(i, e.target.value)} className={`${inputClass} flex-1 shadow-sm`} placeholder="Escreva a pergunta... (Ex: Nível de Surf?)" />
-                  <button type="button" onClick={() => removePergunta(i)} className="w-12 h-12 flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl cursor-pointer font-black transition-colors shadow-sm">&times;</button>
+              {formData.perguntasUI.map((p) => (
+                <div key={p.id} className={`p-5 rounded-2xl border shadow-sm relative transition-all ${p.tipo === 'escolha' ? 'bg-emerald-50/30 border-emerald-200' : 'bg-white border-slate-200'}`}>
+                  <button type="button" onClick={() => removerPergunta(p.id)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-full hover:bg-red-100 font-bold transition-colors">×</button>
+                  <div className="pr-10 mb-4">
+                    <span className={`inline-block px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest mb-3 ${p.tipo === 'escolha' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{p.tipo === 'escolha' ? '▼ Opção de Escolha (Mostrada na Página)' : '📝 Pergunta Aberta (Respondida no Checkout)'}</span>
+                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5">{p.tipo === 'escolha' ? 'Título da Opção' : 'A sua Pergunta'}</label>
+                    <input type="text" placeholder={p.tipo === 'escolha' ? "Ex: Que modalidade prefere de manhã?" : "Ex: Qual o tamanho da t-shirt?"} value={p.titulo} onChange={e => atualizarPergunta(p.id, 'titulo', e.target.value)} className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#167524] shadow-sm" />
+                  </div>
+                  {p.tipo === 'escolha' && (
+                    <div className="bg-white p-4 rounded-xl border border-emerald-100">
+                      <label className="block text-[11px] font-black text-emerald-700 uppercase tracking-widest mb-1.5">Opções Disponíveis (Separadas por vírgula)</label>
+                      <input type="text" placeholder="Ex: Inglês, Espanhol, Francês" value={p.opcoes} onChange={e => atualizarPergunta(p.id, 'opcoes', e.target.value)} className="w-full p-3 bg-slate-50 border border-emerald-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-emerald-500" />
+                      <p className="text-[10px] text-emerald-600 font-bold mt-2 m-0">O pai verá um menu dropdown com estas opções exatas para selecionar para cada filho.</p>
+                    </div>
+                  )}
                 </div>
               ))}
+              {formData.perguntasUI.length === 0 && (
+                <div className="p-8 bg-slate-50 rounded-2xl text-xs font-bold text-slate-400 text-center border border-dashed border-slate-200">Não exige opções extras. O formulário base (Nome, Idade, Restrições Alimentares) é nativo.</div>
+              )}
             </div>
           </div>
 
-          {/* DOCUMENTOS PDF DO CAMPO */}
+          {/* DOCUMENTOS PDF DO CAMPO (HQ EXTRA) */}
           <div className="border-t-2 border-slate-100 pt-8 mt-10">
             <label className="block text-sm font-black text-slate-900 mb-1">Brochuras e PDF do Programa</label>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Disponíveis para os pais descarregarem na página do campo.</p>
@@ -665,7 +833,7 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
         </div>
 
         <button type="submit" disabled={saving} className={`w-full py-5 text-sm uppercase tracking-widest font-black rounded-2xl shadow-xl transition-all ${saving ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/30 hover:-translate-y-1'}`}>
-          {saving ? statusText : 'Guardar Alterações e Sincronizar'}
+          {saving ? statusText || 'A Guardar...' : 'Guardar Alterações e Sincronizar'}
         </button>
       </form>
 
@@ -705,6 +873,9 @@ export default function SuperAdminEditarCampo({ params }: { params: Promise<{ la
                   <label className="text-sm font-black text-slate-900 m-0">Variantes e Preços Base</label>
                   <button type="button" onClick={adicionarVariante} className="text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition-colors">+ Variante</button>
                 </div>
+                <p className="text-[11px] text-slate-500 mb-4 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  Tem preços diferentes para este passe (ex: <i>Com Almoço vs Sem Almoço</i>)? Crie variantes. Se tiver apenas 1 preço fixo, deixe apenas o <b>Bilhete Base</b>.
+                </p>
                 <div className="flex flex-col gap-3">
                   {novoPacote.variantes.map((v, i) => (
                     <div key={i} className="flex gap-3 items-center bg-white border border-slate-200 p-2 rounded-xl shadow-sm">

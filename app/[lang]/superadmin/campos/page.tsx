@@ -11,12 +11,9 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
   const [campos, setCampos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Modal de Ajuste de Comissão
   const [showModal, setShowModal] = useState(false);
   const [campoEmEdicao, setCampoEmEdicao] = useState<any>(null);
-
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [shareData, setShareData] = useState({ url: "", nome: "" });
-  const [copied, setCopied] = useState(false);
 
   const fetchCamposGerais = async () => {
     const { data: camposData } = await supabase.from('campos').select('*').order('created_at', { ascending: false });
@@ -27,7 +24,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
       
       let precoMinimo = campo.preco || 0;
       
-      // BLINDAGEM DE PREVENÇÃO DE ERRO DE MAPPING (Q.map is not a function)
+      // BLINDAGEM DE PREVENÇÃO DE ERRO DE MAPPING
       let pacotesArray = [];
       if (typeof campo.pacotes === 'string') {
         try { pacotesArray = JSON.parse(campo.pacotes); } catch(e) { pacotesArray = []; }
@@ -58,8 +55,12 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
   const handleApagarCampo = async (id: string, nomeCampo: string) => {
     if (!window.confirm(`Tem a certeza que deseja apagar o campo "${nomeCampo}" permanentemente?`)) return;
     const { error } = await supabase.from('campos').delete().eq('id', id);
-    if (!error) { alert("Campo removido com sucesso."); fetchCamposGerais(); } 
-    else alert("Erro ao apagar: " + error.message);
+    if (!error) { 
+      alert("Campo removido com sucesso."); 
+      fetchCamposGerais(); 
+    } else {
+      alert("Erro ao apagar: " + error.message);
+    }
   };
 
   const handleSalvarComissao = async (e: React.FormEvent) => {
@@ -69,27 +70,19 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
 
     const { error } = await supabase.from('campos').update({ taxa_comissao: taxa, base_comissao: base }).eq('id', campoEmEdicao.id);
 
-    if (!error) { alert("Comissão atualizada com sucesso no Programa!"); setShowModal(false); fetchCamposGerais(); } 
-    else alert("Erro: " + error.message);
+    if (!error) { 
+      alert("Comissão atualizada com sucesso no Programa!"); 
+      setShowModal(false); 
+      fetchCamposGerais(); 
+    } else {
+      alert("Erro: " + error.message);
+    }
   };
 
-  const handleGerarContrato = (campoId: string, nomeCampo: string) => {
-    const url = `${window.location.origin}/${lang}/assinatura-contrato/${campoId}`;
-    setShareData({ url, nome: nomeCampo });
-    setCopied(false);
-    setShowShareModal(true);
-  };
-
-  const copyToClipboard = async () => {
-    try { await navigator.clipboard.writeText(shareData.url); setCopied(true); setTimeout(() => setCopied(false), 2500); } 
-    catch (err) { alert("Erro ao copiar o link."); }
-  };
-
-  const getStatusColor = (status: string, temContrato: boolean) => {
-    if (status === 'Aprovado' && temContrato) return { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', label: 'Aprovado' };
-    if (status === 'Aprovado' && !temContrato) return { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200', label: 'Aprov. S/ Contrato' };
+  const getStatusColor = (status: string) => {
+    if (status === 'Aprovado') return { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', label: 'Aprovado' };
     if (status === 'Rejeitado') return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', label: 'Rejeitado' };
-    return { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', label: status || 'Pendente' }; 
+    return { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200', label: status || 'Pendente' }; 
   };
 
   if (loading) return <div className="p-12 text-center text-slate-500 font-bold animate-pulse">A carregar programas do Quartel General...</div>;
@@ -134,35 +127,6 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
         </div>
       )}
 
-      {/* MODAL DE PARTILHA DE CONTRATO */}
-      {showShareModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[2rem] p-8 shadow-2xl relative">
-            <button onClick={() => setShowShareModal(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 flex items-center justify-center font-black transition-colors">&times;</button>
-            <h2 className="text-xl font-black text-slate-900 mb-2 tracking-tight">Link de Assinatura</h2>
-            <p className="text-sm font-medium text-slate-500 mb-6">O Parceiro deste programa não assinou o contrato global. Envie-lhe este link exclusivo para aprovação.</p>
-            
-            <div className="flex flex-col gap-5">
-              <div className="flex gap-2">
-                <input readOnly value={shareData.url} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none shadow-inner" onClick={(e) => (e.target as HTMLInputElement).select()} />
-                <button onClick={copyToClipboard} className={`px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-colors shadow-md ${copied ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
-                  {copied ? 'Copiado' : 'Copiar'}
-                </button>
-              </div>
-              <div className="border-t border-slate-100 my-2"></div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <a href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue o link para validação e assinatura digital do contrato do programa "${shareData.nome}" na plataforma HelloCamp:\n\n${shareData.url}`)}`} target="_blank" rel="noopener noreferrer" className="flex-1 py-3.5 bg-[#25D366] hover:bg-[#20bd5a] text-white font-black text-xs uppercase tracking-widest rounded-xl text-center shadow-md transition-colors no-underline">
-                  💬 WhatsApp
-                </a>
-                <a href={`mailto:?subject=${encodeURIComponent(`Assinatura de Contrato HelloCamp - ${shareData.nome}`)}&body=${encodeURIComponent(`Olá,\n\nSegue o link para validação e assinatura digital do contrato referente ao programa "${shareData.nome}".\n\nAceda através deste link seguro:\n${shareData.url}\n\nObrigado,\nEquipa HelloCamp`)}`} className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest rounded-xl text-center shadow-md transition-colors no-underline">
-                  ✉️ E-mail
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-x-auto shadow-sm">
         <table className="w-full text-left min-w-[800px]">
           <thead className="bg-slate-50 border-b border-slate-200">
@@ -171,7 +135,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
               <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Parceiro</th>
               <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Logística & Status</th>
               <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Preço & Comissão</th>
-              <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ações e Contrato</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -181,9 +145,7 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
               campos.map((campo) => {
                 const isCustom = campo.taxa_comissao !== null && campo.taxa_comissao !== undefined;
                 const taxaVisual = isCustom ? campo.taxa_comissao : (campo.perfis?.taxa_comissao || 12);
-                
-                const temContrato = !!campo.contrato_parceiro_url || campo.perfis?.status_contrato === 'Aprovado';
-                const statusColor = getStatusColor(campo.status_aprovacao, temContrato);
+                const statusColor = getStatusColor(campo.status_aprovacao);
                 
                 return (
                   <tr key={campo.id} className="hover:bg-slate-50 transition-colors">
@@ -226,23 +188,18 @@ export default function GestaoCamposHQ({ params }: { params: Promise<{ lang: str
                       </span>
                     </td>
                     
-                    {/* AÇÕES E CONTRATOS */}
+                    {/* AÇÕES (Simplificado conforme pedido) */}
                     <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 flex-wrap max-w-[280px] ml-auto">
-                        <Link href={`/${lang}/campo/${campo.id}`} target="_blank" className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-slate-50 shadow-sm transition-colors">Ver Perfil</Link>
-                        <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} className="px-3 py-1.5 bg-slate-900 text-white font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-slate-800 shadow-sm transition-colors">Editar HQ</Link>
-                        <button onClick={() => { setCampoEmEdicao(campo); setShowModal(true); }} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-slate-50 shadow-sm transition-colors">Fee%</button>
-                        
-                        {/* Lógica Inteligente de Contrato */}
-                        {campo.contrato_parceiro_url ? (
-                          <a href={campo.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-emerald-100 shadow-sm transition-colors no-underline">Contrato Anexo</a>
-                        ) : (campo.perfis?.status_contrato === 'Aprovado' ? (
-                          <span className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] uppercase tracking-widest rounded-lg shadow-sm cursor-default">✅ Coberto (Global)</span>
-                        ) : (
-                          <button onClick={() => handleGerarContrato(campo.id, campo.nome)} className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-blue-100 shadow-sm transition-colors">Pedir Assinatura</button>
-                        ))}
-
-                        <button onClick={() => handleApagarCampo(campo.id, campo.nome)} className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-700 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-red-100 shadow-sm transition-colors">Apagar</button>
+                      <div className="flex justify-end gap-2 flex-wrap ml-auto">
+                        <Link href={`/${lang}/superadmin/campos/editar/${campo.id}`} className="px-4 py-2 bg-slate-900 text-white font-bold text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-800 shadow-sm transition-colors">
+                          Editar HQ
+                        </Link>
+                        <button onClick={() => { setCampoEmEdicao(campo); setShowModal(true); }} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 shadow-sm transition-colors">
+                          Fee%
+                        </button>
+                        <button onClick={() => handleApagarCampo(campo.id, campo.nome)} className="px-4 py-2 bg-red-50 border border-red-200 text-red-700 font-bold text-[10px] uppercase tracking-widest rounded-xl hover:bg-red-100 shadow-sm transition-colors">
+                          Apagar
+                        </button>
                       </div>
                     </td>
 
