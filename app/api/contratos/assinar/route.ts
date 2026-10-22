@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Usar o Service Role Key para ignorar o RLS e garantir o upload do PDF e gestão Auth
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -14,7 +13,6 @@ const SENDER_NAME = 'HelloCamp B2B';
 
 async function enviarEmailBoasVindas(emailParceiro: string, nomeEmpresa: string, urlPdf: string, lang: string) {
   if (!BREVO_API_KEY) return;
-
   const isPt = lang === 'pt';
   const subject = isPt ? `Bem-vindo à HelloCamp! O seu Acordo Operacional - ${nomeEmpresa}` : `Welcome to HelloCamp! Your Operational Agreement - ${nomeEmpresa}`;
   
@@ -24,13 +22,11 @@ async function enviarEmailBoasVindas(emailParceiro: string, nomeEmpresa: string,
         <h2 style="color: #0E3A68;">Bem-vindo à HelloCamp, ${nomeEmpresa}!</h2>
         <p>Confirmamos a receção e a assinatura digital do seu Acordo Operacional com a HelloCamp.</p>
         <p><strong style="color: #059669; font-size: 16px;">A sua conta e os seus programas encontram-se agora 100% ativos e visíveis na nossa plataforma!</strong></p>
-        <p>A sua integração foi concluída com sucesso. Já está pronto para receber pais, destacar as suas atividades e angariar novas reservas.</p>
         <p>Para sua segurança e arquivo legal, pode descarregar a cópia em formato PDF do seu contrato assinado no link abaixo:</p>
         <div style="margin: 30px 0;">
           <a href="${urlPdf}" style="background-color: #0E3A68; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Descarregar Contrato (PDF)</a>
         </div>
-        <p>Caso tenha alguma dúvida ou precise de aceder ao seu painel de gestão, basta responder a este e-mail.</p>
-        <p>Desejamos-lhe uma excelente temporada de reservas!<br><br>Cumprimentos,<br>A Equipa HelloCamp</p>
+        <p>Desejamos-lhe uma excelente temporada de reservas!<br><br>A Equipa HelloCamp</p>
       </div>
     `
     : `
@@ -38,13 +34,11 @@ async function enviarEmailBoasVindas(emailParceiro: string, nomeEmpresa: string,
         <h2 style="color: #0E3A68;">Welcome to HelloCamp, ${nomeEmpresa}!</h2>
         <p>We confirm the receipt and digital signature of your Operational Agreement with HelloCamp.</p>
         <p><strong style="color: #059669; font-size: 16px;">Your account and programs are now 100% active and visible on our platform!</strong></p>
-        <p>Your onboarding is successfully complete. You are now ready to welcome parents, showcase your activities, and receive new bookings.</p>
         <p>For your security and legal records, you can download a PDF copy of your signed agreement from the link below:</p>
         <div style="margin: 30px 0;">
           <a href="${urlPdf}" style="background-color: #0E3A68; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Download Contract (PDF)</a>
         </div>
-        <p>If you have any questions or need to access your management dashboard, simply reply to this email.</p>
-        <p>We wish you a fantastic booking season!<br><br>Best regards,<br>The HelloCamp Team</p>
+        <p>We wish you a fantastic booking season!<br><br>The HelloCamp Team</p>
       </div>
     `;
 
@@ -69,7 +63,7 @@ export async function POST(request: Request) {
     const emailAcesso = formData.get('email') as string; 
     const lang = formData.get('lang') as string || 'en';
     const contratoDadosStr = formData.get('contratoDados') as string;
-    const passwordNova = formData.get('password') as string; // Nova password definida pelo parceiro
+    const passwordNova = formData.get('password') as string; 
     const pdfFile = formData.get('pdf') as File;
 
     if (!id || !emailAcesso || !contratoDadosStr || !pdfFile) {
@@ -92,13 +86,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Tentativa de submissão não autorizada. O e-mail não corresponde.' }, { status: 403 });
     }
 
-    // 2. Atualizar Palavra-Passe no Supabase Auth
+    // ==========================================================
+    // 2. PROTEÇÃO ANTI-CRASH: Atualizar Palavra-Passe no Supabase
+    // ==========================================================
+    let loginReady = false;
     if (passwordNova) {
-      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
-        password: passwordNova,
-        email_confirm: true // Garante que a conta fica verificada para login imediato
-      });
-      if (authError) throw new Error(`Erro ao configurar palavra-passe: ${authError.message}`);
+      // 2.1 Verifica se o Utilizador Auth existe mesmo!
+      const { data: authData } = await supabaseAdmin.auth.admin.getUserById(id);
+      
+      if (authData && authData.user) {
+        // O utilizador Auth existe! Atualizamos a password.
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+          password: passwordNova,
+          email_confirm: true 
+        });
+        if (!authError) loginReady = true;
+      } else {
+        // A conta foi criada manualmente na BD! Não tem conta Auth.
+        // Registamos o aviso mas NÃO DAMOS CRASH. O contrato avança na mesma.
+        console.warn(`[AVISO] Parceiro ${id} não tem conta Auth ativa. A password não foi guardada.`);
+      }
     }
 
     // 3. Upload do PDF
@@ -116,7 +123,7 @@ export async function POST(request: Request) {
       .from('campos-documentos').getPublicUrl(fileName);
     const contratoUrl = publicUrlData.publicUrl;
 
-    // 4. Atualizar Tabela Perfis (Aprova a Conta IMEDIATAMENTE)
+    // 4. Atualizar Tabela Perfis e Ativar a Conta
     await supabaseAdmin.from('perfis').update({
       empresa_nome: contratoDados.empresaNome,
       nif_empresa: contratoDados.nif,
@@ -130,7 +137,7 @@ export async function POST(request: Request) {
       base_comissao: contratoDados.baseComissao
     }).eq('id', id);
 
-    // 5. Atualizar Tabela Campos (Ativa os campos instantaneamente)
+    // 5. Atualizar Tabela Campos (Mete os campos online)
     await supabaseAdmin.from('campos').update({
       status_aprovacao: 'Aprovado',
       ativo: true,
@@ -143,10 +150,11 @@ export async function POST(request: Request) {
       base_comissao: contratoDados.baseComissao
     }).eq('organizador_id', id);
 
-    // 6. Enviar Email de Boas-Vindas ao Parceiro com o PDF
+    // 6. Enviar Email de Boas-Vindas
     await enviarEmailBoasVindas(contratoDados.emailContacto || emailAcesso, contratoDados.empresaNome, contratoUrl, lang);
 
-    return NextResponse.json({ success: true, url: contratoUrl });
+    // Devolvemos o "loginReady" para o frontend saber se tenta fazer login ou apenas mostra o ecrã de sucesso
+    return NextResponse.json({ success: true, url: contratoUrl, loginReady: loginReady });
 
   } catch (error: any) {
     console.error("Erro na API Assinar Contrato:", error.message);

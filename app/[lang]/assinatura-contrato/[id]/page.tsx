@@ -37,7 +37,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
   const [assinaturaCargo, setAssinaturaCargo] = useState("");
   const [concordaTermos, setConcordaTermos] = useState(false);
 
-  // Novos campos para a password final da conta
   const [novaPassword, setNovaPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -289,20 +288,22 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
         throw new Error(result.error || "Ocorreu um erro ao processar a assinatura.");
       }
 
-      // LOGIN AUTOMÁTICO SE TUDO CORRER BEM
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: inputEmail,
-        password: novaPassword,
-      });
+      // LOGIN AUTOMÁTICO SE A CONFIGURAÇÃO DE AUTH CORREU BEM
+      if (result.loginReady) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: inputEmail,
+          password: novaPassword,
+        });
 
-      if (signInError) {
-        // Se falhar o login, mas assinou com sucesso, redireciona para a página de login
-        alert(contractLang === 'pt' ? "Contrato assinado! Redirecionando para login." : "Contract signed! Redirecting to login.");
-        router.push(`/${lang}/admin/login`);
-      } else {
-        // Se fizer login com sucesso, atira direto para o Dashboard!
-        router.push(`/${lang}/admin/dashboard`);
+        if (!signInError) {
+          router.push(`/${lang}/admin/dashboard`);
+          return;
+        }
       }
+
+      // Fallback Visual: Mostra a confirmação se o Login Automático falhar (ou se for conta criada manualmente)
+      setJaAssinado(true);
+      setPdfGeradoUrl(result.url);
       
     } catch (err: any) {
       alert("Erro: " + err.message);
@@ -311,6 +312,8 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-slate-400 uppercase tracking-widest animate-pulse bg-slate-50">A carregar documento seguro... / Loading secure document...</div>;
+
+  const dataAtual = new Date().toLocaleDateString(contractLang === 'pt' ? 'pt-PT' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   // ==========================================
   // VIEW 1: ECRÃ DE SEGURANÇA (GATEKEEPER)
