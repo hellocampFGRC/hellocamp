@@ -29,9 +29,10 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const textareaClass = "w-full p-3 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-800 outline-none focus:border-slate-800 transition-all shadow-sm resize-y";
 
   const fetchContratos = async () => {
+    // Adicionado o join com "campos(contrato_parceiro_url)" para podermos extrair o PDF gerado pelo parceiro!
     const { data, error } = await supabase
       .from('perfis')
-      .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao, base_comissao')
+      .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao, base_comissao, campos(contrato_parceiro_url)')
       .eq('role', 'organizador')
       .order('created_at', { ascending: false });
       
@@ -43,7 +44,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     const organizadores = data || [];
     setContratos(organizadores);
     
-    if (organizadores.length > 0 && !organizadores.some(c => c.status_contrato === 'Pendente de Revisão' && c.contrato_dados)) {
+    if (organizadores.length > 0 && !organizadores.some(c => c.status_contrato === 'Pendente de Revisão' && c.contrato_dados?.assinaturaNome)) {
       setFiltroStatus('Todos');
     }
     setLoading(false);
@@ -121,6 +122,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
 
   const handleGuardarEdicao = async () => {
     setSavingEdit(true);
+    // Aqui HQ apenas guarda as suas variáveis de controlo!
     const novoJsonContrato = { ...modalPerfil.contrato_dados, ...editForm };
 
     const { data: updatedPerfil, error: perfilError } = await supabase
@@ -156,6 +158,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const tabs = ['Preparação HQ', 'Pendentes de Revisão', 'Aprovado', 'Rejeitado', 'Todos'];
   const contratosFiltrados = contratos.filter(c => {
     let statusReal = c.status_contrato;
+    // Se o parceiro ainda não assinou (assinaturaNome undefined), está na fase de preparação ou aguardando.
     if (!c.contrato_dados || !c.contrato_dados.assinaturaNome) statusReal = 'Preparação HQ';
     else if (!statusReal || statusReal === 'Pendente' || statusReal === 'Pendente de Revisão') statusReal = 'Pendentes de Revisão';
 
@@ -164,6 +167,13 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
     if (filtroStatus === 'Pendentes de Revisão') return statusReal === 'Pendentes de Revisão';
     return c.status_contrato === filtroStatus && c.contrato_dados?.assinaturaNome;
   });
+
+  // Extrair PDF da Tabela Campos para o botão de visualização
+  let pdfGlobalUrl = null;
+  if (modalPerfil?.campos && Array.isArray(modalPerfil.campos)) {
+    const campoComPdf = modalPerfil.campos.find((c: any) => c.contrato_parceiro_url);
+    if (campoComPdf) pdfGlobalUrl = campoComPdf.contrato_parceiro_url;
+  }
 
   if (loading) return <div className="p-8 text-center text-slate-500 font-bold animate-pulse">A carregar Contratos Globais de Parceiros...</div>;
 
@@ -213,12 +223,12 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
               <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold text-sm">Sem parceiros encontrados nesta categoria.</td></tr>
             ) : contratosFiltrados.map(c => {
               const dados = c.contrato_dados || {};
-              const temContrato = !!c.contrato_dados?.assinaturaNome;
+              const parceiroJaAssinou = !!c.contrato_dados?.assinaturaNome;
               
               let statusColor = "bg-slate-100 text-slate-600 border-slate-200";
               let statusLabel = "Preparação HQ";
               
-              if (temContrato) {
+              if (parceiroJaAssinou) {
                 statusLabel = c.status_contrato || 'Pendente de Revisão';
                 if (c.status_contrato === 'Aprovado') statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
                 else if (c.status_contrato === 'Rejeitado') statusColor = "bg-red-100 text-red-800 border-red-200";
@@ -247,7 +257,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button onClick={() => abrirModal(c)} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-slate-800 transition-colors shadow-sm">
-                      {temContrato ? 'Rever & Validar' : 'Preparar Termos HQ'}
+                      {parceiroJaAssinou ? 'Rever & Validar' : 'Preparar Termos HQ'}
                     </button>
                   </td>
                 </tr>
@@ -271,8 +281,8 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2 m-0">Termos Gerais e Assinatura Digital</p>
               </div>
               <div className="flex items-center gap-3">
-                {modalPerfil.contrato_dados?.assinaturaNome && (
-                  <a href={modalPerfil.contrato_parceiro_url || modalPerfil.campos?.[0]?.contrato_parceiro_url || '#'} target="_blank" className="text-xs font-bold text-slate-700 hover:text-black bg-slate-100 px-5 py-2.5 rounded-xl transition-colors shadow-sm hidden sm:block border border-slate-200">
+                {pdfGlobalUrl && (
+                  <a href={pdfGlobalUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-slate-700 hover:text-black bg-slate-100 px-5 py-2.5 rounded-xl transition-colors shadow-sm hidden sm:block border border-slate-200">
                     Ver PDF Assinado
                   </a>
                 )}
@@ -286,7 +296,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
             </div>
             
             <div className="p-8 overflow-y-auto flex-1 bg-slate-50/50">
-              {!modalPerfil.contrato_dados?.assinaturaNome && !isEditing ? (
+              {!modalPerfil.contrato_dados && !isEditing ? (
                  <div className="bg-blue-50 border border-blue-200 p-8 rounded-2xl text-center shadow-sm">
                     <h3 className="text-blue-900 font-black text-lg mb-2">Preparar Acordo para o Parceiro</h3>
                     <p className="text-blue-800 text-sm font-medium mb-6">O parceiro ainda não assinou. Tem de clicar em "Pre-Fill Termos (HQ)", configurar a comissão e as regras logísticas, gravar, e depois gerar o Link Seguro para lhe enviar.</p>
@@ -306,20 +316,36 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                         </div>
                       ) : (
                         <div className="space-y-3 text-sm">
-                          <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100"><strong className="text-slate-500 text-xs">Empresa</strong><span className="font-black text-slate-900 text-right ml-4 text-base">{modalPerfil.contrato_dados?.empresaNome || '---'}</span></div>
-                          <div className="flex justify-between items-center px-1"><strong className="text-slate-500 text-xs">NIF / Tax ID</strong><span className="font-mono font-bold text-slate-800 text-right ml-4">{modalPerfil.contrato_dados?.nif || '---'}</span></div>
-                          <div className="flex justify-between items-center px-1"><strong className="text-slate-500 text-xs">Morada Sede</strong><span className="font-medium text-slate-800 text-right ml-4">{modalPerfil.contrato_dados?.morada || '---'}</span></div>
-                          <div className="flex justify-between items-center px-1"><strong className="text-slate-500 text-xs">Responsável de Dados</strong><span className="font-bold text-blue-600 text-right ml-4 break-all">{modalPerfil.contrato_dados?.responsavelRGPD || '---'}</span></div>
+                          {!modalPerfil.contrato_dados?.nif ? (
+                            <div className="bg-slate-100 p-4 rounded-xl text-center">
+                              <span className="text-xs font-bold text-slate-500">Aguardando preenchimento do parceiro...</span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100"><strong className="text-slate-500 text-xs">Empresa</strong><span className="font-black text-slate-900 text-right ml-4 text-base">{modalPerfil.contrato_dados?.empresaNome}</span></div>
+                              <div className="flex justify-between items-center px-1"><strong className="text-slate-500 text-xs">NIF / Tax ID</strong><span className="font-mono font-bold text-slate-800 text-right ml-4">{modalPerfil.contrato_dados?.nif}</span></div>
+                              <div className="flex justify-between items-center px-1"><strong className="text-slate-500 text-xs">Morada Sede</strong><span className="font-medium text-slate-800 text-right ml-4">{modalPerfil.contrato_dados?.morada}</span></div>
+                              <div className="flex justify-between items-center px-1"><strong className="text-slate-500 text-xs">Resp. RGPD</strong><span className="font-bold text-blue-600 text-right ml-4 break-all">{modalPerfil.contrato_dados?.responsavelRGPD}</span></div>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
                     
-                    {modalPerfil.contrato_dados?.assinaturaNome && !isEditing && (
+                    {!isEditing && (
                       <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl shadow-sm relative overflow-hidden">
                         <span className="relative block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3">Assinatura Digital Segura</span>
-                        <p className="relative font-serif text-3xl font-black italic text-emerald-900 mb-1">{modalPerfil.contrato_dados?.assinaturaNome}</p>
-                        <p className="relative text-sm text-emerald-700 font-bold mb-4">{modalPerfil.contrato_dados?.assinaturaCargo}</p>
-                        <p className="relative text-[10px] text-emerald-600/70 font-mono m-0 uppercase tracking-widest bg-emerald-100/50 inline-block px-3 py-1.5 rounded-md border border-emerald-200">Timestamp: {modalPerfil.contrato_dados?.dataSubmissao ? new Date(modalPerfil.contrato_dados?.dataSubmissao).toLocaleString('pt-PT') : 'N/D'} | IP: {modalPerfil.contrato_dados?.ipAssinatura || '---'}</p>
+                        {!modalPerfil.contrato_dados?.assinaturaNome ? (
+                          <div className="bg-white p-4 rounded-xl text-center border border-emerald-100 opacity-60">
+                            <span className="text-xs font-bold text-emerald-800">Aguardando Assinatura do Parceiro</span>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="relative font-serif text-3xl font-black italic text-emerald-900 mb-1">{modalPerfil.contrato_dados?.assinaturaNome}</p>
+                            <p className="relative text-sm text-emerald-700 font-bold mb-4">{modalPerfil.contrato_dados?.assinaturaCargo}</p>
+                            <p className="relative text-[10px] text-emerald-600/70 font-mono m-0 uppercase tracking-widest bg-emerald-100/50 inline-block px-3 py-1.5 rounded-md border border-emerald-200">Timestamp: {modalPerfil.contrato_dados?.dataSubmissao ? new Date(modalPerfil.contrato_dados?.dataSubmissao).toLocaleString('pt-PT') : 'N/D'} | IP: {modalPerfil.contrato_dados?.ipAssinatura || '---'}</p>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -352,7 +378,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                         {isEditing ? (
                           <>
                             <div>
-                              <label className={labelClass}>Modelo de Reserva</label>
+                              <label className={labelClass}>Modelo de Reserva (Anexo 1)</label>
                               <select className={selectClass} value={editForm.modalidadeReserva || ''} onChange={e => setEditForm({...editForm, modalidadeReserva: e.target.value})}>
                                 <option value="direta">Reserva Direta (Checkout)</option>
                                 <option value="email">Sob Consulta (E-mail)</option>
@@ -367,8 +393,8 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                             )}
                             {editForm.modalidadeReserva !== 'link_externo' && (
                               <>
-                                <div><label className={labelClass}>Fluxo de Pagamento</label><select className={selectClass} value={editForm.tipoPagamento || ''} onChange={e => setEditForm({...editForm, tipoPagamento: e.target.value})}><option value="100_total">100% no Ato da Reserva</option><option value="50_sinal">Sinal 50% Agora + Restante Depois</option></select></div>
-                                <div><label className={labelClass}>Política de Cancelamento</label><select className={selectClass} value={editForm.politicaCancelamento || ''} onChange={e => setEditForm({...editForm, politicaCancelamento: e.target.value})}><option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (100% até 7 dias)</option><option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (50% até 15 dias)</option><option value="Estrita (Sem reembolso após reserva)">Estrita (Sem Reembolso)</option></select></div>
+                                <div><label className={labelClass}>Fluxo de Pagamento (Anexo 2)</label><select className={selectClass} value={editForm.tipoPagamento || ''} onChange={e => setEditForm({...editForm, tipoPagamento: e.target.value})}><option value="100_total">100% no Ato da Reserva</option><option value="50_sinal">Sinal 50% Agora + Restante Depois</option></select></div>
+                                <div><label className={labelClass}>Política de Cancelamento (Anexo 3)</label><select className={selectClass} value={editForm.politicaCancelamento || ''} onChange={e => setEditForm({...editForm, politicaCancelamento: e.target.value})}><option value="Flexível (Reembolso a 100% até 7 dias antes)">Flexível (100% até 7 dias)</option><option value="Moderada (Reembolso a 50% até 15 dias antes)">Moderada (50% até 15 dias)</option><option value="Estrita (Sem reembolso após reserva)">Estrita (Sem Reembolso)</option></select></div>
                               </>
                             )}
                           </>
@@ -476,7 +502,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
           <div className="bg-white w-full max-w-lg rounded-[2rem] flex flex-col overflow-hidden shadow-2xl p-8 relative">
             <button onClick={() => setShowShareModal(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 flex items-center justify-center font-black transition-colors">&times;</button>
             <h2 className="text-xl font-black text-slate-900 mb-2 tracking-tight">Link de Assinatura Único</h2>
-            <p className="text-sm font-medium text-slate-500 mb-6">Envie este link seguro para o Parceiro rever as condições logísticas, adicionar a morada/NIF da sua empresa e assinar o Acordo Digitalmente.</p>
+            <p className="text-sm font-medium text-slate-500 mb-6">Envie este link seguro para o Parceiro rever as condições operacionais fixadas, adicionar a morada/NIF da empresa e assinar o Acordo Digitalmente.</p>
             
             <div className="flex flex-col gap-5">
               <div className="flex gap-2">
