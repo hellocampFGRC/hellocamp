@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase"; 
 import Link from "next/link";
+import jsPDF from "jspdf";
 import React from "react";
 
 export default function MeusCampos({ params }: { params: Promise<{ lang: string }> }) {
@@ -13,207 +14,470 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
   const [perfilBase, setPerfilBase] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // Estado para controlar o Modal de Visualização do Contrato (Read-Only)
+  const [contratoModalCampo, setContratoModalCampo] = useState<any | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
   useEffect(() => {
     const fetchCampos = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return setLoading(false);
 
-      const { data: perfilData } = await supabase.from('perfis').select('taxa_comissao, base_comissao').eq('id', session.user.id).single();
+      const { data: perfilData } = await supabase
+        .from('perfis')
+        .select('taxa_comissao, base_comissao, contrato_dados')
+        .eq('id', session.user.id)
+        .single();
+      
       setPerfilBase(perfilData || { taxa_comissao: 12 });
 
-      // Selecionamos também o contrato_dados e os pacotes para calcular o preço
-      const { data } = await supabase.from('campos').select('*').eq('organizador_id', session.user.id).order('id', { ascending: false }); 
+      const { data } = await supabase
+        .from('campos')
+        .select('*')
+        .eq('organizador_id', session.user.id)
+        .order('id', { ascending: false }); 
+      
       setCampos(data || []);
       setLoading(false);
     };
     fetchCampos();
   }, []);
 
-  const handleImprimirPDF = (campo: any) => {
-    if (!campo || !campo.contrato_dados) {
-      alert(isEn ? "Contract data not found." : "Os dados do contrato não foram encontrados.");
-      return;
-    }
-    const dados = campo.contrato_dados;
-    const comissaoText = campo.taxa_comissao || 12;
-    const dataContrato = dados.dataSubmissao ? new Date(dados.dataSubmissao).toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/D';
+  // Função para descarregar o PDF (Usa o URL oficial do Storage ou gera na hora via jsPDF como fallback)
+  const handleDownloadPDF = (campo: any) => {
+    setDownloadingPdf(true);
+    try {
+      // 1. Se já existir o PDF oficial guardado no Supabase Storage, abre-o diretamente
+      if (campo.contrato_parceiro_url) {
+        window.open(campo.contrato_parceiro_url, '_blank');
+        setDownloadingPdf(false);
+        return;
+      }
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert(isEn ? "Your browser blocked the pop-up. Please allow it to generate the PDF." : "O seu navegador bloqueou a abertura da janela (Pop-up). Por favor, permita para gerar o PDF.");
-      return;
-    }
+      // 2. Fallback: Gerar o PDF na hora com jsPDF caso seja um campo antigo sem URL guardado
+      const dados = campo.contrato_dados || perfilBase?.contrato_dados || {};
+      const taxaComissao = campo.taxa_comissao !== null && campo.taxa_comissao !== undefined 
+        ? campo.taxa_comissao 
+        : (perfilBase?.taxa_comissao || 12);
+      
+      const doc = new jsPDF({ format: 'a4', unit: 'mm' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const timestamp = dados.dataSubmissao || new Date().toISOString();
 
-    // Textos Dinâmicos dos Anexos Baseados nas Escolhas
-    let anexo1Text = dados.modalidadeReserva === 'direta' 
-      ? "<strong>Reserva Direta com Pagamento Automático (Recomendado):</strong> As reservas efetuadas através da plataforma HelloCamp serão registadas diretamente no sistema de reservas do Parceiro. Nesta modalidade, a HelloCamp terá direito à comissão acordada sobre cada reserva concluída. O formulário de reserva será configurado de acordo com as necessidades do Parceiro, recolhendo as informações necessárias para a correta gestão das inscrições. O Parceiro compromete-se a manter atualizadas as disponibilidades, preços e demais informações relevantes das atividades disponibilizadas através da plataforma."
-      : "<strong>Comunicação por E-mail (Reserva Sob Consulta):</strong> A HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias para a gestão da reserva, incluindo os dados do participante, os dados do responsável pela reserva e os detalhes da atividade reservada. O Parceiro dispõe de 2 (dois) dias úteis para comunicar à HelloCamp a rejeição de uma reserva por motivo devidamente justificado. Na ausência de resposta dentro deste prazo, a reserva considerar-se-á aceite, sendo aplicável a comissão prevista no contrato.";
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text(!isEn ? "CONTRATO GLOBAL DE INTERMEDIAÇÃO E SERVIÇOS" : "GLOBAL INTERMEDIATION AND SERVICES AGREEMENT", pageWidth / 2, 20, { align: "center" });
 
-    let anexo2Text = dados.tipoPagamento === '100_total'
-      ? "<strong>100% Pago no Ato da Reserva (Pagamento Imediato):</strong> O cliente liquida a totalidade do valor do programa para assegurar a vaga de imediato."
-      : "<strong>Sinal de 50% Agora + 50% 1 Semana Antes:</strong> A plataforma debitará automaticamente a segunda metade do cartão do cliente 7 dias antes do início do programa.";
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      const dataFormatada = new Date(timestamp).toLocaleDateString(!isEn ? 'pt-PT' : 'en-GB', { year: 'numeric', month: 'long', day: 'numeric' });
+      doc.text(!isEn ? `Data de Assinatura: ${dataFormatada}` : `Signature Date: ${dataFormatada}`, pageWidth / 2, 28, { align: "center" });
+      doc.line(20, 35, pageWidth - 20, 35);
 
-    let anexo3Text = "";
-    if (dados.politicaCancelamento?.includes('Flexível')) {
-      anexo3Text = "<strong>Flexível (Reembolso a 100% até 7 dias antes):</strong> A HelloCamp não cobrará qualquer comissão sobre reservas canceladas pelo cliente. O Parceiro compromete-se a não aplicar quaisquer custos de cancelamento ao cliente, desde que o pedido seja comunicado até 7 (sete) dias antes do início da atividade. Os montantes pagos deverão ser reembolsados no prazo máximo de 30 dias. Cancelamentos após este prazo não conferem direito a reembolso, sendo a comissão integral devida à HelloCamp.";
-    } else if (dados.politicaCancelamento?.includes('Moderada')) {
-      anexo3Text = "<strong>Moderada (Reembolso a 50% até 15 dias antes):</strong> A comissão da HelloCamp é considerada devida após a confirmação. Em caso de cancelamento até 15 dias antes do início, o cliente recebe 50% do valor pago. Nestas situações, a comissão da HelloCamp será reduzida proporcionalmente ao valor efetivamente retido pelo Parceiro a título de cancelamento. Cancelamentos após este prazo não conferem direito a reembolso.";
-    } else {
-      anexo3Text = "<strong>Estrita (Sem reembolso após reserva):</strong> As reservas efetuadas são finais e não reembolsáveis em caso de cancelamento por iniciativa do cliente. A comissão da HelloCamp é devida na sua totalidade independentemente de o cliente comparecer ou não à atividade, uma vez que a receita do Parceiro fica inteiramente garantida.";
-    }
+      // 1. DADOS DAS PARTES
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(!isEn ? "1. IDENTIFICAÇÃO DAS PARTES" : "1. IDENTIFICATION OF THE PARTIES", 20, 45);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      if (!isEn) {
+        doc.text(`PRIMEIRA OUTORGANTE (Plataforma): HelloCamp Portugal`, 20, 55);
+        doc.text(`SEGUNDA OUTORGANTE (Parceiro): ${dados.empresaNome || 'N/A'} (${dados.formaJuridica || 'N/A'})`, 20, 62);
+        doc.text(`Sede: ${dados.morada || 'N/A'}, ${dados.codigoPostal || ''} | NIF: ${dados.nif || 'N/A'}`, 20, 69);
+        doc.text(`Contacto: ${dados.pessoaContacto || 'N/A'} | E-mail: ${dados.emailContacto || 'N/A'} | Tel: ${dados.telefone || 'N/A'}`, 20, 76);
+        doc.text(`Encarregado Proteção de Dados (RGPD): ${dados.responsavelRGPD || dados.pessoaContacto || 'N/A'}`, 20, 83);
+      } else {
+        doc.text(`FIRST PARTY (Platform): HelloCamp Portugal`, 20, 55);
+        doc.text(`SECOND PARTY (Partner): ${dados.empresaNome || 'N/A'} (${dados.formaJuridica || 'N/A'})`, 20, 62);
+        doc.text(`Headquarters: ${dados.morada || 'N/A'}, ${dados.codigoPostal || ''} | Tax ID: ${dados.nif || 'N/A'}`, 20, 69);
+        doc.text(`Contact: ${dados.pessoaContacto || 'N/A'} | E-mail: ${dados.emailContacto || 'N/A'} | Tel: ${dados.telefone || 'N/A'}`, 20, 76);
+        doc.text(`Data Protection Officer (GDPR): ${dados.responsavelRGPD || dados.pessoaContacto || 'N/A'}`, 20, 83);
+      }
 
-    const html = `
-    <!DOCTYPE html>
-    <html lang="pt">
-    <head>
-      <meta charset="UTF-8">
-      <title>Contrato Intermediação - ${dados.empresaNome || campo.nome}</title>
-      <style>
-        body { font-family: "Times New Roman", Times, serif; color: #000; max-width: 850px; margin: 0 auto; padding: 40px 30px; line-height: 1.5; font-size: 14px; text-align: justify; }
-        .header { text-align: center; margin-bottom: 40px; }
-        .header h1 { margin: 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; font-family: Arial, sans-serif; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 10px; display: inline-block; }
-        .header p { font-size: 12px; font-family: Arial, sans-serif; color: #555; margin-top: 5px; }
-        h2 { font-size: 16px; text-align: center; text-transform: uppercase; font-family: Arial, sans-serif; margin-top: 30px; margin-bottom: 15px; }
-        h3 { font-size: 14px; font-weight: bold; margin-top: 25px; margin-bottom: 10px; text-transform: uppercase; }
-        .party-block { background-color: #f9f9f9; border: 1px solid #ddd; padding: 20px; margin-bottom: 20px; border-radius: 4px; }
-        .party-block p { margin: 5px 0; }
-        .clause { margin-bottom: 15px; }
-        .clause-title { font-weight: bold; }
-        .signatures { display: flex; justify-content: space-between; margin-top: 50px; border-top: 2px solid #000; padding-top: 30px; }
-        .sig-box { width: 45%; }
-        .sig-title { font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
-        .sig-name { font-size: 22px; font-style: italic; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 5px; display: inline-block; min-width: 100%; }
-        .sig-details { font-size: 12px; font-family: Arial, sans-serif; }
-        .stamp { font-size: 10px; font-family: monospace; color: #666; margin-top: 15px; padding: 10px; border: 1px dashed #ccc; background: #fafafa; }
-        @media print { 
-          body { padding: 0; max-width: 100%; } 
-          .print-btn { display: none; } 
-          .page-break { page-break-before: always; }
+      // 2. TERMOS FINANCEIROS
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(!isEn ? "2. CONDIÇÕES FINANCEIRAS E OPERACIONAIS" : "2. FINANCIAL AND OPERATIONAL CONDITIONS", 20, 100);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      const baseComissao = dados.baseComissao || campo.base_comissao || 'total';
+      const modalidadeReserva = dados.modalidadeReserva || campo.modalidade_reserva || 'direta';
+      const linkExternoReserva = dados.linkExternoReserva || campo.link_externo_reserva || '';
+      const tipoPagamento = dados.tipoPagamento || campo.tipo_pagamento || '100_total';
+      const politicaCancelamento = dados.politicaCancelamento || campo.politica_cancelamento || 'Moderada';
+
+      let basePT = baseComissao === "apenas_programa" ? "Apenas sobre Valor Base do Programa" : (baseComissao === "sem_comissao" ? "Isento (0%)" : "Sobre Valor Total (Programa + Extras)");
+      let baseEN = baseComissao === "apenas_programa" ? "Only on Program Base Value" : (baseComissao === "sem_comissao" ? "Exempt (0%)" : "On Total Value (Program + Extras)");
+
+      let modPT = modalidadeReserva === "direta" ? "Reserva Direta no Checkout" : (modalidadeReserva === "email" ? "Sob Consulta (Email)" : "Link Externo");
+      let modEN = modalidadeReserva === "direta" ? "Direct Checkout Booking" : (modalidadeReserva === "email" ? "On Request (Email)" : "External Link");
+
+      if (!isEn) {
+        doc.text(`• Taxa de Comissão Fixada: ${taxaComissao}% (IVA incluído à taxa legal)`, 25, 110);
+        doc.text(`• Base de Incidência da Comissão: ${basePT}`, 25, 117);
+        doc.text(`• Modalidade de Integração: ${modPT}`, 25, 124);
+        if (modalidadeReserva === 'link_externo') {
+          doc.text(`• URL Oficial para Redirecionamento: ${linkExternoReserva}`, 25, 131);
+        } else {
+          doc.text(`• Fluxo de Pagamento (Stripe): ${tipoPagamento === '50_sinal' ? '50% Sinal no ato da reserva / Restante depois' : '100% cobrado no ato da reserva'}`, 25, 131);
+          doc.text(`• Política de Cancelamento Autorizada: ${politicaCancelamento}`, 25, 138);
         }
-      </style>
-    </head>
-    <body>
-      <div class="print-btn" style="text-align: center; margin-bottom: 30px;">
-        <button onclick="window.print()" style="padding: 10px 25px; background: #000; color: #fff; font-weight: bold; border: none; cursor: pointer; font-size: 16px;">Imprimir Contrato Jurídico</button>
-      </div>
+      } else {
+        doc.text(`• Fixed Commission Rate: ${taxaComissao}% (VAT included)`, 25, 110);
+        doc.text(`• Commission Base: ${baseEN}`, 25, 117);
+        doc.text(`• Integration Model: ${modEN}`, 25, 124);
+        if (modalidadeReserva === 'link_externo') {
+          doc.text(`• Official Redirect URL: ${linkExternoReserva}`, 25, 131);
+        } else {
+          doc.text(`• Payment Flow (Stripe): ${tipoPagamento === '50_sinal' ? '50% Deposit on booking / Remainder later' : '100% collected on booking'}`, 25, 131);
+          doc.text(`• Authorized Cancellation Policy: ${politicaCancelamento}`, 25, 138);
+        }
+      }
 
-      <div class="header">
-        <h1>Contrato de Intermediação – HelloCamp</h1>
-        <p>Acordo de Prestação de Serviços</p>
-      </div>
+      // 3. CLÁUSULAS LEGAIS
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(!isEn ? "3. CLÁUSULAS CONTRATUAIS GERAIS (SÍNTESE LEGAL)" : "3. GENERAL CONTRACTUAL CLAUSES (LEGAL SUMMARY)", 20, 155);
 
-      <p>Entre a <strong>HelloCamp</strong>, com website em www.hellocamp.pt e contacto via info@hellocamp.pt, doravante designada por "Primeiro Outorgante"; e do outro lado:</p>
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      const clausulasTexto = !isEn
+        ? "3.1. Responsabilidade Civil: A HelloCamp atua de forma estrita como plataforma informática de intermediação e motor de busca. A organização, gestão técnica, supervisão e segurança das atividades são da inteira e exclusiva responsabilidade da Segunda Outorgante (o Parceiro), que se obriga a manter válidos todos os seguros exigidos por lei (Responsabilidade Civil e Acidentes Pessoais) e as respetivas licenças de funcionamento.\n\n3.2. Proteção de Dados (RGPD): O Parceiro compromete-se a tratar os dados pessoais, médicos e restrições alimentares fornecidos pela HelloCamp no estrito cumprimento do Regulamento (UE) 2016/679 (RGPD), utilizando-os apenas para a execução do serviço contratado.\n\n3.3. Lei Aplicável e Jurisdição: O presente contrato rege-se pela Lei Portuguesa. O foro competente para dirimir qualquer litígio será o da Comarca de Lisboa, com renúncia expressa a qualquer outro."
+        : "3.1. Civil Liability: HelloCamp acts strictly as an IT intermediation platform and search engine. The organization, technical management, supervision, and safety of the activities are the entire and exclusive responsibility of the Second Party (the Partner), who is obliged to keep valid all insurance required by law.\n\n3.2. Data Protection (GDPR): The Partner commits to processing the personal, medical, and dietary restriction data provided by HelloCamp in strict compliance with Regulation (EU) 2016/679 (GDPR).\n\n3.3. Governing Law and Jurisdiction: This agreement is governed by Portuguese Law. The competent forum to resolve any dispute will be the District of Lisbon.";
 
-      <div class="party-block">
-        <p><strong>Nome da Empresa (Faturação):</strong> ${dados.empresaNome}</p>
-        <p><strong>NIF:</strong> ${dados.nif}</p>
-        <p><strong>Forma Jurídica:</strong> ${dados.formaJuridica}</p>
-        <p><strong>Morada Fiscal:</strong> ${dados.morada}, ${dados.codigoPostal}</p>
-        <p><strong>Pessoa de Contacto:</strong> ${dados.pessoaContacto}</p>
-        <p><strong>Telefone:</strong> ${dados.telefone}</p>
-        <p><strong>E-mail Comercial:</strong> ${dados.emailContacto}</p>
-        <p><strong>E-mail para Reservas:</strong> ${dados.emailReservas}</p>
-        <p><strong>Responsável de Dados (RGPD):</strong> ${dados.responsavelRGPD}</p>
-        <p><strong>Website:</strong> ${dados.website || 'N/A'}</p>
-      </div>
+      doc.text(doc.splitTextToSize(clausulasTexto, pageWidth - 40), 20, 165);
 
-      <p style="text-align: center; font-style: italic;">- doravante designado por "Parceiro" -</p>
+      // 4. ASSINATURA
+      let yPos = 240;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.line(20, yPos, 100, yPos);
+      doc.text(!isEn ? `Assinado Digitalmente por:` : `Digitally Signed by:`, 20, yPos + 7);
+      doc.text(`${dados.assinaturaNome || 'N/A'} (${dados.assinaturaCargo || 'Representante Legal'})`, 20, yPos + 14);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`Data/Hora: ${new Date(timestamp).toLocaleString(!isEn ? 'pt-PT' : 'en-GB')}`, 20, yPos + 21);
+      doc.text(`IP: ${dados.ipAssinatura || 'Registado'} (Secured via HelloCamp Server)`, 20, yPos + 27);
 
-      <p>É celebrado o presente contrato de intermediação e divulgação comercial aplicável, mas não limitado, ao programa/campo de férias com a designação: <strong>"${campo.nome}"</strong>.</p>
-
-      <h2>Cláusulas Contratuais</h2>
-
-      <div class="clause">
-        <span class="clause-title">Artigo 1.º – Comissão</span><br>
-        O Parceiro compromete-se a pagar à HelloCamp uma comissão de <strong>${comissaoText}% (iva não incluído)</strong> sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou em acordo complementar celebrado entre as partes. A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados. A comissão torna-se devida após a confirmação da reserva. O Parceiro deverá enviar ao cliente a confirmação da reserva e assegurar a prestação dos serviços contratados. Caso uma reserva não possa ser realizada por motivos justificados, o Parceiro deverá informar a HelloCamp com a maior brevidade possível.
-      </div>
-
-      <div class="clause">
-        <span class="clause-title">Artigo 2.º – Condições de Pagamento</span><br>
-        As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados não incluem IVA ou otros impostos legalmente aplicáveis.
-      </div>
-
-      <div class="clause">
-        <span class="clause-title">Artigo 3.º – Obrigações do Parceiro</span><br>
-        O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades. O Parceiro garante que possui todos os direitos necessários sobre os conteúdos disponibilizados (direitos de autor e de imagem). A HelloCamp poderá utilizar os conteúdos fornecidos para promoção. Os preços divulgados na plataforma não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas. O Parceiro compromete-se a informar imediatamente a HelloCamp de alterações de atividades, preços ou condições.
-      </div>
-
-      <div class="clause">
-        <span class="clause-title">Artigo 4.º – Duração e Renovação</span><br>
-        O presente contrato produz efeitos a partir da data da sua assinatura por ambas as partes e mantém-se válido até ao final do respetivo ano civil. O contrato será automaticamente renovado por períodos sucessivos de um ano, salvo denúncia por qualquer das partes com aviso prévio de 30 dias.
-      </div>
-
-      <div class="clause">
-        <span class="clause-title">Artigo 5.º e 6.º – Separabilidade e Alterações</span><br>
-        A eventual invalidade de qualquer disposição não prejudica a validade das restantes cláusulas. Quaisquer alterações a este contrato deverão constar no Anexo 4 para produzirem efeitos.
-      </div>
-
-      <div class="clause">
-        <span class="clause-title">Artigo 7.º – Limitação de Responsabilidade e Seguros</span><br>
-        A HelloCamp atua exclusivamente como plataforma intermediária de reservas e não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos ou disputas. O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças e certificações exigidas para o ejercicio da sua atividade.
-      </div>
-
-      <div class="page-break"></div>
-
-      <h2>Anexos e Condições Operacionais Acordadas</h2>
-
-      <div class="clause">
-        <span class="clause-title">Anexo 1 – Procedimento de Reserva Acordado</span><br>
-        ${anexo1Text}
-      </div>
-
-      <div class="clause">
-        <span class="clause-title">Anexo 2 – Pagamento e Comissão</span><br>
-        O Parceiro autoriza a HelloCamp a receber um depósito durante o processo de reserva efetuado através da plataforma Stripe. O valor do depósito corresponde, regra geral, à comissão devida à HelloCamp pela reserva efetuada, acrescida de IVA. Modalidade escolhida: <br>
-        ${anexo2Text}
-      </div>
-
-      <div class="clause">
-        <span class="clause-title">Anexo 3 – Política de Cancelamento e Reembolso</span><br>
-        A opção selecionada ditará as regras de reembolso para os pais na plataforma. A comissão devida à HelloCamp será sempre ajustada proporcionalmente ao montante que o Parceiro retiver do cliente em caso de desistência. Modalidade escolhida: <br>
-        ${anexo3Text}
-      </div>
-
-      <div class="clause">
-        <span class="clause-title">Anexo 4 – Acordos Extraordinários</span><br>
-        O Parceiro declarou e a HelloCamp validou as siguientes alterações ou exceções ao contrato-modelo:<br>
-        <i>${dados.acordosComplementares || 'Nenhuma cláusula de exceção preenchida pelo parceiro. O contrato-modelo aplica-se na sua totalidade.'}</i>
-      </div>
-
-      <div class="signatures">
-        <div class="sig-box">
-          <div class="sig-title">Pela HelloCamp</div>
-          <div class="sig-name" style="font-family: 'Times New Roman', serif;">Administração HelloCamp</div>
-          <div class="sig-details">Data: ${dataContrato}</div>
-        </div>
-        <div class="sig-box">
-          <div class="sig-title">Pelo Parceiro</div>
-          <div class="sig-name">${dados.assinaturaNome}</div>
-          <div class="sig-details">Cargo: ${dados.assinaturaCargo}</div>
-          <div class="sig-details">Data da Assinatura: ${dataContrato}</div>
-
-          <div class="stamp">
-            <strong>Declaração de Vinculação Aceite:</strong> "Declaro ter lido e aceite os termos. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital."<br><br>
-            <strong>Registo Digital:</strong><br>
-            IP/Método: ${dados.ipAssinatura}<br>
-            Timestamp: ${dados.dataSubmissao}<br>
-            ID Contrato Sistema: ${campo.id}
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-    `;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
+      doc.save(`Contrato_HelloCamp_${(dados.empresaNome || campo.nome).replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error("Erro ao gerar PDF:", err);
+      alert(isEn ? "Error downloading PDF." : "Erro ao descarregar o PDF.");
+    }
+    setDownloadingPdf(false);
   };
 
-  return (
-    <div className="max-w-[1200px] mx-auto pb-10">
+  // Dados ativos do campo selecionado para mostrar no Modal
+  const modalDados = contratoModalCampo?.contrato_dados || perfilBase?.contrato_dados || {};
+  const modalTaxa = contratoModalCampo && contratoModalCampo.taxa_comissao !== null && contratoModalCampo.taxa_comissao !== undefined
+    ? contratoModalCampo.taxa_comissao
+    : (perfilBase?.taxa_comissao || 12);
+  const modalBase = modalDados.baseComissao || contratoModalCampo?.base_comissao || 'total';
+  const modalModalidade = modalDados.modalidadeReserva || contratoModalCampo?.modalidade_reserva || 'direta';
+  const modalLinkExterno = modalDados.linkExternoReserva || contratoModalCampo?.link_externo_reserva || '';
+  const modalPagamento = modalDados.tipoPagamento || contratoModalCampo?.tipo_pagamento || '100_total';
+  const modalCancelamento = modalDados.politicaCancelamento || contratoModalCampo?.politica_cancelamento || 'Moderada';
 
+  return (
+    <div className="max-w-[1200px] mx-auto pb-10 font-sans">
+
+      {/* ========================================================================= */}
+      {/* MODAL DE VISUALIZAÇÃO DO CONTRATO ASSINADO (100% READ-ONLY)               */}
+      {/* ========================================================================= */}
+      {contratoModalCampo && (
+        <div 
+          className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => setContratoModalCampo(null)}
+        >
+          <div 
+            className="bg-white w-full max-w-4xl rounded-[2rem] shadow-2xl border border-slate-200 overflow-hidden relative my-8 max-h-[92vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* CABEÇALHO DO MODAL FIXO */}
+            <div className="bg-[#0E3A68] p-6 sm:p-8 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 shrink-0">
+              <div>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="text-xl font-black tracking-tighter">
+                    <span className="text-white">Hello</span><span className="text-[#e2a41d]">Camp</span>
+                  </span>
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+                    ✓ {isEn ? 'Signed & Active' : 'Assinado & Válido'}
+                  </span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black m-0 tracking-tight">
+                  {isEn ? 'Global Intermediation Agreement' : 'Acordo de Intermediação Global'}
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-3 self-end sm:self-center">
+                <button
+                  onClick={() => handleDownloadPDF(contratoModalCampo)}
+                  disabled={downloadingPdf}
+                  className="bg-[#e2a41d] hover:bg-[#d4991b] text-white font-black text-xs uppercase tracking-widest px-5 py-3 rounded-xl shadow-lg transition-all cursor-pointer border-none flex items-center gap-2"
+                >
+                  📥 {downloadingPdf ? (isEn ? 'Opening...' : 'A abrir...') : (isEn ? 'Download PDF' : 'Descarregar PDF')}
+                </button>
+                <button
+                  onClick={() => setContratoModalCampo(null)}
+                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white font-black text-lg flex items-center justify-center cursor-pointer border-none transition-colors"
+                  title={isEn ? "Close" : "Fechar"}
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+
+            {/* CORPO DO CONTRATO (SCROLLABLE & READ-ONLY) */}
+            <div className="p-6 sm:p-10 overflow-y-auto space-y-8 text-slate-800">
+
+              {/* AVISO DE DOCUMENTO BLOQUEADO PARA EDIÇÃO */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🔒</span>
+                  <p className="text-xs font-bold text-slate-600 m-0">
+                    {isEn 
+                      ? 'This document is digitally signed and locked for editing. It serves as your official legal record.' 
+                      : 'Este documento encontra-se assinado digitalmente e bloqueado para edição, servindo como arquivo legal oficial.'}
+                  </p>
+                </div>
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  ID: {contratoModalCampo.id.slice(0, 8)}
+                </span>
+              </div>
+
+              {/* 1. DADOS DE FATURAÇÃO E IDENTIFICAÇÃO */}
+              <section>
+                <h3 className="text-sm font-black uppercase tracking-widest text-[#0E3A68] border-b border-slate-200 pb-2 mb-4">
+                  1. {isEn ? 'Billing and Identification Data' : 'Dados de Faturação e Identificação'}
+                </h3>
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  <div className="sm:col-span-2">
+                    <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                      {isEn ? 'Organizing Entity / Legal Name' : 'Entidade Organizadora / Nome Fiscal'}
+                    </span>
+                    <p className="text-sm font-black text-slate-900 m-0">{modalDados.empresaNome || '—'}</p>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                      {isEn ? 'Tax ID (NIF/VAT)' : 'NIF / Tax ID'}
+                    </span>
+                    <p className="text-sm font-black text-slate-900 m-0">{modalDados.nif || '—'}</p>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                      {isEn ? 'Legal Form' : 'Forma Jurídica'}
+                    </span>
+                    <p className="text-sm font-bold text-slate-800 m-0">{modalDados.formaJuridica || '—'}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                      {isEn ? 'Registered Address' : 'Morada Fiscal Completa'}
+                    </span>
+                    <p className="text-sm font-bold text-slate-800 m-0">
+                      {modalDados.morada || '—'}{modalDados.codigoPostal ? `, ${modalDados.codigoPostal}` : ''}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                      {isEn ? 'Manager / Contact Person' : 'Nome do Responsável'}
+                    </span>
+                    <p className="text-sm font-bold text-slate-800 m-0">{modalDados.pessoaContacto || '—'}</p>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                      {isEn ? 'Operational Email' : 'E-mail Operacional'}
+                    </span>
+                    <p className="text-sm font-bold text-slate-800 m-0">{modalDados.emailContacto || '—'}</p>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                      {isEn ? 'Phone Number' : 'Telefone'}
+                    </span>
+                    <p className="text-sm font-bold text-slate-800 m-0">{modalDados.telefone || '—'}</p>
+                  </div>
+                  <div className="sm:col-span-3 border-t border-slate-200/80 pt-4">
+                    <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                      {isEn ? 'Data Protection Officer (GDPR)' : 'Encarregado de Proteção de Dados (RGPD)'}
+                    </span>
+                    <p className="text-sm font-bold text-slate-800 m-0">{modalDados.responsavelRGPD || modalDados.pessoaContacto || '—'}</p>
+                  </div>
+                </div>
+              </section>
+
+              {/* 2. CONDIÇÕES OPERACIONAIS E FINANCEIRAS */}
+              <section>
+                <h3 className="text-sm font-black uppercase tracking-widest text-[#0E3A68] border-b border-slate-200 pb-2 mb-4">
+                  2. {isEn ? 'Operational and Financial Terms' : 'Termos Operacionais e Financeiros Acordados'}
+                </h3>
+                <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100 space-y-6">
+                  <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-blue-200 shadow-sm">
+                    <div>
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        {isEn ? 'Agreed Commission Rate' : 'Taxa de Comissão Acordada'}
+                      </span>
+                      <p className="text-xs font-medium text-slate-500 m-0 mt-0.5">
+                        {isEn ? 'Applied only on successful bookings' : 'Aplicada exclusivamente sobre reservas confirmadas'}
+                      </p>
+                    </div>
+                    <span className="text-2xl font-black text-[#0E3A68] bg-blue-50 px-4 py-1.5 rounded-lg border border-blue-200">
+                      {modalTaxa}%
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                      <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                        {isEn ? 'Commission Base' : 'Base de Incidência da Comissão'}
+                      </span>
+                      <p className="text-sm font-black text-slate-900 m-0">
+                        {modalBase === 'apenas_programa' 
+                          ? (isEn ? 'Only on Program Base Value' : 'Apenas sobre Valor Base do Programa')
+                          : modalBase === 'sem_comissao'
+                          ? (isEn ? 'Exempt (0%)' : 'Isento (0%)')
+                          : (isEn ? 'On Total Value (Program + Extras)' : 'Sobre Valor Total (Programa + Extras)')}
+                      </p>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                      <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                        {isEn ? 'Integration Model' : 'Modelo de Integração'}
+                      </span>
+                      <p className="text-sm font-black text-slate-900 m-0">
+                        {modalModalidade === 'direta' 
+                          ? (isEn ? 'Direct Checkout Booking (HelloCamp)' : 'Reserva Direta no Checkout (HelloCamp)')
+                          : modalModalidade === 'email'
+                          ? (isEn ? 'Lead Forwarding via Email' : 'Encaminhamento de Leads via E-mail')
+                          : (isEn ? 'Redirection to External Link' : 'Redirecionamento para Link Externo Oficial')}
+                      </p>
+                    </div>
+
+                    {modalModalidade === 'link_externo' ? (
+                      <div className="sm:col-span-2 bg-white p-4 rounded-xl border border-slate-200">
+                        <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                          {isEn ? 'Official Redirect URL' : 'Link Oficial para Redirecionamento'}
+                        </span>
+                        <a href={modalLinkExterno} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-blue-600 underline break-all">
+                          {modalLinkExterno || '—'}
+                        </a>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="bg-white p-4 rounded-xl border border-slate-200">
+                          <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                            {isEn ? 'Payment Flow' : 'Fluxo de Pagamento'}
+                          </span>
+                          <p className="text-sm font-black text-slate-900 m-0">
+                            {modalPagamento === '50_sinal' 
+                              ? (isEn ? '50% Deposit Now + 50% Later' : 'Sinal de 50% no ato + 50% antes do início')
+                              : (isEn ? '100% Charged Upon Booking' : '100% Cobrado no ato da reserva')}
+                          </p>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-xl border border-slate-200">
+                          <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                            {isEn ? 'Cancellation Policy' : 'Política de Cancelamento'}
+                          </span>
+                          <p className="text-sm font-black text-slate-900 m-0">{modalCancelamento}</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {modalDados.acordosComplementares && (
+                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-amber-800 mb-1">
+                        {isEn ? 'Complementary Agreements / Exceptions' : 'Acordos Complementares / Exceções Fixados'}
+                      </span>
+                      <p className="text-xs font-medium text-amber-900 m-0 italic">"{modalDados.acordosComplementares}"</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* 3. SÍNTESE JURÍDICA */}
+              <section>
+                <h3 className="text-sm font-black uppercase tracking-widest text-[#0E3A68] border-b border-slate-200 pb-2 mb-4">
+                  3. {isEn ? 'Legal Liability and Jurisdiction' : 'Responsabilidade Legal e Foro'}
+                </h3>
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-3 text-xs text-slate-600 leading-relaxed text-justify">
+                  <p className="m-0">
+                    <strong>{isEn ? 'A. Civil Liability & Insurance:' : 'A. Responsabilidade Civil e Seguros:'}</strong>{' '}
+                    {isEn 
+                      ? 'HelloCamp acts strictly as an IT intermediation platform and search engine. The organization, technical management, supervision, and safety of the activities are the entire and exclusive responsibility of the Partner, who is obliged to keep valid all insurance required by law (Civil Liability and Personal Accidents) and operating licenses.' 
+                      : 'A HelloCamp atua de forma estrita como plataforma informática de intermediação e motor de busca. A organização, gestão técnica, supervisão e segurança das atividades são da inteira e exclusiva responsabilidade do Parceiro, que se obriga a manter válidos todos os seguros exigidos por lei (Responsabilidade Civil e Acidentes Pessoais) e respetivas licenças.'}
+                  </p>
+                  <p className="m-0">
+                    <strong>{isEn ? 'B. Data Protection (GDPR):' : 'B. Proteção de Dados (RGPD):'}</strong>{' '}
+                    {isEn 
+                      ? 'The Partner assumes the role of Data Controller for the personal, medical, and dietary restriction data provided by HelloCamp in strict compliance with Regulation (EU) 2016/679 (GDPR), using them only for the execution of the contracted service.' 
+                      : 'O Parceiro assume o papel de Responsável pelo Tratamento dos dados pessoais, médicos e restrições alimentares fornecidos pela HelloCamp no estrito cumprimento do Regulamento (UE) 2016/679 (RGPD), utilizando-os apenas para a execução do serviço contratado.'}
+                  </p>
+                  <p className="m-0">
+                    <strong>{isEn ? 'C. Governing Law and Jurisdiction:' : 'C. Lei Aplicável e Foro Competente:'}</strong>{' '}
+                    {isEn 
+                      ? 'This agreement is governed by Portuguese Law. Any dispute arising from the interpretation or execution of this agreement shall be submitted to the exclusive jurisdiction of the courts of the District of Lisbon (Portugal).' 
+                      : 'O presente acordo rege-se pela Lei Portuguesa. Qualquer litígio emergente da interpretação ou execução deste acordo será submetido à competência exclusiva dos tribunais da Comarca de Lisboa (Portugal).'}
+                  </p>
+                </div>
+              </section>
+
+              {/* 4. CERTIFICADO DE ASSINATURA DIGITAL */}
+              <section>
+                <div className="bg-emerald-50/70 border-2 border-emerald-200 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                  <div>
+                    <span className="inline-block bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-3">
+                      ✍️ {isEn ? 'Digital Signature Certificate' : 'Certificado de Assinatura Digital'}
+                    </span>
+                    <p className="text-lg font-black text-emerald-950 font-serif italic m-0">
+                      {modalDados.assinaturaNome || modalDados.pessoaContacto || 'Assinado Digitalmente'}
+                    </p>
+                    <p className="text-xs font-bold text-emerald-800 m-0 mt-1">
+                      {isEn ? 'Role / Position:' : 'Cargo / Função Legal:'} {modalDados.assinaturaCargo || 'Representante Legal'}
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-emerald-200 text-xs font-mono text-slate-600 space-y-1 w-full md:w-auto">
+                    <div><strong>{isEn ? 'Date/Time:' : 'Data/Hora:'}</strong> {modalDados.dataSubmissao ? new Date(modalDados.dataSubmissao).toLocaleString(!isEn ? 'pt-PT' : 'en-GB') : 'Validado'}</div>
+                    <div><strong>IP Signatário:</strong> {modalDados.ipAssinatura || 'Registado no Servidor'}</div>
+                    <div><strong>Status Legal:</strong> Vinculativo (Termos Aceites)</div>
+                  </div>
+                </div>
+              </section>
+
+            </div>
+
+            {/* RODAPÉ DO MODAL */}
+            <div className="bg-slate-50 px-6 sm:px-10 py-5 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
+              <Link href={`/${lang}/termos`} target="_blank" className="text-xs font-black uppercase tracking-widest text-slate-500 hover:text-[#0E3A68] no-underline">
+                {isEn ? 'View General Terms & Conditions ↗' : 'Consultar Termos e Condições Gerais ↗'}
+              </Link>
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <button
+                  onClick={() => setContratoModalCampo(null)}
+                  className="px-5 py-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs uppercase tracking-widest cursor-pointer transition-colors"
+                >
+                  {isEn ? 'Close' : 'Fechar'}
+                </button>
+                <button
+                  onClick={() => handleDownloadPDF(contratoModalCampo)}
+                  disabled={downloadingPdf}
+                  className="px-6 py-3 rounded-xl border-none bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black text-xs uppercase tracking-widest cursor-pointer shadow-md transition-colors flex items-center gap-2"
+                >
+                  📥 {isEn ? 'Download Signed PDF' : 'Descarregar PDF Assinado'}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* LISTAGEM PRINCIPAL DE CAMPOS                                              */}
+      {/* ========================================================================= */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl md:text-4xl font-black text-slate-900 m-0 tracking-tight">
@@ -246,7 +510,6 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
             const vagasVisivel = campo.vagas_totais || 0;
             const textoVagas = isEn ? 'spots' : 'vagas';
 
-            // Lógica Inteligente para encontrar o preço mais baixo da nova estrutura (pacotes)
             let precoVisivel = campo.preco || 0;
             if (!precoVisivel && campo.pacotes && campo.pacotes.length > 0) {
               const todosPrecos = campo.pacotes.flatMap((p: any) => 
@@ -259,6 +522,7 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
 
             const isComissaoEspecifica = campo.taxa_comissao !== null && campo.taxa_comissao !== undefined;
             const taxaVisual = isComissaoEspecifica ? campo.taxa_comissao : (perfilBase?.taxa_comissao || 12);
+            const temContrato = Boolean(campo.contrato_dados || perfilBase?.contrato_dados || campo.contrato_parceiro_url);
 
             return (
               <div key={campo.id} className="flex flex-col lg:flex-row justify-between lg:items-center gap-5 p-5 md:p-6 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -295,14 +559,16 @@ export default function MeusCampos({ params }: { params: Promise<{ lang: string 
                     {isEn ? 'Preview' : 'Ver Online'}
                   </a>
 
-                  {/* NOVO BOTÃO DE PDF (Apenas se houver contrato assinado) - Adaptado para o Amarelo da Marca */}
-                  {campo.contrato_dados && (
-                    <button onClick={() => handleImprimirPDF(campo)} className="flex items-center justify-center px-5 py-3 bg-[#e2a41d] text-white hover:bg-[#d4991b] rounded-xl font-bold text-xs uppercase tracking-widest no-underline transition-colors cursor-pointer shadow-sm">
-                      {isEn ? 'Download Contract' : '📥 Contrato PDF'}
+                  {/* BOTÃO QUE ABRE O MODAL DE LEITURA DO CONTRATO */}
+                  {temContrato && (
+                    <button 
+                      onClick={() => setContratoModalCampo(campo)} 
+                      className="flex items-center justify-center gap-1.5 px-5 py-3 bg-[#e2a41d] text-white hover:bg-[#d4991b] rounded-xl font-bold text-xs uppercase tracking-widest border-none transition-colors cursor-pointer shadow-sm"
+                    >
+                      📄 {isEn ? 'View Contract' : 'Contrato PDF'}
                     </button>
                   )}
 
-                  {/* Botão de Edição com a cor corporativa principal */}
                   <Link href={`/${lang}/admin/campos/editar/${campo.id}`} className="flex items-center justify-center px-6 py-3 bg-[#167524] text-white hover:bg-[#115a1b] rounded-xl font-bold text-xs uppercase tracking-widest no-underline transition-colors shadow-sm">
                     {isEn ? 'Edit Camp' : 'Editar Campo'}
                   </Link>
