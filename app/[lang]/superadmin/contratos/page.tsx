@@ -29,19 +29,35 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
   const textareaClass = "w-full p-3 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-800 outline-none focus:border-slate-800 transition-all shadow-sm resize-y";
 
   const fetchContratos = async () => {
-    // Adicionado o join com "campos(contrato_parceiro_url)" para podermos extrair o PDF gerado pelo parceiro!
-    const { data, error } = await supabase
+    // 1. Pesquisar Perfis
+    const { data: perfisData, error: perfisError } = await supabase
       .from('perfis')
-      .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao, base_comissao, campos(contrato_parceiro_url)')
+      .select('id, empresa_nome, nif_empresa, email, telefone, contrato_dados, status_contrato, modalidade_reserva, link_externo_reserva, created_at, taxa_comissao, base_comissao')
       .eq('role', 'organizador')
       .order('created_at', { ascending: false });
       
-    if (error) {
-      console.error("Erro ao ler perfis:", error);
-      alert("Erro ao ler a base de dados: " + error.message);
+    if (perfisError) {
+      console.error("Erro ao ler perfis:", perfisError);
+      alert("Erro ao ler a base de dados: " + perfisError.message);
+      setLoading(false);
+      return;
     }
 
-    const organizadores = data || [];
+    // 2. Pesquisar Campos (Apenas para resgatar os PDFs assinados, evitando erros de JOIN de Schema no Supabase)
+    const { data: camposData } = await supabase
+      .from('campos')
+      .select('organizador_id, contrato_parceiro_url')
+      .not('contrato_parceiro_url', 'is', null);
+
+    // 3. Mapeamento Manual e Seguro
+    const organizadores = (perfisData || []).map(perfil => {
+      const camposDoPerfil = (camposData || []).filter(c => c.organizador_id === perfil.id);
+      return {
+        ...perfil,
+        campos: camposDoPerfil
+      };
+    });
+
     setContratos(organizadores);
     
     if (organizadores.length > 0 && !organizadores.some(c => c.status_contrato === 'Pendente de Revisão' && c.contrato_dados?.assinaturaNome)) {
@@ -223,12 +239,12 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
               <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold text-sm">Sem parceiros encontrados nesta categoria.</td></tr>
             ) : contratosFiltrados.map(c => {
               const dados = c.contrato_dados || {};
-              const parceiroJaAssinou = !!c.contrato_dados?.assinaturaNome;
+              const temContrato = !!c.contrato_dados?.assinaturaNome;
               
               let statusColor = "bg-slate-100 text-slate-600 border-slate-200";
               let statusLabel = "Preparação HQ";
               
-              if (parceiroJaAssinou) {
+              if (temContrato) {
                 statusLabel = c.status_contrato || 'Pendente de Revisão';
                 if (c.status_contrato === 'Aprovado') statusColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
                 else if (c.status_contrato === 'Rejeitado') statusColor = "bg-red-100 text-red-800 border-red-200";
@@ -257,7 +273,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button onClick={() => abrirModal(c)} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-slate-800 transition-colors shadow-sm">
-                      {parceiroJaAssinou ? 'Rever & Validar' : 'Preparar Termos HQ'}
+                      {temContrato ? 'Rever & Validar' : 'Preparar Termos HQ'}
                     </button>
                   </td>
                 </tr>
@@ -296,7 +312,7 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
             </div>
             
             <div className="p-8 overflow-y-auto flex-1 bg-slate-50/50">
-              {!modalPerfil.contrato_dados && !isEditing ? (
+              {!modalPerfil.contrato_dados?.assinaturaNome && !isEditing ? (
                  <div className="bg-blue-50 border border-blue-200 p-8 rounded-2xl text-center shadow-sm">
                     <h3 className="text-blue-900 font-black text-lg mb-2">Preparar Acordo para o Parceiro</h3>
                     <p className="text-blue-800 text-sm font-medium mb-6">O parceiro ainda não assinou. Tem de clicar em "Pre-Fill Termos (HQ)", configurar a comissão e as regras logísticas, gravar, e depois gerar o Link Seguro para lhe enviar.</p>
@@ -332,20 +348,12 @@ export default function GestaoContratosHQ({ params }: { params: Promise<{ lang: 
                       )}
                     </div>
                     
-                    {!isEditing && (
+                    {modalPerfil.contrato_dados?.assinaturaNome && !isEditing && (
                       <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl shadow-sm relative overflow-hidden">
                         <span className="relative block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3">Assinatura Digital Segura</span>
-                        {!modalPerfil.contrato_dados?.assinaturaNome ? (
-                          <div className="bg-white p-4 rounded-xl text-center border border-emerald-100 opacity-60">
-                            <span className="text-xs font-bold text-emerald-800">Aguardando Assinatura do Parceiro</span>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="relative font-serif text-3xl font-black italic text-emerald-900 mb-1">{modalPerfil.contrato_dados?.assinaturaNome}</p>
-                            <p className="relative text-sm text-emerald-700 font-bold mb-4">{modalPerfil.contrato_dados?.assinaturaCargo}</p>
-                            <p className="relative text-[10px] text-emerald-600/70 font-mono m-0 uppercase tracking-widest bg-emerald-100/50 inline-block px-3 py-1.5 rounded-md border border-emerald-200">Timestamp: {modalPerfil.contrato_dados?.dataSubmissao ? new Date(modalPerfil.contrato_dados?.dataSubmissao).toLocaleString('pt-PT') : 'N/D'} | IP: {modalPerfil.contrato_dados?.ipAssinatura || '---'}</p>
-                          </>
-                        )}
+                        <p className="relative font-serif text-3xl font-black italic text-emerald-900 mb-1">{modalPerfil.contrato_dados?.assinaturaNome}</p>
+                        <p className="relative text-sm text-emerald-700 font-bold mb-4">{modalPerfil.contrato_dados?.assinaturaCargo}</p>
+                        <p className="relative text-[10px] text-emerald-600/70 font-mono m-0 uppercase tracking-widest bg-emerald-100/50 inline-block px-3 py-1.5 rounded-md border border-emerald-200">Timestamp: {modalPerfil.contrato_dados?.dataSubmissao ? new Date(modalPerfil.contrato_dados?.dataSubmissao).toLocaleString('pt-PT') : 'N/D'} | IP: {modalPerfil.contrato_dados?.ipAssinatura || '---'}</p>
                       </div>
                     )}
                   </div>
