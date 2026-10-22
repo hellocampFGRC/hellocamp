@@ -14,7 +14,9 @@ const SENDER_NAME = 'HelloCamp B2B';
 async function enviarEmailBoasVindas(emailParceiro: string, nomeEmpresa: string, urlPdf: string, lang: string) {
   if (!BREVO_API_KEY) return;
   const isPt = lang === 'pt';
-  const subject = isPt ? `Bem-vindo à HelloCamp! O seu Acordo Operacional - ${nomeEmpresa}` : `Welcome to HelloCamp! Your Operational Agreement - ${nomeEmpresa}`;
+  const subject = isPt 
+    ? `Bem-vindo à HelloCamp! O seu Acordo Operacional - ${nomeEmpresa}` 
+    : `Welcome to HelloCamp! Your Operational Agreement - ${nomeEmpresa}`;
   
   const htmlContent = isPt 
     ? `
@@ -53,7 +55,9 @@ async function enviarEmailBoasVindas(emailParceiro: string, nomeEmpresa: string,
         htmlContent: htmlContent
       }),
     });
-  } catch (error) { console.error("Erro ao enviar email de boas-vindas:", error); }
+  } catch (error) { 
+    console.error("Erro ao enviar email de boas-vindas:", error); 
+  }
 }
 
 export async function POST(request: Request) {
@@ -72,11 +76,16 @@ export async function POST(request: Request) {
 
     const contratoDados = JSON.parse(contratoDadosStr);
 
-    // 1. Verificação de Segurança (Gatekeeper Backend)
+    // 1. Verificação de Segurança (Gatekeeper na tabela 'perfis')
     const { data: perfil, error: fetchError } = await supabaseAdmin
-      .from('perfis').select('email, contrato_dados').eq('id', id).single();
+      .from('perfis')
+      .select('email, contrato_dados')
+      .eq('id', id)
+      .single();
 
-    if (fetchError || !perfil) return NextResponse.json({ error: 'Perfil não encontrado na base de dados.' }, { status: 404 });
+    if (fetchError || !perfil) {
+      return NextResponse.json({ error: 'Perfil não encontrado na base de dados.' }, { status: 404 });
+    }
 
     const emailBd = perfil.email?.trim().toLowerCase();
     const emailContactoBd = perfil.contrato_dados?.emailContacto?.trim().toLowerCase();
@@ -86,29 +95,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Tentativa de submissão não autorizada. O e-mail não corresponde.' }, { status: 403 });
     }
 
-    // ==========================================================
-    // 2. PROTEÇÃO ANTI-CRASH: Atualizar Palavra-Passe no Supabase
-    // ==========================================================
+    // 2. Criação ou Atualização no Supabase Auth
     let loginReady = false;
     if (passwordNova) {
-      // 2.1 Verifica se o Utilizador Auth existe mesmo!
+      const emailFinal = perfil.email || inputEmail;
       const { data: authData } = await supabaseAdmin.auth.admin.getUserById(id);
-      
+
       if (authData && authData.user) {
-        // O utilizador Auth existe! Atualizamos a password.
-        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        // Utilizador já existe: atualiza a password
+        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(id, {
           password: passwordNova,
-          email_confirm: true 
+          email_confirm: true
         });
-        if (!authError) loginReady = true;
+        if (!updateError) loginReady = true;
       } else {
-        // A conta foi criada manualmente na BD! Não tem conta Auth.
-        // Registamos o aviso mas NÃO DAMOS CRASH. O contrato avança na mesma.
-        console.warn(`[AVISO] Parceiro ${id} não tem conta Auth ativa. A password não foi guardada.`);
+        // Utilizador não existe no Auth: cria a conta mantendo o mesmo UUID do perfil
+        const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+          id: id,
+          email: emailFinal,
+          password: passwordNova,
+          email_confirm: true,
+          user_metadata: { role: 'organizador' }
+        });
+
+        if (!createError) {
+          loginReady = true;
+        } else {
+          console.error("Erro ao criar utilizador no Auth:", createError.message);
+        }
       }
     }
 
-    // 3. Upload do PDF
+    // 3. Upload do Documento PDF assinado
     const fileName = `contrato_global_${id}_${Date.now()}.pdf`;
     const arrayBuffer = await pdfFile.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -120,10 +138,11 @@ export async function POST(request: Request) {
     if (uploadError) throw new Error(`Erro ao guardar PDF: ${uploadError.message}`);
 
     const { data: publicUrlData } = supabaseAdmin.storage
-      .from('campos-documentos').getPublicUrl(fileName);
+      .from('campos-documentos')
+      .getPublicUrl(fileName);
     const contratoUrl = publicUrlData.publicUrl;
 
-    // 4. Atualizar Tabela Perfis e Ativar a Conta
+    // 4. Atualizar a Tabela 'perfis'
     await supabaseAdmin.from('perfis').update({
       empresa_nome: contratoDados.empresaNome,
       nif_empresa: contratoDados.nif,
@@ -137,7 +156,7 @@ export async function POST(request: Request) {
       base_comissao: contratoDados.baseComissao
     }).eq('id', id);
 
-    // 5. Atualizar Tabela Campos (Mete os campos online)
+    // 5. Ativar todos os campos associados ao organizador
     await supabaseAdmin.from('campos').update({
       status_aprovacao: 'Aprovado',
       ativo: true,
@@ -150,10 +169,9 @@ export async function POST(request: Request) {
       base_comissao: contratoDados.baseComissao
     }).eq('organizador_id', id);
 
-    // 6. Enviar Email de Boas-Vindas
+    // 6. Notificação por E-mail ao Parceiro
     await enviarEmailBoasVindas(contratoDados.emailContacto || emailAcesso, contratoDados.empresaNome, contratoUrl, lang);
 
-    // Devolvemos o "loginReady" para o frontend saber se tenta fazer login ou apenas mostra o ecrã de sucesso
     return NextResponse.json({ success: true, url: contratoUrl, loginReady: loginReady });
 
   } catch (error: any) {
