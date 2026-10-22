@@ -9,190 +9,213 @@ import React from "react";
 export default function AssinaturaContratoPage({ params }: { params: Promise<{ lang: string; id: string }> }) {
   const { lang, id } = use(params);
   const router = useRouter();
-  const isEn = lang === 'en';
+  
+  // Controlo de Língua do Contrato (Para parceiros Internacionais vs Nacionais)
+  const [contractLang, setContractLang] = useState<'pt' | 'en'>(lang === 'pt' ? 'pt' : 'en');
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [campo, setCampo] = useState<any>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [perfil, setPerfil] = useState<any>(null);
-  const [jaAssinado, setJaAssinado] = useState(false);
+  const [campoNome, setCampoNome] = useState<string>("Vários Programas");
 
-  // Estados Editáveis do Parceiro
-  const [editablePerfil, setEditablePerfil] = useState({ empresa_nome: "", nif_empresa: "", email: "", pessoa_contacto: "", telefone: "", forma_juridica: "", morada: "", codigo_postal: "", responsavel_rgpd: "" });
-  const [editableLink, setEditableLink] = useState("");
-  const [linkCopied, setLinkCopied] = useState(false);
-
-  // Estados do Formulário de Assinatura
+  // Estados Editáveis do Parceiro (Fiscais e Pessoais)
+  const [empresaNome, setEmpresaNome] = useState("");
+  const [nif, setNif] = useState("");
+  const [pessoaContacto, setPessoaContacto] = useState("");
+  const [emailContacto, setEmailContacto] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [formaJuridica, setFormaJuridica] = useState("");
+  const [morada, setMorada] = useState("");
+  const [codigoPostal, setCodigoPostal] = useState("");
+  const [responsavelRGPD, setResponsavelRGPD] = useState("");
+  
   const [assinaturaNome, setAssinaturaNome] = useState("");
   const [assinaturaCargo, setAssinaturaCargo] = useState("");
-  const [acordosComplementares, setAcordosComplementares] = useState("");
   const [concordaTermos, setConcordaTermos] = useState(false);
 
+  // Campos Fixos (Definidos por HQ no Pre-Fill)
+  const [taxaComissao, setTaxaComissao] = useState(12);
+  const [baseComissao, setBaseComissao] = useState("total");
+  const [modalidadeReserva, setModalidadeReserva] = useState("direta");
+  const [linkExternoReserva, setLinkExternoReserva] = useState("");
+  const [tipoPagamento, setTipoPagamento] = useState("100_total");
+  const [politicaCancelamento, setPoliticaCancelamento] = useState("");
+  const [acordosComplementares, setAcordosComplementares] = useState("");
+
+  const labelClass = "text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1 block";
+  const inputClassCustom = "border-b border-gray-400 outline-none bg-transparent px-1 py-1.5 text-base font-bold text-slate-900 placeholder:text-gray-300 w-full focus:border-black focus:bg-white transition-colors rounded-t-sm";
+
   useEffect(() => {
-    const fetchDados = async () => {
-      const { data: campoData, error: campoError } = await supabase.from('campos').select('*').eq('id', id).single();
-      if (campoError || !campoData) {
-        alert("Campo não encontrado ou link inválido.");
+    const fetchPerfil = async () => {
+      // 1. Procurar o Perfil / Organizador
+      const { data, error } = await supabase.from("perfis").select("*").eq("id", id).single();
+
+      if (error || !data) {
+        alert("Link inválido ou expirado.");
+        router.push(`/${lang}`);
         return;
       }
 
-      if (campoData.contrato_parceiro_url && campoData.status_aprovacao === 'Aprovado') {
-        setJaAssinado(true);
-      }
+      setPerfil(data);
 
-      setCampo(campoData);
-      setEditableLink(campoData.link_externo_reserva || "");
+      // 2. Procurar pelo menos um campo para dar contexto ao Parceiro
+      const { data: campoData } = await supabase.from("campos").select("nome").eq("organizador_id", id).limit(1);
+      if (campoData && campoData.length > 0) setCampoNome(campoData[0].nome);
 
-      if (campoData.organizador_id) {
-        const { data: perfilData } = await supabase.from('perfis').select('*').eq('id', campoData.organizador_id).single();
-        setPerfil(perfilData);
-        if (perfilData) {
-          // Extraímos os dados se já existirem no json do contrato
-          const cd = perfilData.contrato_dados || {};
-          
-          setEditablePerfil({
-            empresa_nome: perfilData.empresa_nome || cd.empresaNome || "",
-            nif_empresa: perfilData.nif_empresa || cd.nif || "",
-            email: perfilData.email || cd.emailContacto || "",
-            pessoa_contacto: perfilData.nome_completo || cd.pessoaContacto || "",
-            telefone: perfilData.telefone || cd.telefone || "",
-            forma_juridica: cd.formaJuridica || "",
-            morada: cd.morada || "",
-            codigo_postal: cd.codigoPostal || "",
-            responsavel_rgpd: cd.responsavelRGPD || ""
-          });
-        }
-      }
+      // 3. Pré-preencher os dados base que já tivermos do Perfil ou de um contrato prévio não assinado
+      const cd = data.contrato_dados || {};
+      
+      setEmpresaNome(data.empresa_nome || cd.empresaNome || "");
+      setNif(data.nif_empresa || cd.nif || "");
+      setPessoaContacto(data.nome_completo || cd.pessoaContacto || "");
+      setEmailContacto(data.email || cd.emailContacto || "");
+      setTelefone(data.telefone || cd.telefone || "");
+      setFormaJuridica(cd.formaJuridica || "");
+      setMorada(cd.morada || "");
+      setCodigoPostal(cd.codigoPostal || "");
+      setResponsavelRGPD(cd.responsavelRGPD || "");
+
+      // 4. Carregar os Termos Fixos definidos pelo SuperAdmin HQ
+      setTaxaComissao(data.taxa_comissao !== null ? data.taxa_comissao : 12);
+      setBaseComissao(data.base_comissao || 'total');
+      setModalidadeReserva(cd.modalidadeReserva || data.modalidade_reserva || 'direta');
+      setLinkExternoReserva(cd.linkExternoReserva || data.link_externo_reserva || '');
+      setTipoPagamento(cd.tipoPagamento || '100_total');
+      setPoliticaCancelamento(cd.politicaCancelamento || 'Moderada (Reembolso a 50% até 15 dias antes)');
+      setAcordosComplementares(cd.acordosComplementares || '');
 
       setLoading(false);
     };
 
-    fetchDados();
-  }, [id]);
+    fetchPerfil();
+  }, [id, lang, router]);
 
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(editableLink);
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
-    } catch (e) {
-      alert("Erro ao copiar o link.");
-    }
-  };
-
-  const gerarEGuardarPDF = async (userIP: string) => {
+  // Função robusta de geração do PDF
+  const gerarEGuardarPDF = async (userIP: string, timestamp: string) => {
     const doc = new jsPDF({ format: 'a4', unit: 'mm' });
     const pageWidth = doc.internal.pageSize.getWidth();
     
-    // Configurar Fonte e Tamanho
+    // Títulos e Datas
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
-    doc.text("CONTRATO GLOBAL DE INTERMEDIAÇÃO E SERVIÇOS", pageWidth / 2, 20, { align: "center" });
+    doc.text(contractLang === 'pt' ? "CONTRATO GLOBAL DE INTERMEDIAÇÃO E SERVIÇOS" : "GLOBAL INTERMEDIATION AND SERVICES AGREEMENT", pageWidth / 2, 20, { align: "center" });
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    const dataAtual = new Date().toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' });
-    doc.text(`Data de Emissão: ${dataAtual}`, pageWidth / 2, 28, { align: "center" });
-
+    const dataAtualPT = new Date(timestamp).toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' });
+    const dataAtualEN = new Date(timestamp).toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' });
+    doc.text(contractLang === 'pt' ? `Data de Emissão: ${dataAtualPT}` : `Issue Date: ${dataAtualEN}`, pageWidth / 2, 28, { align: "center" });
     doc.line(20, 35, pageWidth - 20, 35);
 
     // DADOS DAS PARTES
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("1. IDENTIFICAÇÃO DAS PARTES", 20, 45);
+    doc.text(contractLang === 'pt' ? "1. IDENTIFICAÇÃO DAS PARTES" : "1. IDENTIFICATION OF THE PARTIES", 20, 45);
     
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
-    doc.text(`PRIMEIRA OUTORGANTE (Plataforma): HelloCamp Portugal`, 20, 55);
-    doc.text(`SEGUNDA OUTORGANTE (Organizador): ${editablePerfil.empresa_nome || 'N/A'}`, 20, 62);
-    doc.text(`NIF: ${editablePerfil.nif_empresa || 'N/A'} | Email: ${editablePerfil.email || 'N/A'}`, 20, 69);
-    doc.text(`Âmbito: Todas as atividades organizadas por este Parceiro (incluindo "${campo?.nome}")`, 20, 76);
-
-    // CONDIÇÕES FINANCEIRAS
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("2. CONDIÇÕES FINANCEIRAS E OPERACIONAIS", 20, 95);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    const taxaAplicada = campo?.taxa_comissao !== null ? campo?.taxa_comissao : (perfil?.taxa_comissao || 12);
-    let baseTexto = "Sobre Valor Total (Programa + Extras)";
-    if (campo?.base_comissao === "apenas_programa") baseTexto = "Apenas sobre Valor Base do Programa";
-    if (campo?.base_comissao === "sem_comissao") baseTexto = "Isento de Comissão (0%)";
-
-    let modalidadeTexto = "Reserva Direta (Checkout)";
-    if (campo?.modalidade_reserva === "email") modalidadeTexto = "Sob Consulta (Email)";
-    if (campo?.modalidade_reserva === "link_externo") modalidadeTexto = "Link Externo (Sem gestão de pagamento na plataforma)";
-
-    doc.text(`• Taxa de Comissão: ${taxaAplicada}%`, 25, 105);
-    doc.text(`• Base de Incidência: ${baseTexto}`, 25, 112);
-    doc.text(`• Modalidade de Reserva: ${modalidadeTexto}`, 25, 119);
-    
-    // Condições que mudam mediante Stripe vs Externo
-    if (campo?.modalidade_reserva === 'link_externo') {
-      doc.text(`• Link de Inscrição Oficial: ${editableLink}`, 25, 126);
-      doc.text(`• Gestão de Pagamento: Assegurada de forma independente pelo Organizador.`, 25, 133);
+    if (contractLang === 'pt') {
+      doc.text(`PRIMEIRA OUTORGANTE (Plataforma): HelloCamp Portugal`, 20, 55);
+      doc.text(`SEGUNDA OUTORGANTE (Parceiro/Organizador): ${empresaNome} (${formaJuridica})`, 20, 62);
+      doc.text(`Sede: ${morada}, ${codigoPostal} | NIF: ${nif}`, 20, 69);
+      doc.text(`Contacto: ${pessoaContacto} | E-mail: ${emailContacto} | Tel: ${telefone}`, 20, 76);
+      doc.text(`Encarregado Proteção de Dados (RGPD): ${responsavelRGPD || pessoaContacto}`, 20, 83);
     } else {
-      doc.text(`• Política de Pagamento (Stripe): ${campo?.tipo_pagamento === '50_sinal' ? 'Sinal 50% / Restante 50%' : '100% no Ato da Reserva'}`, 25, 126);
-      doc.text(`• Política de Cancelamento: ${campo?.politica_cancelamento || 'Moderada'}`, 25, 133);
+      doc.text(`FIRST PARTY (Platform): HelloCamp Portugal`, 20, 55);
+      doc.text(`SECOND PARTY (Partner/Organizer): ${empresaNome} (${formaJuridica})`, 20, 62);
+      doc.text(`Headquarters: ${morada}, ${codigoPostal} | Tax ID: ${nif}`, 20, 69);
+      doc.text(`Contact: ${pessoaContacto} | E-mail: ${emailContacto} | Tel: ${telefone}`, 20, 76);
+      doc.text(`Data Protection Officer (GDPR): ${responsavelRGPD || pessoaContacto}`, 20, 83);
     }
 
-    // ACORDOS COMPLEMENTARES
-    if (acordosComplementares) {
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.text("3. ACORDOS COMPLEMENTARES E EXCEÇÕES", 20, 150);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      const splitAcordos = doc.splitTextToSize(acordosComplementares, pageWidth - 40);
-      doc.text(splitAcordos, 20, 160);
-    }
-
-    // DECLARAÇÃO DE ACEITAÇÃO
-    const startAceitacao = acordosComplementares ? 200 : 160;
+    // TERMOS FINANCEIROS
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("4. DECLARAÇÃO DE ACEITAÇÃO E CONVENÇÃO DE PROVA", 20, startAceitacao);
+    doc.text(contractLang === 'pt' ? "2. CONDIÇÕES FINANCEIRAS E OPERACIONAIS" : "2. FINANCIAL AND OPERATIONAL CONDITIONS", 20, 100);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
-    const textoDeclaracao = `O Organizador declara ter lido e aceite integralmente as condições descritas. As partes reconhecem expressamente a validade desta aceitação digital, convencionando que os registos recolhidos (IP, Timestamp, Nome) constituem prova plena da autoria e integridade do acordo global aplicável a todas as suas atividades na plataforma, renunciando à invocação de nulidade por ausência de assinatura autógrafa ou qualificada.`;
-    doc.text(doc.splitTextToSize(textoDeclaracao, pageWidth - 40), 20, startAceitacao + 10);
+    
+    let basePT = baseComissao === "apenas_programa" ? "Apenas sobre Valor Base do Programa" : (baseComissao === "sem_comissao" ? "Isento (0%)" : "Sobre Valor Total (Programa + Extras)");
+    let baseEN = baseComissao === "apenas_programa" ? "Only on Program Base Value" : (baseComissao === "sem_comissao" ? "Exempt (0%)" : "On Total Value (Program + Extras)");
 
-    // ASSINATURAS
-    doc.line(20, startAceitacao + 40, 100, startAceitacao + 40); // Linha Assinatura
-    doc.text(`Assinado Digitalmente por:`, 20, startAceitacao + 47);
+    let modPT = modalidadeReserva === "direta" ? "Reserva Direta no Checkout" : (modalidadeReserva === "email" ? "Sob Consulta (Email)" : "Link Externo");
+    let modEN = modalidadeReserva === "direta" ? "Direct Checkout Booking" : (modalidadeReserva === "email" ? "On Request (Email)" : "External Link");
+
+    if (contractLang === 'pt') {
+      doc.text(`• Taxa de Comissão Fixada: ${taxaComissao}% (IVA incluído à taxa legal em vigor)`, 25, 110);
+      doc.text(`• Base de Incidência da Comissão: ${basePT}`, 25, 117);
+      doc.text(`• Modalidade de Integração: ${modPT}`, 25, 124);
+      if (modalidadeReserva === 'link_externo') {
+        doc.text(`• URL Oficial para Redirecionamento: ${linkExternoReserva}`, 25, 131);
+        doc.text(`• Gestão de Pagamentos e Faturação: Independente e a cargo do Parceiro.`, 25, 138);
+      } else {
+        doc.text(`• Fluxo de Pagamento (Stripe): ${tipoPagamento === '50_sinal' ? '50% Sinal no ato da reserva / Restante depois' : '100% cobrado no ato da reserva'}`, 25, 131);
+        doc.text(`• Política de Cancelamento Autorizada: ${politicaCancelamento}`, 25, 138);
+      }
+    } else {
+      doc.text(`• Fixed Commission Rate: ${taxaComissao}% (VAT included at the current legal rate)`, 25, 110);
+      doc.text(`• Commission Base: ${baseEN}`, 25, 117);
+      doc.text(`• Integration Model: ${modEN}`, 25, 124);
+      if (modalidadeReserva === 'link_externo') {
+        doc.text(`• Official Redirect URL: ${linkExternoReserva}`, 25, 131);
+        doc.text(`• Payment and Invoicing: Independently managed by the Partner.`, 25, 138);
+      } else {
+        doc.text(`• Payment Flow (Stripe): ${tipoPagamento === '50_sinal' ? '50% Deposit on booking / Remainder later' : '100% collected on booking'}`, 25, 131);
+        doc.text(`• Authorized Cancellation Policy: ${politicaCancelamento}`, 25, 138);
+      }
+    }
+
+    // CLÁUSULAS LEGAIS
+    doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text(`${assinaturaNome} (${assinaturaCargo})`, 20, startAceitacao + 54);
+    doc.text(contractLang === 'pt' ? "3. CLÁUSULAS CONTRATUAIS GERAIS (SÍNTESE LEGAL)" : "3. GENERAL CONTRACTUAL CLAUSES (LEGAL SUMMARY)", 20, 155);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    let clausulasTexto = "";
+
+    if (contractLang === 'pt') {
+      clausulasTexto = "3.1. Responsabilidade Civil: A HelloCamp atua de forma estrita como plataforma informática de intermediação e motor de busca. A organização, gestão técnica, supervisão e segurança das atividades são da inteira e exclusiva responsabilidade da Segunda Outorgante (o Parceiro), que se obriga a manter válidos todos os seguros exigidos por lei (Responsabilidade Civil e Acidentes Pessoais) e as respetivas licenças de funcionamento (Ex: RNAAT/RNAVT ou licenças camarárias).\n\n3.2. Proteção de Dados (RGPD): O Parceiro compromete-se a tratar os dados pessoais, médicos e restrições alimentares fornecidos pela HelloCamp no estrito cumprimento do Regulamento (UE) 2016/679 (RGPD), utilizando-os apenas para a execução do serviço contratado pelo encarregado de educação e eliminando-os assim que deixem de ser estritamente necessários.\n\n3.3. Lei Aplicável e Jurisdição: Independentemente do país de origem ou da sede da Segunda Outorgante, o presente contrato rege-se, para todos os efeitos legais, pela Lei Portuguesa. Fica expressamente convencionado que o foro competente para dirimir qualquer litígio será o da Comarca de Lisboa, com renúncia expressa a qualquer outro.";
+    } else {
+      clausulasTexto = "3.1. Civil Liability: HelloCamp acts strictly as an intermediation IT platform and search engine. The organization, technical management, supervision, and safety of the activities are the entire and exclusive responsibility of the Second Party (the Partner), who is obliged to keep valid all insurance required by law (Civil Liability and Personal Accidents) and the respective operating licenses.\n\n3.2. Data Protection (GDPR): The Partner commits to processing the personal, medical, and dietary restriction data provided by HelloCamp in strict compliance with Regulation (EU) 2016/679 (GDPR), using them only for the execution of the service contracted by the guardian and deleting them as soon as they are no longer strictly necessary.\n\n3.3. Governing Law and Jurisdiction: Regardless of the country of origin or headquarters of the Second Party, this agreement is governed, for all legal purposes, by Portuguese Law. It is expressly agreed that the competent forum to resolve any dispute will be the District of Lisbon, with express waiver of any other.";
+    }
+
+    const splitClausulas = doc.splitTextToSize(clausulasTexto, pageWidth - 40);
+    doc.text(splitClausulas, 20, 165);
+
+    // DECLARAÇÃO E ASSINATURAS (No fim da página)
+    let yPos = 240;
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    const declText = contractLang === 'pt' 
+      ? "O Parceiro declara ter lido e aceite integralmente as condições, reconhecendo a validade desta assinatura eletrónica e renunciando a invocar a nulidade por ausência de assinatura autógrafa."
+      : "The Partner declares having read and fully accepted the conditions, acknowledging the validity of this electronic signature and waiving the right to invoke nullity due to the absence of a handwritten signature.";
+    doc.text(doc.splitTextToSize(declText, pageWidth - 40), 20, yPos);
+
+    yPos += 15;
+    doc.line(20, yPos, 100, yPos);
+    doc.text(contractLang === 'pt' ? `Assinado Digitalmente por:` : `Digitally Signed by:`, 20, yPos + 7);
+    doc.text(`${assinaturaNome} (${assinaturaCargo})`, 20, yPos + 14);
     
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.text(`Data/Hora: ${new Date().toLocaleString('pt-PT')}`, 20, startAceitacao + 61);
-    doc.text(`IP de Assinatura: ${userIP} (Registado via Plataforma Segura HelloCamp)`, 20, startAceitacao + 67);
+    doc.text(contractLang === 'pt' ? `Data/Hora: ${new Date(timestamp).toLocaleString('pt-PT')}` : `Date/Time: ${new Date(timestamp).toLocaleString('en-US')}`, 20, yPos + 21);
+    doc.text(`IP: ${userIP} (Secured via HelloCamp Server)`, 20, yPos + 27);
 
     return doc.output('blob');
   };
 
-  const handleSubmeterContrato = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assinaturaNome || !assinaturaCargo || !concordaTermos) {
-      alert("Por favor, preencha os dados da assinatura e aceite os termos.");
-      return;
-    }
-    
-    if (!editablePerfil.empresa_nome || !editablePerfil.nif_empresa) {
-      alert("Por favor, garanta que a Entidade Organizadora e o NIF estão preenchidos.");
-      return;
-    }
+    if (!concordaTermos) return alert(contractLang === 'pt' ? "Tem de aceitar os termos do contrato." : "You must accept the terms of the contract.");
+    if (!assinaturaNome || !assinaturaCargo) return alert(contractLang === 'pt' ? "A assinatura digital é obrigatória." : "The digital signature is mandatory.");
+    if (!empresaNome || !nif || !morada) return alert(contractLang === 'pt' ? "Dados Fiscais incompletos." : "Incomplete Fiscal Data.");
 
-    if (campo?.modalidade_reserva === 'link_externo' && !editableLink) {
-      alert("Por favor, garanta que preencheu o Link Externo para as inscrições no Anexo 1.");
-      return;
-    }
+    setSubmitting(true);
 
-    setSaving(true);
-    
-    // Captura de IP
+    // Captura de IP para Validade Legal
     let userIP = "Desconhecido";
     try {
       const res = await fetch("https://api.ipify.org?format=json");
@@ -204,396 +227,258 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
       console.error("Não foi possível capturar o IP.", err);
     }
 
+    const timestampAtual = new Date().toISOString();
+
+    const contratoFinal = {
+      empresaNome, nif, pessoaContacto, emailContacto, telefone,
+      formaJuridica, morada, codigoPostal, responsavelRGPD,
+      modalidadeReserva, tipoPagamento, politicaCancelamento, linkExternoReserva,
+      acordosComplementares, assinaturaNome, assinaturaCargo,
+      dataSubmissao: timestampAtual, ipAssinatura: userIP
+    };
+
     try {
-      // JSON COMPLETO PARA GUARDAR NO PERFIL (Como Contrato Global)
-      const payloadJSON = {
-        empresaNome: editablePerfil.empresa_nome,
-        nif: editablePerfil.nif_empresa,
-        emailContacto: editablePerfil.email,
-        emailReservas: editablePerfil.email,
-        pessoaContacto: editablePerfil.pessoa_contacto,
-        telefone: editablePerfil.telefone,
-        formaJuridica: editablePerfil.forma_juridica,
-        morada: editablePerfil.morada,
-        codigoPostal: editablePerfil.codigo_postal,
-        responsavelRGPD: editablePerfil.responsavel_rgpd,
-        assinaturaNome: assinaturaNome,
-        assinaturaCargo: assinaturaCargo,
-        acordosComplementares: acordosComplementares,
-        modalidadeReserva: campo.modalidade_reserva,
-        linkExternoReserva: campo.modalidade_reserva === 'link_externo' ? editableLink : "",
-        tipoPagamento: campo.tipo_pagamento,
-        politicaCancelamento: campo.politica_cancelamento,
-        dataSubmissao: new Date().toISOString(),
-        ipAssinatura: userIP
-      };
+      // 1. Atualizar Perfil e Contrato
+      const { error: perfilErr } = await supabase.from('perfis').update({
+        empresa_nome: empresaNome, nif_empresa: nif, nome_completo: pessoaContacto, telefone: telefone,
+        status_contrato: 'Pendente de Revisão', // Volta para a HQ aprovar!
+        contrato_dados: contratoFinal
+      }).eq('id', id);
+      if (perfilErr) throw perfilErr;
 
-      const comissaoAtual = campo?.taxa_comissao ?? perfil?.taxa_comissao ?? 12;
-      const baseAtual = campo?.base_comissao ?? perfil?.base_comissao ?? 'total';
+      // 2. Gerar PDF e Fazer Upload
+      const pdfBlob = await gerarEGuardarPDF(userIP, timestampAtual);
+      const fileName = `contrato_global_${id}_${Date.now()}.pdf`;
+      const { error: uploadError } = await supabase.storage.from('campos-documentos').upload(fileName, pdfBlob, { contentType: 'application/pdf' });
+      if (uploadError) throw uploadError;
 
-      // 1. ELEVAR PARA CONTRATO GLOBAL (Guardar na tabela Perfis)
-      if (campo.organizador_id) {
-        const { error: perfilErr } = await supabase.from('perfis').update({
-          empresa_nome: editablePerfil.empresa_nome,
-          nif_empresa: editablePerfil.nif_empresa,
-          email: editablePerfil.email,
-          nome_completo: editablePerfil.pessoa_contacto,
-          telefone: editablePerfil.telefone,
-          contrato_dados: payloadJSON,
-          status_contrato: 'Aprovado', // Fica automaticamente aprovado globalmente
-          parceiro_verificado: true,
-          modalidade_reserva: campo.modalidade_reserva,
-          link_externo_reserva: campo.modalidade_reserva === 'link_externo' ? editableLink : null,
-          taxa_comissao: comissaoAtual,
-          base_comissao: baseAtual
-        }).eq('id', campo.organizador_id);
-        
-        if (perfilErr) throw new Error("Erro ao atualizar dados globais da empresa: " + perfilErr.message);
-      }
-
-      // 2. Gerar e Guardar PDF
-      const pdfBlob = await gerarEGuardarPDF(userIP);
-      const fileName = `contrato_global_${campo.organizador_id}_${Date.now()}.pdf`;
-      const { error: uploadError } = await supabase.storage.from('campos-documentos').upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
-      if (uploadError) throw new Error("Erro ao guardar o PDF do contrato: " + uploadError.message);
-      
       const { data: publicUrlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
       const contratoUrl = publicUrlData.publicUrl;
 
-      // 3. PROPAGAR PARA TODOS OS CAMPOS DO PARCEIRO
-      if (campo.organizador_id) {
-         const { error: camposUpdateErr } = await supabase.from('campos').update({
-            contrato_parceiro_url: contratoUrl,
-            status_aprovacao: 'Aprovado',
-            ativo: true,
-            contrato_dados: payloadJSON,
-            taxa_comissao: comissaoAtual,
-            base_comissao: baseAtual
-         }).eq('organizador_id', campo.organizador_id);
+      // 3. Atualizar Todos os Campos Vinculados
+      const { error: camposErr } = await supabase.from('campos').update({ 
+        status_aprovacao: 'Pendente de Revisão', 
+        contrato_dados: contratoFinal,
+        contrato_parceiro_url: contratoUrl
+      }).eq('organizador_id', id);
+      if (camposErr) console.warn("Erro ao desativar os campos na plataforma (eles já devem estar pendentes): ", camposErr);
+      
+      // Notificar SuperAdmin
+      try {
+        await fetch('/api/notificacoes/status-contrato', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parceiroEmail: 'info@hellocamp.pt', nomeCampo: `CONTRATO ASSINADO POR: ${empresaNome}`, status: 'Para Revisão HQ', lang: 'pt' })
+        });
+      } catch (e) { console.error(e) }
 
-         if (camposUpdateErr) throw new Error("Erro ao ativar os programas na plataforma: " + camposUpdateErr.message);
-      }
-
-      setJaAssinado(true);
-      setCampo({ ...campo, contrato_parceiro_url: contratoUrl, link_externo_reserva: editableLink });
-      alert("✅ Contrato Global assinado com sucesso! Todos os seus programas estão agora Aprovados e Ativos.");
+      alert(contractLang === 'pt' ? "Contrato assinado com sucesso! A nossa equipa irá agora validar o perfil e publicar os campos." : "Contract signed successfully! Our team will now validate the profile and publish your camps.");
+      router.push(`/${lang}`);
 
     } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setSaving(false);
+      alert("Erro crítico: " + err.message);
+      setSubmitting(false);
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-slate-200 py-12 px-4 flex items-center justify-center font-bold text-slate-500">A carregar contrato seguro...</div>;
-
-  const dataAtual = new Date().toLocaleDateString(isEn ? 'en-US' : 'pt-PT', { year: 'numeric', month: 'long', day: 'numeric' });
-  const taxaAplicada = campo?.taxa_comissao !== null ? campo?.taxa_comissao : (perfil?.taxa_comissao || 12);
-  const inputClassCustom = "border-b border-gray-400 outline-none bg-transparent px-1 py-1.5 text-base font-bold text-slate-900 placeholder:text-gray-400 w-full focus:border-black focus:bg-white transition-colors rounded-t-sm";
+  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-slate-400 uppercase tracking-widest animate-pulse">A carregar documento seguro... / Loading secure document...</div>;
 
   return (
-    <main className="min-h-screen bg-slate-200 py-8 md:py-12 px-4 sm:px-6 font-sans text-black selection:bg-yellow-200">
-      <div className="max-w-[900px] mx-auto">
+    <div className="min-h-screen bg-slate-50 py-12 px-4 font-sans text-slate-900">
+      <div className="max-w-4xl mx-auto bg-white rounded-[2rem] shadow-xl border border-slate-200 overflow-hidden relative">
         
-        <div className="mb-8 md:mb-10 text-center">
-          <span className="bg-slate-900 text-white px-4 py-1.5 rounded-full text-[10px] md:text-xs font-bold uppercase tracking-widest shadow-sm">
-            {isEn ? 'Secure Digital Signature' : 'Assinatura Digital Segura'}
-          </span>
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight mt-6">
-            {isEn ? 'Validate Global Contract' : 'Validação de Contrato Global'}
+        {/* CABEÇALHO DO CONTRATO COM TOGGLE DE LÍNGUA */}
+        <div className="bg-[#0E3A68] p-10 md:p-12 text-center relative overflow-hidden">
+          <div className="absolute top-4 right-6 z-20 flex bg-blue-900/50 p-1 rounded-lg border border-blue-400/30">
+            <button onClick={() => setContractLang('pt')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${contractLang === 'pt' ? 'bg-white text-[#0E3A68]' : 'text-white hover:bg-blue-800'}`}>PT</button>
+            <button onClick={() => setContractLang('en')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${contractLang === 'en' ? 'bg-white text-[#0E3A68]' : 'text-white hover:bg-blue-800'}`}>EN</button>
+          </div>
+
+          <div className="absolute top-0 left-0 w-64 h-64 bg-blue-500 rounded-full blur-[80px] opacity-30 -translate-y-1/2 -translate-x-1/4"></div>
+          <h1 className="text-3xl md:text-4xl font-black text-white m-0 tracking-tight relative z-10 mt-4">
+            {contractLang === 'pt' ? 'Acordo de Intermediação HelloCamp' : 'HelloCamp Intermediation Agreement'}
           </h1>
-          <p className="text-sm md:text-base text-slate-600 font-medium mt-3 max-w-2xl mx-auto px-2">
-            {isEn 
-              ? 'Please review and adjust your operational terms below. Sign to activate the program.' 
-              : `Por favor, complete as suas informações fiscais e operacionais. Este contrato será válido para todos os seus programas na plataforma.`}
+          <p className="text-blue-100 mt-3 font-medium relative z-10 max-w-lg mx-auto">
+            {contractLang === 'pt' ? 'Valide os termos operacionais e preencha os seus dados fiscais para dar início à parceria comercial.' : 'Review the operational terms and fill in your legal details to initiate the commercial partnership.'}
           </p>
         </div>
 
-        {jaAssinado ? (
-          <div className="bg-white shadow-2xl p-10 md:p-16 text-center rounded-xl font-serif">
-             <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">✓</div>
-             <h2 className="text-2xl font-black text-emerald-900 mb-2">Contrato Válido e Assinado</h2>
-             <p className="text-emerald-700 text-lg mb-8">O programa <strong>{campo?.nome}</strong> já se encontra Aprovado e ativo na plataforma.</p>
-             <a href={campo?.contrato_parceiro_url} target="_blank" rel="noopener noreferrer" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-4 rounded-xl shadow-md transition-colors font-sans">
-               Fazer Download do PDF Assinado
-             </a>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmeterContrato} className="bg-white shadow-2xl p-5 sm:p-10 md:p-16 text-black leading-relaxed rounded-xl font-serif">
-            
-            {/* CABEÇALHO DO DOCUMENTO */}
-            <div className="text-center mb-10 md:mb-16">
-              <div className="text-3xl md:text-4xl font-black tracking-tighter mb-6 font-sans">
-                <span className="text-black">Hello</span><span className="text-[#EBA914]">Camp</span>
-              </div>
-              <h1 className="text-xl md:text-2xl font-bold uppercase mb-2 tracking-widest border-b-2 border-black inline-block pb-2">
-                {isEn ? 'Global Intermediation Contract' : 'Contrato Global de Intermediação'}
-              </h1>
-              <p className="text-sm md:text-base italic text-gray-600 mt-4">
-                {isEn ? 'This agreement is applicable to all programs.' : 'Este acordo é aplicável a todas as suas atividades presentes e futuras.'}
-              </p>
-            </div>
+        <form onSubmit={handleSubmit} className="p-6 md:p-12">
 
-            {/* DADOS DAS PARTES E INTRODUÇÃO (EDITÁVEIS) */}
-            <div className="space-y-4 font-serif text-sm md:text-[15px]">
-              <p className="text-justify">
-                Entre a HelloCamp, com website em www.hellocamp.pt e contacto via info@hellocamp.pt, doravante designada por "Primeira Outorgante"; e do outro lado:
-              </p>
+          {/* 1. IDENTIFICAÇÃO DO PARCEIRO (EDITÁVEL) */}
+          <section className="mb-12">
+            <h2 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-4 mb-6 tracking-tight">1. {contractLang === 'pt' ? 'Dados de Faturação e Identificação' : 'Billing and Identification Data'}</h2>
+            <div className="bg-gray-50 p-6 md:p-8 rounded-2xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8 shadow-inner">
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8 mt-6 bg-gray-50 p-5 md:p-6 border border-gray-200 rounded-lg font-sans">
-                
-                <div className="flex flex-col md:col-span-2">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Entidade Organizadora / Designação Social *</label>
-                  <input type="text" required value={editablePerfil.empresa_nome} onChange={e => setEditablePerfil({...editablePerfil, empresa_nome: e.target.value})} className={inputClassCustom} placeholder="Designação da sua entidade" />
-                </div>
-                
-                <div className="flex flex-col">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">NIF da Empresa *</label>
-                  <input type="text" required value={editablePerfil.nif_empresa} onChange={e => setEditablePerfil({...editablePerfil, nif_empresa: e.target.value})} className={inputClassCustom} placeholder="Ex: 500 000 000" />
-                </div>
-                
-                <div className="flex flex-col">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">E-mail de Contacto Geral *</label>
-                  <input type="email" required value={editablePerfil.email} onChange={e => setEditablePerfil({...editablePerfil, email: e.target.value})} className={inputClassCustom} placeholder="geral@suaempresa.pt" />
-                </div>
-
-                <div className="flex flex-col">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Pessoa de Contacto *</label>
-                  <input type="text" required value={editablePerfil.pessoa_contacto} onChange={e => setEditablePerfil({...editablePerfil, pessoa_contacto: e.target.value})} className={inputClassCustom} placeholder="Nome completo" />
-                </div>
-
-                <div className="flex flex-col">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Telefone *</label>
-                  <input type="text" required value={editablePerfil.telefone} onChange={e => setEditablePerfil({...editablePerfil, telefone: e.target.value})} className={inputClassCustom} placeholder="Contacto" />
-                </div>
-                
-                <div className="flex flex-col md:col-span-2">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Morada Sede Fiscal *</label>
-                  <input type="text" required value={editablePerfil.morada} onChange={e => setEditablePerfil({...editablePerfil, morada: e.target.value})} className={inputClassCustom} placeholder="Rua, Número..." />
-                </div>
-
-                <div className="flex flex-col">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Código Postal *</label>
-                  <input type="text" required value={editablePerfil.codigo_postal} onChange={e => setEditablePerfil({...editablePerfil, codigo_postal: e.target.value})} className={inputClassCustom} placeholder="0000-000 Localidade" />
-                </div>
-
-                <div className="flex flex-col">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Forma Jurídica *</label>
-                  <input type="text" required value={editablePerfil.forma_juridica} onChange={e => setEditablePerfil({...editablePerfil, forma_juridica: e.target.value})} className={inputClassCustom} placeholder="Lda, Unipessoal, etc" />
-                </div>
-
-                <div className="flex flex-col md:col-span-2">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Responsável de Dados (RGPD) *</label>
-                  <input type="text" required value={editablePerfil.responsavel_rgpd} onChange={e => setEditablePerfil({...editablePerfil, responsavel_rgpd: e.target.value})} className={inputClassCustom} placeholder="Nome do Responsável de Privacidade" />
-                </div>
-
-                <div className="flex flex-col md:col-span-2 border-t border-gray-200 pt-4 mt-2">
-                  <label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Programa Referência</label>
-                  <span className="font-black text-lg text-emerald-800 uppercase">{campo?.nome}</span>
-                </div>
+              <div className="md:col-span-2">
+                <label className={labelClass}>{contractLang === 'pt' ? 'Entidade Organizadora / Nome Fiscal *' : 'Organizing Entity / Legal Name *'}</label>
+                <input required value={empresaNome} onChange={e => setEmpresaNome(e.target.value)} className={inputClassCustom} placeholder={contractLang === 'pt' ? "Designação da sua entidade" : "Legal Entity Name"} />
               </div>
-            </div>
 
-            <div className="h-px bg-gray-300 w-full my-8 md:my-12"></div>
-
-            {/* INTRODUÇÃO VISUAL (Ícones) */}
-            <div className="space-y-8 md:space-y-12 mb-10 md:mb-16 font-sans">
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm">📝</div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 mb-2">1. Celebração do contrato</h3>
-                  <p className="text-sm sm:text-base text-slate-600 text-justify leading-relaxed">Este contrato regula a divulgação e a intermediação das suas ofertas através da plataforma HelloCamp, estabelecendo os termos da colaboração entre ambas as partes.</p>
-                </div>
+              <div>
+                <label className={labelClass}>{contractLang === 'pt' ? 'NIF (Tax ID) *' : 'Tax ID / VAT Number *'}</label>
+                <input required value={nif} onChange={e => setNif(e.target.value)} className={inputClassCustom} placeholder="Tax Identification Number" />
               </div>
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-50 border border-blue-200 rounded-full flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm">🏖️</div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 mb-2">2. Divulgação das ofertas</h3>
-                  <p className="text-sm sm:text-base text-slate-600 text-justify leading-relaxed">A HelloCamp procede à recolha e organização das informações relativas às atividades disponibilizadas pelo parceiro, criando e publicando as respetivas páginas de oferta na plataforma. A publicação ocorrerá após validação.</p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm">💻</div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 mb-2">3. Reservas através da HelloCamp</h3>
-                  <p className="text-sm sm:text-base text-slate-600 text-justify leading-relaxed">Sempre que uma reserva seja realizada, a HelloCamp comunicará ao parceiro os dados do cliente, os detalhes da intenção de reserva e todas as informações necessárias à adequada gestão da inscrição.</p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-slate-900 text-white border border-slate-700 rounded-full flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm">€</div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 mb-2">4. Pagamento da Comissão</h3>
-                  <p className="text-sm sm:text-base text-slate-600 text-justify leading-relaxed">A HelloCamp cobra uma comissão sobre cada reserva concluída através da plataforma. As condições específicas aplicáveis ao seu programa encontram-se detalhadas nos Anexos Operacionais abaixo.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="h-px bg-gray-300 w-full my-8 md:my-12"></div>
-
-            {/* ARTIGOS E CLÁUSULAS CONTRATUAIS */}
-            <div className="space-y-6 text-sm md:text-[15px] text-justify pt-4 md:pt-6">
-              <h3 className="font-bold text-lg md:text-xl uppercase tracking-widest border-b border-black pb-2 mb-6 md:mb-8 font-sans">
-                Cláusulas Contratuais Gerais
-              </h3>
               
-              <h4 className="font-bold">Artigo 1.º – Comissão</h4>
-              <p className="mb-4">O Parceiro compromete-se a pagar à HelloCamp uma comissão (IVA incluído) sobre cada reserva efetuada através da plataforma, nos termos definidos no Anexo 2 deste documento.</p>
-              <p className="mb-4">A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados através da plataforma ou de leads encaminhadas.</p>
-              <p className="mb-8">Em caso de cancelamento por iniciativa do cliente ou desistência, aplicar-se-ão as condições previstas no Anexo 3 – Cancelamento de Reservas.</p>
-
-              <h4 className="font-bold">Artigo 2.º – Obrigações do Parceiro</h4>
-              <p className="mb-4">O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades, incluindo descrições, preços, disponibilidade, fotografias e demais conteúdos relevantes.</p>
-              <p className="mb-4">Os preços divulgados na plataforma HelloCamp não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas da mesma atividade.</p>
-              <p className="mb-8">O Parceiro deverá comunicar à HelloCamp quaisquer alterações aos seus termos e condições gerais ou às condições aplicáveis às atividades disponibilizadas na plataforma.</p>
-
-              <h4 className="font-bold">Artigo 3.º – Limitação de Responsabilidade e Seguros</h4>
-              <p className="mb-4">A HelloCamp atua exclusivamente como plataforma intermediária e motor de busca. A HelloCamp não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos, incidentes ou disputas que ocorram durante a realização das atividades.</p>
-              <p className="mb-8">O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças e certificações exigidas para o exercício da sua atividade.</p>
-
-              <h4 className="font-bold text-[#000000]">Artigo 7.º – Validade da Assinatura e Convenção de Prova</h4>
-              <p className="mb-4 text-[#000000]">As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos (designadamente a aposição do nome do representante legal e seleção da caixa de aceitação no portal web da HelloCamp).</p>
-              <p className="mb-8 text-[#000000]">Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria, a integridade e a aceitação irrevogável das presentes cláusulas operacionais e financeiras, renunciando o Parceiro a invocar a nulidade ou ineficácia do contrato com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada (Chave Móvel Digital / Cartão de Cidadão).</p>
-            </div>
-
-            <div className="h-px bg-gray-300 w-full my-8 md:my-12"></div>
-
-            <h3 className="font-bold text-lg md:text-xl uppercase tracking-widest border-b border-black pb-2 mb-6 md:mb-8 font-sans">
-              Condições e Anexos Operacionais Específicos
-            </h3>
-
-            {/* ANEXOS RESUMIDOS COM TEXTOS DE APOIO */}
-            <div className="space-y-6 font-sans text-sm text-slate-800">
+              <div>
+                <label className={labelClass}>{contractLang === 'pt' ? 'Forma Jurídica *' : 'Legal Form / Company Type *'}</label>
+                <input required value={formaJuridica} onChange={e => setFormaJuridica(e.target.value)} className={inputClassCustom} placeholder={contractLang === 'pt' ? "Ex: Lda, Associação, LLC" : "LLC, Inc, Association"} />
+              </div>
               
-              <div className="bg-gray-50 p-5 rounded-xl border border-gray-200">
-                <h4 className="font-black text-base mb-3 text-black uppercase border-l-4 border-gray-400 pl-3">Anexo 1 – Procedimento de Reserva e Operação</h4>
-                <div className="space-y-3">
-                  <p><strong>Modalidade Definida:</strong> {campo?.modalidade_reserva === 'direta' ? 'Reserva Direta no Checkout com Pagamento Automático' : (campo?.modalidade_reserva === 'email' ? 'Comunicação por E-mail (Reserva Sob Consulta)' : 'Link Externo (Geração de Lead e Redirecionamento)')}</p>
-                  
-                  {campo?.modalidade_reserva === 'direta' && (
-                    <p className="text-gray-600">As reservas efetuadas através da plataforma HelloCamp serão registadas diretamente no sistema. A HelloCamp terá direito à comissão acordada sobre cada reserva concluída.</p>
-                  )}
-                  {campo?.modalidade_reserva === 'email' && (
-                    <p className="text-gray-600">A HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias. O Parceiro dispõe de 2 dias úteis para rejeitar; caso contrário a reserva é considerada aceite.</p>
-                  )}
-                  {campo?.modalidade_reserva === 'link_externo' && (
-                    <div className="mt-4 bg-white p-4 border border-gray-200 rounded-lg">
-                      <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Link Externo Oficial (Valide ou corrija o link de destino) *</label>
-                      <div className="flex gap-2">
-                        <input 
-                          type="url" 
-                          required
-                          value={editableLink} 
-                          onChange={e => setEditableLink(e.target.value)} 
-                          className="flex-1 p-3 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:border-black transition-colors" 
-                          placeholder="https://formulariodeinscricao..."
-                        />
-                        <button type="button" onClick={handleCopyLink} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap hover:bg-slate-800">
-                          {linkCopied ? '✓ Copiado' : 'Copiar'}
-                        </button>
-                      </div>
-                      <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
-                        O tráfego é redirecionado para este link externo. Para transparência, a HelloCamp recolhe a intenção de reserva (Lead com Nome e Email) antes de o pai avançar. O Parceiro compromete-se, sob honra, a ser verdadeiro na comunicação mensal sobre quais destas leads efetivamente finalizaram a inscrição do seu lado.
-                      </p>
-                    </div>
-                  )}
-                </div>
+              <div className="md:col-span-2">
+                <label className={labelClass}>{contractLang === 'pt' ? 'Morada Fiscal Completa *' : 'Full Registered Address *'}</label>
+                <input required value={morada} onChange={e => setMorada(e.target.value)} className={inputClassCustom} placeholder={contractLang === 'pt' ? "Rua, Número, Cidade, País" : "Street, Number, City, Country"} />
               </div>
 
-              <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
-                <h4 className="font-black text-base mb-3 text-blue-950 uppercase border-l-4 border-blue-600 pl-3">Anexo 2 – Faturação e Comissão</h4>
-                <div className="space-y-2">
-                  <p><strong>Taxa de Comissão Fixada:</strong> <span className="font-black text-blue-700 text-lg">{taxaAplicada}%</span> (IVA incluído)</p>
-                  <p><strong>Incidência da Comissão:</strong> {campo?.base_comissao === "apenas_programa" ? "Apenas sobre o Valor Base do Programa" : (campo?.base_comissao === "sem_comissao" ? "Isento (0%)" : "Sobre o Valor Total Faturado (Programa + Extras)")}</p>
-                  
-                  {campo?.modalidade_reserva === 'link_externo' ? (
-                    <p className="text-blue-800 mt-3 text-xs leading-relaxed font-medium bg-blue-100/50 p-3 rounded-lg">
-                      O Parceiro fará a cobrança e faturação de forma independente, fora da plataforma HelloCamp. A comissão acordada será devida pelas intenções de reserva (leads) encaminhadas através da plataforma e convertidas em clientes efetivos pelo Parceiro, conforme apuramento mensal efetuado entre as partes.
-                    </p>
-                  ) : (
-                    <>
-                      <p><strong>Modelo de Pagamento (Cliente):</strong> {campo?.tipo_pagamento === '50_sinal' ? '50% de Sinal no ato da reserva, e restantes 50% 7 dias antes do programa.' : '100% cobrado de imediato no ato da reserva.'}</p>
-                      <p className="text-blue-800 mt-2 text-xs">O Parceiro autoriza a HelloCamp a receber um depósito via plataforma segura de pagamentos (Stripe). O valor retido corresponde, regra geral, à comissão devida à HelloCamp.</p>
-                    </>
-                  )}
-                </div>
+              <div>
+                <label className={labelClass}>{contractLang === 'pt' ? 'Código Postal *' : 'Zip / Postal Code *'}</label>
+                <input required value={codigoPostal} onChange={e => setCodigoPostal(e.target.value)} className={inputClassCustom} placeholder="0000-000" />
               </div>
 
-              {campo?.modalidade_reserva !== 'link_externo' && (
-                <div className="bg-amber-50 p-5 rounded-xl border border-amber-100">
-                  <h4 className="font-black text-base mb-3 text-amber-950 uppercase border-l-4 border-amber-500 pl-3">Anexo 3 – Política de Cancelamento</h4>
-                  <div className="space-y-2">
-                    <p><strong>Política Aplicada:</strong> <span className="font-black">{campo?.politica_cancelamento || 'Moderada'}</span></p>
-                    <p className="text-amber-800 mt-2 text-xs">
-                      {campo?.politica_cancelamento?.includes('Flexível') 
-                        ? 'A HelloCamp não cobrará comissão sobre reservas canceladas pelo cliente até 7 dias antes. Os montantes pagos deverão ser reembolsados a 100%.' 
-                        : (campo?.politica_cancelamento?.includes('Moderada') 
-                            ? 'Cancelamentos até 15 dias antes dão direito a reembolso de 50%. A comissão da HelloCamp é reduzida proporcionalmente.' 
-                            : 'As reservas efetuadas são finais e não reembolsáveis. A comissão da HelloCamp é devida na sua totalidade.')}
+              <div className="md:col-span-2 border-t border-gray-200 pt-6 mt-2">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">{contractLang === 'pt' ? 'Contactos Operacionais' : 'Operational Contacts'}</p>
+              </div>
+
+              <div>
+                <label className={labelClass}>{contractLang === 'pt' ? 'Nome do Responsável *' : 'Manager Name *'}</label>
+                <input required value={pessoaContacto} onChange={e => setPessoaContacto(e.target.value)} className={inputClassCustom} placeholder={contractLang === 'pt' ? "Nome completo" : "Full Name"} />
+              </div>
+              
+              <div>
+                <label className={labelClass}>{contractLang === 'pt' ? 'Telemóvel / Telefone *' : 'Phone Number *'}</label>
+                <input required value={telefone} onChange={e => setTelefone(e.target.value)} className={inputClassCustom} placeholder="+00 000000000" />
+              </div>
+
+              <div>
+                <label className={labelClass}>{contractLang === 'pt' ? 'E-mail Operacional *' : 'Operational Email *'}</label>
+                <input required type="email" value={emailContacto} onChange={e => setEmailContacto(e.target.value)} className={inputClassCustom} placeholder="email@company.com" />
+              </div>
+
+              <div>
+                <label className={labelClass}>{contractLang === 'pt' ? 'Encarregado RGPD / Proteção de Dados *' : 'Data Protection Officer (GDPR) *'}</label>
+                <input required value={responsavelRGPD} onChange={e => setResponsavelRGPD(e.target.value)} className={inputClassCustom} placeholder={contractLang === 'pt' ? "Nome da pessoa responsável pela privacidade" : "Name of Data Privacy Contact"} />
+              </div>
+            </div>
+          </section>
+
+          {/* 2. TERMOS OPERACIONAIS (FIXOS / READ-ONLY) */}
+          <section className="mb-12">
+            <h2 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-4 mb-6 tracking-tight">2. {contractLang === 'pt' ? 'Termos Operacionais e Financeiros' : 'Operational and Financial Terms'}</h2>
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-6 shadow-inner">
+              
+              <div className="md:col-span-2 flex items-center justify-between bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                <span className="text-xs font-black uppercase tracking-widest text-slate-500">{contractLang === 'pt' ? 'Taxa de Comissão (Fee)' : 'Commission Rate (Fee)'}</span>
+                <span className="text-xl font-black text-[#0E3A68] bg-blue-50 px-4 py-1.5 rounded-lg border border-blue-100">
+                  {taxaComissao}%
+                </span>
+              </div>
+
+              <div>
+                <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{contractLang === 'pt' ? 'Base de Incidência' : 'Commission Base'}</span>
+                <p className="text-sm font-bold text-slate-800 m-0">
+                  {baseComissao === 'total' 
+                    ? (contractLang === 'pt' ? 'Sobre o Valor Total (Programa + Extras)' : 'On Total Value (Program + Extras)') 
+                    : baseComissao === 'apenas_programa' 
+                      ? (contractLang === 'pt' ? 'Apenas sobre Valor Base do Programa' : 'Only on Program Base Value') 
+                      : (contractLang === 'pt' ? 'Isento (0%)' : 'Exempt (0%)')}
+                </p>
+              </div>
+
+              <div>
+                <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{contractLang === 'pt' ? 'Modelo de Integração' : 'Integration Model'}</span>
+                <p className="text-sm font-bold text-slate-800 m-0">
+                  {modalidadeReserva === 'direta' 
+                    ? (contractLang === 'pt' ? 'Reserva Direta no Checkout (HelloCamp)' : 'Direct Checkout Booking (HelloCamp)') 
+                    : modalidadeReserva === 'email' 
+                      ? (contractLang === 'pt' ? 'Encaminhamento de Leads via Email' : 'Lead Forwarding via Email') 
+                      : (contractLang === 'pt' ? 'Redirecionamento para Link Externo' : 'Redirection to External Link')}
+                </p>
+              </div>
+
+              {modalidadeReserva === 'link_externo' ? (
+                <div className="md:col-span-2">
+                  <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{contractLang === 'pt' ? 'Link Oficial para Redirecionamento' : 'Official Redirect Link'}</span>
+                  <p className="text-sm font-bold text-blue-600 break-all m-0">
+                    {linkExternoReserva}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    {contractLang === 'pt' ? 'Gestão de pagamento e reservas é feita pela sua plataforma. Faturação de comissões feita via acerto mensal pelas leads fornecidas.' : 'Payment and booking management handled by your platform. Commission invoicing done via monthly settlement for leads provided.'}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{contractLang === 'pt' ? 'Fluxo de Pagamento' : 'Payment Flow'}</span>
+                    <p className="text-sm font-bold text-slate-800 m-0">
+                      {tipoPagamento === '100_total' 
+                        ? (contractLang === 'pt' ? '100% cobrado no ato da reserva' : '100% charged upon booking') 
+                        : (contractLang === 'pt' ? 'Sinal de 50% Agora + Restante Depois' : '50% Deposit Now + Remainder Later')}
                     </p>
                   </div>
-                </div>
+                  <div>
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{contractLang === 'pt' ? 'Política de Cancelamento' : 'Cancellation Policy'}</span>
+                    <p className="text-sm font-bold text-slate-800 m-0">
+                      {politicaCancelamento || (contractLang === 'pt' ? 'Não definida' : 'Not defined')}
+                    </p>
+                  </div>
+                </>
               )}
-
-              <div className="bg-white p-5 rounded-xl border border-gray-200">
-                <h4 className="font-black text-base mb-3 text-black uppercase border-l-4 border-black pl-3">Anexo 4 – Acordos Extraordinários</h4>
-                <p className="mb-3 text-gray-700">Se existirem exceções negociadas a este contrato, estas serão gravadas no documento PDF assinado.</p>
-                <textarea 
-                  className="w-full border border-gray-300 p-3 rounded-lg bg-gray-50 outline-none focus:border-black transition-all text-sm" 
-                  rows={2} 
-                  value={acordosComplementares} 
-                  onChange={e => setAcordosComplementares(e.target.value)}
-                  placeholder="Insira as cláusulas de exceção acordadas, ou deixe em branco."
-                ></textarea>
-              </div>
-
             </div>
 
-            <div className="h-px bg-gray-300 w-full my-8 md:my-12"></div>
-
-            {/* ZONA DE ASSINATURAS FINAIS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 mt-8 font-sans">
-              <div>
-                <h4 className="font-black mb-4 sm:mb-6 uppercase tracking-wider text-black text-xs sm:text-sm">{isEn ? 'For HelloCamp' : 'Pela HelloCamp'}</h4>
-                <p className="font-serif text-lg sm:text-xl italic text-gray-500 mb-2">{isEn ? 'HelloCamp Administration' : 'Administração HelloCamp'}</p>
-                <p className="text-xs sm:text-sm font-medium border-t border-gray-200 mt-4 sm:mt-6 pt-3 sm:pt-4">{isEn ? 'Date:' : 'Data:'} {dataAtual}</p>
+            {acordosComplementares && (
+              <div className="mt-4 bg-amber-50 p-6 rounded-2xl border border-amber-200">
+                <span className="block text-[10px] font-black uppercase tracking-widest text-amber-800 mb-2">{contractLang === 'pt' ? 'Acordos Complementares / Exceções' : 'Complementary Agreements / Exceptions'}</span>
+                <p className="text-sm font-medium text-amber-900 m-0 italic leading-relaxed">"{acordosComplementares}"</p>
               </div>
+            )}
+          </section>
 
-              <div>
-                <h4 className="font-black mb-4 sm:mb-6 uppercase tracking-wider text-black text-xs sm:text-sm">{isEn ? 'For the Partner' : 'Pelo Parceiro'}</h4>
-                <div className="space-y-4">
-                  <div className="flex flex-col">
-                    <label className="text-[10px] sm:text-xs font-bold uppercase mb-1 text-gray-500">{isEn ? 'Digital Signature Name *' : 'Nome da Assinatura Digital *'}</label>
-                    <input required type="text" className="border-b-2 border-black bg-transparent outline-none py-2 text-lg sm:text-xl font-serif italic text-base focus:border-[#EBA914] transition-colors" value={assinaturaNome} onChange={e => setAssinaturaNome(e.target.value)} placeholder={isEn ? "Signatory's name" : "O seu nome completo"} />
-                  </div>
-                  <div className="flex flex-col">
-                    <label className="text-[10px] sm:text-xs font-bold uppercase mb-1 text-gray-500">{isEn ? 'Role / Position *' : 'Cargo *'}</label>
-                    <input required type="text" className="border-b border-gray-300 bg-transparent outline-none py-2 text-base focus:border-black transition-colors" value={assinaturaCargo} onChange={e => setAssinaturaCargo(e.target.value)} placeholder={isEn ? "Ex: Managing Partner" : "Ex: Sócio-Gerente"} />
-                  </div>
-                  <p className="text-xs sm:text-sm font-medium border-t border-gray-200 mt-4 sm:mt-6 pt-3 sm:pt-4">{isEn ? 'Date:' : 'Data:'} {dataAtual}</p>
+          {/* 3. SÍNTESE JURÍDICA */}
+          <section className="mb-12">
+            <h2 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-4 mb-6 tracking-tight">3. {contractLang === 'pt' ? 'Responsabilidade Legal e Foro' : 'Legal Liability and Jurisdiction'}</h2>
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner space-y-4 text-xs text-slate-600 leading-relaxed text-justify">
+              <p><strong>{contractLang === 'pt' ? 'A. Responsabilidade Civil e Seguros:' : 'A. Civil Liability & Insurance:'}</strong> {contractLang === 'pt' ? 'A HelloCamp atua de forma estrita como plataforma informática de intermediação. A organização técnica, gestão e segurança das atividades são da inteira responsabilidade do Parceiro, que obrigatoriamente deterá os seguros de Responsabilidade Civil e Acidentes Pessoais legalmente exigíveis, isentando a HelloCamp de qualquer litígio com os participantes decorrente da atividade de campo.' : 'HelloCamp acts strictly as an IT intermediation platform. The technical organization, management, and safety of activities are the sole responsibility of the Partner, who must hold legally required Civil Liability and Personal Accident insurance, exempting HelloCamp from any litigation with participants arising from the camp activity.'}</p>
+              <p><strong>{contractLang === 'pt' ? 'B. Proteção de Dados (RGPD):' : 'B. Data Protection (GDPR):'}</strong> {contractLang === 'pt' ? 'O Parceiro assume o papel de Responsável pelo Tratamento dos dados pessoais, médicos e restrições alimentares transferidos através da HelloCamp para a prossecução do serviço, assumindo integral cumprimento do Regulamento (UE) 2016/679.' : 'The Partner assumes the role of Data Controller for the personal, medical, and dietary data transferred via HelloCamp to provide the service, assuming full compliance with Regulation (EU) 2016/679.'}</p>
+              <p className="font-bold text-slate-900"><strong>{contractLang === 'pt' ? 'C. Lei e Foro Competente:' : 'C. Governing Law and Jurisdiction:'}</strong> {contractLang === 'pt' ? 'Independentemente da jurisdição da sede do Parceiro, o presente acordo rege-se, para todos os efeitos, pela Lei Portuguesa. Qualquer litígio emergente da interpretação ou execução deste acordo será submetido à competência exclusiva dos tribunais da Comarca de Lisboa (Portugal).' : 'Regardless of the Partner’s headquarters jurisdiction, this agreement is governed, for all purposes, by Portuguese Law. Any dispute arising from the interpretation or execution of this agreement shall be submitted to the exclusive jurisdiction of the courts of the District of Lisbon (Portugal).'}</p>
+            </div>
+          </section>
+
+          {/* 4. ASSINATURA DIGITAL */}
+          <section className="mb-8">
+            <div className="bg-[#059669]/5 border-2 border-[#059669]/20 rounded-[2rem] p-6 md:p-8">
+              <h2 className="text-xl font-black text-emerald-900 mb-2 tracking-tight flex items-center gap-2"><span>✍️</span> {contractLang === 'pt' ? 'Assinatura Digital' : 'Digital Signature'}</h2>
+              <p className="text-xs font-medium text-emerald-700/80 mb-6">{contractLang === 'pt' ? 'A assinatura deste documento tem validade legal probatória através da gravação de Timestamp e Endereço IP do signatário.' : 'The signature of this document has evidential legal validity through the recording of the signatory’s Timestamp and IP Address.'}</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-emerald-800 mb-2">{contractLang === 'pt' ? 'Nome do Signatário *' : 'Signatory Name *'}</label>
+                  <input required value={assinaturaNome} onChange={e => setAssinaturaNome(e.target.value)} className="w-full p-4 bg-white border border-emerald-200 rounded-xl text-sm font-black text-emerald-900 outline-none focus:border-emerald-500 font-serif italic shadow-sm" placeholder={contractLang === 'pt' ? "O seu nome completo" : "Your full name"} />
                 </div>
-
-                <div className="mt-6 md:mt-8 bg-gray-50 p-4 border border-gray-200 rounded-lg">
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <input type="checkbox" required checked={concordaTermos} onChange={e => setConcordaTermos(e.target.checked)} className="mt-1 w-5 h-5 accent-black cursor-pointer flex-shrink-0" />
-                    <span className="text-xs sm:text-sm text-gray-700 font-medium leading-relaxed group-hover:text-black transition-colors">
-                      Declaro ter lido e aceite os Termos Operacionais apresentados e as Cláusulas do Contrato. Confirmo possuir poderes legais para vincular a entidade parceira identificada a todas as atividades na plataforma através desta assinatura digital legalmente vinculativa.
-                    </span>
-                  </label>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-emerald-800 mb-2">{contractLang === 'pt' ? 'Cargo / Função Legal *' : 'Legal Role / Position *'}</label>
+                  <input required value={assinaturaCargo} onChange={e => setAssinaturaCargo(e.target.value)} className="w-full p-4 bg-white border border-emerald-200 rounded-xl text-sm font-bold text-emerald-900 outline-none focus:border-emerald-500 shadow-sm" placeholder={contractLang === 'pt' ? "Ex: CEO / Diretor Geral" : "Ex: CEO / Managing Director"} />
                 </div>
               </div>
-            </div>
 
-            <div className="pt-6 mt-12 md:pt-8 border-t border-slate-300 flex justify-end font-sans">
-              <button type="submit" disabled={saving || !concordaTermos || !assinaturaNome || !assinaturaCargo} className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-400 text-white font-black px-6 sm:px-10 py-4 sm:py-5 rounded-xl shadow-lg transition-transform hover:-translate-y-1 cursor-pointer w-full text-base sm:text-lg border border-emerald-400">
-                {saving 
-                  ? 'A Gerar Documento Criptografado...' 
-                  : 'Assinar Digitalmente e Aprovar Globalmente'}
-              </button>
-            </div>
+              <div className="bg-white p-5 rounded-xl border border-emerald-100">
+                <label className="flex items-start gap-4 cursor-pointer group">
+                  <input type="checkbox" required checked={concordaTermos} onChange={e => setConcordaTermos(e.target.checked)} className="mt-1 w-6 h-6 accent-emerald-600 cursor-pointer flex-shrink-0" />
+                  <span className="text-xs font-bold text-slate-600 leading-relaxed group-hover:text-slate-900 transition-colors">
+                    {contractLang === 'pt' 
+                      ? 'Declaro sob compromisso de honra que sou o representante legal da entidade acima identificada. Aceito os Termos Operacionais aqui descritos, renuncio invocar a nulidade do documento por falta de assinatura autógrafa, e autorizo a comercialização dos nossos programas através da HelloCamp.' 
+                      : 'I declare upon my honor that I am the legal representative of the entity identified above. I accept the Operational Terms described herein, waive the right to invoke the nullity of the document due to lack of handwritten signature, and authorize the marketing of our programs through HelloCamp.'}
+                  </span>
+                </label>
+              </div>
 
-          </form>
-        )}
+            </div>
+          </section>
+
+          <button type="submit" disabled={submitting} className="w-full py-5 text-sm uppercase tracking-widest font-black rounded-2xl border-none text-white bg-[#0E3A68] hover:bg-[#0b2b4d] transition-all shadow-xl shadow-[#0E3A68]/30 hover:-translate-y-1 cursor-pointer disabled:opacity-50">
+            {submitting ? (contractLang === 'pt' ? 'A Processar Documento Legal...' : 'Processing Legal Document...') : (contractLang === 'pt' ? 'Assinar Digitalmente Acordo' : 'Digitally Sign Agreement')}
+          </button>
+        </form>
       </div>
-    </main>
+    </div>
   );
 }
