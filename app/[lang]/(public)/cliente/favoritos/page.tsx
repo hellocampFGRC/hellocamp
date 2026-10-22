@@ -25,15 +25,25 @@ export default function FavoritosCliente({ params }: { params: Promise<{ lang: s
       .select("campo_id")
       .eq("user_id", session.user.id);
 
-    if (favRows && favRows.length > 0 && !favErr) {
+    if (favErr) {
+      console.error("Erro ao carregar favoritos:", favErr);
+      setLoading(false);
+      return;
+    }
+
+    if (favRows && favRows.length > 0) {
       const listaIds = favRows.map(f => f.campo_id);
 
-      const { data: camposData } = await supabase
-        .from("campos")
-        .select("*")
-        .in("id", listaIds);
+      // Proteção Supabase: Se a lista estiver vazia, o `.in()` falha.
+      if (listaIds.length > 0) {
+        const { data: camposData } = await supabase
+          .from("campos")
+          .select("*")
+          .in("id", listaIds)
+          .eq("ativo", true); // Só mostra se ainda estiver ativo!
 
-      setCamposFavoritos(camposData || []);
+        setCamposFavoritos(camposData || []);
+      }
     } else {
       setCamposFavoritos([]);
     }
@@ -47,7 +57,7 @@ export default function FavoritosCliente({ params }: { params: Promise<{ lang: s
   if (loading) return <div className="p-20 text-center font-bold text-slate-400 uppercase tracking-widest text-xs animate-pulse">{isEn ? 'Loading your wishlist...' : 'A carregar os seus favoritos...'}</div>;
 
   return (
-    <div className="max-w-[1000px] mx-auto pb-20 font-sans">
+    <div className="max-w-[1200px] mx-auto px-4 md:px-6 pt-10 pb-20 font-sans">
       
       <div className="mb-10">
         <h1 className="text-3xl md:text-4xl font-black text-slate-900 m-0 tracking-tight">
@@ -59,7 +69,7 @@ export default function FavoritosCliente({ params }: { params: Promise<{ lang: s
       </div>
 
       {camposFavoritos.length === 0 ? (
-        <div className="text-center p-16 md:p-24 bg-white border-2 border-dashed border-slate-300 rounded-[2rem] shadow-sm">
+        <div className="text-center p-16 md:p-24 bg-white border border-dashed border-slate-300 rounded-[2rem] shadow-sm">
           <span className="text-5xl block mb-6 opacity-50">❤️</span>
           <p className="text-slate-500 text-base md:text-lg mb-8 font-medium">
             {isEn ? 'Your wishlist is currently empty.' : 'Ainda não adicionou nenhuma colónia aos seus favoritos.'}
@@ -95,7 +105,7 @@ export default function FavoritosCliente({ params }: { params: Promise<{ lang: s
                     
                     <div className="mt-auto pt-5 border-t border-slate-100 flex justify-between items-center">
                       <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{campo.idade}</span>
-                      <span className="text-xl font-black text-[#0E3A68]">{campo.preco}€</span>
+                      <span className="text-xl font-black text-[#0E3A68]">{campo.preco === 0 ? 'Sob Consulta' : `${campo.preco}€`}</span>
                     </div>
                   </div>
                 </Link>

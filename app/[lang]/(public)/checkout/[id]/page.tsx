@@ -22,6 +22,12 @@ const IconCreditCard = ({ className = "w-6 h-6" }: { className?: string }) => (
   </svg>
 );
 
+const IconExternalLink = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+  </svg>
+);
+
 const calcularIdade = (dataNasc: string) => {
   if (!dataNasc) return 0;
   const hoje = new Date();
@@ -47,7 +53,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   const [reservasExistentes, setReservasExistentes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
-  const [processingStripe, setProcessingStripe] = useState(false);
+  const [processingState, setProcessingState] = useState(false);
 
   // ==========================================
   // PARÂMETROS DO URL E CÁLCULOS
@@ -129,11 +135,21 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
       if (session) {
         setUser(session.user);
-        const { data: criancasData } = await supabase.from("criancas").select("*").eq("cliente_id", session.user.id).order('created_at', { ascending: false });
-        setCriancas(criancasData || []);
+        
+        // Se a modalidade não for externa, carregamos as crianças do utilizador para ele escolher
+        if (campoData.modalidade_reserva !== 'link_externo') {
+          const { data: criancasData } = await supabase.from("criancas").select("*").eq("cliente_id", session.user.id).order('created_at', { ascending: false });
+          setCriancas(criancasData || []);
 
-        const { data: reservasData } = await supabase.from("reservas").select("crianca_id, turno_nome").eq("cliente_id", session.user.id).eq("campo_id", id);
-        setReservasExistentes(reservasData || []);
+          const { data: reservasData } = await supabase.from("reservas").select("crianca_id, turno_nome").eq("cliente_id", session.user.id).eq("campo_id", id);
+          setReservasExistentes(reservasData || []);
+        } else {
+          // Se for link externo e ele estiver com login, pré-preenche os dados de contacto
+          const { data: perfilData } = await supabase.from('perfis').select('nome_completo, email, telefone').eq('id', session.user.id).single();
+          if (perfilData) {
+             setGuestData({ nome: perfilData.nome_completo || '', email: perfilData.email || '', telefone: perfilData.telefone || '' });
+          }
+        }
       } else {
         setIsGuest(true);
       }
@@ -144,7 +160,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   }, [id, lang, router]);
 
   // ==========================================
-  // LÓGICA DE CRIANÇAS
+  // LÓGICA DE CRIANÇAS (APENAS PARA RESERVA DIRETA)
   // ==========================================
   const openNewChildModal = (index: number) => {
     setNewChild({
@@ -194,73 +210,109 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
   };
 
   // ==========================================
-  // SUBMISSÃO & CHECKOUT STRIPE
+  // SUBMISSÃO & CHECKOUT (HÍBRIDO)
   // ==========================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!concordaTermos) return alert(isEn ? "You must accept the Terms and Conditions to proceed." : "Tem de aceitar os Termos e Condições para avançar.");
-    if (selecoesCriancas.some(c => c === "")) return alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione um participante válido para todas as vagas.");
-    if (isGuest && (!guestData.nome || !guestData.email || !guestData.telefone)) return alert(isEn ? "Please fill in your contact details." : "Por favor, preencha os seus dados de contacto.");
+    
+    const isExterna = campo.modalidade_reserva === 'link_externo';
 
-    setProcessingStripe(true);
+    if (!isExterna && selecoesCriancas.some(c => c === "")) return alert(isEn ? "Please select a child for each participant slot." : "Por favor, selecione um participante válido para todas as vagas.");
+    
+    // Tanto externo como guest direto precisam de dados preenchidos
+    if (!guestData.nome || !guestData.email || !guestData.telefone) {
+      if (isExterna || isGuest) return alert(isEn ? "Please fill in your contact details." : "Por favor, preencha os seus dados de contacto.");
+    }
+
+    setProcessingState(true);
 
     try {
-      // 1. Agrega as escolhas múltiplas do URL à ficha de cada criança para gravação no DB via Webhook
-      const criancasParaEnviar = selecoesCriancas.map((id, index) => {
-        const c = criancas.find(cr => cr.id === id);
-        return {
-          ...c,
-          escolhas_multiplas_url: opcoesParticipantesUrl[index + 1] || {}
+      if (isExterna) {
+        // FLUXO DE REDIRECIONAMENTO EXTERNO (Sem pagamentos, apenas gera Lead)
+        const payloadLead = {
+          nome_cliente: guestData.nome,
+          email_cliente: guestData.email,
+          telefone_cliente: guestData.telefone,
+          lang: lang,
+          campoId: campo.id,
+          campoNome: campo.nome,
+          organizadorEmail: organizador?.email,
+          organizadorNome: organizador?.empresa_nome,
+          turnoInteresse: turnoSelecionado?.nome || 'Geral',
+          precoEstimado: precoFinalTotal,
+          linkExterno: campo.link_externo_reserva
         };
-      });
 
-      // 2. Prepara o Payload final
-      const payloadCheckout = {
-        totalAmount: precoFinalTotal,
-        userEmail: isGuest ? guestData.email : user.email,
-        lang: lang,
-        campoNome: campo.nome,
-        stripeAccountId: organizador?.stripe_account_id,
-        tipoPagamento: campo?.tipo_pagamento,
-        campoId: campo.id,
+        const res = await fetch('/api/gerar-lead-externa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadLead)
+        });
 
-        isGuest: isGuest,
-        guestData: isGuest ? guestData : null,
-        criancas: criancasParaEnviar,
+        if (!res.ok) throw new Error(isEn ? "Error generating redirection." : "Erro ao gerar redirecionamento.");
+        const data = await res.json();
+        
+        // Redireciona o utilizador para o site do parceiro
+        window.location.href = data.url;
 
-        reservaSpecs: {
-          turno_nome: turnoSelecionado?.nome || 'Programa Base',
-          extras_escolhidos: {
-            ext_seguro: extSeguro,
-            ext_transporte: extTransporte,
-            dias_inscritos: totalDiasExtras,
-            dias_soltos: turnoSelecionado?.dias_soltos || []
-          },
-          respostas_customizadas: respostasCustomizadas, 
-          opcoes_participantes_url: opcoesParticipantesUrl, 
-          quantidade_reservas: quantidade,
-          valor_por_reserva: precoFinalTotal / quantidade
+      } else {
+        // FLUXO NORMAL STRIPE CHECKOUT
+        const criancasParaEnviar = selecoesCriancas.map((id, index) => {
+          const c = criancas.find(cr => cr.id === id);
+          return {
+            ...c,
+            escolhas_multiplas_url: opcoesParticipantesUrl[index + 1] || {}
+          };
+        });
+
+        const payloadCheckout = {
+          totalAmount: precoFinalTotal,
+          userEmail: isGuest ? guestData.email : user.email,
+          lang: lang,
+          campoNome: campo.nome,
+          stripeAccountId: organizador?.stripe_account_id,
+          tipoPagamento: campo?.tipo_pagamento,
+          campoId: campo.id,
+
+          isGuest: isGuest,
+          guestData: isGuest ? guestData : null,
+          criancas: criancasParaEnviar,
+
+          reservaSpecs: {
+            turno_nome: turnoSelecionado?.nome || 'Programa Base',
+            extras_escolhidos: {
+              ext_seguro: extSeguro,
+              ext_transporte: extTransporte,
+              dias_inscritos: totalDiasExtras,
+              dias_soltos: turnoSelecionado?.dias_soltos || []
+            },
+            respostas_customizadas: respostasCustomizadas, 
+            opcoes_participantes_url: opcoesParticipantesUrl, 
+            quantidade_reservas: quantidade,
+            valor_por_reserva: precoFinalTotal / quantidade
+          }
+        };
+
+        const res = await fetch('/api/stripe-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadCheckout)
+        });
+
+        if (!res.ok) {
+          const textError = await res.text();
+          throw new Error((isEn ? "Server error " : "Erro Servidor ") + "(HTTP " + res.status + "): " + textError);
         }
-      };
 
-      const res = await fetch('/api/stripe-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payloadCheckout)
-      });
-
-      if (!res.ok) {
-        const textError = await res.text();
-        throw new Error((isEn ? "Server error " : "Erro Servidor ") + "(HTTP " + res.status + "): " + textError);
+        const data = await res.json();
+        if (data.url) window.location.href = data.url;
+        else throw new Error(data.error || (isEn ? "Stripe error: no valid payment link." : "Erro na Stripe: Nenhum link válido."));
       }
-
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else throw new Error(data.error || (isEn ? "Stripe error: no valid payment link." : "Erro na Stripe: Nenhum link válido."));
 
     } catch (error: any) {
       alert(error.message);
-      setProcessingStripe(false);
+      setProcessingState(false);
     }
   };
 
@@ -277,27 +329,29 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
     );
   }
 
-  // Filtrar apenas as Perguntas de Texto Livre (As de Escolha já vieram no URL e estão em opcoesParticipantesUrl)
+  const isExterna = campo.modalidade_reserva === 'link_externo';
   const perguntasDeTexto = (campo?.perguntas_customizadas || []).filter((p: string) => p.startsWith('TEXTO|') || !p.startsWith('ESCOLHA|'));
 
   return (
     <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 pt-8 md:pt-12 relative">
 
-      {/* OVERLAY DE REDIRECIONAMENTO STRIPE */}
-      {processingStripe && (
+      {/* OVERLAY DE REDIRECIONAMENTO */}
+      {processingState && (
         <div className="fixed inset-0 bg-white/95 z-[100] flex flex-col items-center justify-center">
           <div className="w-16 h-16 border-4 border-slate-100 border-t-[#0E3A68] rounded-full animate-spin mb-6 shadow-sm" />
           <h2 className="text-2xl font-black text-slate-900 mb-2 tracking-tight">
-            {isEn ? 'Securing your spot...' : 'A garantir a sua vaga...'}
+            {isEn ? 'Securing your spot...' : 'A processar o seu pedido...'}
           </h2>
           <p className="text-slate-500 font-medium text-sm">
-            {isEn ? 'Please wait. Redirecting to Stripe.' : 'Por favor, aguarde o redirecionamento para o pagamento seguro.'}
+            {isExterna 
+              ? (isEn ? 'Redirecting to the official organizer site...' : 'A redirecionar para a plataforma oficial do organizador...')
+              : (isEn ? 'Please wait. Redirecting to Stripe.' : 'Por favor, aguarde o redirecionamento para o pagamento seguro.')}
           </p>
         </div>
       )}
 
-      {/* MODAL NOVO PARTICIPANTE */}
-      {showModal && (
+      {/* MODAL NOVO PARTICIPANTE (SÓ APARECE SE NÃO FOR EXTERNO) */}
+      {showModal && !isExterna && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setShowModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-[2rem] p-8 md:p-10 shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowModal(false)} className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 font-black cursor-pointer transition-colors">&times;</button>
@@ -342,8 +396,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
         {/* ========================================== */}
         <div className="flex-[1_1_60%] min-w-[320px] w-full flex flex-col gap-8">
 
-          {/* HEADER GUEST */}
-          {isGuest && (
+          {/* HEADER INFORMATIVO */}
+          {!isExterna && isGuest && (
             <div className="bg-amber-50 p-6 md:p-8 rounded-[2rem] border border-amber-200 flex justify-between items-center flex-wrap gap-4 shadow-sm">
               <div>
                 <h3 className="text-base font-black text-amber-900 m-0 mb-1">{isEn ? 'Checking out as Guest' : 'A reservar como Convidado'}</h3>
@@ -355,12 +409,26 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
             </div>
           )}
 
+          {isExterna && (
+            <div className="bg-blue-50 p-6 md:p-8 rounded-[2rem] border border-blue-200 flex items-start gap-4 shadow-sm">
+              <IconExternalLink className="w-8 h-8 text-blue-600 flex-shrink-0 mt-1" />
+              <div>
+                <h3 className="text-lg font-black text-blue-900 m-0 mb-2">{isEn ? 'External Registration' : 'Inscrição Externa Oficial'}</h3>
+                <p className="text-sm font-medium text-blue-800 m-0 leading-relaxed">
+                  {isEn 
+                    ? 'This program uses its own registration portal. Please enter your contact details below so we can notify the partner, and we will securely redirect you to their official platform to complete the process.'
+                    : 'Este programa utiliza um portal próprio de inscrições. Introduza os seus dados de contacto rápidos para notificarmos o parceiro e redirecioná-lo-emos com segurança para a plataforma oficial do organizador.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="flex flex-col gap-8">
 
-            {/* DADOS PARENTE (GUEST) */}
-            {isGuest && (
+            {/* DADOS PARENTE (GUEST OU EXTERNO SEMPRE PRECISA) */}
+            {(isGuest || isExterna) && (
               <section className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm">
-                <h2 className="text-xl md:text-2xl font-black text-slate-900 m-0 mb-8 border-b border-slate-100 pb-4 tracking-tight">{isEn ? 'Your Details (Parent)' : 'Os Seus Dados (Encarregado)'}</h2>
+                <h2 className="text-xl md:text-2xl font-black text-slate-900 m-0 mb-8 border-b border-slate-100 pb-4 tracking-tight">{isEn ? 'Your Contact Details' : 'Os Seus Dados de Contacto'}</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="sm:col-span-2"><label className={labelClass}>{isEn ? 'Full Name' : 'Nome Completo'} *</label><input type="text" required value={guestData.nome} onChange={e => setGuestData({ ...guestData, nome: e.target.value })} className={inputClass} /></div>
                   <div><label className={labelClass}>{isEn ? 'Email Address' : 'E-mail'} *</label><input type="email" required value={guestData.email} onChange={e => setGuestData({ ...guestData, email: e.target.value })} className={inputClass} /></div>
@@ -369,156 +437,160 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
               </section>
             )}
 
-            {/* PARTICIPANTES E ESCOLHAS */}
-            <section className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm">
-              <h2 className="text-xl md:text-2xl font-black text-slate-900 m-0 mb-8 border-b border-slate-100 pb-4 tracking-tight">{isEn ? 'Participants' : 'Participantes'}</h2>
+            {/* PARTICIPANTES E ESCOLHAS (ESCONDIDO SE FOR EXTERNO) */}
+            {!isExterna && (
+              <section className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm">
+                <h2 className="text-xl md:text-2xl font-black text-slate-900 m-0 mb-8 border-b border-slate-100 pb-4 tracking-tight">{isEn ? 'Participants' : 'Participantes'}</h2>
 
-              {Array.from({ length: quantidade }).map((_, i) => {
-                const childId = selecoesCriancas[i];
-                const childInfo = criancas.find(c => c.id === childId);
-                const participantNumber = i + 1;
-                const escolhasUrlLocais = opcoesParticipantesUrl[participantNumber]; // AS ESCOLHAS DESTE FILHO
+                {Array.from({ length: quantidade }).map((_, i) => {
+                  const childId = selecoesCriancas[i];
+                  const childInfo = criancas.find(c => c.id === childId);
+                  const participantNumber = i + 1;
+                  const escolhasUrlLocais = opcoesParticipantesUrl[participantNumber]; 
 
-                return (
-                  <div key={i} className={i !== quantidade - 1 ? "mb-10 pb-10 border-b-2 border-dashed border-slate-100" : ""}>
-                    <label className="block text-[11px] font-black text-[#0E3A68] mb-3 uppercase tracking-widest ml-1">{isEn ? `Participant ${participantNumber}` : `Participante ${participantNumber}`}</label>
+                  return (
+                    <div key={i} className={i !== quantidade - 1 ? "mb-10 pb-10 border-b-2 border-dashed border-slate-100" : ""}>
+                      <label className="block text-[11px] font-black text-[#0E3A68] mb-3 uppercase tracking-widest ml-1">{isEn ? `Participant ${participantNumber}` : `Participante ${participantNumber}`}</label>
 
-                    <div className="flex flex-col sm:flex-row gap-4 items-center">
-                      <select required value={childId} onChange={(e) => { const novas = [...selecoesCriancas]; novas[i] = e.target.value; setSelecoesCriancas(novas); }} className={`${selectClass} flex-1`}>
-                        <option value="">{isEn ? 'Choose a child...' : 'Escolha um participante...'}</option>
-                        {criancas.map(c => {
-                          const idade = calcularIdade(c.data_nascimento);
-                          const idadeForaLimite = (campo.idade_min && idade < campo.idade_min) || (campo.idade_max && idade > campo.idade_max);
-                          const jaInscrito = reservasExistentes.some(r => r.crianca_id === c.id && r.turno_nome === (turnoSelecionado?.nome || 'Programa Base'));
-                          const jaSelec = selecoesCriancas.includes(c.id) && selecoesCriancas[i] !== c.id;
-                          const isDisabled = idadeForaLimite || jaInscrito || jaSelec;
-                          
-                          let aviso = "";
-                          if (idadeForaLimite) aviso = isEn ? `(Age not allowed: ${idade} yrs)` : `(Idade não permitida: ${idade} anos)`;
-                          else if (jaInscrito) aviso = isEn ? "(Already registered)" : "(Já inscrito neste turno)";
-                          else if (jaSelec) aviso = isEn ? "(Selected in this order)" : "(Selecionado nesta compra)";
-
-                          return <option key={c.id} value={c.id} disabled={isDisabled}>{c.nome} {aviso}</option>;
-                        })}
-                      </select>
-                      <button type="button" onClick={() => openNewChildModal(i)} className="w-full sm:w-auto px-6 py-4 bg-blue-50 hover:bg-blue-100 text-[#0E3A68] font-black uppercase tracking-widest text-[10px] rounded-xl border border-blue-200 transition-colors shadow-sm">+ {isEn ? 'New' : 'Novo'}</button>
-                    </div>
-
-                    {childInfo && (
-                      <div className="mt-6 bg-slate-50 p-6 md:p-8 rounded-2xl border border-slate-200 shadow-inner">
-                        <div className="flex justify-between items-center mb-6"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">{isEn ? 'Verify Details' : 'Confirmar Identificação'}</h4></div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                          <div className="sm:col-span-2"><label className={labelClass}>{isEn ? 'Full Name' : 'Nome Completo'}</label><input type="text" required value={childInfo.nome || ''} onChange={e => handleUpdateLocalCrianca(childId, 'nome', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'nome', e.target.value)} className={inputClass} /></div>
-                          <div><label className={labelClass}>{isEn ? 'Date of Birth' : 'Data Nascimento'}</label><input type="date" required value={childInfo.data_nascimento || ''} onChange={e => handleUpdateLocalCrianca(childId, 'data_nascimento', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'data_nascimento', e.target.value)} className={inputClass} /></div>
-                          <div><label className={labelClass}>{isEn ? 'Gender' : 'Sexo'}</label>
-                            <select value={childInfo.sexo || ''} onChange={e => { handleUpdateLocalCrianca(childId, 'sexo', e.target.value); handleSaveDBCrianca(childId, 'sexo', e.target.value); }} className={selectClass}>
-                              <option value="Masculino">Masculino</option><option value="Feminino">Feminino</option><option value="Prefiro não dizer">Prefiro não dizer</option>
-                            </select>
-                          </div>
-
-                          <div className="sm:col-span-2 border-t border-slate-200 pt-6 mt-2"><label className={`${labelClass} !text-red-700`}>{isEn ? 'Medical Alerts' : 'Alertas Clínicos'}</label></div>
-                          <div className="sm:col-span-2"><label className={`${labelClass} !text-red-700`}>{isEn ? 'Allergies / Restrictions' : 'Alergias Alimentares'}</label><input type="text" value={childInfo.restricoes_alimentares || ''} onChange={e => handleUpdateLocalCrianca(childId, 'restricoes_alimentares', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'restricoes_alimentares', e.target.value)} className={`${inputClass} !border-red-200 focus:!border-red-500`} placeholder={isEn ? "None" : "Nenhuma"} /></div>
-                          <div className="sm:col-span-2"><label className={`${labelClass} !text-red-700`}>{isEn ? 'Chronic Diseases' : 'Doenças Crónicas ou Medicação'}</label><input type="text" value={childInfo.doencas_cronicas || ''} onChange={e => handleUpdateLocalCrianca(childId, 'doencas_cronicas', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'doencas_cronicas', e.target.value)} className={`${inputClass} !border-red-200 focus:!border-red-500`} placeholder={isEn ? "None" : "Nenhuma"} /></div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* MOSTRAR AS OPÇÕES DE PROGRAMA ESCOLHIDAS NA PÁGINA ANTERIOR */}
-                    {childInfo && escolhasUrlLocais && Object.keys(escolhasUrlLocais).length > 0 && (
-                      <div className="mt-4 bg-emerald-50 p-6 rounded-2xl border border-emerald-200 shadow-sm flex flex-col gap-3">
-                        <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest m-0">✓ Opções de Programa</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                          {Object.entries(escolhasUrlLocais).map(([perg, resp]: any) => (
-                            <div key={perg} className="bg-white p-4 border border-emerald-100 rounded-xl shadow-sm">
-                              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 m-0 mb-1">{perg}</p>
-                              <p className="text-sm font-black text-emerald-700 m-0">{resp}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* PERGUNTAS DE TEXTO LIVRE COM TRADUÇÃO INTELIGENTE */}
-                    {childInfo && perguntasDeTexto.length > 0 && (
-                      <div className="mt-4 bg-blue-50 p-6 md:p-8 rounded-2xl border border-blue-200 shadow-sm">
-                        <h4 className="text-[10px] font-black text-[#0E3A68] uppercase tracking-widest mb-5">{isEn ? 'Specific Questions' : 'Perguntas do Organizador'}</h4>
-                        <div className="grid gap-6">
-                          {perguntasDeTexto.map((pOriginal: string, pIdx: number) => {
-                            // 1. Extrair o Título Original (Português)
-                            const pTituloPt = pOriginal.startsWith('TEXTO|') ? pOriginal.split('|')[1] : pOriginal;
+                      <div className="flex flex-col sm:flex-row gap-4 items-center">
+                        <select required value={childId} onChange={(e) => { const novas = [...selecoesCriancas]; novas[i] = e.target.value; setSelecoesCriancas(novas); }} className={`${selectClass} flex-1`}>
+                          <option value="">{isEn ? 'Choose a child...' : 'Escolha um participante...'}</option>
+                          {criancas.map(c => {
+                            const idade = calcularIdade(c.data_nascimento);
+                            const idadeForaLimite = (campo.idade_min && idade < campo.idade_min) || (campo.idade_max && idade > campo.idade_max);
+                            const jaInscrito = reservasExistentes.some(r => r.crianca_id === c.id && r.turno_nome === (turnoSelecionado?.nome || 'Programa Base'));
+                            const jaSelec = selecoesCriancas.includes(c.id) && selecoesCriancas[i] !== c.id;
+                            const isDisabled = idadeForaLimite || jaInscrito || jaSelec;
                             
-                            // 2. Procurar a tradução inglesa, mantendo o ID original
-                            const originalIndex = campo.perguntas_customizadas.indexOf(pOriginal);
-                            const pEnRaw = campo.perguntas_customizadas_en?.[originalIndex];
-                            const pTituloEn = pEnRaw ? (pEnRaw.startsWith('TEXTO|') ? pEnRaw.split('|')[1] : pEnRaw) : pTituloPt;
-                            
-                            // 3. Decidir o que mostrar ao Pai
-                            const pVisivel = isEn ? pTituloEn : pTituloPt;
+                            let aviso = "";
+                            if (idadeForaLimite) aviso = isEn ? `(Age not allowed: ${idade} yrs)` : `(Idade não permitida: ${idade} anos)`;
+                            else if (jaInscrito) aviso = isEn ? "(Already registered)" : "(Já inscrito neste turno)";
+                            else if (jaSelec) aviso = isEn ? "(Selected in this order)" : "(Selecionado nesta compra)";
 
-                            return (
-                              <div key={pIdx}>
-                                <label className={`${labelClass} !text-[#0E3A68] mb-2 block`}>{pVisivel} *</label>
-                                <input
-                                  type="text" required 
-                                  value={respostasCustomizadas[i]?.[pTituloPt] || ''}
-                                  onChange={e => setRespostasCustomizadas(prev => ({...prev, [i]: {...(prev[i]||{}), [pTituloPt]: e.target.value}}))}
-                                  className={`${inputClass} !border-blue-200 focus:!border-[#0E3A68]`} 
-                                  placeholder={isEn ? 'Your answer...' : 'A sua resposta...'}
-                                />
-                              </div>
-                            );
+                            return <option key={c.id} value={c.id} disabled={isDisabled}>{c.nome} {aviso}</option>;
                           })}
-                        </div>
+                        </select>
+                        <button type="button" onClick={() => openNewChildModal(i)} className="w-full sm:w-auto px-6 py-4 bg-blue-50 hover:bg-blue-100 text-[#0E3A68] font-black uppercase tracking-widest text-[10px] rounded-xl border border-blue-200 transition-colors shadow-sm">+ {isEn ? 'New' : 'Novo'}</button>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </section>
 
-            {/* PAGAMENTO E TERMOS */}
+                      {childInfo && (
+                        <div className="mt-6 bg-slate-50 p-6 md:p-8 rounded-2xl border border-slate-200 shadow-inner">
+                          <div className="flex justify-between items-center mb-6"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">{isEn ? 'Verify Details' : 'Confirmar Identificação'}</h4></div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div className="sm:col-span-2"><label className={labelClass}>{isEn ? 'Full Name' : 'Nome Completo'}</label><input type="text" required value={childInfo.nome || ''} onChange={e => handleUpdateLocalCrianca(childId, 'nome', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'nome', e.target.value)} className={inputClass} /></div>
+                            <div><label className={labelClass}>{isEn ? 'Date of Birth' : 'Data Nascimento'}</label><input type="date" required value={childInfo.data_nascimento || ''} onChange={e => handleUpdateLocalCrianca(childId, 'data_nascimento', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'data_nascimento', e.target.value)} className={inputClass} /></div>
+                            <div><label className={labelClass}>{isEn ? 'Gender' : 'Sexo'}</label>
+                              <select value={childInfo.sexo || ''} onChange={e => { handleUpdateLocalCrianca(childId, 'sexo', e.target.value); handleSaveDBCrianca(childId, 'sexo', e.target.value); }} className={selectClass}>
+                                <option value="Masculino">Masculino</option><option value="Feminino">Feminino</option><option value="Prefiro não dizer">Prefiro não dizer</option>
+                              </select>
+                            </div>
+
+                            <div className="sm:col-span-2 border-t border-slate-200 pt-6 mt-2"><label className={`${labelClass} !text-red-700`}>{isEn ? 'Medical Alerts' : 'Alertas Clínicos'}</label></div>
+                            <div className="sm:col-span-2"><label className={`${labelClass} !text-red-700`}>{isEn ? 'Allergies / Restrictions' : 'Alergias Alimentares'}</label><input type="text" value={childInfo.restricoes_alimentares || ''} onChange={e => handleUpdateLocalCrianca(childId, 'restricoes_alimentares', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'restricoes_alimentares', e.target.value)} className={`${inputClass} !border-red-200 focus:!border-red-500`} placeholder={isEn ? "None" : "Nenhuma"} /></div>
+                            <div className="sm:col-span-2"><label className={`${labelClass} !text-red-700`}>{isEn ? 'Chronic Diseases' : 'Doenças Crónicas ou Medicação'}</label><input type="text" value={childInfo.doencas_cronicas || ''} onChange={e => handleUpdateLocalCrianca(childId, 'doencas_cronicas', e.target.value)} onBlur={e => handleSaveDBCrianca(childId, 'doencas_cronicas', e.target.value)} className={`${inputClass} !border-red-200 focus:!border-red-500`} placeholder={isEn ? "None" : "Nenhuma"} /></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* OPÇÕES MÚLTIPLAS */}
+                      {childInfo && escolhasUrlLocais && Object.keys(escolhasUrlLocais).length > 0 && (
+                        <div className="mt-4 bg-emerald-50 p-6 rounded-2xl border border-emerald-200 shadow-sm flex flex-col gap-3">
+                          <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest m-0">✓ Opções de Programa</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                            {Object.entries(escolhasUrlLocais).map(([perg, resp]: any) => (
+                              <div key={perg} className="bg-white p-4 border border-emerald-100 rounded-xl shadow-sm">
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 m-0 mb-1">{perg}</p>
+                                <p className="text-sm font-black text-emerald-700 m-0">{resp}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* PERGUNTAS TEXTO LIVRE */}
+                      {childInfo && perguntasDeTexto.length > 0 && (
+                        <div className="mt-4 bg-blue-50 p-6 md:p-8 rounded-2xl border border-blue-200 shadow-sm">
+                          <h4 className="text-[10px] font-black text-[#0E3A68] uppercase tracking-widest mb-5">{isEn ? 'Specific Questions' : 'Perguntas do Organizador'}</h4>
+                          <div className="grid gap-6">
+                            {perguntasDeTexto.map((pOriginal: string, pIdx: number) => {
+                              const pTituloPt = pOriginal.startsWith('TEXTO|') ? pOriginal.split('|')[1] : pOriginal;
+                              const originalIndex = campo.perguntas_customizadas.indexOf(pOriginal);
+                              const pEnRaw = campo.perguntas_customizadas_en?.[originalIndex];
+                              const pTituloEn = pEnRaw ? (pEnRaw.startsWith('TEXTO|') ? pEnRaw.split('|')[1] : pEnRaw) : pTituloPt;
+                              const pVisivel = isEn ? pTituloEn : pTituloPt;
+
+                              return (
+                                <div key={pIdx}>
+                                  <label className={`${labelClass} !text-[#0E3A68] mb-2 block`}>{pVisivel} *</label>
+                                  <input
+                                    type="text" required 
+                                    value={respostasCustomizadas[i]?.[pTituloPt] || ''}
+                                    onChange={e => setRespostasCustomizadas(prev => ({...prev, [i]: {...(prev[i]||{}), [pTituloPt]: e.target.value}}))}
+                                    className={`${inputClass} !border-blue-200 focus:!border-[#0E3A68]`} 
+                                    placeholder={isEn ? 'Your answer...' : 'A sua resposta...'}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </section>
+            )}
+
+            {/* PAGAMENTO E TERMOS (STRIPE OU EXTERNO) */}
             <section className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm">
-              <h2 className="text-xl md:text-2xl font-black text-slate-900 m-0 mb-6 border-b border-slate-100 pb-4 tracking-tight">{isEn ? 'Secure Payment' : 'Pagamento Seguro'}</h2>
+              
+              {!isExterna ? (
+                <>
+                  <h2 className="text-xl md:text-2xl font-black text-slate-900 m-0 mb-6 border-b border-slate-100 pb-4 tracking-tight">{isEn ? 'Secure Payment' : 'Pagamento Seguro'}</h2>
 
-              {isPagamentoFracionado ? (
-                <div className="p-6 md:p-8 bg-blue-50 border border-blue-200 rounded-2xl mb-6 shadow-inner">
-                  <p className="font-black text-[#0E3A68] mb-2 m-0 text-base">{isEn ? 'Payment Plan (50% Deposit)' : 'Facilidade de Pagamento (Sinal de 50%)'}</p>
-                  <p className="text-sm font-medium text-blue-800 m-0 leading-relaxed">{isEn ? `Pay only ${valorACobrarAgora.toFixed(2)}€ today. The balance is charged 1 week prior.` : `Garanta a vaga pagando apenas um sinal de ${valorACobrarAgora.toFixed(2)}€. O remanescente (${valorPendente.toFixed(2)}€) é debitado automaticamente 1 semana antes do programa.`}</p>
-                </div>
+                  {isPagamentoFracionado ? (
+                    <div className="p-6 md:p-8 bg-blue-50 border border-blue-200 rounded-2xl mb-6 shadow-inner">
+                      <p className="font-black text-[#0E3A68] mb-2 m-0 text-base">{isEn ? 'Payment Plan (50% Deposit)' : 'Facilidade de Pagamento (Sinal de 50%)'}</p>
+                      <p className="text-sm font-medium text-blue-800 m-0 leading-relaxed">{isEn ? `Pay only ${valorACobrarAgora.toFixed(2)}€ today. The balance is charged 1 week prior.` : `Garanta a vaga pagando apenas um sinal de ${valorACobrarAgora.toFixed(2)}€. O remanescente (${valorPendente.toFixed(2)}€) é debitado automaticamente 1 semana antes do programa.`}</p>
+                    </div>
+                  ) : (
+                    <div className="p-6 md:p-8 bg-[#059669]/10 border border-[#059669]/20 rounded-2xl mb-6 shadow-inner">
+                      <p className="font-black text-[#059669] mb-2 m-0 text-base">{isEn ? 'Full Payment' : 'Pagamento a Pronto (100%)'}</p>
+                      <p className="text-sm font-medium text-[#059669]/80 m-0 leading-relaxed">{isEn ? `Full payment of ${valorACobrarAgora.toFixed(2)}€ is required today.` : `O campo exige o pagamento total (${valorACobrarAgora.toFixed(2)}€) para garantir e bloquear a vaga no sistema imediatamente.`}</p>
+                    </div>
+                  )}
+
+                  <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between flex-wrap gap-4 mb-8">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md flex-shrink-0">
+                        <IconCreditCard className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-900 m-0 mb-1">Stripe Checkout</p>
+                        <p className="text-xs font-bold text-slate-500 m-0">
+                          {isEn ? 'Pay securely via Card.' : 'MB WAY, Cartão de Crédito ou Débito.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3 items-center font-black text-slate-900 text-sm opacity-80">
+                      <span className="italic text-[#0E3A68]">MB WAY</span> 
+                      <span>VISA</span> 
+                      <span>MASTERCARD</span>
+                    </div>
+                  </div>
+                </>
               ) : (
-                <div className="p-6 md:p-8 bg-[#059669]/10 border border-[#059669]/20 rounded-2xl mb-6 shadow-inner">
-                  <p className="font-black text-[#059669] mb-2 m-0 text-base">{isEn ? 'Full Payment' : 'Pagamento a Pronto (100%)'}</p>
-                  <p className="text-sm font-medium text-[#059669]/80 m-0 leading-relaxed">{isEn ? `Full payment of ${valorACobrarAgora.toFixed(2)}€ is required today.` : `O campo exige o pagamento total (${valorACobrarAgora.toFixed(2)}€) para garantir e bloquear a vaga no sistema imediatamente.`}</p>
-                </div>
+                <h2 className="text-xl md:text-2xl font-black text-slate-900 m-0 mb-6 border-b border-slate-100 pb-4 tracking-tight">{isEn ? 'Terms & Redirection' : 'Termos & Redirecionamento'}</h2>
               )}
-
-              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between flex-wrap gap-4 mb-8">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md flex-shrink-0">
-                    <IconCreditCard className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="font-black text-slate-900 m-0 mb-1">Stripe Checkout</p>
-                    <p className="text-xs font-bold text-slate-500 m-0">
-                      {isEn ? 'Pay securely via Card.' : 'MB WAY, Cartão de Crédito ou Débito.'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-3 items-center font-black text-slate-900 text-sm opacity-80">
-                  <span className="italic text-[#0E3A68]">MB WAY</span> 
-                  <span>VISA</span> 
-                  <span>MASTERCARD</span>
-                </div>
-              </div>
 
               <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
                 <label className="flex items-start gap-4 cursor-pointer group">
                   <input type="checkbox" required checked={concordaTermos} onChange={e => setConcordaTermos(e.target.checked)} className="mt-1 w-6 h-6 accent-[#0E3A68] cursor-pointer flex-shrink-0" />
                   <span className="text-xs md:text-sm font-bold text-slate-600 leading-relaxed group-hover:text-slate-900 transition-colors">
                     {isEn ? (
-                      <>I declare that I am of legal age and accept HelloCamp's <Link className="text-[#0E3A68] font-black underline" href={`/${lang}/termos`} target="_blank">Terms & Conditions</Link>. {isGuest && " A secure account will be generated for you."}</>
+                      <>I declare that I am of legal age and accept HelloCamp's <Link className="text-[#0E3A68] font-black underline" href={`/${lang}/termos`} target="_blank">Terms & Conditions</Link>. {isGuest && !isExterna && " A secure account will be generated for you."}</>
                     ) : (
-                      <>Declaro que sou maior de idade e aceito os <Link className="text-[#0E3A68] font-black underline" href={`/${lang}/termos`} target="_blank">Termos e Condições</Link> da plataforma. {isGuest && "Ao prosseguir, será gerada uma conta segura associada ao seu email."}</>
+                      <>Declaro que sou maior de idade e aceito os <Link className="text-[#0E3A68] font-black underline" href={`/${lang}/termos`} target="_blank">Termos e Condições</Link> da plataforma. {isGuest && !isExterna && "Ao prosseguir, será gerada uma conta segura associada ao seu email."}</>
                     )}
                   </span>
                 </label>
@@ -527,8 +599,15 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
 
             {/* BOTÃO DE CONFIRMAÇÃO */}
             <div className="pt-4">
-              <button type="submit" disabled={processingStripe || !concordaTermos} className={`w-full py-5 px-6 text-sm uppercase tracking-widest font-black rounded-2xl border-none transition-all ${processingStripe || !concordaTermos ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-[#e2a41d] hover:bg-[#d4991b] text-white shadow-xl shadow-[#e2a41d]/30 hover:-translate-y-1 cursor-pointer'}`}>
-                {isEn ? `Pay ${valorACobrarAgora.toFixed(2)}€` : `Confirmar e Pagar ${valorACobrarAgora.toFixed(2)}€`}
+              <button type="submit" disabled={processingState || !concordaTermos} className={`w-full py-5 px-6 text-sm uppercase tracking-widest font-black rounded-2xl border-none transition-all flex items-center justify-center gap-3 ${processingState || !concordaTermos ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : (isExterna ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-600/30 hover:-translate-y-1' : 'bg-[#e2a41d] hover:bg-[#d4991b] text-white shadow-xl shadow-[#e2a41d]/30 hover:-translate-y-1')} cursor-pointer`}>
+                {isExterna ? (
+                  <>
+                    {isEn ? 'Proceed to External Booking' : 'Avançar para Inscrição Externa'}
+                    <IconExternalLink className="w-5 h-5" />
+                  </>
+                ) : (
+                  isEn ? `Pay ${valorACobrarAgora.toFixed(2)}€` : `Confirmar e Pagar ${valorACobrarAgora.toFixed(2)}€`
+                )}
               </button>
             </div>
           </form>
@@ -565,7 +644,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                 <span className="text-base font-black text-slate-900">{(precoBaseUnitario * quantidade).toFixed(2)}€</span>
               </div>
 
-              {(extSeguro || extTransporte) && (
+              {(extSeguro || extTransporte) && !isExterna && (
                 <div className="border-b border-slate-100 pb-5">
                   <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{isEn ? 'Extras' : 'Suplementos Extras'}</span>
                   <div className="flex flex-col gap-2">
@@ -575,34 +654,44 @@ export default function CheckoutPage({ params }: { params: Promise<{ lang: strin
                 </div>
               )}
 
-              {/* TAG INFORMATIVA SE HOUVER OPÇÕES MÚLTIPLAS ESCOLHIDAS OU RESPOSTAS DE TEXTO */}
-              {(Object.keys(opcoesParticipantesUrl).length > 0 || Object.keys(respostasCustomizadas).length > 0) && (
+              {/* TAG INFORMATIVA DE OPÇÕES EXTRA */}
+              {(Object.keys(opcoesParticipantesUrl).length > 0 || Object.keys(respostasCustomizadas).length > 0) && !isExterna && (
                 <div className="mt-2 text-[9px] font-bold text-emerald-600 uppercase tracking-widest text-right">
                   ✓ Personalização Confirmada
                 </div>
               )}
             </div>
 
-            <div className="bg-[#0E3A68] p-6 rounded-2xl mb-4 flex justify-between items-center shadow-lg shadow-[#0E3A68]/20">
-              <span className="text-[10px] font-black uppercase tracking-widest text-blue-200">Total</span>
+            <div className={`p-6 rounded-2xl mb-4 flex justify-between items-center shadow-lg ${isExterna ? 'bg-blue-600 shadow-blue-600/20' : 'bg-[#0E3A68] shadow-[#0E3A68]/20'}`}>
+              <span className="text-[10px] font-black uppercase tracking-widest text-white/80">{isEn ? 'Estimated Total' : 'Total Estimado'}</span>
               <span className="text-3xl font-black text-white">{precoFinalTotal.toFixed(2)}€</span>
             </div>
 
-            <div className="flex justify-between items-center bg-[#059669]/10 border border-[#059669]/20 p-5 rounded-2xl shadow-sm">
-              <span className="text-[10px] font-black uppercase tracking-widest text-[#059669]">{isEn ? 'To Pay Now' : 'A Pagar Agora'}</span>
-              <span className="text-2xl font-black text-[#059669]">{valorACobrarAgora.toFixed(2)}€</span>
-            </div>
+            {!isExterna ? (
+              <>
+                <div className="flex justify-between items-center bg-[#059669]/10 border border-[#059669]/20 p-5 rounded-2xl shadow-sm">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#059669]">{isEn ? 'To Pay Now' : 'A Pagar Agora'}</span>
+                  <span className="text-2xl font-black text-[#059669]">{valorACobrarAgora.toFixed(2)}€</span>
+                </div>
 
-            {isPagamentoFracionado && (
-              <div className="flex justify-between items-center mt-4 p-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{isEn ? 'Pending Balance' : 'Faltará Pagar'}</span>
-                <span className="text-lg font-black text-[#e2a41d]">{valorPendente.toFixed(2)}€</span>
+                {isPagamentoFracionado && (
+                  <div className="flex justify-between items-center mt-4 p-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{isEn ? 'Pending Balance' : 'Faltará Pagar'}</span>
+                    <span className="text-lg font-black text-[#e2a41d]">{valorPendente.toFixed(2)}€</span>
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-center gap-2 mt-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <IconShield className="w-3.5 h-3.5"/> {isEn ? '100% Secure Payment' : 'Pagamento 100% Seguro'}
+                </div>
+              </>
+            ) : (
+              <div className="text-center mt-6">
+                <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-relaxed">
+                  {isEn ? 'Payment handled externally by the organizer.' : 'Gestão e pagamento efetuados na plataforma oficial do parceiro.'}
+                </p>
               </div>
             )}
-            
-            <div className="flex items-center justify-center gap-2 mt-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              <IconShield className="w-3.5 h-3.5"/> {isEn ? '100% Secure Payment' : 'Pagamento 100% Seguro'}
-            </div>
           </div>
         </aside>
 
