@@ -95,33 +95,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Tentativa de submissão não autorizada. O e-mail não corresponde.' }, { status: 403 });
     }
 
-    // 2. Criação ou Atualização no Supabase Auth
+    // 2. Definir Palavra-Passe e Reparar/Criar Utilizador Auth (Dupla Camada de Segurança)
     let loginReady = false;
-    if (passwordNova) {
-      const emailFinal = perfil.email || inputEmail;
-      const { data: authData } = await supabaseAdmin.auth.admin.getUserById(id);
+    const emailFinal = (contratoDados.emailContacto || perfil.email || inputEmail).trim().toLowerCase();
 
-      if (authData && authData.user) {
-        // Utilizador já existe: atualiza a password
-        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(id, {
-          password: passwordNova,
-          email_confirm: true
-        });
-        if (!updateError) loginReady = true;
+    if (passwordNova) {
+      // 2.1 Primeiro executa a nossa função RPC que repara qualquer conta criada via SQL e encripta a password diretamente
+      const { error: rpcError } = await supabaseAdmin.rpc('admin_set_partner_password', {
+        target_user_id: id,
+        new_password: passwordNova,
+        target_email: emailFinal
+      });
+
+      if (!rpcError) {
+        loginReady = true;
       } else {
-        // Utilizador não existe no Auth: cria a conta mantendo o mesmo UUID do perfil
-        const { error: createError } = await supabaseAdmin.auth.admin.createUser({
-          id: id,
+        console.warn("Aviso RPC:", rpcError.message, "-> Tentando fallback via Auth Admin API...");
+        // 2.2 Fallback caso não tenhas corrido o bloco 4 do SQL
+        const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(id, {
           email: emailFinal,
           password: passwordNova,
           email_confirm: true,
           user_metadata: { role: 'organizador' }
         });
 
-        if (!createError) {
+        if (!updateErr) {
           loginReady = true;
         } else {
-          console.error("Erro ao criar utilizador no Auth:", createError.message);
+          const { error: createErr } = await supabaseAdmin.auth.admin.createUser({
+            id: id,
+            email: emailFinal,
+            password: passwordNova,
+            email_confirm: true,
+            user_metadata: { role: 'organizador' }
+          });
+          if (!createErr) loginReady = true;
         }
       }
     }
@@ -142,8 +150,10 @@ export async function POST(request: Request) {
       .getPublicUrl(fileName);
     const contratoUrl = publicUrlData.publicUrl;
 
-    // 4. Atualizar a Tabela 'perfis'
+    // 4. Atualizar a Tabela 'perfis' com role 'organizador' e Aprovação Imediata
     await supabaseAdmin.from('perfis').update({
+      email: emailFinal,
+      role: 'organizador',
       empresa_nome: contratoDados.empresaNome,
       nif_empresa: contratoDados.nif,
       nome_completo: contratoDados.pessoaContacto,
@@ -170,7 +180,7 @@ export async function POST(request: Request) {
     }).eq('organizador_id', id);
 
     // 6. Notificação por E-mail ao Parceiro
-    await enviarEmailBoasVindas(contratoDados.emailContacto || emailAcesso, contratoDados.empresaNome, contratoUrl, lang);
+    await enviarEmailBoasVindas(emailFinal, contratoDados.empresaNome, contratoUrl, lang);
 
     return NextResponse.json({ success: true, url: contratoUrl, loginReady: loginReady });
 
