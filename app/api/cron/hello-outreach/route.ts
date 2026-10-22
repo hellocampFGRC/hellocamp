@@ -61,7 +61,7 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarAssunto: (nome) => `Convidamos a ${nome} a integrar o novo motor de busca de atividades juvenis`,
       titulo: "Chegue a Milhares de Famílias o Ano Inteiro",
       textoCta: "Ver como funciona a HelloCamp",
-      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência em Portugal. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
       gerarMensagem: (nome) => `
         <p>Olá equipa da <strong>${nome}</strong>,</p>
         <p>O meu nome é Rodrigo e faço parte da equipa da <strong>HelloCamp</strong>, um novo motor de busca internacional dedicado a campos de férias, aulas de desporto (surf, skate, etc.) e atividades extracurriculares para jovens.</p>
@@ -81,7 +81,7 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarAssunto: (nome) => `A tecnologia que vai poupar dezenas de horas à ${nome}`,
       titulo: "Diga Adeus ao Caos Administrativo",
       textoCta: "Descobrir o Painel de Parceiros",
-      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência em Portugal. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
       gerarMensagem: (nome) => `
         <p>Olá novamente,</p>
         <p>No meu e-mail anterior falei-vos sobre a integração da <strong>${nome}</strong> na nossa plataforma, mas hoje gostava de vos mostrar o que acontece "nos bastidores" quando ativam as reservas diretas na HelloCamp.</p>
@@ -100,7 +100,7 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarAssunto: (nome) => `O protagonismo da ${nome} na nossa plataforma`,
       titulo: "Transparência e Controlo Total",
       textoCta: "Criar o meu Perfil Gratuitamente",
-      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência em Portugal. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
       gerarMensagem: (nome) => `
         <p>Cara equipa da <strong>${nome}</strong>,</p>
         <p>Muitos portais no mercado optam por esconder o website ou o telefone dos organizadores, obrigando as famílias a passar por intermediários. Na HelloCamp, não acreditamos nessa abordagem.</p>
@@ -113,7 +113,7 @@ const TEMPLATES: Record<string, Template[]> = {
       gerarAssunto: (nome) => `Última oportunidade para a ${nome} garantir presença`,
       titulo: "A Época de Inscrições Começou",
       textoCta: "Garantir o meu Lugar na HelloCamp",
-      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência em Portugal. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
       gerarMensagem: (nome) => `
         <p>Olá equipa da <strong>${nome}</strong>,</p>
         <p>Prometo que este é o meu último e-mail. Neste exato momento, a nossa plataforma está a registar pesquisas diárias de famílias que procuram atividades extracurriculares e opções de férias para os filhos.</p>
@@ -230,7 +230,7 @@ const TEMPLATES: Record<string, Template[]> = {
     },
     {
       gerarAssunto: (nome) => `Por qué damos visibilidad total a la marca de ${nome}`,
-      titulo: "Su Marca es la Protagonista",
+      titulo: "Su Marca es la Protagoniste",
       textoCta: "Anunciar mi Organización",
       gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
       gerarMensagem: (nome) => `
@@ -426,7 +426,17 @@ export async function GET(request: Request) {
   try {
     const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: leadsProntas, error } = await supabaseAdmin
+    // SEGURANÇA 1: Vamos buscar os e-mails de todos os Parceiros já registados
+    const { data: perfisAtivos } = await supabaseAdmin
+      .from('perfis')
+      .select('email')
+      .eq('role', 'organizador');
+    
+    // Extrai um array apenas com os e-mails para facilitar a filtragem
+    const emailsRegistados = perfisAtivos?.map(p => p.email?.toLowerCase().trim()) || [];
+
+    // Busca as leads na fila
+    const { data: leadsPotenciais, error } = await supabaseAdmin
       .from('leads_externas')
       .select('id, nome_cliente, email_cliente, fase_funil, ultimo_contacto, idioma')
       .is('unsubscribed', false)
@@ -436,16 +446,45 @@ export async function GET(request: Request) {
       .neq('email_cliente', '')
       .order('fase_funil', { ascending: true })
       .order('created_at', { ascending: true })
-      .limit(250);
+      .limit(300);
 
     if (error) throw error;
-    if (!leadsProntas || leadsProntas.length === 0) return NextResponse.json({ message: 'Nenhuma lead elegível hoje.' });
+    if (!leadsPotenciais || leadsPotenciais.length === 0) return NextResponse.json({ message: 'Nenhuma lead elegível hoje.' });
+
+    // SEGURANÇA 2: Filtra as leads para garantir que nenhuma está na lista de parceiros registados.
+    // E se estiverem, marcamo-las como desativadas para não chatearem mais o cron.
+    const leadsProntas: any[] = [];
+    const leadsParaDesativar: string[] = [];
+
+    for (const lead of leadsPotenciais) {
+      const email = lead.email_cliente?.toLowerCase().trim();
+      if (emailsRegistados.includes(email)) {
+        leadsParaDesativar.push(lead.id);
+      } else {
+        leadsProntas.push(lead);
+      }
+    }
+
+    // Marca as leads que já são parceiros como COMPLETO e Unsubscribed (Silenciosamente)
+    if (leadsParaDesativar.length > 0) {
+      await supabaseAdmin.from('leads_externas')
+        .update({ status: 'COMPLETO', unsubscribed: true, fase_funil: 4 })
+        .in('id', leadsParaDesativar);
+    }
+
+    // Se depois do filtro já não sobrar ninguém...
+    if (leadsProntas.length === 0) {
+      return NextResponse.json({ message: 'Leads filtradas porque já eram parceiros registados. Nenhuma enviada.' });
+    }
+
+    // Limita novamente ao batch final de 250 (caso a limpeza não tenha removido muitos)
+    const leadsFinal = leadsProntas.slice(0, 250);
 
     const resultados: any[] = [];
     const BATCH_SIZE = 25; 
 
-    for (let i = 0; i < leadsProntas.length; i += BATCH_SIZE) {
-      const batch = leadsProntas.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < leadsFinal.length; i += BATCH_SIZE) {
+      const batch = leadsFinal.slice(i, i + BATCH_SIZE);
       
       const batchResults = await Promise.all(
         batch.map(async (lead) => {
@@ -501,7 +540,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ 
       success: true, 
       enviados: sucessos.length,
-      tentados: leadsProntas.length 
+      tentados: leadsFinal.length,
+      limposPorJaSeremParceiros: leadsParaDesativar.length
     });
 
   } catch (error: any) {
