@@ -21,7 +21,16 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
   const [jaAssinado, setJaAssinado] = useState(false);
   const [pdfGeradoUrl, setPdfGeradoUrl] = useState<string | null>(null);
 
-  // Estados Editáveis do Parceiro (Fiscais e Pessoais)
+  // ==========================================
+  // ESTADOS DE SEGURANÇA (GATEKEEPER)
+  // ==========================================
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [inputEmail, setInputEmail] = useState("");
+  const [authError, setAuthError] = useState("");
+
+  // ==========================================
+  // ESTADOS EDITÁVEIS DO PARCEIRO
+  // ==========================================
   const [empresaNome, setEmpresaNome] = useState("");
   const [nif, setNif] = useState("");
   const [pessoaContacto, setPessoaContacto] = useState("");
@@ -36,7 +45,9 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
   const [assinaturaCargo, setAssinaturaCargo] = useState("");
   const [concordaTermos, setConcordaTermos] = useState(false);
 
-  // Campos Fixos (Definidos por HQ no Pre-Fill)
+  // ==========================================
+  // CAMPOS FIXOS (Definidos pela HQ)
+  // ==========================================
   const [taxaComissao, setTaxaComissao] = useState(12);
   const [baseComissao, setBaseComissao] = useState("total");
   const [modalidadeReserva, setModalidadeReserva] = useState("direta");
@@ -50,7 +61,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
 
   useEffect(() => {
     const fetchPerfil = async () => {
-      // 1. Procurar o Perfil / Organizador
       const { data, error } = await supabase.from("perfis").select("*").eq("id", id).single();
 
       if (error || !data) {
@@ -61,7 +71,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
 
       setPerfil(data);
 
-      // 2. Extrair o link do contrato se já estiver assinado (Procura no primeiro campo)
       const { data: campoData } = await supabase.from("campos").select("nome, contrato_parceiro_url").eq("organizador_id", id);
       if (campoData && campoData.length > 0) {
         setCampoNome(campoData[0].nome);
@@ -72,7 +81,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
         }
       }
 
-      // 3. Pré-preencher os dados base
       const cd = data.contrato_dados || {};
       
       setEmpresaNome(data.empresa_nome || cd.empresaNome || "");
@@ -87,7 +95,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
       setAssinaturaNome(cd.assinaturaNome || "");
       setAssinaturaCargo(cd.assinaturaCargo || "");
 
-      // 4. Carregar os Termos Fixos definidos pelo SuperAdmin HQ
       setTaxaComissao(data.taxa_comissao !== null ? data.taxa_comissao : 12);
       setBaseComissao(data.base_comissao || 'total');
       setModalidadeReserva(cd.modalidadeReserva || data.modalidade_reserva || 'direta');
@@ -102,7 +109,26 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     fetchPerfil();
   }, [id, lang, router]);
 
-  // Função robusta de geração do PDF
+  // ==========================================
+  // VERIFICAÇÃO DE SEGURANÇA (GATEKEEPER)
+  // ==========================================
+  const handleSecurityCheck = (e: React.FormEvent) => {
+    e.preventDefault();
+    const emailToVerify = inputEmail.trim().toLowerCase();
+    const emailBd = perfil?.email?.trim().toLowerCase();
+    const emailContactoBd = perfil?.contrato_dados?.emailContacto?.trim().toLowerCase();
+
+    if (emailToVerify === emailBd || emailToVerify === emailContactoBd) {
+      setIsAuthenticated(true);
+      setAuthError("");
+    } else {
+      setAuthError(contractLang === 'pt' ? "O E-mail inserido não corresponde aos registos confidenciais deste parceiro." : "The entered E-mail does not match the confidential records for this partner.");
+    }
+  };
+
+  // ==========================================
+  // GERAÇÃO DO PDF (JURÍDICO INTERNACIONAL)
+  // ==========================================
   const gerarEGuardarPDF = async (userIP: string, timestamp: string) => {
     const doc = new jsPDF({ format: 'a4', unit: 'mm' });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -218,6 +244,9 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     return doc.output('blob');
   };
 
+  // ==========================================
+  // SUBMISSÃO FINAL DO CONTRATO
+  // ==========================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!concordaTermos) return alert(contractLang === 'pt' ? "Tem de aceitar os termos do contrato." : "You must accept the terms of the contract.");
@@ -253,14 +282,15 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     };
 
     try {
+      // 1. Atualizar Perfil
       const { error: perfilErr } = await supabase.from('perfis').update({
         empresa_nome: empresaNome, nif_empresa: nif, nome_completo: pessoaContacto, telefone: telefone,
-        status_contrato: 'Pendente de Revisão',
+        status_contrato: 'Pendente de Revisão', // Volta para a HQ aprovar
         contrato_dados: contratoFinal
       }).eq('id', id);
       if (perfilErr) throw perfilErr;
 
-      // Gerar PDF e Fazer Upload
+      // 2. Gerar PDF e Upload
       const pdfBlob = await gerarEGuardarPDF(userIP, timestampAtual);
       const fileName = `contrato_global_${id}_${Date.now()}.pdf`;
       const { error: uploadError } = await supabase.storage.from('campos-documentos').upload(fileName, pdfBlob, { contentType: 'application/pdf' });
@@ -269,19 +299,22 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
       const { data: publicUrlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
       const contratoUrl = publicUrlData.publicUrl;
 
+      // 3. Propagar para os Campos (Para ativar na plataforma)
       const { error: camposErr } = await supabase.from('campos').update({ 
         status_aprovacao: 'Pendente de Revisão', 
         contrato_dados: contratoFinal,
         contrato_parceiro_url: contratoUrl
       }).eq('organizador_id', id);
+      if (camposErr) console.warn("Aviso na desativação dos campos: ", camposErr);
       
+      // Notificar Admin
       try {
         await fetch('/api/notificacoes/status-contrato', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ parceiroEmail: 'info@hellocamp.pt', nomeCampo: `CONTRATO ASSINADO POR: ${empresaNome}`, status: 'Para Revisão HQ', lang: 'pt' })
         });
-      } catch (e) { console.error(e) }
+      } catch (e) {}
 
       setJaAssinado(true);
       setPdfGeradoUrl(contratoUrl);
@@ -297,8 +330,67 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
 
   const dataAtual = new Date().toLocaleDateString(contractLang === 'pt' ? 'pt-PT' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+  // ==========================================
+  // VIEW 1: ECRÃ DE SEGURANÇA (GATEKEEPER)
+  // ==========================================
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4 font-sans selection:bg-yellow-200">
+        <div className="absolute top-6 right-6 flex bg-slate-200 p-1 rounded-lg border border-slate-300">
+          <button onClick={() => setContractLang('pt')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${contractLang === 'pt' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>PT</button>
+          <button onClick={() => setContractLang('en')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${contractLang === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>EN</button>
+        </div>
+
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-[#0E3A68] p-8 text-center relative">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500 rounded-full blur-[50px] opacity-30 -translate-y-1/2 translate-x-1/4"></div>
+            <div className="text-2xl font-black tracking-tighter mb-4 font-sans relative z-10">
+              <span className="text-white">Hello</span><span className="text-[#e2a41d]">Camp</span>
+            </div>
+            <h1 className="text-xl font-bold text-white tracking-tight relative z-10">
+              {contractLang === 'pt' ? 'Verificação de Segurança' : 'Security Verification'}
+            </h1>
+          </div>
+          
+          <form onSubmit={handleSecurityCheck} className="p-8">
+            <p className="text-sm font-medium text-slate-500 mb-6 text-center leading-relaxed">
+              {contractLang === 'pt' 
+                ? 'Para aceder a este documento confidencial e assinar o Acordo de Intermediação, introduza o e-mail de contacto registado na sua conta.' 
+                : 'To access this confidential document and sign the Intermediation Agreement, please enter the contact e-mail registered in your account.'}
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                {contractLang === 'pt' ? 'O seu E-mail' : 'Your E-mail'}
+              </label>
+              <input 
+                type="email" 
+                required 
+                value={inputEmail}
+                onChange={e => setInputEmail(e.target.value)}
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors shadow-inner" 
+                placeholder="email@empresa.com" 
+              />
+              {authError && <p className="text-xs font-bold text-red-600 mt-3 bg-red-50 p-3 rounded-lg border border-red-100">{authError}</p>}
+            </div>
+
+            <button type="submit" className="w-full py-4 text-sm uppercase tracking-widest font-black rounded-xl border-none text-white bg-[#0E3A68] hover:bg-[#0b2b4d] transition-all shadow-xl shadow-[#0E3A68]/30 hover:-translate-y-1 cursor-pointer">
+              {contractLang === 'pt' ? 'Aceder ao Contrato' : 'Access Contract'}
+            </button>
+            <div className="mt-6 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <span>🔒</span> {contractLang === 'pt' ? 'Acesso Restrito e Protegido' : 'Secure Restricted Access'}
+            </div>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  // ==========================================
+  // VIEW 2: ECRÃ DE ASSINATURA / CONTRATO
+  // ==========================================
   return (
-    <main className="min-h-screen bg-slate-50 py-12 px-4 font-sans text-slate-900">
+    <main className="min-h-screen bg-slate-50 py-12 px-4 font-sans text-slate-900 selection:bg-yellow-200">
       <div className="max-w-4xl mx-auto bg-white rounded-[2rem] shadow-xl border border-slate-200 overflow-hidden relative">
         
         {/* CABEÇALHO DO CONTRATO COM TOGGLE DE LÍNGUA */}
@@ -308,6 +400,8 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
             <button onClick={() => setContractLang('en')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${contractLang === 'en' ? 'bg-white text-[#0E3A68]' : 'text-white hover:bg-blue-800'}`}>EN</button>
           </div>
 
+          <div className="absolute top-0 left-0 w-64 h-64 bg-blue-500 rounded-full blur-[80px] opacity-30 -translate-y-1/2 -translate-x-1/4"></div>
+          
           <div className="text-3xl md:text-4xl font-black tracking-tighter mb-8 font-sans flex justify-center items-center relative z-10">
             <span className="text-white">Hello</span><span className="text-[#e2a41d]">Camp</span>
           </div>
