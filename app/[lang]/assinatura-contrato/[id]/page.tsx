@@ -11,24 +11,17 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
   const { lang, id } = use(params);
   const router = useRouter();
   
-  // Controlo de Língua do Contrato (Para parceiros Internacionais vs Nacionais)
   const [contractLang, setContractLang] = useState<'pt' | 'en'>(lang === 'pt' ? 'pt' : 'en');
-
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [perfil, setPerfil] = useState<any>(null);
-  const [campoNome, setCampoNome] = useState<string>("Vários Programas");
   const [jaAssinado, setJaAssinado] = useState(false);
   const [pdfGeradoUrl, setPdfGeradoUrl] = useState<string | null>(null);
 
-  // ==========================================
-  // ESTADOS DE SEGURANÇA (GATEKEEPER)
-  // ==========================================
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [inputEmail, setInputEmail] = useState("");
   const [authError, setAuthError] = useState("");
 
-  // Estados Editáveis do Parceiro (Fiscais e Pessoais)
   const [empresaNome, setEmpresaNome] = useState("");
   const [nif, setNif] = useState("");
   const [pessoaContacto, setPessoaContacto] = useState("");
@@ -43,7 +36,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
   const [assinaturaCargo, setAssinaturaCargo] = useState("");
   const [concordaTermos, setConcordaTermos] = useState(false);
 
-  // Campos Fixos (Definidos por HQ no Pre-Fill)
   const [taxaComissao, setTaxaComissao] = useState(12);
   const [baseComissao, setBaseComissao] = useState("total");
   const [modalidadeReserva, setModalidadeReserva] = useState("direta");
@@ -58,7 +50,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
 
   useEffect(() => {
     const fetchPerfil = async () => {
-      // 1. Procurar o Perfil / Organizador
       const { data, error } = await supabase.from("perfis").select("*").eq("id", id).single();
 
       if (error || !data) {
@@ -71,7 +62,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
 
       const { data: campoData } = await supabase.from("campos").select("nome, contrato_parceiro_url").eq("organizador_id", id);
       if (campoData && campoData.length > 0) {
-        setCampoNome(campoData[0].nome);
         const campoComPdf = campoData.find(c => c.contrato_parceiro_url);
         if (campoComPdf && data.contrato_dados?.assinaturaNome) {
            setJaAssinado(true);
@@ -93,7 +83,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
       setAssinaturaNome(cd.assinaturaNome || "");
       setAssinaturaCargo(cd.assinaturaCargo || "");
 
-      // Valores Operacionais Geridos pela HQ
       setTaxaComissao(data.taxa_comissao !== null && data.taxa_comissao !== undefined ? data.taxa_comissao : 12);
       setBaseComissao(cd.baseComissao || data.base_comissao || 'total');
       setModalidadeReserva(cd.modalidadeReserva || data.modalidade_reserva || 'direta');
@@ -108,9 +97,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     fetchPerfil();
   }, [id, lang, router]);
 
-  // ==========================================
-  // VERIFICAÇÃO DE SEGURANÇA (GATEKEEPER)
-  // ==========================================
   const handleSecurityCheck = (e: React.FormEvent) => {
     e.preventDefault();
     const emailToVerify = inputEmail.trim().toLowerCase();
@@ -125,7 +111,6 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     }
   };
 
-  // Função robusta de geração do PDF
   const gerarEGuardarPDF = async (userIP: string, timestamp: string) => {
     const doc = new jsPDF({ format: 'a4', unit: 'mm' });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -274,56 +259,41 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     };
 
     try {
-      const { error: perfilErr } = await supabase.from('perfis').update({
-        empresa_nome: empresaNome, nif_empresa: nif, nome_completo: pessoaContacto, telefone: telefone,
-        status_contrato: 'Pendente de Revisão',
-        contrato_dados: contratoFinal,
-        modalidade_reserva: modalidadeReserva,
-        link_externo_reserva: modalidadeReserva === 'link_externo' ? linkExternoReserva : null,
-        base_comissao: baseComissao
-      }).eq('id', id);
-      if (perfilErr) throw perfilErr;
-
+      // 1. Gera PDF em formato Blob e converte para File
       const pdfBlob = await gerarEGuardarPDF(userIP, timestampAtual);
-      const fileName = `contrato_global_${id}_${Date.now()}.pdf`;
-      const { error: uploadError } = await supabase.storage.from('campos-documentos').upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
-      if (uploadError) throw uploadError;
+      const pdfFile = new File([pdfBlob], `contrato.pdf`, { type: "application/pdf" });
 
-      const { data: publicUrlData } = supabase.storage.from('campos-documentos').getPublicUrl(fileName);
-      const contratoUrl = publicUrlData.publicUrl;
+      // 2. Prepara o FormData para enviar de forma segura à API interna
+      const formData = new FormData();
+      formData.append('id', id);
+      formData.append('email', inputEmail);
+      formData.append('lang', contractLang);
+      formData.append('contratoDados', JSON.stringify(contratoFinal));
+      formData.append('pdf', pdfFile);
 
-      await supabase.from('campos').update({ 
-        status_aprovacao: 'Pendente de Revisão', 
-        contrato_dados: contratoFinal,
-        contrato_parceiro_url: contratoUrl,
-        modalidade_reserva: modalidadeReserva,
-        link_externo_reserva: modalidadeReserva === 'link_externo' ? linkExternoReserva : null,
-        tipo_pagamento: modalidadeReserva !== 'link_externo' ? tipoPagamento : null,
-        politica_cancelamento: modalidadeReserva !== 'link_externo' ? politicaCancelamento : null,
-        base_comissao: baseComissao
-      }).eq('organizador_id', id);
-      
-      try {
-        await fetch('/api/notificacoes/status-contrato', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ parceiroEmail: 'info@hellocamp.pt', nomeCampo: `CONTRATO ASSINADO: ${empresaNome}`, status: 'Para Revisão HQ', lang: 'pt' })
-        });
-      } catch (e) {}
+      // 3. Submete o pedido à API Backend (que agora Aprova a conta automaticamente)
+      const response = await fetch('/api/contratos/assinar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Ocorreu um erro ao processar a assinatura.");
+      }
 
       setJaAssinado(true);
-      setPdfGeradoUrl(contratoUrl);
-      alert(contractLang === 'pt' ? "Contrato assinado com sucesso! A nossa equipa irá agora validar o perfil e publicar os campos." : "Contract signed successfully! Our team will now validate the profile and publish your camps.");
-
+      setPdfGeradoUrl(result.url);
+      alert(contractLang === 'pt' ? "Contrato assinado com sucesso! A sua conta e programas estão agora ativos." : "Contract signed successfully! Your account and programs are now active.");
+      
     } catch (err: any) {
-      alert("Erro crítico: " + err.message);
+      alert("Erro: " + err.message);
       setSubmitting(false);
     }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-slate-400 uppercase tracking-widest animate-pulse bg-slate-50">A carregar documento seguro... / Loading secure document...</div>;
-
-  const dataAtual = new Date().toLocaleDateString(contractLang === 'pt' ? 'pt-PT' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   // ==========================================
   // VIEW 1: ECRÃ DE SEGURANÇA (GATEKEEPER)
@@ -388,7 +358,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
     <main className="min-h-screen bg-slate-50 py-12 px-4 font-sans text-slate-900 selection:bg-yellow-200">
       <div className="max-w-4xl mx-auto bg-white rounded-[2rem] shadow-xl border border-slate-200 overflow-hidden relative">
         
-        {/* CABEÇALHO DO CONTRATO COM TOGGLE DE LÍNGUA */}
+        {/* CABEÇALHO DO CONTRATO */}
         <div className="bg-[#0E3A68] p-10 md:p-12 text-center relative overflow-hidden">
           <div className="absolute top-4 right-6 z-20 flex bg-blue-900/50 p-1 rounded-lg border border-blue-400/30">
             <button onClick={() => setContractLang('pt')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${contractLang === 'pt' ? 'bg-white text-[#0E3A68]' : 'text-white hover:bg-blue-800'}`}>PT</button>
@@ -413,7 +383,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
           <div className="p-10 md:p-16 text-center font-serif">
              <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">✓</div>
              <h2 className="text-2xl font-black text-emerald-900 mb-2">{contractLang === 'pt' ? 'Contrato Válido e Assinado' : 'Contract Signed Successfully'}</h2>
-             <p className="text-emerald-700 text-lg mb-8">{contractLang === 'pt' ? 'O seu perfil encontra-se agora sob revisão final pela equipa HelloCamp.' : 'Your profile is now under final review by the HelloCamp team.'}</p>
+             <p className="text-emerald-700 text-lg mb-8">{contractLang === 'pt' ? 'O seu perfil e os seus programas encontram-se agora ativos e visíveis para as famílias na plataforma HelloCamp.' : 'Your profile and programs are now active and visible to families on the HelloCamp platform.'}</p>
              {pdfGeradoUrl && (
                <a href={pdfGeradoUrl} target="_blank" rel="noopener noreferrer" className="inline-block bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black px-8 py-4 rounded-xl shadow-md transition-colors font-sans uppercase tracking-widest text-sm">
                  {contractLang === 'pt' ? 'Fazer Download do PDF Assinado' : 'Download Signed PDF'}
@@ -423,7 +393,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
         ) : (
           <form onSubmit={handleSubmit} className="p-6 md:p-12">
 
-            {/* RESUMO EXECUTIVO VISUAL (ESTILO CORPORATIVO) */}
+            {/* RESUMO EXECUTIVO VISUAL */}
             <div className="space-y-8 md:space-y-12 mb-10 md:mb-16 font-sans">
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
                 <div className="w-12 h-12 sm:w-16 sm:h-16 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm">📝</div>
@@ -536,7 +506,7 @@ export default function AssinaturaContratoPage({ params }: { params: Promise<{ l
               </div>
             </section>
 
-            {/* 2. TERMOS OPERACIONAIS (COMISSÃO FIXA, RESTO EDITÁVEL) */}
+            {/* 2. TERMOS OPERACIONAIS */}
             <section className="mb-12">
               <h2 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-4 mb-6 tracking-tight">2. {contractLang === 'pt' ? 'Termos Operacionais e Financeiros' : 'Operational and Financial Terms'}</h2>
               <div className="bg-slate-50 p-6 md:p-8 rounded-2xl border border-slate-200 shadow-inner font-sans space-y-6">
