@@ -1,0 +1,3227 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: **/*.css, **/*.json, **/*.svg
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+[app/api]/
+  admin/
+    aprovar-contrato/
+      route.ts
+  cancelar-reserva/
+    route.ts
+  contratos/
+    assinar/
+      route.ts
+  cron/
+    hello-outreach/
+      route.ts
+  enviar-duvida/
+    route.ts
+  inbox/
+    send-change-request/
+      route.ts
+  notificacoes/
+    boas-vindas/
+      route.ts
+    nova-mensagem-recrutamento/
+      route.ts
+    novo-contrato/
+      route.ts
+  notificar-reserva/
+    admin/
+      criar-parceiro/
+        route.ts
+    route.ts
+  processar-reembolso/
+    route.ts
+  send-contact/
+    route.ts
+  stripe-checkout/
+    route.ts
+  stripe-connect/
+    route.ts
+  stripe-webhook/
+    route.ts
+  superadmin/
+    enviar-broadcast/
+      route.ts
+  test-emails/
+    route.ts
+  translate-camp/
+    route.ts
+  webhooks/
+    brevo/
+      route.ts
+    resend/
+      route.ts
+
+[lib]/
+  getDictionary.ts
+  supabase.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="app/api/admin/aprovar-contrato/route.ts">
+import { NextResponse } from 'next/server';
+import { Resend } from 'resend';
+
+// Inicializa o Resend com a chave do seu ficheiro .env
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    
+    // Captura exatamente os dados enviados pelo componente Superadmin
+    const { parceiroEmail, nomeCampo, status, lang = 'pt' } = body;
+
+    // Validação de segurança obrigatória
+    if (!status || !parceiroEmail || !nomeCampo) {
+      return NextResponse.json(
+        { error: 'Dados insuficientes fornecidos (parceiroEmail, nomeCampo ou status em falta).' }, 
+        { status: 400 }
+      );
+    }
+
+    // CONFIGURAÇÃO DO REMETENTE:
+    // Altere para o e-mail exato que validou no painel do Resend (ex: info@hellocamp.pt).
+    // Se estiver em modo Sandbox/Testes iniciais do Resend, use obrigatoriamente: 'onboarding@resend.dev'
+    const remetenteOficial = 'HelloCamp Parceiros <info@hellocamp.pt>';
+
+    // ==========================================
+    // FLUXO 1: CONTRATO REJEITADO
+    // ==========================================
+    if (status === 'Rejeitado') {
+      await resend.emails.send({
+        from: remetenteOficial,
+        to: parceiroEmail,
+        subject: `[HelloCamp] Revisão do Contrato: ${nomeCampo}`,
+        html: `
+          <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+            <h2 style="color: #b91c1c;">Olá!</h2>
+            <p>Revimos o contrato submetido para o seu programa <strong>${nomeCampo}</strong>, mas encontrámos algumas inconformidades nos dados preenchidos.</p>
+            <p>Por favor, aceda ao seu Dashboard de Parceiro para verificar as informações da entidade (Nome, NIF, Anexos ou Assinatura Digital) e submeta novamente o documento corrigido para validação.</p>
+            <br/>
+            <p>Se tiver qualquer dúvida, responda diretamente a este e-mail.</p>
+            <br/>
+            <p>Melhores cumprimentos,<br/><strong>A Equipa HelloCamp</strong></p>
+          </div>
+        `
+      });
+
+      return NextResponse.json({ success: true, message: 'E-mail de rejeição enviado com sucesso via Resend.' });
+    }
+
+    // ==========================================
+    // FLUXO 2: CONTRATO APROVADO
+    // ==========================================
+    if (status === 'Aprovado') {
+      await resend.emails.send({
+        from: remetenteOficial,
+        to: parceiroEmail,
+        subject: `[HelloCamp] Contrato Aprovado - O seu campo está online! 🎉`,
+        html: `
+          <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+            <div style="background-color: #0f172a; padding: 25px; border-radius: 8px 8px 0 0; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 22px; font-family: Arial, sans-serif;">Parabéns, o contrato foi validado!</h1>
+            </div>
+            <div style="padding: 25px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; background-color: #ffffff;">
+              <p>O acordo de intermediação para o programa <strong>${nomeCampo}</strong> foi revisto, assinado e validado com sucesso pela nossa equipa legal.</p>
+              <p>O seu programa **já se encontra ativo e visível publicamente na plataforma**, ficando totalmente elegível para receber inscrições e pagamentos dos encarregados de educação.</p>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="https://www.hellocamp.pt/${lang}/admin/login" style="display: inline-block; background-color: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                  Aceder ao Portal do Organizador
+                </a>
+              </div>
+              
+              <p>Poderá descarregar a cópia integral do seu contrato assinado a qualquer momento, diretamente na secção "Os Meus Campos" dentro do seu portal.</p>
+              <br/>
+              <p>Desejamos-lhe um excelente período de atividades e excelentes vendas!</p>
+              <p>Boas reservas,<br/><strong>A Equipa HelloCamp</strong></p>
+            </div>
+          </div>
+        `
+      });
+
+      return NextResponse.json({ success: true, message: 'E-mail de aprovação enviado com sucesso via Resend.' });
+    }
+
+    return NextResponse.json({ error: 'Status de processamento inválido.' }, { status: 400 });
+
+  } catch (error: any) {
+    console.error('🛑 [ERRO RESEND] Falha crítica no envio do e-mail:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/cancelar-reserva/route.ts">
+import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!stripeSecretKey || !resendApiKey || !supabaseUrl || !supabaseKey) {
+    return NextResponse.json({ error: "Configurações de servidor em falta." }, { status: 500 });
+  }
+
+  // CORREÇÃO DO ERRO TYPESCRIPT AQUI: 
+  // Usamos 'as any' para contornar a limitação de tipos da biblioteca
+  const stripe = new Stripe(stripeSecretKey, { 
+    apiVersion: '2023-10-16' as any 
+  });
+  
+  const resend = new Resend(resendApiKey);
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  try {
+    const { reservaId } = await req.json();
+
+    // 1. Busca da Reserva
+    const { data: reserva, error: fetchError } = await supabase
+      .from('reservas')
+      .select('*')
+      .eq('id', reservaId)
+      .single();
+
+    if (fetchError || !reserva) throw new Error("Reserva não encontrada na Base de Dados.");
+    if (reserva.status_pagamento === 'Reembolsado' || reserva.status_reembolso === 'Reembolsado') {
+      throw new Error("Esta reserva já se encontra cancelada e tratada.");
+    }
+
+    // 2. Busca de Dados Complementares
+    const { data: campoData } = await supabase.from('campos').select('nome, local, politica_cancelamento').eq('id', reserva.campo_id).single();
+    const { data: criancaData } = await supabase.from('criancas').select('nome').eq('id', reserva.crianca_id).single();
+    const { data: clienteData } = await supabase.from('perfis').select('nome_completo, email').eq('id', reserva.cliente_id).single();
+    const { data: orgData } = await supabase.from('perfis').select('email, empresa_nome, stripe_account_id').eq('id', reserva.organizador_id).single();
+
+    // 3. MATEMÁTICA: Calcular Dias até ao Início do Campo
+    let dataInicioTurno: Date | null = null;
+    try {
+      const turnoObj = typeof reserva.turno === 'string' ? JSON.parse(reserva.turno) : reserva.turno;
+      if (turnoObj && turnoObj.data_inicio) dataInicioTurno = new Date(turnoObj.data_inicio);
+    } catch (e) { console.error(e); }
+
+    if (!dataInicioTurno) throw new Error("A data de início do turno não foi encontrada na reserva.");
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const inicio = new Date(dataInicioTurno);
+    inicio.setHours(0, 0, 0, 0);
+    const diffDias = Math.ceil((inicio.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+
+    // 4. LÓGICA DE CANCELAMENTO (Flexível, Moderada, Estrita)
+    const politica = campoData?.politica_cancelamento || '';
+    const valorPagoGeral = Number(reserva.valor_pago) || Number(reserva.valor_total) || 0; 
+    let valorAReembolsar = 0;
+    let descricaoPolitica = 'Estrita (Sem Reembolso)';
+
+    if (politica.includes('Flexível')) {
+      if (diffDias >= 7) { valorAReembolsar = valorPagoGeral; descricaoPolitica = 'Flexível (100% devolvido)'; }
+    } else if (politica.includes('Moderada')) {
+      if (diffDias >= 15) { valorAReembolsar = valorPagoGeral * 0.5; descricaoPolitica = 'Moderada (50% devolvido)'; }
+    } else if (politica.includes('Estrita')) {
+      valorAReembolsar = 0; descricaoPolitica = 'Estrita (0% devolvido)';
+    }
+
+    // 5. EXECUTAR REEMBOLSO NA STRIPE (Apenas se houver valor a devolver)
+    let paymentIntentId = reserva.stripe_payment_intent_id; 
+
+    if (valorAReembolsar > 0) {
+      if (!paymentIntentId && reserva.stripe_session_id) {
+        const session = await stripe.checkout.sessions.retrieve(reserva.stripe_session_id);
+        paymentIntentId = session.payment_intent as string;
+      }
+      if (!paymentIntentId) {
+        const sessions = await stripe.checkout.sessions.list({ limit: 100 });
+        const matchSession = sessions.data.find(s => {
+          if (s.metadata && s.metadata.reservasIds) {
+            try { return JSON.parse(s.metadata.reservasIds).includes(reservaId); } catch(e) { return false; }
+          }
+          return false;
+        });
+        paymentIntentId = matchSession?.payment_intent as string;
+      }
+
+      if (!paymentIntentId) {
+        throw new Error("Transação Stripe não encontrada. O reembolso financeiro terá de ser manual.");
+      }
+
+      const quantiaReembolsoCentimos = Math.round(valorAReembolsar * 100);
+      const refundParams: Stripe.RefundCreateParams = {
+        payment_intent: paymentIntentId,
+        amount: quantiaReembolsoCentimos,
+        reason: 'requested_by_customer'
+      };
+
+      if (orgData?.stripe_account_id) {
+        refundParams.reverse_transfer = true;
+        if (valorAReembolsar === valorPagoGeral) {
+          refundParams.refund_application_fee = true;
+        }
+      }
+
+      await stripe.refunds.create(refundParams);
+    }
+
+    // 6. ATUALIZAR A BASE DE DADOS
+    await supabase.from('reservas').update({
+      status_pagamento: 'Reembolsado',
+      status_reembolso: 'Reembolsado',
+      status: 'Reembolsado',
+      dados_reembolso: { 
+        data_estorno: new Date().toISOString(), 
+        processado_por: 'Automático via Cliente',
+        politica_aplicada: descricaoPolitica,
+        valor_devolvido: valorAReembolsar
+      }
+    }).eq('id', reservaId);
+
+    // 7. ENVIO DOS EMAILS
+    const campoNome = campoData?.nome || 'Programa HelloCamp';
+    const nomeCrianca = criancaData?.nome || 'Participante';
+    const turnoNome = reserva.turno_nome || 'Programa Base';
+    const valorStr = valorAReembolsar.toFixed(2);
+    
+    const emailPai = clienteData?.email || reserva.email_encarregado;
+    const emailCampo = orgData?.email || 'info@hellocamp.pt';
+    const nomeOrganizador = orgData?.empresa_nome || 'Organizador';
+    const nomePai = clienteData?.nome_completo || reserva.nome_encarregado || 'Encarregado de Educação';
+
+    // A. EMAIL PREMIUM PARA O PAI
+    if (emailPai) {
+      await resend.emails.send({
+        from: 'HelloCamp Finanças <info@hellocamp.pt>',
+        to: emailPai,
+        subject: `Confirmação de Cancelamento - ${campoNome}`,
+        html: `
+          <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px 20px; color: #0f172a;">
+            <h1 style="font-size: 24px; font-weight: 900; text-align: center; margin-bottom: 30px; color: #0f172a;">HelloCamp</h1>
+            <div style="background-color: #fef2f2; border: 1px solid #fca5a5; border-radius: 12px; padding: 25px; text-align: center;">
+              <h2 style="font-size: 18px; font-weight: 700; margin-top: 0; color: #991b1b;">Inscrição Cancelada com Sucesso</h2>
+              <p style="font-size: 14px; line-height: 1.6; color: #991b1b; margin-bottom: 0;">Olá <strong>${nomePai}</strong>, confirmamos o cancelamento da sua reserva.</p>
+            </div>
+            
+            <div style="margin: 30px 0;">
+              <h3 style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Resumo do Cancelamento</h3>
+              <table width="100%" style="font-size: 14px; color: #334155; margin-top: 12px; line-height: 2;">
+                <tr><td><strong>Programa:</strong></td><td style="text-align: right;">${campoNome}</td></tr>
+                <tr><td><strong>Turno / Semana:</strong></td><td style="text-align: right;">${turnoNome}</td></tr>
+                <tr><td><strong>Participante:</strong></td><td style="text-align: right;">${nomeCrianca}</td></tr>
+                <tr><td><strong>Política Aplicada:</strong></td><td style="text-align: right;">${descricaoPolitica}</td></tr>
+                <tr><td style="padding-top: 10px; border-top: 1px dashed #e2e8f0;"><strong>Valor Estornado:</strong></td><td style="text-align: right; font-weight: bold; color: #dc2626; font-size: 16px; padding-top: 10px; border-top: 1px dashed #e2e8f0;">${valorStr}€</td></tr>
+              </table>
+            </div>
+            ${valorAReembolsar > 0 
+              ? `<p style="font-size: 12px; color: #64748b; line-height: 1.5;">O montante de ${valorStr}€ foi creditado na mesma via de pagamento original. Dependendo do seu banco, o saldo estará visível no extrato num prazo estimado de 5 a 10 dias úteis.</p>` 
+              : `<p style="font-size: 12px; color: #64748b; line-height: 1.5;">De acordo com os termos contratuais e a data de cancelamento face ao início do campo, esta reserva não reuniu os critérios para reembolso financeiro.</p>`}
+          </div>
+        `
+      });
+    }
+
+    // B. EMAIL PARA O ORGANIZADOR
+    await resend.emails.send({
+      from: 'HelloCamp Parceiros <info@hellocamp.pt>',
+      to: emailCampo,
+      subject: `Atualização de Ocupação: Cancelamento - ${campoNome}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #0f172a; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #b91c1c; border-bottom: 2px solid #b91c1c; padding-bottom: 10px; font-size: 20px;">Vaga Libertada - Cancelamento</h2>
+          <p>Caro parceiro da entidade <strong>${nomeOrganizador}</strong>,</p>
+          <p>Informamos que uma vaga para o seu programa foi cancelada por iniciativa do cliente.</p>
+          
+          <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 20px 0; line-height: 1.8;">
+            <p style="margin: 0;"><strong>Programa de Férias:</strong> ${campoNome}</p>
+            <p style="margin: 0;"><strong>Turno Afetado:</strong> ${turnoNome}</p>
+            <p style="margin: 0;"><strong>Participante removido:</strong> ${nomeCrianca}</p>
+            <p style="margin: 0; color: #dc2626;"><strong>Valor Reembolsado ao Cliente:</strong> ${valorStr}€ (${descricaoPolitica})</p>
+          </div>
+          <p style="font-size: 13px; color: #64748b;">A vaga foi automaticamente recolocada disponível para venda no site. Os ajustes financeiros (caso se apliquem) refletir-se-ão no seu Stripe Connect.</p>
+        </div>
+      `
+    });
+
+    // C. EMAIL INTERNO MACRO (HELLOCAMP)
+    await resend.emails.send({
+      from: 'HelloCamp Control <info@hellocamp.pt>',
+      to: 'info@hellocamp.pt',
+      subject: `[Cancelamento Auto] ${valorStr}€ Devolvidos - ${campoNome}`,
+      html: `
+        <div style="font-family: monospace; font-size: 13px; color: #1e293b; padding: 30px; background-color: #fdfdfd; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 650px; margin: 0 auto;">
+          <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #0f172a; padding-bottom: 10px; font-family: sans-serif;">🚨 RELATÓRIO DE CANCELAMENTO</h2>
+          <p style="font-size: 14px; font-weight: bold; color: #dc2626;">Operação executada via Dashboard do Pai.</p>
+          <table width="100%" style="margin-top: 20px; font-family: monospace; line-height: 2;">
+            <tr style="background-color: #f1f5f9;"><td width="40%"><strong>ID da Reserva:</strong></td><td>${reservaId}</td></tr>
+            <tr><td><strong>Programa:</strong></td><td>${campoNome}</td></tr>
+            <tr style="background-color: #f1f5f9;"><td><strong>Nome do Pai:</strong></td><td>${nomePai}</td></tr>
+            <tr><td><strong>Entidade Parceira:</strong></td><td>${nomeOrganizador}</td></tr>
+            <tr style="background-color: #f1f5f9;"><td><strong>Regra Aplicada:</strong></td><td>${descricaoPolitica} (${diffDias} dias p/ início)</td></tr>
+            <tr><td><strong>Valor Devolvido (Stripe):</strong></td><td style="color: #b91c1c; font-weight: bold;">${valorStr}€</td></tr>
+          </table>
+        </div>
+      `
+    });
+
+    return NextResponse.json({ success: true, estorno: valorAReembolsar });
+  } catch (err: any) {
+    console.error(err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/enviar-duvida/route.ts">
+import { NextResponse } from 'next/server';
+import { Resend } from 'resend';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  
+  // CRÍTICO: Para gerir contas e escrever na base de dados ignorando RLS, precisamos da Service Role Key
+  // Certifica-te que tens SUPABASE_SERVICE_ROLE_KEY no teu .env.local
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; 
+
+  if (!resendApiKey) {
+    return NextResponse.json({ error: "Falta a chave do Resend no .env.local" }, { status: 500 });
+  }
+
+  const resend = new Resend(resendApiKey);
+  const supabaseAdmin = createClient(supabaseUrl as string, supabaseServiceKey as string);
+
+  try {
+    const formData = await req.formData();
+    const nome = formData.get('First_Name') as string;
+    const apelido = formData.get('Last_Name') as string;
+    const emailPai = formData.get('Email') as string;
+    const telefone = formData.get('Phone') as string;
+    const idade = formData.get('Age') as string;
+    const mensagem = formData.get('Message') as string;
+    const subject = formData.get('_subject') as string;
+    const campoId = formData.get('campo_id') as string;
+    const organizadorId = formData.get('organizador_id') as string;
+    const lang = formData.get('lang') as string || 'pt';
+
+    const nomeCompleto = `${nome} ${apelido}`.trim();
+
+    // 1. DADOS DO PARCEIRO / ORGANIZADOR
+    let emailOrganizador = 'info@hellocamp.pt'; 
+    let nomeOrganizador = 'Parceiro HelloCamp';
+
+    if (organizadorId) {
+      const { data: perfil } = await supabaseAdmin
+        .from('perfis')
+        .select('email, empresa_nome, nome_completo')
+        .eq('id', organizadorId)
+        .single();
+      
+      if (perfil && perfil.email) {
+        emailOrganizador = perfil.email;
+        nomeOrganizador = perfil.empresa_nome || perfil.nome_completo || 'Parceiro';
+      }
+    }
+
+    // 2. IDENTIFICAR OU CRIAR A CONTA DO PAI (Silenciosamente)
+    let userIdFinal = null;
+    
+    // Procura se o email já existe
+    const { data: existingUser } = await supabaseAdmin
+      .from('perfis')
+      .select('id')
+      .eq('email', emailPai)
+      .single();
+
+    if (existingUser) {
+      userIdFinal = existingUser.id;
+    } else {
+      // Cria o user via API do Supabase Auth (Admin)
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: emailPai,
+        password: Math.random().toString(36).slice(-10) + 'A1!',
+        email_confirm: true,
+        user_metadata: { nome_completo: nomeCompleto, role: 'cliente' }
+      });
+
+      if (authData?.user) {
+        userIdFinal = authData.user.id;
+        // Insere na tabela de perfis
+        await supabaseAdmin.from('perfis').upsert({
+          id: userIdFinal, 
+          email: emailPai, 
+          nome_completo: nomeCompleto, 
+          telefone: telefone, 
+          role: 'cliente'
+        });
+      }
+    }
+
+    // 3. GRAVAR MENSAGEM NO CHAT (Tabela 'mensagens')
+    if (userIdFinal && organizadorId) {
+      const prefixoIdade = idade ? `(Interessado para ${idade} anos) ` : '';
+      const textoFinal = `📢 [Nova Questão] ${prefixoIdade}\n\n${mensagem}`;
+
+      const { error: msgError } = await supabaseAdmin.from('mensagens').insert([{
+        campo_id: campoId,
+        sender_id: userIdFinal,
+        receiver_id: organizadorId,
+        texto: textoFinal,
+        lida: false
+      }]);
+      
+      if(msgError) console.error("Erro a gravar no chat:", msgError);
+    }
+
+    // 4. DISPARAR O EMAIL VIA RESEND
+    await resend.emails.send({
+      from: 'HelloCamp Inbox <info@hellocamp.pt>',
+      to: emailOrganizador,
+      cc: 'info@hellocamp.pt',
+      replyTo: emailPai, 
+      subject: subject || 'Nova Dúvida de Cliente - HelloCamp',
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
+          <h2 style="color: #167524;">Nova Mensagem Recebida</h2>
+          <p>Olá <strong>${nomeOrganizador}</strong>,</p>
+          <p>Tem uma nova dúvida de um potencial cliente pendente no seu painel HelloCamp.</p>
+          <p>Pode responder diretamente a este e-mail ou aceder à sua <a href="https://www.hellocamp.pt/pt/admin/inbox" style="color: #167524; font-weight: bold;">Inbox da HelloCamp</a>.</p>
+          
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #e2e8f0;">
+            <p><strong>De:</strong> ${nomeCompleto} (${emailPai})</p>
+            <p><strong>Telefone:</strong> ${telefone}</p>
+            <p><strong>Idade do Participante:</strong> ${idade}</p>
+            <hr style="border: 0; border-top: 1px solid #cbd5e1; margin: 15px 0;" />
+            <p style="margin: 0; color: #334155; white-space: pre-wrap;"><strong>Mensagem:</strong><br/><br/>${mensagem}</p>
+          </div>
+        </div>
+      `,
+    });
+    
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Erro na API:", error);
+    return NextResponse.json({ error: "Erro ao enviar a mensagem: " + error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/inbox/send-change-request/route.ts">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+
+// Usamos o Service Role Key para garantir que o sistema pode escrever na reserva
+// independentemente das restrições de RLS do utilizador comum.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { reservaId, organizadorId, campoNome, mensagem, lang } = body;
+
+    if (!reservaId || !organizadorId || !mensagem) {
+      return NextResponse.json({ error: 'Faltam dados obrigatórios' }, { status: 400 });
+    }
+
+    const isEn = lang === 'en';
+    const assunto = isEn ? `Change Request: ${campoNome}` : `Pedido de Alteração: ${campoNome}`;
+
+    // 1. Procurar as respostas customizadas atuais para preservar dados antigos (como a origem ou outros formulários)
+    const { data: reserva, error: fetchError } = await supabase
+      .from('reservas')
+      .select('respostas_customizadas')
+      .eq('id', reservaId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const respostasAtuais = reserva?.respostas_customizadas || {};
+    // Injetar a chave exata que a tabela e a ficha do parceiro procuram para exibir o alerta
+    respostasAtuais.pedido_pai_pendente = mensagem;
+
+    // 2. Atualizar a tabela de reservas com o novo estado do JSON
+    const { error: updateError } = await supabase
+      .from('reservas')
+      .update({ respostas_customizadas: respostasAtuais })
+      .eq('id', reservaId);
+
+    if (updateError) throw updateError;
+
+    // 3. Inserir na tabela de Mensagens para manter o histórico da Inbox/Chat síncrono
+    const { error: dbError } = await supabase.from('mensagens').insert({
+      reserva_id: reservaId,
+      remetente_id: 'sistema', 
+      destinatario_id: organizadorId,
+      assunto: assunto,
+      conteudo: `O encarregado de educação solicitou a seguinte alteração/extra para a inscrição #${reservaId}:\n\n"${mensagem}"\n\nAceda à Central de Reservas para analisar o pedido e solicitar o Pagamento Extra se aplicável.`,
+      lida: false
+    });
+
+    if (dbError) throw dbError;
+
+    // 4. Procurar o Email do Organizador para enviar o alerta real para a caixa de correio externa
+    const { data: organizador } = await supabase
+      .from('perfis')
+      .select('email')
+      .eq('id', organizadorId)
+      .single();
+
+    if (organizador?.email) {
+      const htmlContent = `
+        <div style="font-family: sans-serif; max-w: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #0f172a;">Novo Pedido de Alteração (HelloCamp)</h2>
+          <p>O encarregado de educação da reserva <strong>#${reservaId}</strong> enviou uma solicitação de alteração ou adição de extras para o programa <strong>${campoNome}</strong>.</p>
+          
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #2563eb; margin: 20px 0; font-style: italic;">
+            "${mensagem}"
+          </div>
+          
+          <p><strong>Ação necessária:</strong> Aceda à sua Central de Reservas na HelloCamp, abra a ficha deste participante e utilize o painel de Controlo Financeiro para lançar a cobrança adicional correspondente.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #64748b;">Este é um e-mail automático gerado pelo sistema HelloCamp.</p>
+        </div>
+      `;
+
+      await resend.emails.send({
+        from: 'HelloCamp Notificações <info@hellocamp.pt>',
+        to: organizador.email,
+        subject: assunto,
+        html: htmlContent
+      });
+    }
+
+    return NextResponse.json({ success: true, message: 'Pedido processado e enviado com sucesso.' });
+  } catch (error: any) {
+    console.error("Erro na API de pedido de alteração:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/notificacoes/boas-vindas/route.ts">
+import { NextResponse } from 'next/server';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    // Recebemos o role (cliente ou organizador) e as variáveis de nome
+    const { email, nomeEmpresa, nome, role, lang = 'pt' } = body;
+
+    if (!email) {
+      return NextResponse.json({ error: 'Email em falta.' }, { status: 400 });
+    }
+
+    const isEn = lang === 'en';
+    const remetenteOficial = 'HelloCamp <info@hellocamp.pt>';
+    
+    let subject = "";
+    let htmlContent = "";
+
+    // ==============================================
+    // 📩 EMAIL PARA ENCARREGADOS DE EDUCAÇÃO (PAIS)
+    // ==============================================
+    if (role === 'cliente') {
+      const nomeUser = nome || 'Encarregado(a) de Educação';
+      subject = isEn ? `Welcome to HelloCamp, ${nomeUser}! 🏕️` : `Bem-vindo(a) à HelloCamp, ${nomeUser}! 🏕️`;
+      
+      htmlContent = `
+        <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+          <div style="background-color: #0f172a; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px; font-family: Arial, sans-serif;">HelloCamp</h1>
+          </div>
+          <div style="padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; background-color: #ffffff;">
+            <h2 style="color: #059669; margin-top: 0;">${isEn ? 'Account Created Successfully!' : 'Conta Criada com Sucesso!'}</h2>
+            <p>${isEn ? 'Hello' : 'Olá'} <strong>${nomeUser}</strong>,</p>
+            <p>${isEn 
+              ? 'Welcome to HelloCamp! Your parent account is now ready.' 
+              : 'Bem-vindo(a) à HelloCamp! A sua conta de encarregado de educação está pronta a ser utilizada.'}</p>
+            
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 25px 0; border: 1px solid #e2e8f0;">
+              <h3 style="margin-top: 0; font-size: 16px;">${isEn ? 'What you can do now:' : 'O que pode fazer agora:'}</h3>
+              <ul style="margin: 0; padding-left: 20px; color: #475569;">
+                <li style="margin-bottom: 10px;"><strong>${isEn ? 'Explore Camps:' : 'Explorar Campos:'}</strong> ${isEn ? 'Find the perfect summer camp for your children.' : 'Encontre o programa de férias ideal para os seus educandos.'}</li>
+                <li style="margin-bottom: 10px;"><strong>${isEn ? 'Add Participants:' : 'Adicionar Participantes:'}</strong> ${isEn ? 'Fill in your children\'s profiles to book faster.' : 'Preencha as fichas das crianças para realizar reservas mais rapidamente.'}</li>
+                <li><strong>${isEn ? 'Manage Bookings:' : 'Gerir Reservas:'}</strong> ${isEn ? 'Track your active bookings and payments.' : 'Acompanhe as suas reservas ativas e pagamentos de forma segura.'}</li>
+              </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 35px 0;">
+              <a href="https://www.hellocamp.pt/${lang}/login" style="display: inline-block; background-color: #0f172a; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                ${isEn ? 'Access My Account' : 'Aceder à Minha Conta'}
+              </a>
+            </div>
+            
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+            <p style="font-size: 13px; color: #64748b; margin: 0;">${isEn ? 'Need help? Reply to this email.' : 'Precisa de ajuda? Basta responder a este e-mail.'}</p>
+          </div>
+        </div>
+      `;
+
+      // Envia o email apenas para o Cliente
+      await resend.emails.send({
+        from: remetenteOficial,
+        to: email,
+        subject: subject,
+        html: htmlContent
+      });
+
+    } 
+    // ==============================================
+    // 📩 EMAIL PARA PARCEIROS B2B (ORGANIZADORES)
+    // ==============================================
+    else {
+      const nomeUser = nomeEmpresa || 'Parceiro';
+      subject = isEn ? `Welcome to HelloCamp, ${nomeUser}! 🏕️` : `Bem-vindo à HelloCamp, ${nomeUser}! 🏕️`;
+      
+      htmlContent = `
+        <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+          <div style="background-color: #0f172a; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px; font-family: Arial, sans-serif;">HelloCamp Partner</h1>
+          </div>
+          <div style="padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; background-color: #ffffff;">
+            <h2 style="color: #059669; margin-top: 0;">${isEn ? 'Account Created Successfully!' : 'Conta Criada com Sucesso!'}</h2>
+            <p>${isEn ? 'Hello' : 'Olá'} <strong>${nomeUser}</strong>,</p>
+            <p>${isEn 
+              ? 'Welcome to the HelloCamp partner network. Your organizer account is now ready.' 
+              : 'Bem-vindo à rede de parceiros da HelloCamp. A sua conta de organizador está pronta a ser utilizada.'}</p>
+            
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 25px 0; border: 1px solid #e2e8f0;">
+              <h3 style="margin-top: 0; font-size: 16px;">${isEn ? 'Next Steps:' : 'Próximos Passos:'}</h3>
+              <ol style="margin: 0; padding-left: 20px; color: #475569;">
+                <li style="margin-bottom: 10px;"><strong>${isEn ? 'Create your first Camp:' : 'Crie o seu primeiro Campo:'}</strong> ${isEn ? 'Add photos, dates, and prices.' : 'Adicione fotos, datas e preços.'}</li>
+                <li style="margin-bottom: 10px;"><strong>${isEn ? 'Connect Stripe:' : 'Ligar a conta Stripe:'}</strong> ${isEn ? 'Go to the billing tab to receive automatic payouts.' : 'Vá ao separador de faturação para receber pagamentos automáticos.'}</li>
+                <li><strong>${isEn ? 'Submit for Review:' : 'Submeter para Revisão:'}</strong> ${isEn ? 'Once ready, we will review and publish your camp.' : 'Assim que estiver pronto, iremos rever e publicar o seu campo.'}</li>
+              </ol>
+            </div>
+            
+            <div style="text-align: center; margin: 35px 0;">
+              <a href="https://www.hellocamp.pt/${lang}/admin/login" style="display: inline-block; background-color: #0f172a; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                ${isEn ? 'Access Dashboard' : 'Aceder ao Dashboard'}
+              </a>
+            </div>
+            
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+            <p style="font-size: 13px; color: #64748b; margin: 0;">${isEn ? 'Need help? Reply to this email.' : 'Precisa de ajuda? Basta responder a este e-mail.'}</p>
+          </div>
+        </div>
+      `;
+
+      // 1. Envia email para o novo Parceiro
+      await resend.emails.send({
+        from: remetenteOficial,
+        to: email,
+        subject: subject,
+        html: htmlContent
+      });
+
+      // ==============================================
+      // 🚨 ALERTA INTERNO PARA A EQUIPA HELLOCAMP
+      // ==============================================
+      const alertaInternoHtml = `
+        <div style="font-family: sans-serif; color: #333;">
+          <h2 style="color: #0f172a;">🚨 Novo Parceiro Registado!</h2>
+          <p>Um novo organizador acabou de criar conta na plataforma HelloCamp.</p>
+          <ul style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <li><strong>Empresa:</strong> ${nomeUser}</li>
+            <li><strong>Email de Contacto:</strong> ${email}</li>
+            <li><strong>Data do Registo:</strong> ${new Date().toLocaleString('pt-PT')}</li>
+          </ul>
+          <p>Recomendamos que verifique o perfil no painel de administração do Supabase e prepare o processo de onboarding/verificação.</p>
+        </div>
+      `;
+
+      // 2. Envia email para a vossa caixa de entrada geral
+      await resend.emails.send({
+        from: remetenteOficial,
+        to: 'info@hellocamp.pt', // O seu email oficial da HelloCamp
+        subject: `🚨 Novo Parceiro: ${nomeUser}`,
+        html: alertaInternoHtml
+      });
+    }
+
+    return NextResponse.json({ success: true, message: 'Emails enviados com sucesso.' });
+  } catch (error: any) {
+    console.error('Erro ao enviar email de boas-vindas:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/notificacoes/nova-mensagem-recrutamento/route.ts">
+import { NextResponse } from 'next/server';
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { destinatarioEmail, nomeRemetente, textoMensagem, tipoDestinatario, lang } = body;
+
+    // 1. Validação básica de segurança
+    if (!destinatarioEmail || !nomeRemetente || !textoMensagem || !tipoDestinatario) {
+      return NextResponse.json({ error: 'Faltam parâmetros obrigatórios.' }, { status: 400 });
+    }
+
+    const isEn = lang === 'en';
+
+    // 2. Configuração das credenciais do Mailgun (Lidas do ficheiro .env)
+    const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY;
+    const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN; // Ex: mg.hellocamp.pt
+
+    if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+      console.error("Faltam variáveis de ambiente do Mailgun (.env)");
+      return NextResponse.json({ error: 'Erro de configuração no servidor.' }, { status: 500 });
+    }
+
+    // 3. Lógica Bilingue e Contextual (Quem envia para quem?)
+    let assunto = "";
+    let tituloHtml = "";
+    let textoIntroHtml = "";
+    let linkBotao = "";
+    let textoBotao = "";
+
+    if (tipoDestinatario === 'monitor') {
+      // O PARCEIRO/CAMPO está a enviar mensagem a um jovem (Monitor)
+      assunto = isEn 
+        ? `New recruitment message from ${nomeRemetente} - HelloCamp`
+        : `Nova mensagem de recrutamento de ${nomeRemetente} - HelloCamp`;
+      
+      tituloHtml = isEn ? "You have a new job proposal!" : "Tens uma nova proposta de trabalho!";
+      textoIntroHtml = isEn 
+        ? `The camp organizer <strong>${nomeRemetente}</strong> sent you a direct message via HelloCamp's Staff Portal.`
+        : `A entidade organizadora <strong>${nomeRemetente}</strong> enviou-te uma mensagem direta através da Bolsa de Monitores da HelloCamp.`;
+      
+      linkBotao = `https://hellocamp.pt/${lang}/monitores/login`;
+      textoBotao = isEn ? "Open Portal and Reply" : "Abrir Portal e Responder";
+
+    } else {
+      // O JOVEM (Monitor) está a responder à mensagem do Parceiro
+      assunto = isEn 
+        ? `Candidate ${nomeRemetente} replied to your message - HelloCamp`
+        : `O candidato ${nomeRemetente} respondeu à sua mensagem - HelloCamp`;
+      
+      tituloHtml = isEn ? "New candidate message" : "Nova resposta de candidato";
+      textoIntroHtml = isEn 
+        ? `The candidate <strong>${nomeRemetente}</strong> has replied to your recruitment message on HelloCamp.`
+        : `O candidato <strong>${nomeRemetente}</strong> respondeu à sua mensagem de recrutamento na HelloCamp.`;
+      
+      linkBotao = `https://hellocamp.pt/${lang}/admin/login`;
+      textoBotao = isEn ? "View Message in Dashboard" : "Ver Mensagem no Dashboard";
+    }
+
+    // 4. Construção do Email em HTML (Design Limpo e Responsivo)
+    const emailHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${assunto}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+          .header { background-color: #0f172a; padding: 24px; text-align: center; }
+          .header h1 { margin: 0; color: #ffffff; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; }
+          .header h1 span { color: #fbbf24; }
+          .content { padding: 32px; color: #334155; line-height: 1.6; }
+          .content h2 { margin-top: 0; color: #0f172a; font-size: 20px; font-weight: 800; }
+          .message-box { background-color: #f1f5f9; border-left: 4px solid #3b82f6; padding: 16px; margin: 24px 0; border-radius: 0 8px 8px 0; font-style: italic; color: #1e293b; }
+          .btn-container { text-align: center; margin: 32px 0; }
+          .btn { background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }
+          .footer { background-color: #f8fafc; padding: 24px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Hello<span>Camp</span></h1>
+          </div>
+          <div class="content">
+            <h2>${tituloHtml}</h2>
+            <p>${textoIntroHtml}</p>
+            
+            <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; font-weight: bold; margin-bottom: 0;">${isEn ? "Message content:" : "Conteúdo da mensagem:"}</p>
+            <div class="message-box">
+              "${textoMensagem}"
+            </div>
+
+            <div class="btn-container">
+              <a href="${linkBotao}" class="btn">${textoBotao}</a>
+            </div>
+            
+            <p style="font-size: 13px; color: #64748b;">
+              ${isEn 
+                ? "This is an automated notification. Please do not reply directly to this email." 
+                : "Esta é uma notificação automática. Por favor, não responda diretamente a este email. Use o botão acima para continuar a conversa na plataforma."}
+            </p>
+          </div>
+          <div class="footer">
+            &copy; ${new Date().getFullYear()} HelloCamp Portugal. ${isEn ? "All rights reserved." : "Todos os direitos reservados."} <br>
+            Bolsa de Talentos & Recrutamento
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // 5. Preparar o envio via Mailgun usando Fetch nativo do Edge/Node
+    const formData = new URLSearchParams();
+    formData.append('from', `HelloCamp Notificações <noreply@${MAILGUN_DOMAIN}>`);
+    formData.append('to', destinatarioEmail);
+    formData.append('subject', assunto);
+    formData.append('html', emailHTML);
+
+    // Codificar a API Key para o Header de Basic Auth
+    const basicAuth = Buffer.from(`api:${MAILGUN_API_KEY}`).toString('base64');
+
+    const mailgunResponse = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basicAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData.toString()
+    });
+
+    if (!mailgunResponse.ok) {
+      const errorText = await mailgunResponse.text();
+      console.error("Falha no disparo Mailgun:", errorText);
+      throw new Error("Erro no serviço de email.");
+    }
+
+    return NextResponse.json({ success: true, message: 'Email de notificação enviado com sucesso.' }, { status: 200 });
+
+  } catch (error: any) {
+    console.error("Erro interno na API de notificações (Recrutamento):", error);
+    return NextResponse.json({ error: error.message || 'Erro interno no servidor.' }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/notificacoes/novo-contrato/route.ts">
+import { NextResponse } from 'next/server';
+import { Resend } from 'resend';
+
+export const dynamic = 'force-dynamic';
+
+// Inicializa o Resend com a chave do seu ficheiro .env
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function POST(req: Request) {
+  try {
+    const { form, emailAcesso, lang } = await req.json();
+
+    const isEn = lang === 'en';
+
+    // ==========================================
+    // 1. E-MAIL PARA A EQUIPA HELLOCAMP (Admin)
+    // ==========================================
+    const adminHtml = `
+      <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+        <h2 style="color: #0f172a;">Novo Contrato Assinado!</h2>
+        <p>Um novo parceiro acabou de assinar o contrato B2B e criou conta na plataforma.</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Empresa:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${form.nomeEmpresa}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>NIF:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${form.nif}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Programa:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${form.nomePrograma}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Pessoa Contacto:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${form.pessoaContacto} (${form.telefone})</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Email de Login:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${emailAcesso}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Pagamento:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${form.tipo_pagamento}</td></tr>
+          <tr><td style="padding: 8px;"><strong>Cancelamento:</strong></td><td style="padding: 8px;">${form.politica_cancelamento}</td></tr>
+        </table>
+        
+        <p style="margin-top: 30px; font-size: 14px;"><strong>Ação necessária:</strong> Aceda ao SuperAdmin para rever os dados e aprovar o campo para publicação.</p>
+      </div>
+    `;
+
+    // ==========================================
+    // 2. E-MAIL PARA O PARCEIRO (Comprovativo)
+    // ==========================================
+    const parceiroSubject = isEn ? 'Welcome to HelloCamp! ⛺️ Contract Received' : 'Bem-vindo à HelloCamp! ⛺️ Contrato Recebido';
+    
+    const parceiroHtml = `
+      <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+        <div style="font-size: 24px; font-weight: 900; letter-spacing: -1px; margin-bottom: 20px; text-align: center;">
+          <span style="color: #0f172a;">Hello</span><span style="color: #EBA914;">Camp</span>
+        </div>
+        
+        <p>${isEn ? 'Hello' : 'Olá'} <strong>${form.pessoaContacto}</strong>,</p>
+        <p>${isEn ? 'We successfully received your partnership contract for the program' : 'Recebemos com sucesso o seu contrato de parceria referente ao programa'} <strong>${form.nomePrograma}</strong>.</p>
+        <p>${isEn ? 'Your organizer account has been created. You can now access your dashboard using this email address.' : 'A sua conta de organizador foi criada com sucesso. Pode agora aceder ao seu portal de gestão utilizando este endereço de e-mail.'}</p>
+        
+        <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0;"><strong>${isEn ? 'Contract Summary:' : 'Resumo do Acordo:'}</strong></p>
+          <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6;">
+            <li><strong>${isEn ? 'Company:' : 'Empresa:'}</strong> ${form.nomeEmpresa} (NIF: ${form.nif})</li>
+            <li><strong>${isEn ? 'Booking Model:' : 'Modelo de Reserva:'}</strong> ${form.modalidadeReserva}</li>
+            <li><strong>${isEn ? 'Payment Rule:' : 'Regra de Pagamento:'}</strong> ${form.tipo_pagamento}</li>
+            <li><strong>${isEn ? 'Cancellation Policy:' : 'Política de Cancelamento:'}</strong> ${form.politica_cancelamento}</li>
+          </ul>
+        </div>
+        
+        <p>${isEn ? 'Our team will review your submission shortly. If you have any questions, reply directly to this email.' : 'A nossa equipa irá rever a sua submissão em breve. Se tiver alguma dúvida, basta responder diretamente a este e-mail.'}</p>
+        
+        <p style="margin-top: 30px;">${isEn ? 'Best regards,' : 'Com os melhores cumprimentos,'}<br><strong>Equipa HelloCamp</strong></p>
+      </div>
+    `;
+
+    const remetenteOficial = 'HelloCamp Sistema <info@hellocamp.pt>';
+
+    // Disparar os dois e-mails ao mesmo tempo utilizando o Resend
+    await Promise.all([
+      // Email para a equipa HelloCamp (Admin)
+      resend.emails.send({
+        from: remetenteOficial,
+        to: 'info@hellocamp.pt',
+        subject: `Novo Parceiro: ${form.nomeEmpresa}`,
+        html: adminHtml,
+      }),
+      // Email para o Parceiro
+      resend.emails.send({
+        from: remetenteOficial,
+        to: emailAcesso,
+        subject: parceiroSubject,
+        html: parceiroHtml,
+      })
+    ]);
+
+    return NextResponse.json({ success: true });
+
+  } catch (error: any) {
+    console.error("Erro ao enviar emails de novo contrato via Resend:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/notificar-reserva/admin/criar-parceiro/route.ts">
+import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
+
+// Usamos a chave secreta para ter poderes absolutos na Base de Dados
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function POST(req: Request) {
+  try {
+    const { email, password, empresa_nome } = await req.json();
+    
+    // 1. Cria a conta no sistema de Autenticação
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: email,
+      password: password,
+      email_confirm: true // Valida o email automaticamente
+    });
+
+    if (authError) throw authError;
+
+    // 2. Atualiza o perfil criado com o nome da empresa
+    if (authData.user) {
+       await supabaseAdmin.from('perfis').update({ 
+         empresa_nome: empresa_nome 
+       }).eq('id', authData.user.id);
+    }
+
+    return NextResponse.json({ success: true, user: authData.user });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+}
+</file>
+
+<file path="app/api/notificar-reserva/route.ts">
+import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
+  try {
+    const data = await req.json();
+    
+    const { lead, campoNome, parceiroEmail, lang } = data;
+    const isEn = lang === 'en';
+
+    if (!lead || !lead.nome || !lead.email || !parceiroEmail) {
+      return NextResponse.json({ error: 'Faltam dados obrigatórios para envio da notificação.' }, { status: 400 });
+    }
+
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+      throw new Error("A chave API da Brevo não está configurada no servidor.");
+    }
+
+    const emailHelloCamp = 'info@hellocamp.pt';
+
+    // 1. CONSTRUÇÃO DO ASSUNTO
+    const subject = isEn 
+      ? `🎯 New Booking Lead: ${campoNome}` 
+      : `🎯 Nova Intenção de Reserva: ${campoNome}`;
+
+    // 2. CONSTRUÇÃO DO CORPO DO E-MAIL (HTML Profissional)
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f8fafc;">
+        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; padding: 40px 20px;">
+          <tr>
+            <td align="center">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                
+                <!-- CABEÇALHO -->
+                <tr>
+                  <td align="center" style="background-color: #0f172a; padding: 30px;">
+                    <div style="font-size: 28px; font-weight: 900; letter-spacing: -1px; color: #ffffff;">
+                      <span>Hello</span><span style="color: #EBA914;">Camp</span>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- CORPO DA MENSAGEM -->
+                <tr>
+                  <td align="left" style="padding: 40px 30px;">
+                    <h2 style="font-size: 20px; font-weight: bold; color: #0f172a; margin: 0 0 20px 0;">
+                      ${isEn ? 'New Booking Intent' : 'Nova Intenção de Reserva'}
+                    </h2>
+                    
+                    <p style="font-size: 15px; color: #475569; line-height: 1.6; margin: 0 0 25px 0;">
+                      ${isEn 
+                        ? `A customer has shown a strong interest in booking <strong>${campoNome}</strong> and was redirected to your official external form to complete the registration.` 
+                        : `Um cliente demonstrou forte intenção de reserva no programa <strong>${campoNome}</strong> e foi reencaminhado da plataforma HelloCamp para o vosso formulário oficial para concluir a inscrição.`}
+                    </p>
+
+                    <!-- CAIXA DE DADOS DO CLIENTE -->
+                    <div style="background-color: #f1f5f9; border-left: 4px solid #059669; padding: 20px; border-radius: 4px; margin-bottom: 30px;">
+                      <h3 style="font-size: 12px; text-transform: uppercase; color: #64748b; margin: 0 0 10px 0; letter-spacing: 1px;">
+                        ${isEn ? 'Customer Details (Lead)' : 'Dados do Cliente (Lead)'}
+                      </h3>
+                      <p style="margin: 0 0 8px 0; font-size: 15px; color: #0f172a;">
+                        <strong>${isEn ? 'Name' : 'Nome'}:</strong> ${lead.nome}
+                      </p>
+                      <p style="margin: 0 0 8px 0; font-size: 15px; color: #0f172a;">
+                        <strong>E-mail:</strong> <a href="mailto:${lead.email}" style="color: #0284c7; text-decoration: none;">${lead.email}</a>
+                      </p>
+                      <p style="margin: 0; font-size: 15px; color: #0f172a;">
+                        <strong>${isEn ? 'Phone' : 'Telefone'}:</strong> ${lead.telefone}
+                      </p>
+                    </div>
+
+                    <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin: 0 0 30px 0; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                      <strong>${isEn ? 'Transparency & Commissioning:' : 'Transparência e Comissionamento:'}</strong><br>
+                      ${isEn 
+                        ? 'For transparency and auditing purposes, this contact has been logged in our system. At the end of the billing cycle, we will ask your team to cross-reference this lead with your officially paid bookings to calculate the correct commission.' 
+                        : 'Para efeitos de transparência e auditoria de comissionamento, registámos este contacto no nosso sistema. No final do ciclo de faturação, pediremos à vossa equipa que cruze esta listagem com as inscrições efetivamente pagas no vosso sistema para o cálculo correto da comissão.'}
+                    </p>
+
+                    <p style="font-size: 15px; color: #0f172a; margin: 0;">
+                      ${isEn ? 'Best regards,' : 'Com os melhores cumprimentos,'}<br>
+                      <strong>${isEn ? 'HelloCamp Partner Team' : 'Equipa de Parceiros HelloCamp'}</strong>
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+              
+              <!-- RODAPÉ -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px;">
+                <tr>
+                  <td align="center" style="padding-top: 20px;">
+                    <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin: 0;">
+                      ${isEn 
+                        ? 'This is an automated message generated by the HelloCamp B2B Platform.' 
+                        : 'Esta é uma mensagem automática gerada pela Plataforma B2B da HelloCamp.'}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    // 3. COMUNICAÇÃO COM A BREVO REST API
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'content-type': 'application/json',
+        'accept': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'Equipa HelloCamp', email: emailHelloCamp },
+        to: [{ email: parceiroEmail }],
+        // Adiciona a HelloCamp em CC para registo e auditoria
+        cc: [{ email: emailHelloCamp, name: 'Auditoria HelloCamp' }],
+        subject: subject,
+        htmlContent: htmlContent
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`A API da Brevo rejeitou o envio: ${errorData.message || JSON.stringify(errorData)}`);
+    }
+
+    return NextResponse.json({ success: true, message: 'Notificação de Lead externa disparada com sucesso via Brevo.' });
+
+  } catch (error: any) {
+    console.error('Erro na API /nova-lead-externa:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/processar-reembolso/route.ts">
+import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!stripeSecretKey || !resendApiKey || !supabaseUrl || !supabaseKey) {
+    return NextResponse.json({ error: "Configurações de servidor em falta." }, { status: 500 });
+  }
+
+  const stripe = new Stripe(stripeSecretKey);
+  const resend = new Resend(resendApiKey);
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  try {
+    const { reservaId } = await req.json();
+
+    // 1. Busca direta da reserva para evitar ambiguidades de Joins no Supabase
+    const { data: reserva, error: fetchError } = await supabase
+      .from('reservas')
+      .select('*')
+      .eq('id', reservaId)
+      .single();
+
+    if (fetchError || !reserva) {
+      throw new Error("Reserva não encontrada na Base de Dados.");
+    }
+
+    if (reserva.status_pagamento === 'Reembolsado') {
+      throw new Error("Esta reserva já se encontra reembolsada.");
+    }
+
+    // 2. Busca plana dos dados complementares nas tabelas paralelas
+    const { data: campoData } = await supabase.from('campos').select('nome, local').eq('id', reserva.campo_id).single();
+    const { data: criancaData } = await supabase.from('criancas').select('nome').eq('id', reserva.crianca_id).single();
+    const { data: clienteData } = await supabase.from('perfis').select('nome_completo, email').eq('id', reserva.cliente_id).single();
+    const { data: orgData } = await supabase.from('perfis').select('email, empresa_nome, stripe_account_id').eq('id', reserva.organizador_id).single();
+
+    // 3. Localizar a transação correspondente na Stripe
+    const sessions = await stripe.checkout.sessions.list({ limit: 100 });
+    const matchSession = sessions.data.find(s => {
+      if (s.metadata && s.metadata.reservasIds) {
+        try {
+          const ids = JSON.parse(s.metadata.reservasIds);
+          return ids.includes(reservaId);
+        } catch(e) { return false; }
+      }
+      return false;
+    });
+
+    if (!matchSession || !matchSession.payment_intent) {
+      throw new Error("Transação Stripe não encontrada para emitir reembolso automático. Terá de reembolsar manualmente.");
+    }
+
+    // 4. EXECUTAR REEMBOLSO REAL NA STRIPE (Reembolso Connect Protegido)
+    const quantiaReembolsoCentimos = Math.round(Number(reserva.valor_total) * 100);
+    
+    const refundParams: Stripe.RefundCreateParams = {
+      payment_intent: matchSession.payment_intent as string,
+      amount: quantiaReembolsoCentimos,
+      reason: 'requested_by_customer'
+    };
+
+    // Puxa o dinheiro da conta do organizador de volta se houver Stripe Connect configurado
+    if (orgData?.stripe_account_id) {
+      refundParams.reverse_transfer = true;
+      refundParams.refund_application_fee = true;
+    }
+
+    await stripe.refunds.create(refundParams);
+
+    // 5. ATUALIZAR A BASE DE DADOS PARA REFLETIR O SUCESSO DO REEMBOLSO
+    await supabase.from('reservas').update({
+      status_pagamento: 'Reembolsado',
+      status_reembolso: 'Reembolsado',
+      status: 'Reembolsado',
+      dados_reembolso: { data_estorno: new Date().toISOString(), processado_por: 'SuperAdmin HQ' }
+    }).eq('id', reservaId);
+
+    // 6. IDENTIFICAÇÃO DINÂMICA INTELIGENTE (Contorna campos vazios no perfil de teste)
+    const campoNome = campoData?.nome || 'Programa HelloCamp';
+    const nomeCrianca = criancaData?.nome || 'Participante';
+    const turnoNome = reserva.turno_nome || 'Programa Base';
+    const valorReembolsado = Number(reserva.valor_total).toFixed(2);
+    
+    const emailPai = clienteData?.email || reserva.email_encarregado || matchSession.customer_email || matchSession.customer_details?.email;
+    const emailCampo = orgData?.email || 'info@hellocamp.pt';
+    const nomeOrganizador = orgData?.empresa_nome || 'Organizador';
+
+    // Hierarquia de nomes para o Pai (Garante que se o perfil falhar, tenta o preenchimento da reserva ou o email)
+    const nomePai = clienteData?.nome_completo || reserva.nome_encarregado || matchSession.customer_details?.name || emailPai?.split('@')[0] || 'Encarregado de Educação';
+
+    // A. EMAIL PREMIUM PARA O PAI
+    if (emailPai) {
+      await resend.emails.send({
+        from: 'HelloCamp Finanças <info@hellocamp.pt>',
+        to: emailPai,
+        subject: `Confirmação de Reembolso - ${campoNome}`,
+        html: `
+          <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px 20px; color: #0f172a;">
+            <h1 style="font-size: 24px; font-weight: 900; text-align: center; margin-bottom: 30px; color: #0f172a;">HelloCamp</h1>
+            <div style="background-color: #fef2f2; border: 1px solid #fca5a5; border-radius: 12px; padding: 25px; text-align: center;">
+              <h2 style="font-size: 18px; font-weight: 700; margin-top: 0; color: #991b1b;">Reembolso Processado com Sucesso</h2>
+              <p style="font-size: 14px; line-height: 1.6; color: #991b1b; margin-bottom: 0;">Olá <strong>${nomePai}</strong>, confirmamos que o cancelamento da sua reserva e a devolução dos capitais foram concluídos pelo nosso departamento financeiro.</p>
+            </div>
+            
+            <div style="margin: 30px 0;">
+              <h3 style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Resumo do Cancelamento</h3>
+              <table width="100%" style="font-size: 14px; color: #334155; margin-top: 12px; line-height: 2;">
+                <tr><td><strong>Programa:</strong></td><td style="text-align: right;">${campoNome}</td></tr>
+                <tr><td><strong>Turno / Semana:</strong></td><td style="text-align: right;">${turnoNome}</td></tr>
+                <tr><td><strong>Participante:</strong></td><td style="text-align: right;">${nomeCrianca}</td></tr>
+                <tr><td style="padding-top: 10px; border-top: 1px dashed #e2e8f0;"><strong>Valor Devolvido:</strong></td><td style="text-align: right; font-weight: bold; color: #dc2626; font-size: 16px; padding-top: 10px; border-top: 1px dashed #e2e8f0;">${valorReembolsado}€</td></tr>
+              </table>
+            </div>
+            <p style="font-size: 12px; color: #64748b; line-height: 1.5;">O montante foi creditado na mesma via de pagamento original. Dependendo do seu banco ou operadora MB WAY, o saldo estará visível no extrato num prazo estimado de 5 a 10 dias úteis.</p>
+          </div>
+        `
+      });
+    }
+
+    // B. EMAIL DE ATUALIZAÇÃO PARA O ORGANIZADOR DO CAMPO
+    await resend.emails.send({
+      from: 'HelloCamp Parceiros <info@hellocamp.pt>',
+      to: emailCampo,
+      subject: `Atualização de Ocupação: Cancelamento - ${campoNome}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #0f172a; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #b91c1c; border-bottom: 2px solid #b91c1c; padding-bottom: 10px; font-size: 20px;">Vaga Libertada - Cancelamento</h2>
+          <p>Caro parceiro da entidade <strong>${nomeOrganizador}</strong>,</p>
+          <p>Informamos que uma vaga para o seu programa foi cancelada e o respetivo valor foi integralmente estornado ao cliente através da nossa central de atendimento.</p>
+          
+          <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 20px 0; line-height: 1.8;">
+            <p style="margin: 0;"><strong>Programa de Férias:</strong> ${campoNome}</p>
+            <p style="margin: 0;"><strong>Turno Afetado:</strong> ${turnoNome}</p>
+            <p style="margin: 0;"><strong>Participante removido:</strong> ${nomeCrianca}</p>
+            <p style="margin: 0;"><strong>Encarregado de Educação:</strong> ${nomePai}</p>
+            <p style="margin: 0; color: #dc2626;"><strong>Valor Reversível:</strong> ${valorReembolsado}€</p>
+          </div>
+          <p style="font-size: 13px; color: #64748b;">A vaga foi automaticamente recolocada disponível para venda no site. Os ajustes de comissionamento associados a esta vaga serão liquidados no seu relatório mensal.</p>
+        </div>
+      `
+    });
+
+    // C. EMAIL DETALHADO MACRO PARA A HELLOCAMP (CONTROLO INTERNO EXAUSTIVO)
+    await resend.emails.send({
+      from: 'HelloCamp Control <info@hellocamp.pt>',
+      to: 'info@hellocamp.pt',
+      subject: `[Reemboslo Efetuado] ${valorReembolsado}€ - ${campoNome}`,
+      html: `
+        <div style="font-family: monospace; font-size: 13px; color: #1e293b; padding: 30px; background-color: #fdfdfd; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 650px; margin: 0 auto;">
+          <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #0f172a; padding-bottom: 10px; font-family: sans-serif;">🚨 RELATÓRIO DE MOVIMENTAÇÃO DE CAPITAL</h2>
+          <p style="font-size: 14px; font-weight: bold; color: #dc2626;">Reembolso efetuado com sucesso via Stripe API Connect.</p>
+          
+          <table width="100%" style="margin-top: 20px; font-family: monospace; line-height: 2;">
+            <tr style="background-color: #f1f5f9;"><td width="40%"><strong>ID da Reserva:</strong></td><td>${reservaId}</td></tr>
+            <tr><td><strong>Programa:</strong></td><td>${campoNome}</td></tr>
+            <tr style="background-color: #f1f5f9;"><td><strong>Turno / Semana:</strong></td><td>${turnoNome}</td></tr>
+            <tr><td><strong>Nome do Pai:</strong></td><td>${nomePai}</td></tr>
+            <tr style="background-color: #f1f5f9;"><td><strong>Email do Pai:</strong></td><td>${emailPai}</td></tr>
+            <tr><td><strong>Participante (Criança):</strong></td><td>${nomeCrianca}</td></tr>
+            <tr style="background-color: #f1f5f9;"><td><strong>Entidade Parceira:</strong></td><td>${nomeOrganizador}</td></tr>
+            <tr><td><strong>Valor Devolvido:</strong></td><td style="color: #b91c1c; font-weight: bold;">${valorReembolsado}€</td></tr>
+            <tr style="background-color: #fef2f2;"><td><strong>Reverse Transfer Connect:</strong></td><td style="color: #991b1b; font-weight: bold;">${orgData?.stripe_account_id ? 'ATIVADO (Débito efetuado ao Parceiro)' : 'NÃO REQUERIDO'}</td></tr>
+          </table>
+          
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 25px 0;" />
+          <p style="font-size: 11px; color: #64748b; margin: 0;">Processado por: SuperAdmin HQ via API Router Secure Connection.<br/>Data da Transação: ${new Date().toLocaleString('pt-PT')}</p>
+        </div>
+      `
+    });
+
+    return NextResponse.json({ success: true, message: 'Reembolso efetuado e comunicados enviados.' });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/send-contact/route.ts">
+import { NextResponse } from 'next/server';
+import { Resend } from 'resend';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  
+  if (!resendApiKey) {
+    return NextResponse.json({ error: "Chave do Resend não configurada." }, { status: 500 });
+  }
+
+  const resend = new Resend(resendApiKey);
+
+  try {
+    const body = await req.json();
+    const { nome, emailCliente, mensagem, emailCampo, nomeCampo } = body;
+
+    if (!emailCliente || !mensagem || !emailCampo) {
+      return NextResponse.json({ error: "Faltam dados obrigatórios." }, { status: 400 });
+    }
+
+    const { data, error } = await resend.emails.send({
+      from: 'HelloCamp <info@hellocamp.pt>', 
+      to: emailCampo,
+      replyTo: emailCliente, 
+      subject: `Nova Pergunta de um Pai - ${nomeCampo}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
+          <h2 style="color: #0f172a;">Tem uma nova mensagem via HelloCamp!</h2>
+          <p style="color: #475569;"><strong>De:</strong> ${nome} (${emailCliente})</p>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+          <p style="color: #334155; white-space: pre-wrap;">${mensagem}</p>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #94a3b8;">Para responder a este pai, basta clicar em "Responder" no seu cliente de email.</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, message: 'Email enviado com sucesso!', id: data?.id });
+
+  } catch (error: any) {
+    return NextResponse.json({ error: "Erro ao processar o pedido: " + error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/stripe-connect/route.ts">
+import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+
+// Inicializa o Supabase do lado do servidor para gravar o ID com segurança
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function POST(req: Request) {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  
+  if (!stripeSecretKey) {
+    return NextResponse.json({ error: "Chave Secreta da Stripe não configurada no servidor." }, { status: 500 });
+  }
+
+  const stripe = new Stripe(stripeSecretKey);
+
+  try {
+    const body = await req.json();
+    const { userId, email, lang } = body;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.hellocamp.pt';
+
+    // 1. Procurar se o perfil já tem uma conta Stripe Connect associada
+    const { data: perfil } = await supabaseAdmin
+      .from('perfis')
+      .select('stripe_account_id')
+      .eq('id', userId)
+      .single();
+
+    let stripeAccountId = perfil?.stripe_account_id;
+
+    // 2. Se não tiver, cria uma conta Express nova na Stripe
+    if (!stripeAccountId) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        email: email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+      });
+      stripeAccountId = account.id;
+
+      // Grava o novo ID imediatamente na tabela perfis do utilizador
+      await supabaseAdmin
+        .from('perfis')
+        .update({ stripe_account_id: stripeAccountId })
+        .eq('id', userId);
+    }
+
+    // 3. Gerar o link oficial de Onboarding (onde o parceiro vai colocar os dados bancários com segurança)
+    const accountLink = await stripe.accountLinks.create({
+      account: stripeAccountId,
+      refresh_url: `${siteUrl}/${lang}/dashboard/faturacao`, // Se falhar ou expirar, volta aqui
+      return_url: `${siteUrl}/${lang}/dashboard/faturacao`,  // Se concluir com sucesso, volta aqui
+      type: 'account_onboarding',
+    });
+
+    return NextResponse.json({ url: accountLink.url });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/superadmin/enviar-broadcast/route.ts">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { publico, assunto, tituloDaMensagem, mensagem, textoBotao, linkBotao, emailsManuais } = body;
+
+    if (!publico || !assunto || !mensagem) {
+      return NextResponse.json({ error: 'Faltam campos obrigatórios.' }, { status: 400 });
+    }
+
+    let destinatarios: { email: string, nome: string }[] = [];
+
+    // 1. ROTEAR DESTINATÁRIOS
+    if (publico === 'csv') {
+      if (!emailsManuais || emailsManuais.length === 0) {
+        return NextResponse.json({ error: 'O ficheiro anexado não tem e-mails válidos.' }, { status: 400 });
+      }
+      destinatarios = emailsManuais.map((email: string) => ({ email, nome: 'Amigo' }));
+    } else {
+      let query = supabaseAdmin.from('perfis').select('email, nome_completo');
+      if (publico === 'organizadores') query = query.eq('role', 'organizador');
+      else if (publico === 'clientes') query = query.eq('role', 'cliente');
+      
+      const { data: utilizadores, error } = await query;
+      if (error) throw error;
+      if (!utilizadores || utilizadores.length === 0) {
+        return NextResponse.json({ error: 'Nenhum utilizador encontrado.' }, { status: 404 });
+      }
+
+      destinatarios = utilizadores.filter(u => u.email).map(u => ({
+        email: u.email,
+        nome: u.nome_completo?.split(' ')[0] || 'Utilizador'
+      }));
+    }
+
+    // 1.5 FILTRAR UNSUBSCRIBES
+    const { data: listaNegraData } = await supabaseAdmin.from('unsubscribes').select('email');
+    if (listaNegraData && listaNegraData.length > 0) {
+      const listaNegraEmails = listaNegraData.map(u => u.email.toLowerCase());
+      destinatarios = destinatarios.filter(d => !listaNegraEmails.includes(d.email.toLowerCase()));
+    }
+    
+    if (destinatarios.length === 0) {
+      return NextResponse.json({ error: 'Nenhum destinatário válido após aplicação da lista de remoções (Unsubscribe).' }, { status: 400 });
+    }
+
+    const mensagemFormatada = mensagem.replace(/\n/g, '<br/>');
+
+    // 2. REGISTAR CAMPANHA NA BASE DE DADOS
+    const { data: novaCampanha, error: dbError } = await supabaseAdmin
+      .from('email_broadcasts')
+      .insert([{
+        assunto,
+        titulo: tituloDaMensagem,
+        mensagem,
+        texto_botao: textoBotao,
+        link_botao: linkBotao,
+        publico,
+        total_enviados: destinatarios.length
+      }])
+      .select('id')
+      .single();
+
+    if (dbError || !novaCampanha) throw new Error("Falha ao registar campanha na Base de Dados.");
+
+    const broadcastId = novaCampanha.id;
+    const BATCH_SIZE = 50; 
+    let totalEnviados = 0;
+
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) throw new Error("A chave API da Brevo não está configurada no servidor.");
+
+    // 3. ENVIAR EM BATCH VIA BREVO REST API
+    for (let i = 0; i < destinatarios.length; i += BATCH_SIZE) {
+      const lote = destinatarios.slice(i, i + BATCH_SIZE);
+      
+      const promessasEnvio = lote.map(async (dest) => {
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+          <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f8fafc;">
+            <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; padding: 40px 20px;">
+              <tr>
+                <td align="center">
+                  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <tr>
+                      <td align="center" style="padding: 40px;">
+                        <div style="font-size: 28px; font-weight: 900; letter-spacing: -1px; margin-bottom: 30px;">
+                          <span style="color: #0f172a;">Hello</span><span style="color: #EBA914;">Camp</span>
+                        </div>
+                        <h2 style="font-size: 22px; font-weight: bold; color: #0f172a; margin: 0 0 24px 0; line-height: 1.3;">
+                          ${tituloDaMensagem || assunto}
+                        </h2>
+                        <p style="font-size: 16px; color: #475569; line-height: 1.6; text-align: left; margin: 0 0 30px 0;">
+                          ${mensagemFormatada}
+                        </p>
+                        ${textoBotao && linkBotao ? `
+                          <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                            <tr>
+                              <td align="center">
+                                <table border="0" cellspacing="0" cellpadding="0">
+                                  <tr>
+                                    <td align="center" bgcolor="#0f172a" style="border-radius: 6px;">
+                                      <a href="${linkBotao}" target="_blank" style="display: inline-block; padding: 16px 32px; font-family: Arial, sans-serif; font-size: 16px; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 6px;">
+                                        ${textoBotao}
+                                      </a>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                        ` : ''}
+                      </td>
+                    </tr>
+                  </table>
+                  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px;">
+                    <tr>
+                      <td align="center" style="padding-top: 20px;">
+                        <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin: 0 0 15px 0;">Este e-mail foi enviado pela HelloCamp.</p>
+                        <table border="0" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td align="center" bgcolor="#f1f5f9" style="border-radius: 4px; border: 1px solid #e2e8f0;">
+                              <a href="https://www.hellocamp.pt/unsubscribe?email=${encodeURIComponent(dest.email)}" target="_blank" style="display: inline-block; padding: 8px 16px; font-family: Arial, sans-serif; font-size: 11px; color: #64748b; text-decoration: none; font-weight: bold; border-radius: 4px;">
+                                Unsubscribe
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+          </html>
+        `;
+
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': apiKey,
+            'content-type': 'application/json',
+            'accept': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: 'Equipa HelloCamp', email: 'info@hellocamp.pt' },
+            to: [{ email: dest.email, name: dest.nome }],
+            subject: assunto,
+            htmlContent: htmlContent,
+            tags: [broadcastId]
+          })
+        });
+
+        // AQUI ESTÁ A CORREÇÃO: Capturamos o erro real da Brevo
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Brevo rejeitou o envio: ${errorData.message || JSON.stringify(errorData)}`);
+        }
+
+        return response.json();
+      });
+
+      await Promise.all(promessasEnvio);
+      totalEnviados += lote.length;
+    }
+
+    return NextResponse.json({ success: true, totalEnviados });
+
+  } catch (error: any) {
+    console.error("Erro no broadcast (Brevo):", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/test-emails/route.ts">
+import { NextResponse } from 'next/server';
+import { Resend } from 'resend';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET() {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  
+  if (!resendApiKey) {
+    return NextResponse.json({ error: "Falta a chave do Resend no .env.local" }, { status: 500 });
+  }
+
+  const resend = new Resend(resendApiKey);
+
+  // 1. Dados Fictícios para a Simulação
+  const campoNome = "Campo de Férias Aventura & Surf (Teste)";
+  const turnoNome = "Semana 1 (15 a 19 Julho)";
+  const nomesCriancas = "João Silva, Margarida Silva";
+  const emailPai = "pai.exemplo@gmail.com";
+  const valorTotal = 320.00;
+  
+  // 2. O Seu Email de Destino (Receberá as 3 perspetivas)
+  const emailDestino = "info@hellocamp.pt"; 
+
+  try {
+    // A. Simulação do Email para o Pai
+    await resend.emails.send({
+      from: 'HelloCamp <info@hellocamp.pt>',
+      to: emailDestino,
+      subject: `[VISÃO PAI] 🎉 Confirmação de Reserva: ${campoNome}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
+          <h2 style="color: #059669;">A sua reserva está confirmada!</h2>
+          <p>Obrigado por escolher a HelloCamp. O pagamento foi recebido com sucesso e a vaga está garantida.</p>
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>Campo:</strong> ${campoNome}</p>
+            <p><strong>Participante(s):</strong> ${nomesCriancas}</p>
+            <p><strong>Turno/Programa:</strong> ${turnoNome}</p>
+            <p><strong>Valor Pago:</strong> ${valorTotal.toFixed(2)}€</p>
+          </div>
+          <p style="font-size: 14px; color: #64748b;">Em breve, o organizador do campo entrará em contacto com mais detalhes (o que levar, pontos de encontro, etc).</p>
+        </div>
+      `,
+    });
+
+    // B. Simulação do Email para o Parceiro (Campo)
+    await resend.emails.send({
+      from: 'HelloCamp Notificações <info@hellocamp.pt>',
+      to: emailDestino,
+      subject: `[VISÃO CAMPO] Nova Inscrição Recebida! - ${nomesCriancas}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
+          <h2 style="color: #0f172a;">Tem uma nova inscrição paga!</h2>
+          <p>O pagamento já foi processado através da plataforma HelloCamp e o valor será transferido para a sua conta Stripe consoante o acordo.</p>
+          <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; border: 1px solid #bbf7d0; margin: 20px 0;">
+            <p><strong>Participante(s):</strong> ${nomesCriancas}</p>
+            <p><strong>Programa/Turno:</strong> ${turnoNome}</p>
+            <p><strong>Email do Encarregado:</strong> ${emailPai}</p>
+          </div>
+          <p>Por favor, consulte o seu Dashboard de Parceiro para verificar detalhes de NIF e restrições alimentares.</p>
+        </div>
+      `,
+    });
+
+    // C. Simulação do Email Interno (HelloCamp Admin)
+    await resend.emails.send({
+      from: 'HelloCamp Sistema <info@hellocamp.pt>',
+      to: emailDestino,
+      subject: `[VISÃO HELLOCAMP] 🚨 Nova Venda: ${campoNome} (${valorTotal}€)`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #0f172a;">Nova Transação Registada</h2>
+          <p><strong>Valor Total:</strong> ${valorTotal.toFixed(2)}€</p>
+          <p><strong>Campo:</strong> ${campoNome}</p>
+          <p><strong>Cliente:</strong> ${emailPai}</p>
+          <p><strong>Crianças:</strong> ${nomesCriancas}</p>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #64748b;">Comissão já retida automaticamente na Stripe.</p>
+        </div>
+      `,
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      message: "Sucesso! Os 3 emails foram enviados. Vá verificar a sua caixa de entrada (rcruz1010@hotmail.com)." 
+    });
+
+  } catch (error: any) {
+    return NextResponse.json({ error: "Erro ao enviar os emails: " + error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/translate-camp/route.ts">
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Utilize a service role key no .env para garantir permissões de escrita
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+async function traduzir(texto: string): Promise<string> {
+  if (!texto) return "";
+  try {
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=pt|en`);
+    const data = await res.json();
+    return data.responseData.translatedText || texto;
+  } catch (e) {
+    return texto;
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { id } = await request.json();
+    if (!id) return NextResponse.json({ error: "ID do campo em falta" }, { status: 400 });
+
+    // 1. Procura os dados originais em Português
+    const { data: campo, error: fetchError } = await supabase.from("campos").select("*").eq("id", id).single();
+    if (fetchError || !campo) return NextResponse.json({ error: "Campo não encontrado" }, { status: 404 });
+
+    // 2. Executa as traduções em segundo plano no servidor
+    const [
+      nome_en, categoria_en, local_en, idade_en, descricao_en,
+      alimentacao_en, alojamento_en, seguro_en, Distrito_en, regras_termos_en, politica_cancelamento_en
+    ] = await Promise.all([
+      traduzir(campo.nome), traduzir(campo.categoria), traduzir(campo.local),
+      traduzir(campo.idade), traduzir(campo.descricao), traduzir(campo.alimentacao),
+      traduzir(campo.alojamento), traduzir(campo.seguro), traduzir(campo.Distrito),
+      traduzir(campo.regras_termos), traduzir(campo.politica_cancelamento)
+    ]);
+
+    // Tradução dos turnos
+    let turnos_en = [];
+    if (campo.turnos && Array.isArray(campo.turnos)) {
+      turnos_en = await Promise.all(campo.turnos.map(async (t: any) => ({
+        ...t,
+        nome: await traduzir(t.nome)
+      })));
+    }
+
+    // Tradução das perguntas customizadas
+    let perguntasCustomizadasEn = [];
+    if (campo.perguntas_customizadas && Array.isArray(campo.perguntas_customizadas)) {
+      perguntasCustomizadasEn = await Promise.all(campo.perguntas_customizadas.map(async (p: string) => await traduzir(p)));
+    }
+
+    const textoDatasEn = campo.datas_disponiveis ? campo.datas_disponiveis.replace(/ a /g, " to ") : "";
+
+    // 3. Atualiza as colunas de inglês na base de dados
+    await supabase.from("campos").update({
+      nome_en, categoria_en, local_en, idade_en, descricao_en,
+      alimentacao_en, alojamento_en, seguro_en, Distrito_en,
+      regras_termos_en, politica_cancelamento_en, turnos_en,
+      perguntas_customizadas_en: perguntasCustomizadasEn,
+      datas_disponiveis_en: textoDatasEn,
+      pais_en: campo.pais === "Portugal" ? "Portugal" : "International"
+    }).eq("id", id);
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/webhooks/brevo/route.ts">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function POST(req: Request) {
+  try {
+    // 1. Opcional: Verificação de Segurança
+    const tokenHeader = req.headers.get("auth-token");
+    const secret = process.env.BREVO_WEBHOOK_SECRET;
+
+    if (secret && tokenHeader !== secret) {
+      return NextResponse.json({ error: "Acesso não autorizado." }, { status: 401 });
+    }
+
+    const payload = await req.json();
+
+    // 2. Extrair dados da Brevo
+    const eventType = payload.event; 
+    // Na Brevo, tags vêm como array. A primeira (index 0) é o broadcastId que injetamos na rota de envio.
+    const broadcastId = payload.tags && payload.tags.length > 0 ? payload.tags[0] : null;
+
+    if (!broadcastId) {
+      return NextResponse.json({ message: "Evento ignorado: Tag não encontrada." }, { status: 200 });
+    }
+
+    // 3. Mapear os eventos para as colunas
+    let updateField = '';
+    if (eventType === 'delivered') updateField = 'total_entregues';
+    else if (eventType === 'opened' || eventType === 'unique_opened') updateField = 'total_abertos';
+    else if (eventType === 'click') updateField = 'total_cliques';
+    else if (['bounced', 'hardBounced', 'softBounced', 'spam', 'invalid', 'blocked', 'deferred'].includes(eventType)) {
+      updateField = 'total_falhas';
+    }
+
+    // 4. Atualizar a base de dados
+    if (updateField) {
+      const { data: campanha, error: fetchError } = await supabaseAdmin
+        .from('email_broadcasts')
+        .select(updateField)
+        .eq('id', broadcastId)
+        .single();
+
+      if (!fetchError && campanha) {
+        const valorAtual = (campanha as Record<string, any>)?.[updateField] || 0;
+        
+        await supabaseAdmin
+          .from('email_broadcasts')
+          .update({ [updateField]: valorAtual + 1 })
+          .eq('id', broadcastId);
+      }
+    }
+
+    return NextResponse.json({ received: true }, { status: 200 });
+
+  } catch (err: any) {
+    console.error("Erro no Webhook da Brevo:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/webhooks/resend/route.ts">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function POST(req: Request) {
+  try {
+    // 1. VERIFICAÇÃO DE SEGURANÇA (Estilo Brevo)
+    // Vamos procurar um Header secreto chamado 'auth-token' que configuraremos no painel da Brevo
+    const tokenHeader = req.headers.get("auth-token");
+    const secret = process.env.BREVO_WEBHOOK_SECRET;
+
+    // Se tivermos um segredo configurado no servidor, validamos se a Brevo nos enviou o mesmo segredo
+    if (secret && tokenHeader !== secret) {
+      return NextResponse.json({ error: "Acesso não autorizado." }, { status: 401 });
+    }
+
+    const payload = await req.json();
+
+    // 2. EXTRAIR DADOS DA BREVO
+    const eventType = payload.event; 
+    // A Brevo envia as tags como um array de strings. A nossa é a primeira (e única).
+    const broadcastId = payload.tags && payload.tags.length > 0 ? payload.tags[0] : null;
+
+    if (!broadcastId) {
+      return NextResponse.json({ message: "Evento ignorado: Não pertence a uma campanha da HelloCamp." }, { status: 200 });
+    }
+
+    // 3. MAPEAR EVENTOS DA BREVO PARA A BASE DE DADOS
+    let updateField = '';
+    if (eventType === 'delivered') updateField = 'total_entregues';
+    else if (eventType === 'opened' || eventType === 'unique_opened') updateField = 'total_abertos';
+    else if (eventType === 'click') updateField = 'total_cliques';
+    else if (eventType === 'bounced' || eventType === 'hardBounced' || eventType === 'softBounced' || eventType === 'spam' || eventType === 'invalid') updateField = 'total_falhas';
+
+    // 4. INCREMENTAR AS ESTATÍSTICAS
+    if (updateField) {
+      const { data: campanha } = await supabaseAdmin
+        .from('email_broadcasts')
+        .select(updateField)
+        .eq('id', broadcastId)
+        .single();
+
+      // Sem erros de TypeScript
+      const valorAtual = (campanha as Record<string, any>)?.[updateField] || 0;
+
+      await supabaseAdmin
+        .from('email_broadcasts')
+        .update({ [updateField]: valorAtual + 1 })
+        .eq('id', broadcastId);
+    }
+
+    return NextResponse.json({ received: true }, { status: 200 });
+
+  } catch (err: any) {
+    console.error("Erro no Webhook da Brevo:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="lib/getDictionary.ts">
+import 'server-only';
+
+// Mapeia os idiomas para os ficheiros JSON correspondentes
+const dictionaries = {
+  pt: () => import('../dictionaries/pt.json').then((module) => module.default),
+  en: () => import('../dictionaries/en.json').then((module) => module.default),
+};
+
+export const getDictionary = async (locale: 'pt' | 'en') => {
+  // Se o idioma não for pt ou en, força o pt por segurança
+  const getDict = dictionaries[locale] || dictionaries.pt;
+  return getDict();
+};
+</file>
+
+<file path="lib/supabase.ts">
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+</file>
+
+<file path="app/api/stripe-checkout/route.ts">
+import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeSecretKey) return NextResponse.json({ error: "Chave Stripe não encontrada." }, { status: 500 });
+  
+  const stripe = new Stripe(stripeSecretKey);
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  
+  const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+
+  try {
+    const body = await req.json();
+    const { 
+      totalAmount, userEmail, lang, campoNome, stripeAccountId, 
+      tipoPagamento, campoId, isGuest, guestData, criancas, reservaSpecs 
+    } = body;
+    
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.hellocamp.pt';
+
+    let taxaComissao = 0.12; 
+    let organizadorId = null;
+    
+    if (campoId) {
+      const { data: campoData } = await supabaseAdmin
+        .from('campos')
+        .select('taxa_comissao, comissao, organizador_id')
+        .eq('id', campoId)
+        .single();
+        
+      if (campoData) {
+        organizadorId = campoData.organizador_id;
+        const comissaoDb = campoData.taxa_comissao || campoData.comissao;
+        if (comissaoDb) taxaComissao = comissaoDb / 100;
+      }
+    }
+
+    let clienteId = '';
+    let criancasProcessadas = [];
+    let resetLink = '';
+
+    if (isGuest && guestData) {
+      const { data: existingUser } = await supabaseAdmin.from('perfis').select('id').eq('email', guestData.email).single();
+      if (existingUser) {
+        return NextResponse.json({ error: "Já existe uma conta com este e-mail. Por favor, faça login para continuar." }, { status: 400 });
+      }
+
+      const { data: newUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: guestData.email, email_confirm: true,
+        user_metadata: { nome: guestData.nome, telefone: guestData.telefone, role: 'pai' }
+      });
+      if (authError) throw new Error("Erro ao criar conta de convidado: " + authError.message);
+      clienteId = newUser.user.id;
+
+      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({ type: 'recovery', email: guestData.email });
+      resetLink = linkData?.properties?.action_link || '';
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      for (const c of criancas) {
+        const { id, isGuestChild, ...childData } = c; 
+        const { data: newC, error: cErr } = await supabaseAdmin.from('criancas').insert({ cliente_id: clienteId, ...childData }).select().single();
+        if (cErr) throw new Error("Erro ao gravar dados do participante: " + cErr.message);
+        criancasProcessadas.push(newC);
+      }
+    } else {
+      const { data: userData } = await supabaseAdmin.from('perfis').select('id').eq('email', userEmail).single();
+      if (!userData) throw new Error("Utilizador autenticado não encontrado.");
+      clienteId = userData.id;
+      criancasProcessadas = criancas;
+    }
+
+    const insercoes = criancasProcessadas.map((crianca: any, index: number) => ({
+      cliente_id: clienteId, crianca_id: crianca.id, campo_id: campoId, organizador_id: organizadorId,
+      quantidade_criancas: 1, valor_total: reservaSpecs.valor_por_reserva, turno_nome: reservaSpecs.turno_nome,
+      status_pagamento: 'Pendente', extras_escolhidos: reservaSpecs.extras_escolhidos,
+      respostas_customizadas: reservaSpecs.respostas_customizadas ? reservaSpecs.respostas_customizadas[index] : {}
+    }));
+
+    const { data: idsCriados, error: rpcError } = await supabaseAdmin.rpc('criar_reserva_segura', { p_insercoes: insercoes });
+    
+    if (rpcError) {
+      if (rpcError.message.includes('ESGOTADO')) throw new Error("Lamentamos, mas as vagas para este turno acabaram de esgotar.");
+      throw new Error("Erro ao bloquear vagas na BD: " + rpcError.message);
+    }
+
+    try {
+      if (idsCriados && idsCriados.length > 0 && campoId && organizadorId) {
+        const isSinal = tipoPagamento === '50_sinal';
+        const msgTexto = isSinal 
+          ? `📢 Nova intenção de inscrição iniciada! O cliente escolheu pagar sinal de 50%. A aguardar conclusão na Stripe. (Ref Reservas: ${idsCriados.join(', ')})`
+          : `📢 Nova intenção de inscrição iniciada! O cliente escolheu pagar 100% da totalidade. A aguardar conclusão na Stripe. (Ref Reservas: ${idsCriados.join(', ')})`;
+        await supabaseAdmin.from('mensagens').insert([{ campo_id: campoId, sender_id: clienteId, receiver_id: organizadorId, texto: msgTexto, lida: false }]);
+      }
+    } catch (chatErr) {}
+
+    const isSinal = tipoPagamento === '50_sinal';
+    const valorCobrarAgora = isSinal ? (totalAmount / 2) : totalAmount;
+    const nomeProdutoStripe = isSinal ? `Sinal (50%) - ${campoNome}` : `Inscrição - ${campoNome}`;
+
+    const sessionData: Stripe.Checkout.SessionCreateParams = {
+      customer_email: userEmail,
+      customer_creation: 'always', 
+      line_items: [{
+        price_data: { currency: 'eur', product_data: { name: nomeProdutoStripe }, unit_amount: Math.round(valorCobrarAgora * 100) },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${siteUrl}/${lang}/sucesso?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/${lang}/campo/${campoId}`,
+      metadata: {
+        reservasIds: JSON.stringify(idsCriados),
+        valor_total_original: totalAmount.toString(),
+        pagamento_tipo: isSinal ? '50_sinal' : '100_total',
+        is_guest: isGuest ? 'true' : 'false',
+        guest_reset_link: resetLink
+      },
+    };
+
+    if (stripeAccountId) {
+      (sessionData as any).payment_intent_data = {
+        application_fee_amount: Math.round((valorCobrarAgora * taxaComissao) * 100),
+        transfer_data: { destination: stripeAccountId }
+      };
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionData);
+    return NextResponse.json({ url: session.url });
+    
+  } catch (err: any) {
+    console.error("Erro no Checkout:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/stripe-webhook/route.ts">
+import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+
+export const dynamic = 'force-dynamic';
+
+const calcularIdade = (dataNasc: string) => {
+  if (!dataNasc) return 'N/A';
+  const hoje = new Date();
+  const nasc = new Date(dataNasc);
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) {
+    idade--;
+  }
+  return `${idade} anos`;
+};
+
+export async function POST(req: Request) {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const resendApiKey = process.env.RESEND_API_KEY;
+  
+  if (!stripeSecretKey || !webhookSecret || !resendApiKey) {
+    return new NextResponse('Configuração de servidor incompleta.', { status: 500 });
+  }
+
+  const stripe = new Stripe(stripeSecretKey);
+  const resend = new Resend(resendApiKey);
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const body = await req.text(); 
+  const signature = req.headers.get('stripe-signature') as string;
+
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+  } catch (error: any) {
+    return new NextResponse(`Webhook Error: ${error.message}`, { status: 400 });
+  }
+
+  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    
+    if (session.payment_status !== 'paid') {
+      return new NextResponse('A aguardar aprovação do pagamento.', { status: 200 });
+    }
+
+    if (session.metadata?.reservasIds) {
+      const reservasIds = JSON.parse(session.metadata.reservasIds);
+      
+      const isSinal = session.metadata.pagamento_tipo === '50_sinal';
+      const isPagamentoFinal = session.metadata.pagamento_tipo === 'pagamento_final';
+      const valorOriginalTotal = Number(session.metadata.valor_total_original || 0);
+      const valorCobradoAgora = (session.amount_total || 0) / 100;
+      
+      let novoStatus = 'Pago';
+      let valorEmFalta = 0;
+      let valorPagoBaseDeDados = valorCobradoAgora;
+
+      if (isSinal) {
+        novoStatus = 'Sinal Pago';
+        valorEmFalta = valorOriginalTotal - valorCobradoAgora;
+      } else if (isPagamentoFinal) {
+        novoStatus = 'Pago';
+        valorPagoBaseDeDados = valorOriginalTotal; 
+      }
+
+      const stripeCustomerId = typeof session.customer === 'string' ? session.customer : null;
+
+      const stripeMetodo = session.payment_method_types?.[0] || 'card';
+      const metodoFormatado = stripeMetodo === 'mb_way' ? 'MB WAY' : stripeMetodo === 'card' ? 'Cartão' : stripeMetodo.toUpperCase();
+
+      const nomeEncarregado = session.customer_details?.name || '';
+      const emailEncarregado = session.customer_email || session.customer_details?.email || '';
+      const telefoneEncarregado = session.customer_details?.phone || '';
+
+      const { error: updateError } = await supabase
+        .from('reservas')
+        .update({ 
+          status_pagamento: novoStatus,
+          status: novoStatus,
+          valor_pago: valorPagoBaseDeDados,
+          valor_em_falta: valorEmFalta,
+          stripe_customer_id: stripeCustomerId,
+          metodo_pagamento: metodoFormatado,
+          nome_encarregado: nomeEncarregado,
+          email_encarregado: emailEncarregado,
+          telefone_encarregado: telefoneEncarregado
+        })
+        .in('id', reservasIds);
+
+      if (updateError) {
+        console.error('Erro ao atualizar reservas:', updateError);
+        return new NextResponse('Erro na Base de Dados', { status: 500 });
+      }
+
+      const { data: reservasData } = await supabase
+        .from('reservas')
+        .select(`
+          id, valor_total, turno_nome, organizador_id, extras_escolhidos, respostas_customizadas, cliente_id,
+          criancas ( nome, data_nascimento, sexo, restricoes_alimentares, doencas_cronicas, medicacao_regular ),
+          campos ( nome, local )
+        `)
+        .in('id', reservasIds);
+
+      if (reservasData && reservasData.length > 0) {
+        const campoObj: any = reservasData[0].campos;
+        const campoNome = Array.isArray(campoObj) ? campoObj[0]?.nome : campoObj?.nome || 'Programa HelloCamp';
+        const campoLocal = Array.isArray(campoObj) ? campoObj[0]?.local : campoObj?.local || 'Localização a designar';
+        const turnoNome = reservasData[0].turno_nome || 'Programa Base';
+
+        const { data: perfilPaiData } = await supabase
+          .from('perfis')
+          .select('nome_completo, telefone, nif')
+          .eq('id', reservasData[0].cliente_id)
+          .single();
+
+        const nifPai = perfilPaiData?.nif || '';
+        if (nifPai) {
+          await supabase.from('reservas').update({ nif_encarregado: nifPai }).in('id', reservasIds);
+        }
+
+        const nomePai = perfilPaiData?.nome_completo || nomeEncarregado || 'Encarregado de Educação';
+        const emailPai = emailEncarregado;
+
+        const { data: orgData } = await supabase.from('perfis').select('email, empresa_nome').eq('id', reservasData[0].organizador_id).single();
+        const emailCampo = orgData?.email || 'info@hellocamp.pt'; 
+        const nomeOrganizador = orgData?.empresa_nome || 'Organizador';
+
+        let blocoParticipantesPai = '';
+        let blocoParticipantesOrg = '';
+        let nomesSimplesArray: string[] = [];
+
+        reservasData.forEach((reserva: any, index: number) => {
+          const c: any = Array.isArray(reserva.criancas) ? reserva.criancas[0] : reserva.criancas;
+          if (!c) return;
+
+          nomesSimplesArray.push(c.nome);
+          const idade = calcularIdade(c.data_nascimento);
+
+          const extras = reserva.extras_escolhidos || {};
+          let extrasText = [];
+          if (extras.extAlimentacao) extrasText.push('Alimentação Extra');
+          if (extras.extAlojamento) extrasText.push('Alojamento Extra');
+          if (extras.extProlongamento) extrasText.push('Prolongamento');
+          if (extras.extTransporte) extrasText.push('Transporte');
+          const extrasString = extrasText.length > 0 ? extrasText.join(', ') : 'Nenhum extra';
+
+          const respostas = reserva.respostas_customizadas || {};
+          let respostasHtml = Object.keys(respostas).length > 0 
+            ? Object.entries(respostas).map(([p, r]) => `<tr><td style="padding: 4px 0; color: #64748b; font-size: 13px;">${p}</td><td style="padding: 4px 0; font-weight: bold; font-size: 13px;">${r as string}</td></tr>`).join('')
+            : `<tr><td style="padding: 4px 0; color: #64748b; font-size: 13px;">Detalhes adicionais</td><td style="padding: 4px 0; font-weight: bold; font-size: 13px;">N/A</td></tr>`;
+
+          blocoParticipantesPai += `
+            <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #f8fafc;">
+              <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px;">Participante ${index + 1}: ${c.nome}</h3>
+              <table width="100%" style="font-size: 14px; color: #334155; border-collapse: collapse;">
+                <tr><td width="40%" style="padding: 4px 0; color: #64748b;">Turno:</td><td style="font-weight: bold;">${reserva.turno_nome}</td></tr>
+                <tr><td style="padding: 4px 0; color: #64748b;">Extras:</td><td style="font-weight: bold;">${extrasString}</td></tr>
+              </table>
+            </div>
+          `;
+
+          const hasAlerta = (c.restricoes_alimentares?.length > 3) || (c.doencas_cronicas?.length > 3);
+          blocoParticipantesOrg += `
+            <div style="border: 1px solid ${hasAlerta ? '#fca5a5' : '#e2e8f0'}; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: ${hasAlerta ? '#fef2f2' : '#f8fafc'};">
+              <h3 style="margin: 0 0 10px 0; font-size: 16px; color: ${hasAlerta ? '#991b1b' : '#0f172a'}; border-bottom: 1px solid ${hasAlerta ? '#fecaca' : '#cbd5e1'}; padding-bottom: 8px;">
+                ${c.nome} (Ref: ${reserva.id.split('-')[0]})
+              </h3>
+              <table width="100%" style="font-size: 14px; color: #334155; border-collapse: collapse;">
+                <tr><td width="40%" style="padding: 4px 0; color: #64748b;">Idade / Género:</td><td style="font-weight: bold;">${idade} / ${c.sexo || 'N/D'}</td></tr>
+                <tr><td style="padding: 4px 0; color: #64748b;">Alergias:</td><td style="font-weight: bold; color: ${c.restricoes_alimentares ? '#b91c1c' : '#334155'};">${c.restricoes_alimentares || 'Nenhuma'}</td></tr>
+                <tr><td style="padding: 4px 0; color: #64748b;">Doenças / Medicação:</td><td style="font-weight: bold; color: ${c.doencas_cronicas || c.medicacao_regular ? '#b91c1c' : '#334155'};">${c.doencas_cronicas || 'Não'} | ${c.medicacao_regular || 'Nenhuma'}</td></tr>
+                <tr><td colspan="2"><div style="height: 1px; background-color: ${hasAlerta ? '#fecaca' : '#cbd5e1'}; margin: 10px 0;"></div></td></tr>
+                ${respostasHtml}
+              </table>
+            </div>
+          `;
+        });
+
+        let tituloEmailPai = `Confirmação de Reserva - ${campoNome}`;
+        let statusTextoPai = `<p style="font-size: 15px; line-height: 1.6; color: #475569;">A sua reserva para o programa <strong>${campoNome}</strong> encontra-se validada e totalmente paga.</p>`;
+        
+        if (isSinal) {
+          statusTextoPai = `<p style="font-size: 15px; line-height: 1.6; color: #475569;">A sua vaga para o programa <strong>${campoNome}</strong> encontra-se garantida através do pagamento do sinal. <br/><br/><strong>Atenção:</strong> O valor remanescente (${valorEmFalta.toFixed(2)}€) deverá ser pago 1 semana antes do início do programa através do seu Portal de Cliente HelloCamp.</p>`;
+        } else if (isPagamentoFinal) {
+          tituloEmailPai = `Liquidação Final - ${campoNome}`;
+          statusTextoPai = `<p style="font-size: 15px; line-height: 1.6; color: #475569;">O pagamento da segunda tranche da sua reserva para o programa <strong>${campoNome}</strong> foi liquidado com sucesso.</p>`;
+        }
+
+        const financeiroOrg = isSinal
+          ? `<tr><td style="padding: 4px 0; color: #64748b;">Sinal Recebido (50%):</td><td style="font-weight: bold; color: #059669;">${valorCobradoAgora.toFixed(2)}€</td></tr><tr><td style="padding: 4px 0; color: #64748b;">Valor Pendente:</td><td style="font-weight: bold; color: #eab308;">${valorEmFalta.toFixed(2)}€</td></tr>`
+          : `<tr><td style="padding: 4px 0; color: #64748b;">Valor Pago Agora:</td><td style="font-weight: bold; color: #059669;">${valorCobradoAgora.toFixed(2)}€</td></tr><tr><td style="padding: 4px 0; color: #64748b;">Situação:</td><td style="font-weight: bold; color: #059669;">100% Pago</td></tr>`;
+
+        if (emailPai && !isPagamentoFinal) {
+          await resend.emails.send({
+            from: 'HelloCamp Reservas <info@hellocamp.pt>', 
+            to: emailPai,
+            subject: tituloEmailPai,
+            html: `
+              <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px 20px; color: #0f172a;">
+                <h1 style="font-size: 24px; font-weight: 900; text-align: center; margin-bottom: 30px; color: #0f172a;">HelloCamp</h1>
+                <p style="font-size: 15px; line-height: 1.6; color: #475569;">Estimado(a) ${nomePai},</p>
+                ${statusTextoPai}
+                <div style="margin: 30px 0;">
+                  <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Detalhes Financeiros</h3>
+                  <table width="100%" style="font-size: 15px; color: #334155; margin-top: 10px;">
+                    <tr><td style="padding: 5px 0;">Valor Pago Agora:</td><td style="text-align: right; font-weight: bold; color: #059669; font-size: 18px;">${valorCobradoAgora.toFixed(2)}€</td></tr>
+                    ${isSinal ? `<tr><td style="padding: 5px 0; color: #64748b;">Valor a Pagar:</td><td style="text-align: right; font-weight: bold; color: #64748b;">${valorEmFalta.toFixed(2)}€</td></tr>` : ''}
+                  </table>
+                </div>
+                <div style="margin: 30px 0;">
+                  <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Ficha de Participantes</h3>
+                  <div style="margin-top: 15px;">${blocoParticipantesPai}</div>
+                </div>
+              </div>
+            `,
+          });
+        }
+
+        if (isPagamentoFinal) {
+          await resend.emails.send({
+            from: 'HelloCamp Parceiros <info@hellocamp.pt>',
+            to: emailCampo,
+            subject: `Liquidação Recebida - ${campoNome}`,
+            html: `<div style="font-family: Arial, sans-serif; padding: 20px; color: #0f172a;"><h2>Pagamento Final Recebido</h2><p>O encarregado de educação <strong>${nomePai}</strong> liquidou a segunda parcela de <strong>${valorCobradoAgora.toFixed(2)}€</strong> referente ao programa ${campoNome}.</p></div>`,
+          });
+        } else {
+          await resend.emails.send({
+            from: 'HelloCamp Parceiros <info@hellocamp.pt>',
+            to: emailCampo,
+            subject: `Nova Inscrição Processada - ${campoNome}`,
+            html: `
+              <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 30px 20px; color: #0f172a;">
+                <h2 style="font-size: 22px; font-weight: 700; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">Nova Inscrição Processada</h2>
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 25px 0;">
+                  <table width="100%" style="font-size: 14px; color: #334155; margin-top: 10px; border-collapse: collapse;">
+                    <tr><td width="30%" style="padding: 4px 0; color: #64748b;">Nome:</td><td style="font-weight: bold;">${nomePai}</td></tr>
+                    <tr><td style="padding: 4px 0; color: #64748b;">Email:</td><td style="font-weight: bold;">${emailPai}</td></tr>
+                    ${financeiroOrg}
+                  </table>
+                </div>
+                ${blocoParticipantesOrg}
+              </div>
+            `,
+          });
+        }
+
+        // CORREÇÃO CRÍTICA DO CÓDIGO (Concatenação de string formatada para evitar quebras)
+        const assuntoAdmin = `[VENDA] ${valorCobradoAgora.toFixed(2)}€ ${isSinal ? '(SINAL)' : isPagamentoFinal ? '(2ª TRANCHE)' : '(100%)'} | ${campoNome}`;
+        
+        await resend.emails.send({
+          from: 'HelloCamp Control <info@hellocamp.pt>',
+          to: 'info@hellocamp.pt',
+          subject: assuntoAdmin,
+          html: `<div style="font-family: monospace; font-size: 14px; padding: 20px;"><h2>Transação HelloCamp</h2><p>Recebido: ${valorCobradoAgora}€ | Falta: ${valorEmFalta}€</p><p>Método: ${metodoFormatado}</p></div>`,
+        });
+      }
+    }
+  }
+
+  return new NextResponse('Webhook processado com sucesso.', { status: 200 });
+}
+</file>
+
+<file path="app/api/contratos/assinar/route.ts">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
+const SENDER_EMAIL = 'info@hellocamp.pt';
+const SENDER_NAME = 'HelloCamp B2B'; 
+
+async function enviarEmailBoasVindas(emailParceiro: string, nomeEmpresa: string, urlPdf: string, lang: string) {
+  if (!BREVO_API_KEY) return;
+  const isPt = lang === 'pt';
+  const subject = isPt 
+    ? `Bem-vindo à HelloCamp! O seu Acordo Operacional - ${nomeEmpresa}` 
+    : `Welcome to HelloCamp! Your Operational Agreement - ${nomeEmpresa}`;
+  
+  const htmlContent = isPt 
+    ? `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #334155;">
+        <h2 style="color: #0E3A68;">Bem-vindo à HelloCamp, ${nomeEmpresa}!</h2>
+        <p>Confirmamos a receção e a assinatura digital do seu Acordo Operacional com a HelloCamp.</p>
+        <p><strong style="color: #059669; font-size: 16px;">A sua conta e os seus programas encontram-se agora 100% ativos e visíveis na nossa plataforma!</strong></p>
+        <p>Para sua segurança e arquivo legal, pode descarregar a cópia em formato PDF do seu contrato assinado no link abaixo:</p>
+        <div style="margin: 30px 0;">
+          <a href="${urlPdf}" style="background-color: #0E3A68; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Descarregar Contrato (PDF)</a>
+        </div>
+        <p>Desejamos-lhe uma excelente temporada de reservas!<br><br>A Equipa HelloCamp</p>
+      </div>
+    `
+    : `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #334155;">
+        <h2 style="color: #0E3A68;">Welcome to HelloCamp, ${nomeEmpresa}!</h2>
+        <p>We confirm the receipt and digital signature of your Operational Agreement with HelloCamp.</p>
+        <p><strong style="color: #059669; font-size: 16px;">Your account and programs are now 100% active and visible on our platform!</strong></p>
+        <p>For your security and legal records, you can download a PDF copy of your signed agreement from the link below:</p>
+        <div style="margin: 30px 0;">
+          <a href="${urlPdf}" style="background-color: #0E3A68; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Download Contract (PDF)</a>
+        </div>
+        <p>We wish you a fantastic booking season!<br><br>The HelloCamp Team</p>
+      </div>
+    `;
+
+  try {
+    await fetch(BREVO_ENDPOINT, {
+      method: 'POST',
+      headers: { 'accept': 'application/json', 'api-key': BREVO_API_KEY, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+        to: [{ email: emailParceiro, name: nomeEmpresa }],
+        subject: subject,
+        htmlContent: htmlContent
+      }),
+    });
+  } catch (error) { 
+    console.error("Erro ao enviar email de boas-vindas:", error); 
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const formData = await request.formData();
+    const id = formData.get('id') as string;
+    const emailAcesso = formData.get('email') as string; 
+    const lang = formData.get('lang') as string || 'en';
+    const contratoDadosStr = formData.get('contratoDados') as string;
+    const passwordNova = formData.get('password') as string; 
+    const pdfFile = formData.get('pdf') as File;
+
+    if (!id || !emailAcesso || !contratoDadosStr || !pdfFile) {
+      return NextResponse.json({ error: 'Dados incompletos submetidos no formulário.' }, { status: 400 });
+    }
+
+    const contratoDados = JSON.parse(contratoDadosStr);
+
+    // 1. Verificação de Segurança (Gatekeeper na tabela 'perfis')
+    const { data: perfil, error: fetchError } = await supabaseAdmin
+      .from('perfis')
+      .select('email, contrato_dados')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !perfil) {
+      return NextResponse.json({ error: 'Perfil não encontrado na base de dados.' }, { status: 404 });
+    }
+
+    const emailBd = perfil.email?.trim().toLowerCase();
+    const emailContactoBd = perfil.contrato_dados?.emailContacto?.trim().toLowerCase();
+    const inputEmail = emailAcesso.trim().toLowerCase();
+
+    if (inputEmail !== emailBd && inputEmail !== emailContactoBd) {
+      return NextResponse.json({ error: 'Tentativa de submissão não autorizada. O e-mail não corresponde.' }, { status: 403 });
+    }
+
+    // 2. Definir Palavra-Passe e Reparar/Criar Utilizador Auth (Dupla Camada de Segurança)
+    let loginReady = false;
+    const emailFinal = (contratoDados.emailContacto || perfil.email || inputEmail).trim().toLowerCase();
+
+    if (passwordNova) {
+      // 2.1 Primeiro executa a nossa função RPC que repara qualquer conta criada via SQL e encripta a password diretamente
+      const { error: rpcError } = await supabaseAdmin.rpc('admin_set_partner_password', {
+        target_user_id: id,
+        new_password: passwordNova,
+        target_email: emailFinal
+      });
+
+      if (!rpcError) {
+        loginReady = true;
+      } else {
+        console.warn("Aviso RPC:", rpcError.message, "-> Tentando fallback via Auth Admin API...");
+        // 2.2 Fallback caso não tenhas corrido o bloco 4 do SQL
+        const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(id, {
+          email: emailFinal,
+          password: passwordNova,
+          email_confirm: true,
+          user_metadata: { role: 'organizador' }
+        });
+
+        if (!updateErr) {
+          loginReady = true;
+        } else {
+          const { error: createErr } = await supabaseAdmin.auth.admin.createUser({
+            id: id,
+            email: emailFinal,
+            password: passwordNova,
+            email_confirm: true,
+            user_metadata: { role: 'organizador' }
+          });
+          if (!createErr) loginReady = true;
+        }
+      }
+    }
+
+    // 3. Upload do Documento PDF assinado
+    const fileName = `contrato_global_${id}_${Date.now()}.pdf`;
+    const arrayBuffer = await pdfFile.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('campos-documentos')
+      .upload(fileName, buffer, { contentType: 'application/pdf', upsert: true });
+
+    if (uploadError) throw new Error(`Erro ao guardar PDF: ${uploadError.message}`);
+
+    const { data: publicUrlData } = supabaseAdmin.storage
+      .from('campos-documentos')
+      .getPublicUrl(fileName);
+    const contratoUrl = publicUrlData.publicUrl;
+
+    // 4. Atualizar a Tabela 'perfis' com role 'organizador' e Aprovação Imediata
+    await supabaseAdmin.from('perfis').update({
+      email: emailFinal,
+      role: 'organizador',
+      empresa_nome: contratoDados.empresaNome,
+      nif_empresa: contratoDados.nif,
+      nome_completo: contratoDados.pessoaContacto,
+      telefone: contratoDados.telefone,
+      status_contrato: 'Aprovado',
+      parceiro_verificado: true,
+      contrato_dados: contratoDados,
+      modalidade_reserva: contratoDados.modalidadeReserva,
+      link_externo_reserva: contratoDados.modalidadeReserva === 'link_externo' ? contratoDados.linkExternoReserva : null,
+      base_comissao: contratoDados.baseComissao
+    }).eq('id', id);
+
+    // 5. Ativar todos os campos associados ao organizador
+    await supabaseAdmin.from('campos').update({
+      status_aprovacao: 'Aprovado',
+      ativo: true,
+      contrato_dados: contratoDados,
+      contrato_parceiro_url: contratoUrl,
+      modalidade_reserva: contratoDados.modalidadeReserva,
+      link_externo_reserva: contratoDados.modalidadeReserva === 'link_externo' ? contratoDados.linkExternoReserva : null,
+      tipo_pagamento: contratoDados.modalidadeReserva !== 'link_externo' ? contratoDados.tipoPagamento : null,
+      politica_cancelamento: contratoDados.modalidadeReserva !== 'link_externo' ? contratoDados.politicaCancelamento : null,
+      base_comissao: contratoDados.baseComissao
+    }).eq('organizador_id', id);
+
+    // 6. Notificação por E-mail ao Parceiro
+    await enviarEmailBoasVindas(emailFinal, contratoDados.empresaNome, contratoUrl, lang);
+
+    return NextResponse.json({ success: true, url: contratoUrl, loginReady: loginReady });
+
+  } catch (error: any) {
+    console.error("Erro na API Assinar Contrato:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/cron/hello-outreach/route.ts">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
+const SENDER_EMAIL = 'info@hellocamp.pt';
+const SENDER_NAME = 'Rodrigo | HelloCamp'; 
+const BASE_URL = 'https://www.hellocamp.pt';
+
+async function enviarViaBrevo(params: {
+  to: { email: string; name?: string };
+  subject: string;
+  html: string;
+}): Promise<{ success: boolean; messageId?: string; error?: any }> {
+  if (!BREVO_API_KEY) return { success: false, error: { message: 'Sem API Key' } };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+        to: [params.to],
+        subject: params.subject,
+        htmlContent: params.html,
+        headers: { 'X-Mailer': 'HelloCamp-B2B-Global' },
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { success: false, error: data };
+    return { success: true, messageId: data?.messageId };
+  } catch (err: any) {
+    return { success: false, error: { message: String(err) } };
+  }
+}
+
+type Template = {
+  gerarAssunto: (nome: string) => string;
+  titulo: string;
+  textoCta: string;
+  gerarMensagem: (nome: string) => string;
+  gerarFooter: (unsubscribeUrl: string) => string;
+};
+
+const TEMPLATES: Record<string, Template[]> = {
+  PT: [
+    {
+      gerarAssunto: (nome) => `Convidamos a ${nome} a integrar o novo motor de busca de atividades juvenis`,
+      titulo: "Chegue a Milhares de Famílias o Ano Inteiro",
+      textoCta: "Ver como funciona a HelloCamp",
+      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarMensagem: (nome) => `
+        <p>Olá equipa da <strong>${nome}</strong>,</p>
+        <p>O meu nome é Rodrigo e faço parte da equipa da <strong>HelloCamp</strong>, um novo motor de busca internacional dedicado a campos de férias, aulas de desporto (surf, skate, etc.) e atividades extracurriculares para jovens.</p>
+        <p>Notámos que a vossa organização tem excelentes programas que encaixam perfeitamente naquilo que as nossas famílias procuram para o tempo livre dos filhos (tanto no verão como no resto do ano), e gostaríamos muito de vos convidar a fazer parte do nosso diretório.</p>
+        <p><strong>Como funciona o nosso modelo de parceria?</strong></p>
+        <ul>
+          <li><strong>Visibilidade 100% Gratuita:</strong> Estar presente no nosso motor de busca não tem qualquer custo fixo. O vosso perfil exibirá as vossas fotografias, descrições, website oficial e contactos, permitindo que as famílias vos encontrem livremente.</li>
+          <li><strong>Reservas Diretas (Opcional):</strong> Caso pretendam automatizar as vossas inscrições, podem ativar a opção de reservas diretas através da HelloCamp. Neste modelo, fornecemos uma secretaria digital completa e cobramos uma comissão <strong>significativamente mais baixa que a média do mercado</strong>, aplicada apenas às reservas confirmadas.</li>
+        </ul>
+        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
+          <strong>O nosso serviço chave-na-mão:</strong> Se pretenderem aderir, basta responderem a este e-mail com o link do vosso website ou o PDF da vossa brochura de atividades. A nossa equipa encarrega-se de construir o vosso perfil completo em 24 horas, sem qualquer esforço da vossa parte.
+        </p>
+        <p>Gostariam de avançar com a criação gratuita do vosso perfil?</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `A tecnologia que vai poupar dezenas de horas à ${nome}`,
+      titulo: "Diga Adeus ao Caos Administrativo",
+      textoCta: "Descobrir o Painel de Parceiros",
+      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarMensagem: (nome) => `
+        <p>Olá novamente,</p>
+        <p>No meu e-mail anterior falei-vos sobre a integração da <strong>${nome}</strong> na nossa plataforma, mas hoje gostava de vos mostrar o que acontece "nos bastidores" quando ativam as reservas diretas na HelloCamp.</p>
+        <p>Gerir dezenas de e-mails, pedir comprovativos de transferência e compilar fichas de alergias em folhas de Excel é exaustivo. Foi por isso que construímos um <strong>Dashboard Exclusivo para Organizadores</strong>.</p>
+        <p>Ao permitirem reservas através da nossa plataforma (com a nossa estrutura de comissões muito competitiva):</p>
+        <ul>
+          <li>Os pais pagam diretamente por Multibanco, MBWay ou Cartão, e o valor é faturado diretamente na vossa conta (via Stripe).</li>
+          <li>Os formulários de saúde, alergias e contactos de emergência ficam logo centralizados e ligados a cada participante.</li>
+          <li>As vagas dos vossos desportos ou campos são atualizadas em tempo real.</li>
+        </ul>
+        <p>Se preferirem apenas a listagem gratuita de visibilidade, essa opção continuará sempre à vossa disposição.</p>
+        <p>Podem criar o vosso espaço em menos de 5 minutos através do link abaixo, ou responder a este e-mail para agendarmos uma breve chamada.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `O protagonismo da ${nome} na nossa plataforma`,
+      titulo: "Transparência e Controlo Total",
+      textoCta: "Criar o meu Perfil Gratuitamente",
+      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarMensagem: (nome) => `
+        <p>Cara equipa da <strong>${nome}</strong>,</p>
+        <p>Muitos portais no mercado optam por esconder o website ou o telefone dos organizadores, obrigando as famílias a passar por intermediários. Na HelloCamp, não acreditamos nessa abordagem.</p>
+        <p>Ao figurarem na nossa plataforma, <strong>a vossa identidade e os vossos contactos estão sempre à vista</strong>. Se os pais preferirem contactar-vos diretamente para tirar dúvidas sobre uma aula ou campo de férias, têm total liberdade para o fazer.</p>
+        <p>Como referi anteriormente, a nossa taxa de comissão só é aplicada se a família optar por fechar a inscrição diretamente pelo nosso sistema automatizado.</p>
+        <p>Recuperem o controlo da vossa presença online. Basta responderem a este e-mail a confirmar o vosso interesse e nós tratamos do resto.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Última oportunidade para a ${nome} garantir presença`,
+      titulo: "A Época de Inscrições Começou",
+      textoCta: "Garantir o meu Lugar na HelloCamp",
+      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarMensagem: (nome) => `
+        <p>Olá equipa da <strong>${nome}</strong>,</p>
+        <p>Prometo que este é o meu último e-mail. Neste exato momento, a nossa plataforma está a registar pesquisas diárias de famílias que procuram atividades extracurriculares e opções de férias para os filhos.</p>
+        <p>Não queremos que fiquem de fora desta montra. Volto a reforçar que ter a vossa entidade listada para gerar visibilidade é um processo gratuito.</p>
+        <p><strong>Não precisam de preencher formulários longos.</strong> Enviem-nos apenas as vossas brochuras ou o link do vosso site, e nós garantimos que ficam online ainda esta semana.</p>
+        <p>Esperamos contar com vocês.</p>
+      `
+    }
+  ],
+  EN: [
+    {
+      gerarAssunto: (nome) => `Invitation to feature ${nome} to European families`,
+      titulo: "Reach Thousands of European Students",
+      textoCta: "Discover HelloCamp",
+      gerarFooter: (url) => `You received this email because your organization is highly rated. <a href="${url}" style="color: #64748B; text-decoration: underline;">Click here to unsubscribe</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Dear <strong>${nome}</strong> team,</p>
+        <p>My name is Rodrigo and I'm reaching out from <strong>HelloCamp</strong>, a newly launched international search engine and booking platform for summer camps, sports clinics (surf, tennis, etc.), and extracurricular youth activities.</p>
+        <p>Every year, thousands of Iberian families use our portal to plan their children's activities. We have noticed a huge surge in demand for international programs, and your offerings at <strong>${nome}</strong> perfectly match what our audience is looking for.</p>
+        <p><strong>How does our partnership work?</strong></p>
+        <ul>
+          <li><strong>Free Visibility Listing:</strong> Being listed in our directory is completely free. We will showcase your photos, descriptions, and official contact details so European parents can find you effortlessly.</li>
+          <li><strong>Direct Bookings (Optional):</strong> If you wish to streamline your enrollments, you can activate direct bookings through HelloCamp. We provide a full digital dashboard for this service and charge a <strong>highly competitive commission, significantly lower than the industry average</strong>, per confirmed booking.</li>
+        </ul>
+        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
+          <strong>Our white-glove onboarding:</strong> To get started, simply reply to this email with a link to your website or a PDF brochure. Our team will build and optimize your profile within 24 hours at no cost.
+        </p>
+        <p>Would you be open to having your organization featured on our platform?</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Streamline your international bookings for ${nome}`,
+      titulo: "International Growth, Zero Hassle",
+      textoCta: "Create your Partner Account",
+      gerarFooter: (url) => `You received this email because your organization is highly rated. <a href="${url}" style="color: #64748B; text-decoration: underline;">Click here to unsubscribe</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hello again,</p>
+        <p>In my previous email, I mentioned featuring <strong>${nome}</strong> on our platform. Today, I'd like to show you the operational side of HelloCamp if you choose to activate direct bookings.</p>
+        <p>Expanding to international markets often involves chasing wire transfers and managing medical forms in foreign languages. That is why we built our <strong>Partner Dashboard</strong>.</p>
+        <p>By enabling direct bookings (with our highly competitive low-commission structure):</p>
+        <ul>
+          <li>Parents pay securely online, and funds are automatically transferred to your connected Stripe account.</li>
+          <li>Medical records, dietary restrictions, and emergency contacts are standardized and accessible with one click.</li>
+          <li>Your program availability is updated in real-time.</li>
+        </ul>
+        <p>Registration takes 5 minutes. Feel free to set up your account via the link below, or reply to this email to schedule a quick introduction call.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Why we put ${nome}'s brand front and center`,
+      titulo: "Your Brand is the Protagonist",
+      textoCta: "Join HelloCamp for Free",
+      gerarFooter: (url) => `You received this email because your organization is highly rated. <a href="${url}" style="color: #64748B; text-decoration: underline;">Click here to unsubscribe</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hi <strong>${nome}</strong> team,</p>
+        <p>Unlike other directories that hide your contact details to force clients through their funnels, HelloCamp believes in transparent partnerships.</p>
+        <p>On our platform, <strong>your website, email, and brand logo are 100% visible</strong>. If a parent prefers to contact your admissions office directly with questions, they are free to do so.</p>
+        <p>As mentioned, our commission fee is only applied if the family decides to complete their booking using our integrated payment system.</p>
+        <p>Regain control of your international visibility. Create your free listing today or simply reply to this email to let our onboarding team do the work for you.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Last email (European booking season for ${nome})`,
+      titulo: "The Enrollment Season has Begun",
+      textoCta: "Start Receiving European Leads",
+      gerarFooter: (url) => `You received this email because your organization is highly rated. <a href="${url}" style="color: #64748B; text-decoration: underline;">Click here to unsubscribe</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hi <strong>${nome}</strong> team,</p>
+        <p>I promise this is my last email. Families are currently actively finalizing their children's sports clinics and holiday plans.</p>
+        <p>We would hate for you to miss out on this high-value demographic. Again, listing your programs for visibility is entirely free.</p>
+        <p>If you don't have time to create an account, <strong>just reply to this email with your program dates and prices</strong>, and our team will set it up for you.</p>
+        <p>We hope to welcome you aboard HelloCamp soon!</p>
+      `
+    }
+  ],
+  ES: [
+    {
+      gerarAssunto: (nome) => `Familias portuguesas buscando actividades en ${nome}`,
+      titulo: "Atraiga Alumnos de Toda Europa",
+      textoCta: "Unirse a HelloCamp",
+      gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hola equipo de <strong>${nome}</strong>,</p>
+        <p>Mi nombre es Rodrigo y les escribo desde <strong>HelloCamp</strong>, un nuevo buscador internacional y plataforma de reservas dedicado a campamentos, escuelas de deporte (surf, skate, etc.) y actividades juveniles.</p>
+        <p>España es, por excelencia, el destino internacional más solicitado por nuestras familias. Hemos evaluado sus programas y consideramos que encajan a la perfección con lo que nuestro público demanda durante todo el año.</p>
+        <p><strong>¿Cómo funciona nuestra colaboración?</strong></p>
+        <ul>
+          <li><strong>Visibilidad 100% Gratuita:</strong> Estar en nuestro buscador no tiene coste. Mostraremos sus fotos, descripciones y datos de contacto oficiales para que las familias les encuentren sin barreras.</li>
+          <li><strong>Reservas Directas (Opcional):</strong> Si desean automatizar las inscripciones internacionales, pueden activar las reservas directas. En este caso, proporcionamos un panel de control completo y cobramos una comisión <strong>muy competitiva y significativamente más baja que la media del sector</strong>, solo por cada reserva confirmada.</li>
+        </ul>
+        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
+          <strong>Servicio llave en mano:</strong> Simplemente respondan a este email con un enlace a su web o su folleto en PDF, y nuestro equipo creará su perfil en 24 horas sin esfuerzo alguno por su parte.
+        </p>
+        <p>¿Les gustaría que incluyamos su organización de forma gratuita?</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Gestión internacional sin esfuerzo para ${nome}`,
+      titulo: "Crecimiento Internacional, Cero Estrés",
+      textoCta: "Crear Cuenta de Organizador",
+      gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hola de nuevo,</p>
+        <p>Captar y gestionar alumnos internacionales a menudo implica cruce de correos, traducciones de fichas médicas y transferencias bancarias lentas. Por eso hemos creado el <strong>Dashboard para Partners de HelloCamp</strong>.</p>
+        <p>Al activar las reservas directas con nosotros (sujetas a nuestra comisión reducida):</p>
+        <ul>
+          <li>Los padres pagan de forma segura online, y los fondos van directamente a su cuenta bancaria.</li>
+          <li>Las fichas médicas y alergias quedan centralizadas y listas para exportar.</li>
+          <li>El control de plazas se actualiza en tiempo real.</li>
+        </ul>
+        <p>Si prefieren mantener únicamente el escaparate de visibilidad gratuita, esa opción siempre estará disponible.</p>
+        <p>Pueden registrarse en 5 minutos en el siguiente enlace, o responder a este email si prefieren que organicemos una breve llamada.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Por qué damos visibilidad total a la marca de ${nome}`,
+      titulo: "Su Marca es la Protagoniste",
+      textoCta: "Anunciar mi Organización",
+      gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Equipo de <strong>${nome}</strong>,</p>
+        <p>A diferencia de otros directorios que ocultan los datos de contacto para forzar al cliente a pasar por ellos, en HelloCamp creemos en las alianzas transparentes.</p>
+        <p>En nuestra plataforma, <strong>su sitio web, email y número de teléfono son totalmente visibles</strong>. Si una familia prefiere llamarles directamente para aclarar dudas, tiene total libertad para hacerlo.</p>
+        <p>Como mencioné antes, nuestra comisión por reserva solo se aplica cuando la familia decide completar la inscripción a través de nuestro sistema automatizado.</p>
+        <p>Recuperen el control de su exposición internacional. Respondan a este correo con sus programas y nosotros nos encargaremos del resto.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Último aviso: Familias buscando actividades en ${nome}`,
+      titulo: "La Temporada de Inscripciones está Activa",
+      textoCta: "Garantizar mi espacio",
+      gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hola equipo de <strong>${nome}</strong>,</p>
+        <p>Les prometo que este es mi último correo. Las familias europeas están buscando activamente programas deportivos y campamentos en este preciso momento.</p>
+        <p>Sería una pena que se perdieran este mercado. Recuerden que estar listados para generar visibilidad es un proceso totalmente gratuito.</p>
+        <p>Si no tienen tiempo, <strong>basta con que nos envíen sus tarifas y fechas por aquí</strong>, y nosotros nos encargaremos de construir su perfil hoy mismo.</p>
+        <p>Esperamos colaborar con ustedes muy pronto.</p>
+      `
+    }
+  ],
+  FR: [
+    {
+      gerarAssunto: (nome) => `Invitation à présenter ${nome} aux familles européennes`,
+      titulo: "Touchez des milliers de familles",
+      textoCta: "Découvrir HelloCamp",
+      gerarFooter: (url) => `Vous recevez cet e-mail car votre organisation est une référence. <a href="${url}" style="color: #64748B; text-decoration: underline;">Cliquez ici pour vous désabonner</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Bonjour l'équipe de <strong>${nome}</strong>,</p>
+        <p>Je m'appelle Rodrigo et je vous contacte de la part de <strong>HelloCamp</strong>, une nouvelle plateforme internationale de réservation dédiée aux colonies de vacances, stages sportifs (surf, etc.) et activités extrascolaires pour les jeunes.</p>
+        <p>Chaque année, des milliers de familles utilisent notre portail. Nous avons remarqué que vos programmes correspondent parfaitement à ce que notre public recherche à l'international, tout au long de l'année.</p>
+        <p><strong>Comment fonctionne notre partenariat ?</strong></p>
+        <ul>
+          <li><strong>Visibilité 100% Gratuite :</strong> Être présent dans notre annuaire n'a aucun coût fixe. Votre profil affichera vos photos, descriptions et contacts officiels pour que les parents puissent vous trouver facilement.</li>
+          <li><strong>Réservations Directes (Optionnel) :</strong> Si vous souhaitez automatiser vos inscriptions, vous pouvez activer les réservations via HelloCamp. Nous facturons une commission <strong>très compétitive et nettement inférieure à la moyenne du marché</strong> par réservation confirmée.</li>
+        </ul>
+        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
+          <strong>Notre service clé en main :</strong> Répondez simplement à cet e-mail avec un lien vers votre site ou une brochure PDF. Notre équipe créera et optimisera votre profil en 24 heures sans aucun effort de votre part.
+        </p>
+        <p>Seriez-vous ouverts à l'idée d'ajouter votre organisation gratuitement ?</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Simplifiez vos réservations internationales pour ${nome}`,
+      titulo: "Croissance Internationale Sans Effort",
+      textoCta: "Créer votre compte Partenaire",
+      gerarFooter: (url) => `Vous recevez cet e-mail car votre organisation est une référence. <a href="${url}" style="color: #64748B; text-decoration: underline;">Cliquez ici pour vous désabonner</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Re-bonjour,</p>
+        <p>Accueillir des étudiants internationaux implique souvent des fiches médicales complexes. C'est pourquoi nous avons développé le <strong>Tableau de Bord HelloCamp</strong>.</p>
+        <p>En activant les réservations directes (avec notre commission très réduite) :</p>
+        <ul>
+          <li>Les parents paient en ligne de manière sécurisée et les fonds vont sur votre compte.</li>
+          <li>Les dossiers médicaux et les allergies sont centralisés.</li>
+          <li>Vos disponibilités sont mises à jour en temps réel.</li>
+        </ul>
+        <p>L'inscription prend 5 minutes via le lien ci-dessous.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Pourquoi nous mettons en avant la marque de ${nome}`,
+      titulo: "Votre Marque est la Protagoniste",
+      textoCta: "Créer Mon Profil Gratuit",
+      gerarFooter: (url) => `Vous recevez cet e-mail car votre organisation est une référence. <a href="${url}" style="color: #64748B; text-decoration: underline;">Cliquez ici pour vous désabonner</a>.`,
+      gerarMensagem: (nome) => `
+        <p>L'équipe de <strong>${nome}</strong>,</p>
+        <p>Contrairement à d'autres plateformes qui cachent vos coordonnées, sur HelloCamp, <strong>votre site web et votre téléphone sont 100% visibles</strong>.</p>
+        <p>Notre commission ne s'applique que si la famille décide de réserver directement via notre système de paiement.</p>
+        <p>Reprenez le contrôle de votre visibilité internationale. Répondez à cet e-mail et nous ferons le travail pour vous.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Dernier message : Les réservations européennes pour ${nome}`,
+      titulo: "La Saison Bat son Plein",
+      textoCta: "Rejoindre HelloCamp",
+      gerarFooter: (url) => `Vous recevez cet e-mail car votre organisation est une référence. <a href="${url}" style="color: #64748B; text-decoration: underline;">Cliquez ici pour vous désabonner</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Bonjour <strong>${nome}</strong>,</p>
+        <p>Je vous promets que c'est mon dernier e-mail. Les familles cherchent activement des programmes sportifs et séjours en ce moment même.</p>
+        <p>Nous ne voulons pas que vous manquiez cette opportunité. Je vous rappelle que l'ajout à notre annuaire est totalement gratuit.</p>
+        <p><strong>Envoyez-nous simplement vos dates et tarifs en réponse</strong>, et nous paramétrerons votre profil aujourd'hui.</p>
+        <p>Nous espérons collaborer avec vous !</p>
+      `
+    }
+  ],
+  DE: [
+    {
+      gerarAssunto: (nome) => `Einladung zur Präsentation von ${nome} für europäische Familien`,
+      titulo: "Erreichen Sie tausende europäische Familien",
+      textoCta: "HelloCamp Entdecken",
+      gerarFooter: (url) => `Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. <a href="${url}" style="color: #64748B; text-decoration: underline;">Klicken Sie hier, um sich abzumelden</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hallo <strong>${nome}</strong> Team,</p>
+        <p>Mein Name ist Rodrigo und ich melde mich im Namen von <strong>HelloCamp</strong>, einer neuen internationalen Such- und Buchungsplattform für Feriencamps, Sportkurse und Freizeitaktivitäten für Jugendliche.</p>
+        <p>Tausende Familien nutzen unser Portal. Ihre Programme passen perfekt zu dem, was unser Publikum sucht.</p>
+        <p><strong>Wie funktioniert unsere Partnerschaft?</strong></p>
+        <ul>
+          <li><strong>100% Kostenlose Sichtbarkeit:</strong> Der Eintrag in unser Verzeichnis ist komplett kostenlos. Wir zeigen Ihre Fotos, Beschreibungen und Kontaktdaten.</li>
+          <li><strong>Direktbuchungen (Optional):</strong> Wenn Sie Ihre Anmeldungen automatisieren möchten, können Sie die direkte Buchung über HelloCamp aktivieren. Wir berechnen eine äußerst <strong>wettbewerbsfähige Provision, die deutlich unter dem Branchenstandard liegt</strong>, nur bei bestätigten Buchungen.</li>
+        </ul>
+        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
+          <strong>Unser Full-Service:</strong> Antworten Sie einfach auf diese E-Mail mit einem Link zu Ihrer Website. Unser Team erstellt und optimiert Ihr Profil innerhalb von 24 Stunden kostenlos für Sie.
+        </p>
+        <p>Hätten Sie Interesse an einer kostenlosen Platzierung?</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Vereinfachen Sie Ihre internationalen Buchungen für ${nome}`,
+      titulo: "Müheloses Internationales Wachstum",
+      textoCta: "Partnerkonto Erstellen",
+      gerarFooter: (url) => `Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. <a href="${url}" style="color: #64748B; text-decoration: underline;">Klicken Sie hier, um sich abzumelden</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hallo nochmal,</p>
+        <p>Durch die Aktivierung von Direktbuchungen (mit unserer wettbewerbsfähigen Provision):</p>
+        <ul>
+          <li>Eltern zahlen sicher online.</li>
+          <li>Medizinische Daten und Allergien werden zentralisiert erfasst.</li>
+          <li>Ihre Verfügbarkeiten werden in Echtzeit aktualisiert.</li>
+        </ul>
+        <p>Die Registrierung dauert nur 5 Minuten.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Warum wir die Marke von ${nome} in den Mittelpunkt stellen`,
+      titulo: "Ihre Marke ist der Protagonist",
+      textoCta: "Kostenloses Profil Erstellen",
+      gerarFooter: (url) => `Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. <a href="${url}" style="color: #64748B; text-decoration: underline;">Klicken Sie hier, um sich abzumelden</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Team <strong>${nome}</strong>,</p>
+        <p>Im Gegensatz zu anderen Portalen, die Kontaktdaten verstecken, ist bei HelloCamp <strong>Ihre Website und E-Mail zu 100% sichtbar</strong>.</p>
+        <p>Wenn Eltern Sie lieber direkt kontaktieren möchten, können sie das tun. Unsere Provision fällt nur an, wenn die Familie direkt über unser integriertes Zahlungssystem bucht.</p>
+        <p>Erstellen Sie noch heute Ihren kostenlosen Eintrag.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Letzte E-Mail (Buchungssaison für ${nome})`,
+      titulo: "Die Buchungssaison hat Begonnen",
+      textoCta: "HelloCamp Beitreten",
+      gerarFooter: (url) => `Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. <a href="${url}" style="color: #64748B; text-decoration: underline;">Klicken Sie hier, um sich abzumelden</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hallo <strong>${nome}</strong> Team,</p>
+        <p>Dies ist meine letzte E-Mail. Die Buchungssaison ist in vollem Gange.</p>
+        <p>Wir möchten nicht, dass Sie diese Zielgruppe verpassen. Denken Sie daran, dass der bloße Eintrag für mehr Sichtbarkeit völlig kostenlos ist.</p>
+        <p><strong>Antworten Sie einfach mit Ihren Preisen und Terminen</strong>, und wir kümmern uns noch heute um Ihr Profil.</p>
+        <p>Wir hoffen, Sie bald bei HelloCamp begrüßen zu dürfen!</p>
+      `
+    }
+  ]
+};
+
+function getTemplateHTML(titulo: string, mensagem: string, ctaTexto: string, ctaLink: string, footerText: string) {
+  return `
+    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 650px; margin: 0 auto; background-color: #ffffff; border: 1px solid #E8EDF2; border-radius: 8px; overflow: hidden;">
+      <div style="height: 6px; width: 100%; display: flex;">
+        <div style="background-color: #218F4C; height: 100%; width: 33.3%;"></div>
+        <div style="background-color: #F3A61C; height: 100%; width: 33.4%;"></div>
+        <div style="background-color: #0E3A68; height: 100%; width: 33.3%;"></div>
+      </div>
+      <div style="padding: 35px;">
+        <div style="margin-bottom: 30px;">
+          <h1 style="color: #0E3A68; font-size: 22px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">Hello<span style="color: #F3A61C;">Camp</span></h1>
+        </div>
+        <h2 style="color: #0E3A68; font-size: 21px; margin-top: 0; margin-bottom: 25px; font-weight: 700; line-height: 1.4;">
+          ${titulo}
+        </h2>
+        <div style="color: #333333; font-size: 15px; line-height: 1.6;">
+          ${mensagem}
+        </div>
+        <div style="margin-top: 40px; margin-bottom: 10px;">
+          <a href="${ctaLink}" style="display: inline-block; background-color: #0E3A68; color: #ffffff; padding: 15px 30px; text-decoration: none; font-size: 14px; font-weight: bold; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
+            ${ctaTexto}
+          </a>
+        </div>
+      </div>
+      <div style="background-color: #F8FAFC; padding: 25px 35px; border-top: 1px solid #E8EDF2;">
+        <p style="color: #64748B; font-size: 11px; line-height: 1.5; margin: 0;">
+          ${footerText}
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const isAuthorized = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}` || searchParams.get('secret') === process.env.CRON_SECRET;
+
+  if (!isAuthorized) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  try {
+    const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // SEGURANÇA 1: Vamos buscar os e-mails de todos os Parceiros já registados
+    const { data: perfisAtivos } = await supabaseAdmin
+      .from('perfis')
+      .select('email')
+      .eq('role', 'organizador');
+    
+    // Extrai um array apenas com os e-mails para facilitar a filtragem
+    const emailsRegistados = perfisAtivos?.map(p => p.email?.toLowerCase().trim()) || [];
+
+    // Busca as leads na fila
+    const { data: leadsPotenciais, error } = await supabaseAdmin
+      .from('leads_externas')
+      .select('id, nome_cliente, email_cliente, fase_funil, ultimo_contacto, idioma')
+      .is('unsubscribed', false)
+      .lt('fase_funil', 4) 
+      .or(`ultimo_contacto.is.null,ultimo_contacto.lt.${seteDiasAtras}`)
+      .not('email_cliente', 'is', null)
+      .neq('email_cliente', '')
+      .order('fase_funil', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(300);
+
+    if (error) throw error;
+    if (!leadsPotenciais || leadsPotenciais.length === 0) return NextResponse.json({ message: 'Nenhuma lead elegível hoje.' });
+
+    // SEGURANÇA 2: Filtra as leads para garantir que nenhuma está na lista de parceiros registados.
+    // E se estiverem, marcamo-las como desativadas para não chatearem mais o cron.
+    const leadsProntas: any[] = [];
+    const leadsParaDesativar: string[] = [];
+
+    for (const lead of leadsPotenciais) {
+      const email = lead.email_cliente?.toLowerCase().trim();
+      if (emailsRegistados.includes(email)) {
+        leadsParaDesativar.push(lead.id);
+      } else {
+        leadsProntas.push(lead);
+      }
+    }
+
+    // Marca as leads que já são parceiros como COMPLETO e Unsubscribed (Silenciosamente)
+    if (leadsParaDesativar.length > 0) {
+      await supabaseAdmin.from('leads_externas')
+        .update({ status: 'COMPLETO', unsubscribed: true, fase_funil: 4 })
+        .in('id', leadsParaDesativar);
+    }
+
+    // Se depois do filtro já não sobrar ninguém...
+    if (leadsProntas.length === 0) {
+      return NextResponse.json({ message: 'Leads filtradas porque já eram parceiros registados. Nenhuma enviada.' });
+    }
+
+    // Limita novamente ao batch final de 250 (caso a limpeza não tenha removido muitos)
+    const leadsFinal = leadsProntas.slice(0, 250);
+
+    const resultados: any[] = [];
+    const BATCH_SIZE = 25; 
+
+    for (let i = 0; i < leadsFinal.length; i += BATCH_SIZE) {
+      const batch = leadsFinal.slice(i, i + BATCH_SIZE);
+      
+      const batchResults = await Promise.all(
+        batch.map(async (lead) => {
+          const email = (lead.email_cliente || '').trim();
+          const nome = lead.nome_cliente || 'Organizador';
+          const faseAtual = Number(lead.fase_funil) || 0;
+          
+          let lang = (lead.idioma || 'PT').toUpperCase();
+          if (!TEMPLATES[lang]) lang = 'EN'; 
+          
+          const tpl = TEMPLATES[lang][faseAtual];
+          if (!tpl) return { status: 'skipped', id: lead.id };
+
+          const linkLang = lang === 'PT' ? 'pt' : lang === 'ES' ? 'es' : lang === 'FR' ? 'fr' : 'en';
+          const ctaLinkTracker = `${BASE_URL}/${linkLang}/parceiros?utm_source=cold_email_b2b&utm_medium=email&utm_campaign=fase_${faseAtual}_${lang}`;
+          const unsubscribeUrl = `${BASE_URL}/${linkLang}/unsubscribe?id=${lead.id}`;
+
+          const r = await enviarViaBrevo({
+            to: { email, name: nome },
+            subject: tpl.gerarAssunto(nome),
+            html: getTemplateHTML(tpl.titulo, tpl.gerarMensagem(nome), tpl.textoCta, ctaLinkTracker, tpl.gerarFooter(unsubscribeUrl)),
+          });
+
+          if (r.success) {
+            return { status: 'sent', id: lead.id, novaFase: faseAtual + 1 };
+          }
+          return { status: 'failed', id: lead.id };
+        })
+      );
+      
+      resultados.push(...batchResults);
+    }
+
+    const sucessos = resultados.filter(r => r.status === 'sent');
+
+    if (sucessos.length > 0) {
+      const groupedByFase = sucessos.reduce((acc: any, curr: any) => {
+        if (!acc[curr.novaFase]) acc[curr.novaFase] = [];
+        acc[curr.novaFase].push(curr.id);
+        return acc;
+      }, {} as Record<number, string[]>);
+
+      const nowIso = new Date().toISOString();
+      await Promise.all(
+        Object.entries(groupedByFase).map(([faseStr, ids]) =>
+          supabaseAdmin.from('leads_externas')
+            .update({ fase_funil: parseInt(faseStr, 10), ultimo_contacto: nowIso })
+            .in('id', ids as string[])
+        )
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      enviados: sucessos.length,
+      tentados: leadsFinal.length,
+      limposPorJaSeremParceiros: leadsParaDesativar.length
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro no Cron B2B Global:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+</files>

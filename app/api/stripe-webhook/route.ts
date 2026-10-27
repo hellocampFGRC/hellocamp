@@ -1,27 +1,24 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { createClient } from '@supabase/supabase-js';
 
-export const dynamic = 'force-dynamic';
-
-const calcularIdade = (dataNasc: string) => {
-  if (!dataNasc) return 'N/A';
+function calcularIdade(dataNasc?: string) {
+  if (!dataNasc) return 'N/D';
   const hoje = new Date();
   const nasc = new Date(dataNasc);
+  if (isNaN(nasc.getTime())) return 'N/D';
   let idade = hoje.getFullYear() - nasc.getFullYear();
   const m = hoje.getMonth() - nasc.getMonth();
-  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) {
-    idade--;
-  }
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
   return `${idade} anos`;
-};
+}
 
 export async function POST(req: Request) {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   const resendApiKey = process.env.RESEND_API_KEY;
-  
+
   if (!stripeSecretKey || !webhookSecret || !resendApiKey) {
     return new NextResponse('Configuração de servidor incompleta.', { status: 500 });
   }
@@ -33,7 +30,7 @@ export async function POST(req: Request) {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  const body = await req.text(); 
+  const body = await req.text();
   const signature = req.headers.get('stripe-signature') as string;
 
   let event: Stripe.Event;
@@ -46,19 +43,19 @@ export async function POST(req: Request) {
 
   if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
     const session = event.data.object as Stripe.Checkout.Session;
-    
+
     if (session.payment_status !== 'paid') {
       return new NextResponse('A aguardar aprovação do pagamento.', { status: 200 });
     }
 
     if (session.metadata?.reservasIds) {
       const reservasIds = JSON.parse(session.metadata.reservasIds);
-      
+
       const isSinal = session.metadata.pagamento_tipo === '50_sinal';
       const isPagamentoFinal = session.metadata.pagamento_tipo === 'pagamento_final';
       const valorOriginalTotal = Number(session.metadata.valor_total_original || 0);
       const valorCobradoAgora = (session.amount_total || 0) / 100;
-      
+
       let novoStatus = 'Pago';
       let valorEmFalta = 0;
       let valorPagoBaseDeDados = valorCobradoAgora;
@@ -68,7 +65,7 @@ export async function POST(req: Request) {
         valorEmFalta = valorOriginalTotal - valorCobradoAgora;
       } else if (isPagamentoFinal) {
         novoStatus = 'Pago';
-        valorPagoBaseDeDados = valorOriginalTotal; 
+        valorPagoBaseDeDados = valorOriginalTotal;
       }
 
       const stripeCustomerId = typeof session.customer === 'string' ? session.customer : null;
@@ -82,7 +79,7 @@ export async function POST(req: Request) {
 
       const { error: updateError } = await supabase
         .from('reservas')
-        .update({ 
+        .update({
           status_pagamento: novoStatus,
           status: novoStatus,
           valor_pago: valorPagoBaseDeDados,
@@ -112,8 +109,6 @@ export async function POST(req: Request) {
       if (reservasData && reservasData.length > 0) {
         const campoObj: any = reservasData[0].campos;
         const campoNome = Array.isArray(campoObj) ? campoObj[0]?.nome : campoObj?.nome || 'Programa HelloCamp';
-        const campoLocal = Array.isArray(campoObj) ? campoObj[0]?.local : campoObj?.local || 'Localização a designar';
-        const turnoNome = reservasData[0].turno_nome || 'Programa Base';
 
         const { data: perfilPaiData } = await supabase
           .from('perfis')
@@ -130,18 +125,15 @@ export async function POST(req: Request) {
         const emailPai = emailEncarregado;
 
         const { data: orgData } = await supabase.from('perfis').select('email, empresa_nome').eq('id', reservasData[0].organizador_id).single();
-        const emailCampo = orgData?.email || 'info@hellocamp.pt'; 
-        const nomeOrganizador = orgData?.empresa_nome || 'Organizador';
+        const emailCampo = orgData?.email || 'info@hellocamp.pt';
 
         let blocoParticipantesPai = '';
         let blocoParticipantesOrg = '';
-        let nomesSimplesArray: string[] = [];
 
         reservasData.forEach((reserva: any, index: number) => {
           const c: any = Array.isArray(reserva.criancas) ? reserva.criancas[0] : reserva.criancas;
           if (!c) return;
 
-          nomesSimplesArray.push(c.nome);
           const idade = calcularIdade(c.data_nascimento);
 
           const extras = reserva.extras_escolhidos || {};
@@ -153,7 +145,7 @@ export async function POST(req: Request) {
           const extrasString = extrasText.length > 0 ? extrasText.join(', ') : 'Nenhum extra';
 
           const respostas = reserva.respostas_customizadas || {};
-          let respostasHtml = Object.keys(respostas).length > 0 
+          let respostasHtml = Object.keys(respostas).length > 0
             ? Object.entries(respostas).map(([p, r]) => `<tr><td style="padding: 4px 0; color: #64748b; font-size: 13px;">${p}</td><td style="padding: 4px 0; font-weight: bold; font-size: 13px;">${r as string}</td></tr>`).join('')
             : `<tr><td style="padding: 4px 0; color: #64748b; font-size: 13px;">Detalhes adicionais</td><td style="padding: 4px 0; font-weight: bold; font-size: 13px;">N/A</td></tr>`;
 
@@ -186,50 +178,69 @@ export async function POST(req: Request) {
 
         let tituloEmailPai = `Confirmação de Reserva - ${campoNome}`;
         let statusTextoPai = `<p style="font-size: 15px; line-height: 1.6; color: #475569;">A sua reserva para o programa <strong>${campoNome}</strong> encontra-se validada e totalmente paga.</p>`;
-        
+
         if (isSinal) {
           statusTextoPai = `<p style="font-size: 15px; line-height: 1.6; color: #475569;">A sua vaga para o programa <strong>${campoNome}</strong> encontra-se garantida através do pagamento do sinal. <br/><br/><strong>Atenção:</strong> O valor remanescente (${valorEmFalta.toFixed(2)}€) deverá ser pago 1 semana antes do início do programa através do seu Portal de Cliente HelloCamp.</p>`;
         } else if (isPagamentoFinal) {
-          tituloEmailPai = `Liquidação Final - ${campoNome}`;
-          statusTextoPai = `<p style="font-size: 15px; line-height: 1.6; color: #475569;">O pagamento da segunda tranche da sua reserva para o programa <strong>${campoNome}</strong> foi liquidado com sucesso.</p>`;
+          tituloEmailPai = `Liquidação Final Confirmada - ${campoNome}`;
+          statusTextoPai = `<p style="font-size: 15px; line-height: 1.6; color: #475569;">O pagamento da segunda tranche da sua reserva para o programa <strong>${campoNome}</strong> foi liquidado com sucesso. A sua inscrição encontra-se 100% paga.</p>`;
         }
 
         const financeiroOrg = isSinal
           ? `<tr><td style="padding: 4px 0; color: #64748b;">Sinal Recebido (50%):</td><td style="font-weight: bold; color: #059669;">${valorCobradoAgora.toFixed(2)}€</td></tr><tr><td style="padding: 4px 0; color: #64748b;">Valor Pendente:</td><td style="font-weight: bold; color: #eab308;">${valorEmFalta.toFixed(2)}€</td></tr>`
           : `<tr><td style="padding: 4px 0; color: #64748b;">Valor Pago Agora:</td><td style="font-weight: bold; color: #059669;">${valorCobradoAgora.toFixed(2)}€</td></tr><tr><td style="padding: 4px 0; color: #64748b;">Situação:</td><td style="font-weight: bold; color: #059669;">100% Pago</td></tr>`;
 
-        if (emailPai && !isPagamentoFinal) {
+        // A. E-MAIL PARA O PAI (Enviado tanto na reserva inicial como na liquidação final)
+        if (emailPai) {
           await resend.emails.send({
-            from: 'HelloCamp Reservas <info@hellocamp.pt>', 
+            from: 'HelloCamp Reservas <info@hellocamp.pt>',
             to: emailPai,
             subject: tituloEmailPai,
             html: `
-              <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px 20px; color: #0f172a;">
-                <h1 style="font-size: 24px; font-weight: 900; text-align: center; margin-bottom: 30px; color: #0f172a;">HelloCamp</h1>
-                <p style="font-size: 15px; line-height: 1.6; color: #475569;">Estimado(a) ${nomePai},</p>
+              <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px 20px; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 12px;">
+                <h1 style="font-size: 24px; font-weight: 900; text-align: center; margin-bottom: 30px; color: #0f172a;">
+                  Hello<span style="color: #EBA914;">Camp</span>
+                </h1>
+                <p style="font-size: 15px; line-height: 1.6; color: #475569;">Estimado(a) <strong>${nomePai}</strong>,</p>
                 ${statusTextoPai}
                 <div style="margin: 30px 0;">
                   <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Detalhes Financeiros</h3>
                   <table width="100%" style="font-size: 15px; color: #334155; margin-top: 10px;">
                     <tr><td style="padding: 5px 0;">Valor Pago Agora:</td><td style="text-align: right; font-weight: bold; color: #059669; font-size: 18px;">${valorCobradoAgora.toFixed(2)}€</td></tr>
-                    ${isSinal ? `<tr><td style="padding: 5px 0; color: #64748b;">Valor a Pagar:</td><td style="text-align: right; font-weight: bold; color: #64748b;">${valorEmFalta.toFixed(2)}€</td></tr>` : ''}
+                    ${isSinal ? `<tr><td style="padding: 5px 0; color: #64748b;">Valor Restante a Pagar:</td><td style="text-align: right; font-weight: bold; color: #64748b;">${valorEmFalta.toFixed(2)}€</td></tr>` : ''}
                   </table>
                 </div>
                 <div style="margin: 30px 0;">
                   <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Ficha de Participantes</h3>
                   <div style="margin-top: 15px;">${blocoParticipantesPai}</div>
                 </div>
+                <div style="text-align: center; margin-top: 30px;">
+                  <a href="https://www.hellocamp.pt/pt/cliente/dashboard" style="display: inline-block; background-color: #0f172a; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    Ver as Minhas Reservas
+                  </a>
+                </div>
               </div>
             `,
           });
         }
 
+        // B. E-MAIL PARA O PARCEIRO
         if (isPagamentoFinal) {
           await resend.emails.send({
             from: 'HelloCamp Parceiros <info@hellocamp.pt>',
             to: emailCampo,
             subject: `Liquidação Recebida - ${campoNome}`,
-            html: `<div style="font-family: Arial, sans-serif; padding: 20px; color: #0f172a;"><h2>Pagamento Final Recebido</h2><p>O encarregado de educação <strong>${nomePai}</strong> liquidou a segunda parcela de <strong>${valorCobradoAgora.toFixed(2)}€</strong> referente ao programa ${campoNome}.</p></div>`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 10px;">
+                <h2 style="margin-top: 0; color: #167524;">Pagamento Final Recebido</h2>
+                <p>O encarregado de educação <strong>${nomePai}</strong> liquidou a segunda parcela de <strong>${valorCobradoAgora.toFixed(2)}€</strong> referente ao programa <strong>${campoNome}</strong>.</p>
+                <div style="margin-top: 25px;">
+                  <a href="https://www.hellocamp.pt/pt/admin/reservas" style="display: inline-block; background-color: #167524; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    Consultar Reservas no Portal
+                  </a>
+                </div>
+              </div>
+            `,
           });
         } else {
           await resend.emails.send({
@@ -237,29 +248,43 @@ export async function POST(req: Request) {
             to: emailCampo,
             subject: `Nova Inscrição Processada - ${campoNome}`,
             html: `
-              <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 30px 20px; color: #0f172a;">
-                <h2 style="font-size: 22px; font-weight: 700; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">Nova Inscrição Processada</h2>
+              <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 30px 20px; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 12px;">
+                <h2 style="font-size: 22px; font-weight: 700; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-top: 0;">Nova Inscrição Processada</h2>
                 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                  <table width="100%" style="font-size: 14px; color: #334155; margin-top: 10px; border-collapse: collapse;">
-                    <tr><td width="30%" style="padding: 4px 0; color: #64748b;">Nome:</td><td style="font-weight: bold;">${nomePai}</td></tr>
+                  <table width="100%" style="font-size: 14px; color: #334155; border-collapse: collapse;">
+                    <tr><td width="30%" style="padding: 4px 0; color: #64748b;">Encarregado:</td><td style="font-weight: bold;">${nomePai}</td></tr>
                     <tr><td style="padding: 4px 0; color: #64748b;">Email:</td><td style="font-weight: bold;">${emailPai}</td></tr>
+                    <tr><td style="padding: 4px 0; color: #64748b;">Telefone:</td><td style="font-weight: bold;">${telefoneEncarregado || perfilPaiData?.telefone || 'N/D'}</td></tr>
                     ${financeiroOrg}
                   </table>
                 </div>
                 ${blocoParticipantesOrg}
+                <div style="text-align: center; margin-top: 25px;">
+                  <a href="https://www.hellocamp.pt/pt/admin/reservas" style="display: inline-block; background-color: #167524; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    Gerir Reserva no Dashboard
+                  </a>
+                </div>
               </div>
             `,
           });
         }
 
-        // CORREÇÃO CRÍTICA DO CÓDIGO (Concatenação de string formatada para evitar quebras)
+        // C. E-MAIL INTERNO PARA A HELLOCAMP
         const assuntoAdmin = `[VENDA] ${valorCobradoAgora.toFixed(2)}€ ${isSinal ? '(SINAL)' : isPagamentoFinal ? '(2ª TRANCHE)' : '(100%)'} | ${campoNome}`;
-        
+
         await resend.emails.send({
           from: 'HelloCamp Control <info@hellocamp.pt>',
           to: 'info@hellocamp.pt',
           subject: assuntoAdmin,
-          html: `<div style="font-family: monospace; font-size: 14px; padding: 20px;"><h2>Transação HelloCamp</h2><p>Recebido: ${valorCobradoAgora}€ | Falta: ${valorEmFalta}€</p><p>Método: ${metodoFormatado}</p></div>`,
+          html: `
+            <div style="font-family: monospace; font-size: 14px; padding: 20px; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 600px; margin: 0 auto;">
+              <h2 style="margin-top: 0;">Transação HelloCamp</h2>
+              <p><strong>Campo:</strong> ${campoNome}</p>
+              <p><strong>Cliente:</strong> ${nomePai} (${emailPai})</p>
+              <p><strong>Recebido agora:</strong> ${valorCobradoAgora.toFixed(2)}€ | <strong>Em falta:</strong> ${valorEmFalta.toFixed(2)}€</p>
+              <p><strong>Método:</strong> ${metodoFormatado}</p>
+            </div>
+          `,
         });
       }
     }

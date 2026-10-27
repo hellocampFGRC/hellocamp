@@ -6,16 +6,16 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    // Recebemos o role (cliente ou organizador) e as variáveis de nome
     const { email, nomeEmpresa, nome, role, lang = 'pt' } = body;
 
     if (!email) {
       return NextResponse.json({ error: 'Email em falta.' }, { status: 400 });
     }
 
-    const isEn = lang === 'en';
+    const safeLang = lang === 'en' ? 'en' : 'pt';
+    const isEn = safeLang === 'en';
     const remetenteOficial = 'HelloCamp <info@hellocamp.pt>';
-    
+
     let subject = "";
     let htmlContent = "";
 
@@ -23,13 +23,15 @@ export async function POST(req: Request) {
     // 📩 EMAIL PARA ENCARREGADOS DE EDUCAÇÃO (PAIS)
     // ==============================================
     if (role === 'cliente') {
-      const nomeUser = nome || 'Encarregado(a) de Educação';
+      const nomeUser = nome || (isEn ? 'Parent / Guardian' : 'Encarregado(a) de Educação');
       subject = isEn ? `Welcome to HelloCamp, ${nomeUser}! 🏕️` : `Bem-vindo(a) à HelloCamp, ${nomeUser}! 🏕️`;
       
       htmlContent = `
-        <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
           <div style="background-color: #0f172a; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 24px; font-family: Arial, sans-serif;">HelloCamp</h1>
+            <h1 style="color: white; margin: 0; font-size: 24px; font-family: Arial, sans-serif;">
+              <span>Hello</span><span style="color: #EBA914;">Camp</span>
+            </h1>
           </div>
           <div style="padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; background-color: #ffffff;">
             <h2 style="color: #059669; margin-top: 0;">${isEn ? 'Account Created Successfully!' : 'Conta Criada com Sucesso!'}</h2>
@@ -48,7 +50,7 @@ export async function POST(req: Request) {
             </div>
             
             <div style="text-align: center; margin: 35px 0;">
-              <a href="https://www.hellocamp.pt/${lang}/login" style="display: inline-block; background-color: #0f172a; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+              <a href="https://www.hellocamp.pt/${safeLang}/login" style="display: inline-block; background-color: #0f172a; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
                 ${isEn ? 'Access My Account' : 'Aceder à Minha Conta'}
               </a>
             </div>
@@ -59,7 +61,6 @@ export async function POST(req: Request) {
         </div>
       `;
 
-      // Envia o email apenas para o Cliente
       await resend.emails.send({
         from: remetenteOficial,
         to: email,
@@ -72,13 +73,15 @@ export async function POST(req: Request) {
     // 📩 EMAIL PARA PARCEIROS B2B (ORGANIZADORES)
     // ==============================================
     else {
-      const nomeUser = nomeEmpresa || 'Parceiro';
+      const nomeUser = nomeEmpresa || nome || 'Parceiro';
       subject = isEn ? `Welcome to HelloCamp, ${nomeUser}! 🏕️` : `Bem-vindo à HelloCamp, ${nomeUser}! 🏕️`;
       
       htmlContent = `
-        <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
           <div style="background-color: #0f172a; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 24px; font-family: Arial, sans-serif;">HelloCamp Partner</h1>
+            <h1 style="color: white; margin: 0; font-size: 24px; font-family: Arial, sans-serif;">
+              <span>Hello</span><span style="color: #EBA914;">Camp</span> Partner
+            </h1>
           </div>
           <div style="padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; background-color: #ffffff;">
             <h2 style="color: #059669; margin-top: 0;">${isEn ? 'Account Created Successfully!' : 'Conta Criada com Sucesso!'}</h2>
@@ -97,8 +100,8 @@ export async function POST(req: Request) {
             </div>
             
             <div style="text-align: center; margin: 35px 0;">
-              <a href="https://www.hellocamp.pt/${lang}/admin/login" style="display: inline-block; background-color: #0f172a; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                ${isEn ? 'Access Dashboard' : 'Aceder ao Dashboard'}
+              <a href="https://www.hellocamp.pt/${safeLang}/login" style="display: inline-block; background-color: #167524; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                ${isEn ? 'Access Partner Dashboard' : 'Aceder ao Dashboard de Parceiro'}
               </a>
             </div>
             
@@ -120,28 +123,29 @@ export async function POST(req: Request) {
       // 🚨 ALERTA INTERNO PARA A EQUIPA HELLOCAMP
       // ==============================================
       const alertaInternoHtml = `
-        <div style="font-family: sans-serif; color: #333;">
+        <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #0f172a;">🚨 Novo Parceiro Registado!</h2>
           <p>Um novo organizador acabou de criar conta na plataforma HelloCamp.</p>
-          <ul style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <ul style="background-color: #f8fafc; padding: 20px 20px 20px 35px; border-radius: 8px; border: 1px solid #e2e8f0; line-height: 1.8;">
             <li><strong>Empresa:</strong> ${nomeUser}</li>
             <li><strong>Email de Contacto:</strong> ${email}</li>
             <li><strong>Data do Registo:</strong> ${new Date().toLocaleString('pt-PT')}</li>
           </ul>
-          <p>Recomendamos que verifique o perfil no painel de administração do Supabase e prepare o processo de onboarding/verificação.</p>
+          <p>Recomendamos que verifique o perfil no SuperAdmin e acompanhe o processo de onboarding.</p>
         </div>
       `;
 
-      // 2. Envia email para a vossa caixa de entrada geral
+      // 2. Envia email para a caixa de entrada geral
       await resend.emails.send({
         from: remetenteOficial,
-        to: 'info@hellocamp.pt', // O seu email oficial da HelloCamp
+        to: 'info@hellocamp.pt',
         subject: `🚨 Novo Parceiro: ${nomeUser}`,
         html: alertaInternoHtml
       });
     }
 
     return NextResponse.json({ success: true, message: 'Emails enviados com sucesso.' });
+
   } catch (error: any) {
     console.error('Erro ao enviar email de boas-vindas:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

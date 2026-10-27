@@ -12,7 +12,7 @@ const supabaseAdmin = createClient(
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 const SENDER_EMAIL = 'info@hellocamp.pt';
-const SENDER_NAME = 'Rodrigo | HelloCamp'; 
+const SENDER_NAME = 'Rodrigo | HelloCamp';
 const BASE_URL = 'https://www.hellocamp.pt';
 
 async function enviarViaBrevo(params: {
@@ -230,7 +230,7 @@ const TEMPLATES: Record<string, Template[]> = {
     },
     {
       gerarAssunto: (nome) => `Por qué damos visibilidad total a la marca de ${nome}`,
-      titulo: "Su Marca es la Protagoniste",
+      titulo: "Su Marca es la Protagonista",
       textoCta: "Anunciar mi Organización",
       gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
       gerarMensagem: (nome) => `
@@ -418,12 +418,12 @@ function getTemplateHTML(titulo: string, mensagem: string, ctaTexto: string, cta
 }
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const isAuthorized = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}` || searchParams.get('secret') === process.env.CRON_SECRET;
-
-  if (!isAuthorized) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-
   try {
+    const authHeader = request.headers.get('authorization');
+    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
     const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     // SEGURANÇA 1: Vamos buscar os e-mails de todos os Parceiros já registados
@@ -431,8 +431,7 @@ export async function GET(request: Request) {
       .from('perfis')
       .select('email')
       .eq('role', 'organizador');
-    
-    // Extrai um array apenas com os e-mails para facilitar a filtragem
+
     const emailsRegistados = perfisAtivos?.map(p => p.email?.toLowerCase().trim()) || [];
 
     // Busca as leads na fila
@@ -440,7 +439,7 @@ export async function GET(request: Request) {
       .from('leads_externas')
       .select('id, nome_cliente, email_cliente, fase_funil, ultimo_contacto, idioma')
       .is('unsubscribed', false)
-      .lt('fase_funil', 4) 
+      .lt('fase_funil', 4)
       .or(`ultimo_contacto.is.null,ultimo_contacto.lt.${seteDiasAtras}`)
       .not('email_cliente', 'is', null)
       .neq('email_cliente', '')
@@ -449,10 +448,11 @@ export async function GET(request: Request) {
       .limit(300);
 
     if (error) throw error;
-    if (!leadsPotenciais || leadsPotenciais.length === 0) return NextResponse.json({ message: 'Nenhuma lead elegível hoje.' });
+    if (!leadsPotenciais || leadsPotenciais.length === 0) {
+      return NextResponse.json({ message: 'Nenhuma lead elegível hoje.' });
+    }
 
-    // SEGURANÇA 2: Filtra as leads para garantir que nenhuma está na lista de parceiros registados.
-    // E se estiverem, marcamo-las como desativadas para não chatearem mais o cron.
+    // SEGURANÇA 2: Filtra as leads para garantir que nenhuma está na lista de parceiros registados
     const leadsProntas: any[] = [];
     const leadsParaDesativar: string[] = [];
 
@@ -465,41 +465,38 @@ export async function GET(request: Request) {
       }
     }
 
-    // Marca as leads que já são parceiros como COMPLETO e Unsubscribed (Silenciosamente)
     if (leadsParaDesativar.length > 0) {
       await supabaseAdmin.from('leads_externas')
         .update({ status: 'COMPLETO', unsubscribed: true, fase_funil: 4 })
         .in('id', leadsParaDesativar);
     }
 
-    // Se depois do filtro já não sobrar ninguém...
     if (leadsProntas.length === 0) {
       return NextResponse.json({ message: 'Leads filtradas porque já eram parceiros registados. Nenhuma enviada.' });
     }
 
-    // Limita novamente ao batch final de 250 (caso a limpeza não tenha removido muitos)
     const leadsFinal = leadsProntas.slice(0, 250);
-
     const resultados: any[] = [];
-    const BATCH_SIZE = 25; 
+    const BATCH_SIZE = 25;
 
     for (let i = 0; i < leadsFinal.length; i += BATCH_SIZE) {
       const batch = leadsFinal.slice(i, i + BATCH_SIZE);
-      
+
       const batchResults = await Promise.all(
         batch.map(async (lead) => {
           const email = (lead.email_cliente || '').trim();
           const nome = lead.nome_cliente || 'Organizador';
           const faseAtual = Number(lead.fase_funil) || 0;
-          
+
           let lang = (lead.idioma || 'PT').toUpperCase();
-          if (!TEMPLATES[lang]) lang = 'EN'; 
-          
+          if (!TEMPLATES[lang]) lang = 'EN';
+
           const tpl = TEMPLATES[lang][faseAtual];
           if (!tpl) return { status: 'skipped', id: lead.id };
 
-          const linkLang = lang === 'PT' ? 'pt' : lang === 'ES' ? 'es' : lang === 'FR' ? 'fr' : 'en';
-          const ctaLinkTracker = `${BASE_URL}/${linkLang}/parceiros?utm_source=cold_email_b2b&utm_medium=email&utm_campaign=fase_${faseAtual}_${lang}`;
+          // CORREÇÃO CRÍTICA: O site só suporta rotas /pt e /en, e a página real é /parceiro (singular)
+          const linkLang = lang === 'PT' ? 'pt' : 'en';
+          const ctaLinkTracker = `${BASE_URL}/${linkLang}/parceiro?utm_source=cold_email_b2b&utm_medium=email&utm_campaign=fase_${faseAtual}_${lang}`;
           const unsubscribeUrl = `${BASE_URL}/${linkLang}/unsubscribe?id=${lead.id}`;
 
           const r = await enviarViaBrevo({
@@ -514,7 +511,7 @@ export async function GET(request: Request) {
           return { status: 'failed', id: lead.id };
         })
       );
-      
+
       resultados.push(...batchResults);
     }
 
@@ -537,8 +534,8 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       enviados: sucessos.length,
       tentados: leadsFinal.length,
       limposPorJaSeremParceiros: leadsParaDesativar.length

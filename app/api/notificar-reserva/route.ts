@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
-
 export async function POST(req: Request) {
   try {
     const data = await req.json();
-    
-    const { lead, campoNome, parceiroEmail, lang } = data;
-    const isEn = lang === 'en';
+    const { lead, campoNome, parceiroEmail, lang = 'pt' } = data;
+    const safeLang = lang === 'en' ? 'en' : 'pt';
+    const isEn = safeLang === 'en';
 
     if (!lead || !lead.nome || !lead.email || !parceiroEmail) {
       return NextResponse.json({ error: 'Faltam dados obrigatórios para envio da notificação.' }, { status: 400 });
@@ -73,7 +71,7 @@ export async function POST(req: Request) {
                         <strong>E-mail:</strong> <a href="mailto:${lead.email}" style="color: #0284c7; text-decoration: none;">${lead.email}</a>
                       </p>
                       <p style="margin: 0; font-size: 15px; color: #0f172a;">
-                        <strong>${isEn ? 'Phone' : 'Telefone'}:</strong> ${lead.telefone}
+                        <strong>${isEn ? 'Phone' : 'Telefone'}:</strong> ${lead.telefone || 'N/A'}
                       </p>
                     </div>
 
@@ -83,6 +81,12 @@ export async function POST(req: Request) {
                         ? 'For transparency and auditing purposes, this contact has been logged in our system. At the end of the billing cycle, we will ask your team to cross-reference this lead with your officially paid bookings to calculate the correct commission.' 
                         : 'Para efeitos de transparência e auditoria de comissionamento, registámos este contacto no nosso sistema. No final do ciclo de faturação, pediremos à vossa equipa que cruze esta listagem com as inscrições efetivamente pagas no vosso sistema para o cálculo correto da comissão.'}
                     </p>
+
+                    <div style="text-align: center; margin: 25px 0;">
+                      <a href="https://www.hellocamp.pt/${safeLang}/login" style="display: inline-block; background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;">
+                        ${isEn ? 'Access Partner Portal' : 'Aceder ao Portal do Parceiro'}
+                      </a>
+                    </div>
 
                     <p style="font-size: 15px; color: #0f172a; margin: 0;">
                       ${isEn ? 'Best regards,' : 'Com os melhores cumprimentos,'}<br>
@@ -124,7 +128,6 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         sender: { name: 'Equipa HelloCamp', email: emailHelloCamp },
         to: [{ email: parceiroEmail }],
-        // Adiciona a HelloCamp em CC para registo e auditoria
         cc: [{ email: emailHelloCamp, name: 'Auditoria HelloCamp' }],
         subject: subject,
         htmlContent: htmlContent
@@ -139,7 +142,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, message: 'Notificação de Lead externa disparada com sucesso via Brevo.' });
 
   } catch (error: any) {
-    console.error('Erro na API /nova-lead-externa:', error);
+    console.error('Erro na API /notificar-reserva:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

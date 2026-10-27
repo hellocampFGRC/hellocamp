@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,12 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Configurações de servidor em falta." }, { status: 500 });
   }
 
-  // CORREÇÃO DO ERRO TYPESCRIPT AQUI: 
-  // Usamos 'as any' para contornar a limitação de tipos da biblioteca
-  const stripe = new Stripe(stripeSecretKey, { 
-    apiVersion: '2023-10-16' as any 
-  });
-  
+  const stripe = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' as any });
   const resend = new Resend(resendApiKey);
   const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -50,7 +45,9 @@ export async function POST(req: Request) {
     try {
       const turnoObj = typeof reserva.turno === 'string' ? JSON.parse(reserva.turno) : reserva.turno;
       if (turnoObj && turnoObj.data_inicio) dataInicioTurno = new Date(turnoObj.data_inicio);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
 
     if (!dataInicioTurno) throw new Error("A data de início do turno não foi encontrada na reserva.");
 
@@ -62,20 +59,27 @@ export async function POST(req: Request) {
 
     // 4. LÓGICA DE CANCELAMENTO (Flexível, Moderada, Estrita)
     const politica = campoData?.politica_cancelamento || '';
-    const valorPagoGeral = Number(reserva.valor_pago) || Number(reserva.valor_total) || 0; 
+    const valorPagoGeral = Number(reserva.valor_pago) || Number(reserva.valor_total) || 0;
     let valorAReembolsar = 0;
     let descricaoPolitica = 'Estrita (Sem Reembolso)';
 
     if (politica.includes('Flexível')) {
-      if (diffDias >= 7) { valorAReembolsar = valorPagoGeral; descricaoPolitica = 'Flexível (100% devolvido)'; }
+      if (diffDias >= 7) {
+        valorAReembolsar = valorPagoGeral;
+        descricaoPolitica = 'Flexível (100% devolvido)';
+      }
     } else if (politica.includes('Moderada')) {
-      if (diffDias >= 15) { valorAReembolsar = valorPagoGeral * 0.5; descricaoPolitica = 'Moderada (50% devolvido)'; }
+      if (diffDias >= 15) {
+        valorAReembolsar = valorPagoGeral * 0.5;
+        descricaoPolitica = 'Moderada (50% devolvido)';
+      }
     } else if (politica.includes('Estrita')) {
-      valorAReembolsar = 0; descricaoPolitica = 'Estrita (0% devolvido)';
+      valorAReembolsar = 0;
+      descricaoPolitica = 'Estrita (0% devolvido)';
     }
 
     // 5. EXECUTAR REEMBOLSO NA STRIPE (Apenas se houver valor a devolver)
-    let paymentIntentId = reserva.stripe_payment_intent_id; 
+    let paymentIntentId = reserva.stripe_payment_intent_id;
 
     if (valorAReembolsar > 0) {
       if (!paymentIntentId && reserva.stripe_session_id) {
@@ -86,7 +90,7 @@ export async function POST(req: Request) {
         const sessions = await stripe.checkout.sessions.list({ limit: 100 });
         const matchSession = sessions.data.find(s => {
           if (s.metadata && s.metadata.reservasIds) {
-            try { return JSON.parse(s.metadata.reservasIds).includes(reservaId); } catch(e) { return false; }
+            try { return JSON.parse(s.metadata.reservasIds).includes(reservaId); } catch (e) { return false; }
           }
           return false;
         });
@@ -119,8 +123,8 @@ export async function POST(req: Request) {
       status_pagamento: 'Reembolsado',
       status_reembolso: 'Reembolsado',
       status: 'Reembolsado',
-      dados_reembolso: { 
-        data_estorno: new Date().toISOString(), 
+      dados_reembolso: {
+        data_estorno: new Date().toISOString(),
         processado_por: 'Automático via Cliente',
         politica_aplicada: descricaoPolitica,
         valor_devolvido: valorAReembolsar
@@ -132,13 +136,13 @@ export async function POST(req: Request) {
     const nomeCrianca = criancaData?.nome || 'Participante';
     const turnoNome = reserva.turno_nome || 'Programa Base';
     const valorStr = valorAReembolsar.toFixed(2);
-    
+
     const emailPai = clienteData?.email || reserva.email_encarregado;
     const emailCampo = orgData?.email || 'info@hellocamp.pt';
     const nomeOrganizador = orgData?.empresa_nome || 'Organizador';
     const nomePai = clienteData?.nome_completo || reserva.nome_encarregado || 'Encarregado de Educação';
 
-    // A. EMAIL PREMIUM PARA O PAI
+    // A. EMAIL PARA O PAI
     if (emailPai) {
       await resend.emails.send({
         from: 'HelloCamp Finanças <info@hellocamp.pt>',
@@ -214,8 +218,8 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true, estorno: valorAReembolsar });
-  } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+
+  } catch (error: any) {
+    return NextResponse.json({ error: "Erro ao processar o pedido: " + error.message }, { status: 500 });
   }
 }

@@ -1,27 +1,22 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-// Inicializa o Resend com a chave do seu ficheiro .env
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    
-    // Captura exatamente os dados enviados pelo componente Superadmin
     const { parceiroEmail, nomeCampo, status, lang = 'pt' } = body;
 
-    // Validação de segurança obrigatória
     if (!status || !parceiroEmail || !nomeCampo) {
       return NextResponse.json(
-        { error: 'Dados insuficientes fornecidos (parceiroEmail, nomeCampo ou status em falta).' }, 
+        { error: 'Dados insuficientes fornecidos (parceiroEmail, nomeCampo ou status em falta).' },
         { status: 400 }
       );
     }
 
-    // CONFIGURAÇÃO DO REMETENTE:
-    // Altere para o e-mail exato que validou no painel do Resend (ex: info@hellocamp.pt).
-    // Se estiver em modo Sandbox/Testes iniciais do Resend, use obrigatoriamente: 'onboarding@resend.dev'
+    const safeLang = lang === 'en' ? 'en' : 'pt';
+    const isEn = safeLang === 'en';
     const remetenteOficial = 'HelloCamp Parceiros <info@hellocamp.pt>';
 
     // ==========================================
@@ -31,16 +26,28 @@ export async function POST(req: Request) {
       await resend.emails.send({
         from: remetenteOficial,
         to: parceiroEmail,
-        subject: `[HelloCamp] Revisão do Contrato: ${nomeCampo}`,
+        subject: isEn
+          ? `[HelloCamp] Contract Review Required: ${nomeCampo}`
+          : `[HelloCamp] Revisão do Contrato: ${nomeCampo}`,
         html: `
-          <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
-            <h2 style="color: #b91c1c;">Olá!</h2>
-            <p>Revimos o contrato submetido para o seu programa <strong>${nomeCampo}</strong>, mas encontrámos algumas inconformidades nos dados preenchidos.</p>
-            <p>Por favor, aceda ao seu Dashboard de Parceiro para verificar as informações da entidade (Nome, NIF, Anexos ou Assinatura Digital) e submeta novamente o documento corrigido para validação.</p>
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 8px; padding: 25px;">
+            <h2 style="color: #b91c1c; margin-top: 0;">${isEn ? 'Hello!' : 'Olá!'}</h2>
+            <p>${isEn
+              ? `We reviewed the submitted contract for your program <strong>${nomeCampo}</strong>, but found some discrepancies in the provided details.`
+              : `Revimos o contrato submetido para o seu programa <strong>${nomeCampo}</strong>, mas encontrámos algumas inconformidades nos dados preenchidos.`}</p>
+            <p>${isEn
+              ? 'Please access your Partner Dashboard to verify your company details (Name, Tax ID, Attachments, or Digital Signature) and resubmit the corrected document for validation.'
+              : 'Por favor, aceda ao seu Dashboard de Parceiro para verificar as informações da entidade (Nome, NIF, Anexos ou Assinatura Digital) e submeta novamente o documento corrigido para validação.'}</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="https://www.hellocamp.pt/${safeLang}/login" style="display: inline-block; background-color: #0f172a; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                ${isEn ? 'Access Partner Portal' : 'Aceder ao Portal do Organizador'}
+              </a>
+            </div>
+
+            <p>${isEn ? 'If you have any questions, reply directly to this email.' : 'Se tiver qualquer dúvida, responda diretamente a este e-mail.'}</p>
             <br/>
-            <p>Se tiver qualquer dúvida, responda diretamente a este e-mail.</p>
-            <br/>
-            <p>Melhores cumprimentos,<br/><strong>A Equipa HelloCamp</strong></p>
+            <p>${isEn ? 'Best regards,' : 'Melhores cumprimentos,'}<br/><strong>${isEn ? 'The HelloCamp Team' : 'A Equipa HelloCamp'}</strong></p>
           </div>
         `
       });
@@ -55,26 +62,36 @@ export async function POST(req: Request) {
       await resend.emails.send({
         from: remetenteOficial,
         to: parceiroEmail,
-        subject: `[HelloCamp] Contrato Aprovado - O seu campo está online! 🎉`,
+        subject: isEn
+          ? `[HelloCamp] Contract Approved - Your camp is now live! 🎉`
+          : `[HelloCamp] Contrato Aprovado - O seu campo está online! 🎉`,
         html: `
-          <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
             <div style="background-color: #0f172a; padding: 25px; border-radius: 8px 8px 0 0; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 22px; font-family: Arial, sans-serif;">Parabéns, o contrato foi validado!</h1>
+              <h1 style="color: white; margin: 0; font-size: 22px; font-family: Arial, sans-serif;">
+                ${isEn ? 'Congratulations, your contract is approved!' : 'Parabéns, o contrato foi validado!'}
+              </h1>
             </div>
             <div style="padding: 25px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; background-color: #ffffff;">
-              <p>O acordo de intermediação para o programa <strong>${nomeCampo}</strong> foi revisto, assinado e validado com sucesso pela nossa equipa legal.</p>
-              <p>O seu programa **já se encontra ativo e visível publicamente na plataforma**, ficando totalmente elegível para receber inscrições e pagamentos dos encarregados de educação.</p>
+              <p>${isEn
+                ? `The partnership agreement for the program <strong>${nomeCampo}</strong> has been reviewed, signed, and validated by our team.`
+                : `O acordo de intermediação para o programa <strong>${nomeCampo}</strong> foi revisto, assinado e validado com sucesso pela nossa equipa legal.`}</p>
+              <p>${isEn
+                ? `Your program <strong>is now active and publicly visible on the platform</strong>, and is fully eligible to receive bookings and payments from parents.`
+                : `O seu programa <strong>já se encontra ativo e visível publicamente na plataforma</strong>, ficando totalmente elegível para receber inscrições e pagamentos dos encarregados de educação.`}</p>
               
               <div style="text-align: center; margin: 30px 0;">
-                <a href="https://www.hellocamp.pt/${lang}/admin/login" style="display: inline-block; background-color: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                  Aceder ao Portal do Organizador
+                <a href="https://www.hellocamp.pt/${safeLang}/login" style="display: inline-block; background-color: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                  ${isEn ? 'Access Organizer Portal' : 'Aceder ao Portal do Organizador'}
                 </a>
               </div>
               
-              <p>Poderá descarregar a cópia integral do seu contrato assinado a qualquer momento, diretamente na secção "Os Meus Campos" dentro do seu portal.</p>
+              <p>${isEn
+                ? 'You can download the full copy of your signed contract at any time directly under the "My Camps" section inside your portal.'
+                : 'Poderá descarregar a cópia integral do seu contrato assinado a qualquer momento, diretamente na secção "Os Meus Campos" dentro do seu portal.'}</p>
               <br/>
-              <p>Desejamos-lhe um excelente período de atividades e excelentes vendas!</p>
-              <p>Boas reservas,<br/><strong>A Equipa HelloCamp</strong></p>
+              <p>${isEn ? 'We wish you a fantastic season and great sales!' : 'Desejamos-lhe um excelente período de atividades e excelentes vendas!'}</p>
+              <p>${isEn ? 'Best regards,' : 'Boas reservas,'}<br/><strong>${isEn ? 'The HelloCamp Team' : 'A Equipa HelloCamp'}</strong></p>
             </div>
           </div>
         `

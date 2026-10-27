@@ -1,0 +1,212 @@
+
+/Users/franciscogouveia/campos-de-ferias
+├── AGENTS.md
+├── CLAUDE.md
+├── README.md
+├── app
+|  ├── [lang]
+|  |  ├── (public)
+|  |  |  ├── admin
+|  |  |  |  └── [id]
+|  |  |  ├── atualizar-password
+|  |  |  |  └── page.tsx
+|  |  |  ├── blog
+|  |  |  |  ├── [slug]
+|  |  |  |  ├── components
+|  |  |  |  └── page.tsx
+|  |  |  ├── campo
+|  |  |  |  └── [id]
+|  |  |  ├── checkout
+|  |  |  |  └── [id]
+|  |  |  ├── cliente
+|  |  |  |  ├── avaliar
+|  |  |  |  ├── criancas
+|  |  |  |  ├── dashboard
+|  |  |  |  ├── favoritos
+|  |  |  |  ├── layout.tsx
+|  |  |  |  ├── mensagens
+|  |  |  |  └── perfil
+|  |  |  ├── components
+|  |  |  |  ├── AuthButton.tsx
+|  |  |  |  ├── BotaoFavorito.tsx
+|  |  |  |  ├── BotaoPartilha.tsx
+|  |  |  |  ├── DescricaoExpansivel.tsx
+|  |  |  |  ├── Footer.tsx
+|  |  |  |  ├── FormContactoCampo.tsx
+|  |  |  |  ├── LanguageSwitcher.tsx
+|  |  |  |  ├── SugestoesMagicas.tsx
+|  |  |  |  └── header.tsx
+|  |  |  ├── convite
+|  |  |  |  ├── layout.tsx
+|  |  |  |  └── page.tsx
+|  |  |  ├── cookies
+|  |  |  |  └── page.tsx
+|  |  |  ├── distrito
+|  |  |  |  └── [nome]
+|  |  |  ├── guia-pais
+|  |  |  |  └── page.tsx
+|  |  |  ├── institucional
+|  |  |  |  ├── [id]
+|  |  |  |  ├── distrito
+|  |  |  |  └── page.tsx
+|  |  |  ├── layout.tsx
+|  |  |  ├── login
+|  |  |  |  └── page.tsx
+|  |  |  ├── mapa
+|  |  |  |  ├── MapaMapLibre.tsx
+|  |  |  |  ├── MapaWrapper.tsx
+|  |  |  |  └── page.tsx
+|  |  |  ├── monitores
+|  |  |  |  ├── login
+|  |  |  |  ├── page.tsx
+|  |  |  |  ├── portal
+|  |  |  |  ├── registo
+|  |  |  |  └── termos
+|  |  |  ├── page.tsx
+|  |  |  ├── parceiro
+|  |  |  |  └── page.tsx
+|  |  |  ├── pesquisa
+|  |  |  |  ├── page.tsx
+|  |  |  |  └── pais
+|  |  |  ├── privacidade
+|  |  |  |  └── page.tsx
+|  |  |  ├── recuperar-password
+|  |  |  |  └── page.tsx
+|  |  |  ├── registo
+|  |  |  |  └── page.tsx
+|  |  |  ├── seguranca
+|  |  |  |  └── page.tsx
+|  |  |  ├── sobre
+|  |  |  |  └── page.tsx
+|  |  |  ├── sucesso
+|  |  |  |  └── page.tsx
+|  |  |  └── termos
+|  |  |     └── page.tsx
+|  |  ├── [categoria]
+|  |  |  └── [localizacao]
+|  |  |     └── page.tsx
+|  |  ├── admin
+|  |  |  ├── campos
+|  |  |  |  ├── editar
+|  |  |  |  ├── novo
+|  |  |  |  └── page.tsx
+|  |  |  ├── contrato
+|  |  |  |  └── page.tsx
+|  |  |  ├── dashboard
+|  |  |  |  └── page.tsx
+|  |  |  ├── estatisticas
+|  |  |  |  └── page.tsx
+|  |  |  ├── faturacao
+|  |  |  |  └── page.tsx
+|  |  |  ├── inbox
+|  |  |  |  └── page.tsx
+|  |  |  ├── layout.tsx
+|  |  |  ├── recrutamento
+|  |  |  |  └── page.tsx
+|  |  |  └── reservas
+|  |  |     └── page.tsx
+|  |  ├── assinatura-contrato
+|  |  |  └── [id]
+|  |  |     └── page.tsx
+|  |  ├── lista
+|  |  |  └── [token]
+|  |  |     └── page.tsx
+|  |  ├── parceiro
+|  |  |  └── [id]
+|  |  |     └── page.tsx
+|  |  ├── reset-password
+|  |  |  └── page.tsx
+|  |  ├── superadmin
+|  |  |  ├── campos
+|  |  |  |  ├── editar
+|  |  |  |  └── page.tsx
+|  |  |  ├── contratos
+|  |  |  |  └── page.tsx
+|  |  |  ├── emails
+|  |  |  |  └── page.tsx
+|  |  |  ├── faturacao
+|  |  |  |  └── page.tsx
+|  |  |  ├── layout.tsx
+|  |  |  └── parceiros
+|  |  |     └── page.tsx
+|  |  └── unsubscribe
+|  |     └── page.tsx
+|  ├── api
+|  |  ├── admin
+|  |  |  └── aprovar-contrato
+|  |  |     └── route.ts
+|  |  ├── cancelar-reserva
+|  |  |  └── route.ts
+|  |  ├── contratos
+|  |  |  └── assinar
+|  |  |     └── route.ts
+|  |  ├── cron
+|  |  |  └── hello-outreach
+|  |  |     └── route.ts
+|  |  ├── enviar-duvida
+|  |  |  └── route.ts
+|  |  ├── inbox
+|  |  |  └── send-change-request
+|  |  |     └── route.ts
+|  |  ├── notificacoes
+|  |  |  ├── boas-vindas
+|  |  |  |  └── route.ts
+|  |  |  ├── nova-mensagem-recrutamento
+|  |  |  |  └── route.ts
+|  |  |  └── novo-contrato
+|  |  |     └── route.ts
+|  |  ├── notificar-reserva
+|  |  |  ├── admin
+|  |  |  |  └── criar-parceiro
+|  |  |  └── route.ts
+|  |  ├── processar-reembolso
+|  |  |  └── route.ts
+|  |  ├── send-contact
+|  |  |  └── route.ts
+|  |  ├── stripe-checkout
+|  |  |  └── route.ts
+|  |  ├── stripe-connect
+|  |  |  └── route.ts
+|  |  ├── stripe-webhook
+|  |  |  └── route.ts
+|  |  ├── superadmin
+|  |  |  └── enviar-broadcast
+|  |  |     └── route.ts
+|  |  ├── test-emails
+|  |  |  └── route.ts
+|  |  ├── translate-camp
+|  |  |  └── route.ts
+|  |  └── webhooks
+|  |     ├── brevo
+|  |     |  └── route.ts
+|  |     └── resend
+|  |        └── route.ts
+|  ├── globals.css
+|  ├── layout.tsx
+|  ├── not-found.tsx
+|  └── sitemap.ts
+├── dictionaries
+|  ├── en.json
+|  └── pt.json
+├── eslint.config.mjs
+├── hellocamp_arvore.txt
+├── hellocamp_b2b_admin.txt
+├── hellocamp_b2c_publico.txt
+├── lib
+|  ├── getDictionary.ts
+|  └── supabase.ts
+├── next-env.d.ts
+├── next.config.ts
+├── package-lock.json
+├── package.json
+├── postcss.config.mjs
+├── proxy.ts
+├── robots.ts
+└── tsconfig.json
+
+directory: 2087 file: 16965
+
+ignored: directory (18)
+
+
+[2K[1G

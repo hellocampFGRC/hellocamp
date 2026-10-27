@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   try {
     const { reservaId } = await req.json();
 
-    // 1. Busca direta da reserva para evitar ambiguidades de Joins no Supabase
+    // 1. Busca direta da reserva
     const { data: reserva, error: fetchError } = await supabase
       .from('reservas')
       .select('*')
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       throw new Error("Esta reserva já se encontra reembolsada.");
     }
 
-    // 2. Busca plana dos dados complementares nas tabelas paralelas
+    // 2. Busca plana dos dados complementares
     const { data: campoData } = await supabase.from('campos').select('nome, local').eq('id', reserva.campo_id).single();
     const { data: criancaData } = await supabase.from('criancas').select('nome').eq('id', reserva.crianca_id).single();
     const { data: clienteData } = await supabase.from('perfis').select('nome_completo, email').eq('id', reserva.cliente_id).single();
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
         try {
           const ids = JSON.parse(s.metadata.reservasIds);
           return ids.includes(reservaId);
-        } catch(e) { return false; }
+        } catch (e) { return false; }
       }
       return false;
     });
@@ -59,16 +59,15 @@ export async function POST(req: Request) {
       throw new Error("Transação Stripe não encontrada para emitir reembolso automático. Terá de reembolsar manualmente.");
     }
 
-    // 4. EXECUTAR REEMBOLSO REAL NA STRIPE (Reembolso Connect Protegido)
+    // 4. EXECUTAR REEMBOLSO REAL NA STRIPE
     const quantiaReembolsoCentimos = Math.round(Number(reserva.valor_total) * 100);
-    
+
     const refundParams: Stripe.RefundCreateParams = {
       payment_intent: matchSession.payment_intent as string,
       amount: quantiaReembolsoCentimos,
       reason: 'requested_by_customer'
     };
 
-    // Puxa o dinheiro da conta do organizador de volta se houver Stripe Connect configurado
     if (orgData?.stripe_account_id) {
       refundParams.reverse_transfer = true;
       refundParams.refund_application_fee = true;
@@ -76,7 +75,7 @@ export async function POST(req: Request) {
 
     await stripe.refunds.create(refundParams);
 
-    // 5. ATUALIZAR A BASE DE DADOS PARA REFLETIR O SUCESSO DO REEMBOLSO
+    // 5. ATUALIZAR A BASE DE DADOS
     await supabase.from('reservas').update({
       status_pagamento: 'Reembolsado',
       status_reembolso: 'Reembolsado',
@@ -84,20 +83,18 @@ export async function POST(req: Request) {
       dados_reembolso: { data_estorno: new Date().toISOString(), processado_por: 'SuperAdmin HQ' }
     }).eq('id', reservaId);
 
-    // 6. IDENTIFICAÇÃO DINÂMICA INTELIGENTE (Contorna campos vazios no perfil de teste)
+    // 6. IDENTIFICAÇÃO DINÂMICA
     const campoNome = campoData?.nome || 'Programa HelloCamp';
     const nomeCrianca = criancaData?.nome || 'Participante';
     const turnoNome = reserva.turno_nome || 'Programa Base';
     const valorReembolsado = Number(reserva.valor_total).toFixed(2);
-    
+
     const emailPai = clienteData?.email || reserva.email_encarregado || matchSession.customer_email || matchSession.customer_details?.email;
     const emailCampo = orgData?.email || 'info@hellocamp.pt';
     const nomeOrganizador = orgData?.empresa_nome || 'Organizador';
-
-    // Hierarquia de nomes para o Pai (Garante que se o perfil falhar, tenta o preenchimento da reserva ou o email)
     const nomePai = clienteData?.nome_completo || reserva.nome_encarregado || matchSession.customer_details?.name || emailPai?.split('@')[0] || 'Encarregado de Educação';
 
-    // A. EMAIL PREMIUM PARA O PAI
+    // A. EMAIL PARA O PAI
     if (emailPai) {
       await resend.emails.send({
         from: 'HelloCamp Finanças <info@hellocamp.pt>',
@@ -126,7 +123,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // B. EMAIL DE ATUALIZAÇÃO PARA O ORGANIZADOR DO CAMPO
+    // B. EMAIL PARA O ORGANIZADOR
     await resend.emails.send({
       from: 'HelloCamp Parceiros <info@hellocamp.pt>',
       to: emailCampo,
@@ -149,11 +146,11 @@ export async function POST(req: Request) {
       `
     });
 
-    // C. EMAIL DETALHADO MACRO PARA A HELLOCAMP (CONTROLO INTERNO EXAUSTIVO)
+    // C. EMAIL INTERNO MACRO (HELLOCAMP)
     await resend.emails.send({
       from: 'HelloCamp Control <info@hellocamp.pt>',
       to: 'info@hellocamp.pt',
-      subject: `[Reemboslo Efetuado] ${valorReembolsado}€ - ${campoNome}`,
+      subject: `[Reembolso Efetuado] ${valorReembolsado}€ - ${campoNome}`,
       html: `
         <div style="font-family: monospace; font-size: 13px; color: #1e293b; padding: 30px; background-color: #fdfdfd; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 650px; margin: 0 auto;">
           <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #0f172a; padding-bottom: 10px; font-family: sans-serif;">🚨 RELATÓRIO DE MOVIMENTAÇÃO DE CAPITAL</h2>
@@ -178,7 +175,8 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true, message: 'Reembolso efetuado e comunicados enviados.' });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+
+  } catch (error: any) {
+    return NextResponse.json({ error: "Erro ao processar o pedido: " + error.message }, { status: 500 });
   }
 }

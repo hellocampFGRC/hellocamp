@@ -17,19 +17,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltam campos obrigatórios.' }, { status: 400 });
     }
 
-    let destinatarios: { email: string, nome: string }[] = [];
+    let destinatarios: { email: string; nome: string }[] = [];
 
     // 1. ROTEAR DESTINATÁRIOS
     if (publico === 'csv') {
       if (!emailsManuais || emailsManuais.length === 0) {
         return NextResponse.json({ error: 'O ficheiro anexado não tem e-mails válidos.' }, { status: 400 });
       }
-      destinatarios = emailsManuais.map((email: string) => ({ email, nome: 'Amigo' }));
+      destinatarios = emailsManuais.map((email: string) => ({ email: email.trim(), nome: 'Parceiro / Cliente' }));
     } else {
       let query = supabaseAdmin.from('perfis').select('email, nome_completo');
       if (publico === 'organizadores') query = query.eq('role', 'organizador');
       else if (publico === 'clientes') query = query.eq('role', 'cliente');
-      
+
       const { data: utilizadores, error } = await query;
       if (error) throw error;
       if (!utilizadores || utilizadores.length === 0) {
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       }
 
       destinatarios = utilizadores.filter(u => u.email).map(u => ({
-        email: u.email,
+        email: u.email.trim(),
         nome: u.nome_completo?.split(' ')[0] || 'Utilizador'
       }));
     }
@@ -45,10 +45,10 @@ export async function POST(req: Request) {
     // 1.5 FILTRAR UNSUBSCRIBES
     const { data: listaNegraData } = await supabaseAdmin.from('unsubscribes').select('email');
     if (listaNegraData && listaNegraData.length > 0) {
-      const listaNegraEmails = listaNegraData.map(u => u.email.toLowerCase());
+      const listaNegraEmails = listaNegraData.map(u => u.email.toLowerCase().trim());
       destinatarios = destinatarios.filter(d => !listaNegraEmails.includes(d.email.toLowerCase()));
     }
-    
+
     if (destinatarios.length === 0) {
       return NextResponse.json({ error: 'Nenhum destinatário válido após aplicação da lista de remoções (Unsubscribe).' }, { status: 400 });
     }
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     if (dbError || !novaCampanha) throw new Error("Falha ao registar campanha na Base de Dados.");
 
     const broadcastId = novaCampanha.id;
-    const BATCH_SIZE = 50; 
+    const BATCH_SIZE = 50;
     let totalEnviados = 0;
 
     const apiKey = process.env.BREVO_API_KEY;
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
     // 3. ENVIAR EM BATCH VIA BREVO REST API
     for (let i = 0; i < destinatarios.length; i += BATCH_SIZE) {
       const lote = destinatarios.slice(i, i + BATCH_SIZE);
-      
+
       const promessasEnvio = lote.map(async (dest) => {
         const htmlContent = `
           <!DOCTYPE html>
@@ -101,9 +101,9 @@ export async function POST(req: Request) {
                         <h2 style="font-size: 22px; font-weight: bold; color: #0f172a; margin: 0 0 24px 0; line-height: 1.3;">
                           ${tituloDaMensagem || assunto}
                         </h2>
-                        <p style="font-size: 16px; color: #475569; line-height: 1.6; text-align: left; margin: 0 0 30px 0;">
+                        <div style="font-size: 16px; color: #475569; line-height: 1.6; text-align: left; margin: 0 0 30px 0;">
                           ${mensagemFormatada}
-                        </p>
+                        </div>
                         ${textoBotao && linkBotao ? `
                           <table width="100%" border="0" cellspacing="0" cellpadding="0">
                             <tr>
@@ -131,8 +131,8 @@ export async function POST(req: Request) {
                         <table border="0" cellspacing="0" cellpadding="0">
                           <tr>
                             <td align="center" bgcolor="#f1f5f9" style="border-radius: 4px; border: 1px solid #e2e8f0;">
-                              <a href="https://www.hellocamp.pt/unsubscribe?email=${encodeURIComponent(dest.email)}" target="_blank" style="display: inline-block; padding: 8px 16px; font-family: Arial, sans-serif; font-size: 11px; color: #64748b; text-decoration: none; font-weight: bold; border-radius: 4px;">
-                                Unsubscribe
+                              <a href="https://www.hellocamp.pt/pt/unsubscribe?email=${encodeURIComponent(dest.email)}" target="_blank" style="display: inline-block; padding: 8px 16px; font-family: Arial, sans-serif; font-size: 11px; color: #64748b; text-decoration: none; font-weight: bold; border-radius: 4px;">
+                                Cancelar Subscrição / Unsubscribe
                               </a>
                             </td>
                           </tr>
@@ -163,7 +163,6 @@ export async function POST(req: Request) {
           })
         });
 
-        // AQUI ESTÁ A CORREÇÃO: Capturamos o erro real da Brevo
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(`Brevo rejeitou o envio: ${errorData.message || JSON.stringify(errorData)}`);
@@ -178,8 +177,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, totalEnviados });
 
-  } catch (error: any) {
-    console.error("Erro no broadcast (Brevo):", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

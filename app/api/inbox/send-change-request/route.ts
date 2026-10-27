@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
-// Usamos o Service Role Key para garantir que o sistema pode escrever na reserva
-// independentemente das restrições de RLS do utilizador comum.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -13,16 +11,17 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { reservaId, organizadorId, campoNome, mensagem, lang } = body;
+    const { reservaId, organizadorId, campoNome, mensagem, lang = 'pt' } = body;
 
     if (!reservaId || !organizadorId || !mensagem) {
       return NextResponse.json({ error: 'Faltam dados obrigatórios' }, { status: 400 });
     }
 
-    const isEn = lang === 'en';
+    const safeLang = lang === 'en' ? 'en' : 'pt';
+    const isEn = safeLang === 'en';
     const assunto = isEn ? `Change Request: ${campoNome}` : `Pedido de Alteração: ${campoNome}`;
 
-    // 1. Procurar as respostas customizadas atuais para preservar dados antigos (como a origem ou outros formulários)
+    // 1. Procurar as respostas customizadas atuais para preservar dados antigos
     const { data: reserva, error: fetchError } = await supabase
       .from('reservas')
       .select('respostas_customizadas')
@@ -32,7 +31,6 @@ export async function POST(req: Request) {
     if (fetchError) throw fetchError;
 
     const respostasAtuais = reserva?.respostas_customizadas || {};
-    // Injetar a chave exata que a tabela e a ficha do parceiro procuram para exibir o alerta
     respostasAtuais.pedido_pai_pendente = mensagem;
 
     // 2. Atualizar a tabela de reservas com o novo estado do JSON
@@ -46,7 +44,7 @@ export async function POST(req: Request) {
     // 3. Inserir na tabela de Mensagens para manter o histórico da Inbox/Chat síncrono
     const { error: dbError } = await supabase.from('mensagens').insert({
       reserva_id: reservaId,
-      remetente_id: 'sistema', 
+      remetente_id: 'sistema',
       destinatario_id: organizadorId,
       assunto: assunto,
       conteudo: `O encarregado de educação solicitou a seguinte alteração/extra para a inscrição #${reservaId}:\n\n"${mensagem}"\n\nAceda à Central de Reservas para analisar o pedido e solicitar o Pagamento Extra se aplicável.`,
@@ -55,7 +53,7 @@ export async function POST(req: Request) {
 
     if (dbError) throw dbError;
 
-    // 4. Procurar o Email do Organizador para enviar o alerta real para a caixa de correio externa
+    // 4. Procurar o Email do Organizador para enviar o alerta real
     const { data: organizador } = await supabase
       .from('perfis')
       .select('email')
@@ -64,17 +62,26 @@ export async function POST(req: Request) {
 
     if (organizador?.email) {
       const htmlContent = `
-        <div style="font-family: sans-serif; max-w: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-          <h2 style="color: #0f172a;">Novo Pedido de Alteração (HelloCamp)</h2>
-          <p>O encarregado de educação da reserva <strong>#${reservaId}</strong> enviou uma solicitação de alteração ou adição de extras para o programa <strong>${campoNome}</strong>.</p>
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 8px; color: #0f172a; line-height: 1.6;">
+          <h2 style="color: #0f172a; margin-top: 0;">${isEn ? 'New Change Request (HelloCamp)' : 'Novo Pedido de Alteração (HelloCamp)'}</h2>
+          <p>${isEn
+            ? `The parent/guardian for booking <strong>#${reservaId}</strong> sent a change or extra request for the program <strong>${campoNome}</strong>:`
+            : `O encarregado de educação da reserva <strong>#${reservaId}</strong> enviou uma solicitação de alteração ou adição de extras para o programa <strong>${campoNome}</strong>:`}</p>
           
-          <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #2563eb; margin: 20px 0; font-style: italic;">
-            "${mensagem}"
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #2563eb; margin: 20px 0; font-style: italic; white-space: pre-wrap;">"${mensagem}"</div>
+          
+          <p><strong>${isEn ? 'Action required:' : 'Ação necessária:'}</strong> ${isEn
+            ? 'Access your Bookings Center on HelloCamp, open this participant\'s record, and use the Financial Control panel to issue an additional charge if applicable.'
+            : 'Aceda à sua Central de Reservas na HelloCamp, abra a ficha deste participante e utilize o painel de Controlo Financeiro para lançar a cobrança adicional correspondente.'}</p>
+
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="https://www.hellocamp.pt/${safeLang}/admin/reservas" style="display: inline-block; background-color: #167524; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+              ${isEn ? 'Open Bookings Center' : 'Abrir Central de Reservas'}
+            </a>
           </div>
-          
-          <p><strong>Ação necessária:</strong> Aceda à sua Central de Reservas na HelloCamp, abra a ficha deste participante e utilize o painel de Controlo Financeiro para lançar a cobrança adicional correspondente.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #64748b;">Este é um e-mail automático gerado pelo sistema HelloCamp.</p>
+
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #64748b; margin: 0;">${isEn ? 'This is an automated email generated by the HelloCamp system.' : 'Este é um e-mail automático gerado pelo sistema HelloCamp.'}</p>
         </div>
       `;
 
@@ -87,6 +94,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true, message: 'Pedido processado e enviado com sucesso.' });
+
   } catch (error: any) {
     console.error("Erro na API de pedido de alteração:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
