@@ -1,26 +1,52 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   try {
     const data = await req.json();
-    const { lead, campoNome, parceiroEmail, lang = 'pt' } = data;
+    const {
+      lead: rawLead,
+      campoNome,
+      parceiroEmail = 'info@hellocamp.pt',
+      lang = 'pt',
+      tipo = 'padrao'
+    } = data;
+
     const safeLang = lang === 'en' ? 'en' : 'pt';
     const isEn = safeLang === 'en';
 
-    if (!lead || !lead.nome || !lead.email || !parceiroEmail) {
-      return NextResponse.json({ error: 'Faltam dados obrigatórios para envio da notificação.' }, { status: 400 });
+    // Normaliza os campos quer venham da página do Campo (nome/email/telefone),
+    // do Checkout (nome_cliente/email_cliente) ou da página de Autarquias/Institucional (nomePai/emailPai/telefonePai)
+    const lead = rawLead
+      ? {
+          nome: rawLead.nome || rawLead.nomePai || rawLead.nome_cliente || 'Encarregado de Educação',
+          email: rawLead.email || rawLead.emailPai || rawLead.email_cliente || '',
+          telefone: rawLead.telefone || rawLead.telefonePai || rawLead.telefone_cliente || 'N/A',
+          mensagem: rawLead.mensagem || rawLead.subprogramaId || rawLead.turnoInteresse || ''
+        }
+      : null;
+
+    if (!lead || !lead.email || !parceiroEmail) {
+      return NextResponse.json(
+        { error: 'Faltam dados obrigatórios para envio da notificação.' },
+        { status: 400 }
+      );
     }
 
     const apiKey = process.env.BREVO_API_KEY;
     if (!apiKey) {
-      throw new Error("A chave API da Brevo não está configurada no servidor.");
+      throw new Error('A chave API da Brevo não está configurada no servidor.');
     }
 
     const emailHelloCamp = 'info@hellocamp.pt';
+    const isInstitucional = tipo === 'institucional';
 
     // 1. CONSTRUÇÃO DO ASSUNTO
-    const subject = isEn 
-      ? `🎯 New Booking Lead: ${campoNome}` 
+    const subject = isInstitucional
+      ? `[Autarquia / Institucional] Nova Pré-Inscrição: ${campoNome}`
+      : isEn
+      ? `🎯 New Booking Lead: ${campoNome}`
       : `🎯 Nova Intenção de Reserva: ${campoNome}`;
 
     // 2. CONSTRUÇÃO DO CORPO DO E-MAIL (HTML Profissional)
@@ -50,19 +76,25 @@ export async function POST(req: Request) {
                 <tr>
                   <td align="left" style="padding: 40px 30px;">
                     <h2 style="font-size: 20px; font-weight: bold; color: #0f172a; margin: 0 0 20px 0;">
-                      ${isEn ? 'New Booking Intent' : 'Nova Intenção de Reserva'}
+                      ${isInstitucional
+                        ? 'Novo Pedido de Inscrição Institucional'
+                        : isEn
+                        ? 'New Booking Intent'
+                        : 'Nova Intenção de Reserva'}
                     </h2>
                     
                     <p style="font-size: 15px; color: #475569; line-height: 1.6; margin: 0 0 25px 0;">
-                      ${isEn 
-                        ? `A customer has shown a strong interest in booking <strong>${campoNome}</strong> and was redirected to your official external form to complete the registration.` 
+                      ${isInstitucional
+                        ? `Um munícipe / encarregado de educação submeteu um pedido de inscrição ou informação para a iniciativa <strong>${campoNome}</strong> através do Portal Autárquico HelloCamp.`
+                        : isEn
+                        ? `A customer has shown a strong interest in booking <strong>${campoNome}</strong> and was redirected to your official external form to complete the registration.`
                         : `Um cliente demonstrou forte intenção de reserva no programa <strong>${campoNome}</strong> e foi reencaminhado da plataforma HelloCamp para o vosso formulário oficial para concluir a inscrição.`}
                     </p>
 
                     <!-- CAIXA DE DADOS DO CLIENTE -->
-                    <div style="background-color: #f1f5f9; border-left: 4px solid #059669; padding: 20px; border-radius: 4px; margin-bottom: 30px;">
+                    <div style="background-color: #f1f5f9; border-left: 4px solid #167524; padding: 20px; border-radius: 4px; margin-bottom: 30px;">
                       <h3 style="font-size: 12px; text-transform: uppercase; color: #64748b; margin: 0 0 10px 0; letter-spacing: 1px;">
-                        ${isEn ? 'Customer Details (Lead)' : 'Dados do Cliente (Lead)'}
+                        ${isEn ? 'Customer Details (Lead)' : 'Dados do Encarregado de Educação'}
                       </h3>
                       <p style="margin: 0 0 8px 0; font-size: 15px; color: #0f172a;">
                         <strong>${isEn ? 'Name' : 'Nome'}:</strong> ${lead.nome}
@@ -70,21 +102,28 @@ export async function POST(req: Request) {
                       <p style="margin: 0 0 8px 0; font-size: 15px; color: #0f172a;">
                         <strong>E-mail:</strong> <a href="mailto:${lead.email}" style="color: #0284c7; text-decoration: none;">${lead.email}</a>
                       </p>
-                      <p style="margin: 0; font-size: 15px; color: #0f172a;">
-                        <strong>${isEn ? 'Phone' : 'Telefone'}:</strong> ${lead.telefone || 'N/A'}
+                      <p style="margin: 0 0 8px 0; font-size: 15px; color: #0f172a;">
+                        <strong>${isEn ? 'Phone' : 'Telefone'}:</strong> ${lead.telefone}
                       </p>
+                      ${lead.mensagem ? `
+                        <p style="margin: 8px 0 0 0; padding-top: 8px; border-top: 1px solid #cbd5e1; font-size: 14px; color: #334155;">
+                          <strong>${isEn ? 'Selected Option / Notes' : 'Opção / Observações'}:</strong> ${lead.mensagem}
+                        </p>
+                      ` : ''}
                     </div>
 
-                    <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin: 0 0 30px 0; padding-top: 20px; border-top: 1px solid #e2e8f0;">
-                      <strong>${isEn ? 'Transparency & Commissioning:' : 'Transparência e Comissionamento:'}</strong><br>
-                      ${isEn 
-                        ? 'For transparency and auditing purposes, this contact has been logged in our system. At the end of the billing cycle, we will ask your team to cross-reference this lead with your officially paid bookings to calculate the correct commission.' 
-                        : 'Para efeitos de transparência e auditoria de comissionamento, registámos este contacto no nosso sistema. No final do ciclo de faturação, pediremos à vossa equipa que cruze esta listagem com as inscrições efetivamente pagas no vosso sistema para o cálculo correto da comissão.'}
-                    </p>
+                    ${!isInstitucional ? `
+                      <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin: 0 0 30px 0; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                        <strong>${isEn ? 'Transparency & Commissioning:' : 'Transparência e Comissionamento:'}</strong><br>
+                        ${isEn
+                          ? 'For transparency and auditing purposes, this contact has been logged in our system. At the end of the billing cycle, we will ask your team to cross-reference this lead with your officially paid bookings to calculate the correct commission.'
+                          : 'Para efeitos de transparência e auditoria de comissionamento, registámos este contacto no nosso sistema. No final do ciclo de faturação, pediremos à vossa equipa que cruze esta listagem com as inscrições efetivamente pagas no vosso sistema para o cálculo correto da comissão.'}
+                      </p>
+                    ` : ''}
 
                     <div style="text-align: center; margin: 25px 0;">
-                      <a href="https://www.hellocamp.pt/${safeLang}/login" style="display: inline-block; background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;">
-                        ${isEn ? 'Access Partner Portal' : 'Aceder ao Portal do Parceiro'}
+                      <a href="https://www.hellocamp.pt/${safeLang}/login" style="display: inline-block; background-color: #167524; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px;">
+                        ${isEn ? 'Access Partner Portal' : 'Aceder ao Portal HelloCamp'}
                       </a>
                     </div>
 
@@ -96,20 +135,6 @@ export async function POST(req: Request) {
                 </tr>
 
               </table>
-              
-              <!-- RODAPÉ -->
-              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px;">
-                <tr>
-                  <td align="center" style="padding-top: 20px;">
-                    <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin: 0;">
-                      ${isEn 
-                        ? 'This is an automated message generated by the HelloCamp B2B Platform.' 
-                        : 'Esta é uma mensagem automática gerada pela Plataforma B2B da HelloCamp.'}
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
             </td>
           </tr>
         </table>
@@ -129,6 +154,7 @@ export async function POST(req: Request) {
         sender: { name: 'Equipa HelloCamp', email: emailHelloCamp },
         to: [{ email: parceiroEmail }],
         cc: [{ email: emailHelloCamp, name: 'Auditoria HelloCamp' }],
+        replyTo: { email: lead.email, name: lead.nome },
         subject: subject,
         htmlContent: htmlContent
       })
@@ -139,8 +165,10 @@ export async function POST(req: Request) {
       throw new Error(`A API da Brevo rejeitou o envio: ${errorData.message || JSON.stringify(errorData)}`);
     }
 
-    return NextResponse.json({ success: true, message: 'Notificação de Lead externa disparada com sucesso via Brevo.' });
-
+    return NextResponse.json({
+      success: true,
+      message: 'Notificação disparada com sucesso via Brevo.'
+    });
   } catch (error: any) {
     console.error('Erro na API /notificar-reserva:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

@@ -34,22 +34,48 @@ export async function POST(req: Request) {
       throw new Error("Esta reserva já se encontra cancelada e tratada.");
     }
 
-    // 2. Busca de Dados Complementares
-    const { data: campoData } = await supabase.from('campos').select('nome, local, politica_cancelamento').eq('id', reserva.campo_id).single();
+    // 2. Busca de Dados Complementares (incluindo datas do campo para fallback seguro)
+    const { data: campoData } = await supabase
+      .from('campos')
+      .select('nome, local, politica_cancelamento, data_inicio, pacotes, calendario_funcionamento')
+      .eq('id', reserva.campo_id)
+      .single();
     const { data: criancaData } = await supabase.from('criancas').select('nome').eq('id', reserva.crianca_id).single();
     const { data: clienteData } = await supabase.from('perfis').select('nome_completo, email').eq('id', reserva.cliente_id).single();
     const { data: orgData } = await supabase.from('perfis').select('email, empresa_nome, stripe_account_id').eq('id', reserva.organizador_id).single();
 
-    // 3. MATEMÁTICA: Calcular Dias até ao Início do Campo
+    // 3. MATEMÁTICA: Calcular Dias até ao Início do Campo (Com 5 Níveis de Fallback Seguro)
     let dataInicioTurno: Date | null = null;
+
+    // Fallback 1: Coluna reserva.turno (se existir)
     try {
       const turnoObj = typeof reserva.turno === 'string' ? JSON.parse(reserva.turno) : reserva.turno;
-      if (turnoObj && turnoObj.data_inicio) dataInicioTurno = new Date(turnoObj.data_inicio);
-    } catch (e) {
-      console.error(e);
+      if (turnoObj?.data_inicio) dataInicioTurno = new Date(turnoObj.data_inicio);
+    } catch (e) {}
+
+    // Fallback 2: Primeiro dia escolhido em extras_escolhidos.dias_soltos (formato YYYY-MM-DD)
+    if (!dataInicioTurno || isNaN(dataInicioTurno.getTime())) {
+      const diasSoltos = reserva.extras_escolhidos?.dias_soltos;
+      if (Array.isArray(diasSoltos) && diasSoltos.length > 0) {
+        const diasOrdenados = [...diasSoltos].sort();
+        const d = new Date(diasOrdenados[0]);
+        if (!isNaN(d.getTime())) dataInicioTurno = d;
+      }
     }
 
-    if (!dataInicioTurno) throw new Error("A data de início do turno não foi encontrada na reserva.");
+    // Fallback 3: Calendário de funcionamento do campo ou data_inicio do campo
+    if (!dataInicioTurno || isNaN(dataInicioTurno.getTime())) {
+      const calInicio = campoData?.calendario_funcionamento?.data_inicio || campoData?.data_inicio;
+      if (calInicio) {
+        const d = new Date(calInicio);
+        if (!isNaN(d.getTime())) dataInicioTurno = d;
+      }
+    }
+
+    // Fallback 4: Se o campo não tiver data fixa definida (ex: aberto todo o ano), assume 30 dias de antecedência para não bloquear o pai
+    if (!dataInicioTurno || isNaN(dataInicioTurno.getTime())) {
+      dataInicioTurno = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    }
 
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
@@ -58,7 +84,7 @@ export async function POST(req: Request) {
     const diffDias = Math.ceil((inicio.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
 
     // 4. LÓGICA DE CANCELAMENTO (Flexível, Moderada, Estrita)
-    const politica = campoData?.politica_cancelamento || '';
+    const politica = campoData?.politica_cancelamento || 'Flexível';
     const valorPagoGeral = Number(reserva.valor_pago) || Number(reserva.valor_total) || 0;
     let valorAReembolsar = 0;
     let descricaoPolitica = 'Estrita (Sem Reembolso)';
@@ -67,11 +93,15 @@ export async function POST(req: Request) {
       if (diffDias >= 7) {
         valorAReembolsar = valorPagoGeral;
         descricaoPolitica = 'Flexível (100% devolvido)';
+      } else {
+        descricaoPolitica = `Flexível (Cancelado a menos de 7 dias: ${diffDias} dias)`;
       }
     } else if (politica.includes('Moderada')) {
       if (diffDias >= 15) {
         valorAReembolsar = valorPagoGeral * 0.5;
         descricaoPolitica = 'Moderada (50% devolvido)';
+      } else {
+        descricaoPolitica = `Moderada (Cancelado a menos de 15 dias: ${diffDias} dias)`;
       }
     } else if (politica.includes('Estrita')) {
       valorAReembolsar = 0;
@@ -142,7 +172,6 @@ export async function POST(req: Request) {
     const nomeOrganizador = orgData?.empresa_nome || 'Organizador';
     const nomePai = clienteData?.nome_completo || reserva.nome_encarregado || 'Encarregado de Educação';
 
-    // A. EMAIL PARA O PAI
     if (emailPai) {
       await resend.emails.send({
         from: 'HelloCamp Finanças <info@hellocamp.pt>',
@@ -155,7 +184,6 @@ export async function POST(req: Request) {
               <h2 style="font-size: 18px; font-weight: 700; margin-top: 0; color: #991b1b;">Inscrição Cancelada com Sucesso</h2>
               <p style="font-size: 14px; line-height: 1.6; color: #991b1b; margin-bottom: 0;">Olá <strong>${nomePai}</strong>, confirmamos o cancelamento da sua reserva.</p>
             </div>
-            
             <div style="margin: 30px 0;">
               <h3 style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Resumo do Cancelamento</h3>
               <table width="100%" style="font-size: 14px; color: #334155; margin-top: 12px; line-height: 2;">
@@ -166,15 +194,11 @@ export async function POST(req: Request) {
                 <tr><td style="padding-top: 10px; border-top: 1px dashed #e2e8f0;"><strong>Valor Estornado:</strong></td><td style="text-align: right; font-weight: bold; color: #dc2626; font-size: 16px; padding-top: 10px; border-top: 1px dashed #e2e8f0;">${valorStr}€</td></tr>
               </table>
             </div>
-            ${valorAReembolsar > 0 
-              ? `<p style="font-size: 12px; color: #64748b; line-height: 1.5;">O montante de ${valorStr}€ foi creditado na mesma via de pagamento original. Dependendo do seu banco, o saldo estará visível no extrato num prazo estimado de 5 a 10 dias úteis.</p>` 
-              : `<p style="font-size: 12px; color: #64748b; line-height: 1.5;">De acordo com os termos contratuais e a data de cancelamento face ao início do campo, esta reserva não reuniu os critérios para reembolso financeiro.</p>`}
           </div>
         `
       });
     }
 
-    // B. EMAIL PARA O ORGANIZADOR
     await resend.emails.send({
       from: 'HelloCamp Parceiros <info@hellocamp.pt>',
       to: emailCampo,
@@ -184,35 +208,27 @@ export async function POST(req: Request) {
           <h2 style="color: #b91c1c; border-bottom: 2px solid #b91c1c; padding-bottom: 10px; font-size: 20px;">Vaga Libertada - Cancelamento</h2>
           <p>Caro parceiro da entidade <strong>${nomeOrganizador}</strong>,</p>
           <p>Informamos que uma vaga para o seu programa foi cancelada por iniciativa do cliente.</p>
-          
           <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 20px 0; line-height: 1.8;">
             <p style="margin: 0;"><strong>Programa de Férias:</strong> ${campoNome}</p>
             <p style="margin: 0;"><strong>Turno Afetado:</strong> ${turnoNome}</p>
             <p style="margin: 0;"><strong>Participante removido:</strong> ${nomeCrianca}</p>
             <p style="margin: 0; color: #dc2626;"><strong>Valor Reembolsado ao Cliente:</strong> ${valorStr}€ (${descricaoPolitica})</p>
           </div>
-          <p style="font-size: 13px; color: #64748b;">A vaga foi automaticamente recolocada disponível para venda no site. Os ajustes financeiros (caso se apliquem) refletir-se-ão no seu Stripe Connect.</p>
         </div>
       `
     });
 
-    // C. EMAIL INTERNO MACRO (HELLOCAMP)
     await resend.emails.send({
       from: 'HelloCamp Control <info@hellocamp.pt>',
       to: 'info@hellocamp.pt',
       subject: `[Cancelamento Auto] ${valorStr}€ Devolvidos - ${campoNome}`,
       html: `
         <div style="font-family: monospace; font-size: 13px; color: #1e293b; padding: 30px; background-color: #fdfdfd; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 650px; margin: 0 auto;">
-          <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #0f172a; padding-bottom: 10px; font-family: sans-serif;">🚨 RELATÓRIO DE CANCELAMENTO</h2>
-          <p style="font-size: 14px; font-weight: bold; color: #dc2626;">Operação executada via Dashboard do Pai.</p>
-          <table width="100%" style="margin-top: 20px; font-family: monospace; line-height: 2;">
-            <tr style="background-color: #f1f5f9;"><td width="40%"><strong>ID da Reserva:</strong></td><td>${reservaId}</td></tr>
-            <tr><td><strong>Programa:</strong></td><td>${campoNome}</td></tr>
-            <tr style="background-color: #f1f5f9;"><td><strong>Nome do Pai:</strong></td><td>${nomePai}</td></tr>
-            <tr><td><strong>Entidade Parceira:</strong></td><td>${nomeOrganizador}</td></tr>
-            <tr style="background-color: #f1f5f9;"><td><strong>Regra Aplicada:</strong></td><td>${descricaoPolitica} (${diffDias} dias p/ início)</td></tr>
-            <tr><td><strong>Valor Devolvido (Stripe):</strong></td><td style="color: #b91c1c; font-weight: bold;">${valorStr}€</td></tr>
-          </table>
+          <h2 style="color: #0f172a; margin-top: 0;">🚨 RELATÓRIO DE CANCELAMENTO</h2>
+          <p><strong>ID da Reserva:</strong> ${reservaId}</p>
+          <p><strong>Programa:</strong> ${campoNome}</p>
+          <p><strong>Regra Aplicada:</strong> ${descricaoPolitica} (${diffDias} dias p/ início)</p>
+          <p><strong>Valor Devolvido:</strong> ${valorStr}€</p>
         </div>
       `
     });
