@@ -150,19 +150,20 @@ export default function GestaoParceirosHQ({ params }: { params: Promise<{ lang: 
     setSaving(false);
   };
 
-  const handleRecuperarPassword = async (email: string) => {
-    if (!window.confirm(`Enviar link de recuperação de password para ${email}?`)) return;
-    
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/${lang}/admin/redefinir-password`,
-    });
+ const handleRecuperarPassword = async (email: string) => {
+  if (!window.confirm(`Enviar link de recuperação de password para ${email}?`)) return;
 
-    if (error) alert("Erro ao enviar e-mail: " + error.message);
-    else alert("E-mail de recuperação enviado com sucesso para o parceiro!");
-  };
+  // CORREÇÃO CRÍTICA: A página real é /atualizar-password (não existe /admin/redefinir-password)
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/${lang}/atualizar-password`,
+  });
 
-  const textoMensagem = `Olá ${welcomeData.nome.split(' ')[0]}! 🎉\n\nA sua conta de Parceiro Organizador na plataforma HelloCamp foi criada com sucesso.\n\nPara aceder ao painel de controlo, completar informações e rever o Acordo de Intermediação, utilize os seguintes dados temporários:\n\n🔗 Link de Acesso: https://hellocamp.pt/${lang}/admin/login\n✉️ E-mail: ${welcomeData.email}\n🔑 Password: ${welcomeData.password}\n\nRecomendamos que altere a password no seu perfil assim que entrar.\n\nQualquer dúvida, estamos à disposição!\nEquipa HelloCamp`;
+  if (error) alert("Erro ao enviar e-mail: " + error.message);
+  else alert("E-mail de recuperação enviado com sucesso para o parceiro!");
+};
 
+// CORREÇÃO CRÍTICA: O link de login real é /${lang}/login (não existe /admin/login)
+const textoMensagem = `Olá ${welcomeData.nome.split(' ')[0]}! 🎉\n\nA sua conta de Parceiro Organizador na plataforma HelloCamp foi criada com sucesso.\n\nPara aceder ao painel de controlo, completar informações e rever o Acordo de Intermediação, utilize os seguintes dados temporários:\n\n🔗 Link de Acesso: https://www.hellocamp.pt/${lang}/login\n✉️ E-mail: ${welcomeData.email}\n🔑 Password: ${welcomeData.password}\n\nRecomendamos que altere a password no seu perfil assim que entrar.\n\nQualquer dúvida, estamos à disposição!\nEquipa HelloCamp`;
   return (
     <div className="max-w-7xl mx-auto font-sans pb-16 px-4 md:px-0">
       

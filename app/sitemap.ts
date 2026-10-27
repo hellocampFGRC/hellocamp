@@ -1,185 +1,149 @@
-import { MetadataRoute } from 'next';
-import { supabase } from '@/lib/supabase';
-
-export const revalidate = 3600; // regenera a cada 1h
+import { MetadataRoute } from "next";
+import { supabase } from "@/lib/supabase";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://www.hellocamp.pt';
-  const langs = ['pt', 'en'] as const;
+  const baseUrl = "https://www.hellocamp.pt";
+  const idiomas = ["pt", "en"];
+  const agora = new Date();
 
-  const alt = (path: string) => ({
-    languages: {
-      pt: `${baseUrl}/pt${path}`,
-      en: `${baseUrl}/en${path}`,
-      'x-default': `${baseUrl}/pt${path}`,
-    },
-  });
-
-  const now = new Date();
-
-  // ═══════════════════════════════════════════
-  // 1. PÁGINAS ESTÁTICAS
-  // ═══════════════════════════════════════════
-  const staticPaths = [
-    { path: '', priority: 1.0, freq: 'daily' as const },
-    { path: '/pesquisa', priority: 0.95, freq: 'daily' as const },
-    { path: '/mapa', priority: 0.85, freq: 'weekly' as const },
-    { path: '/institucional', priority: 0.85, freq: 'weekly' as const },
-    { path: '/blog', priority: 0.8, freq: 'weekly' as const },
-    { path: '/guia-pais', priority: 0.8, freq: 'weekly' as const },
-    { path: '/ser-parceiro', priority: 0.75, freq: 'monthly' as const },
-    { path: '/sobre', priority: 0.7, freq: 'monthly' as const },
-    { path: '/como-funciona', priority: 0.7, freq: 'monthly' as const },
-    { path: '/seguranca', priority: 0.6, freq: 'monthly' as const },
-    { path: '/termos', priority: 0.4, freq: 'yearly' as const },
-    { path: '/privacidade', priority: 0.4, freq: 'yearly' as const },
-    { path: '/cookies', priority: 0.3, freq: 'yearly' as const },
+  // 1. Páginas Estáticas Principais (Apenas rotas que existem!)
+  const rotasEstaticas = [
+    "",
+    "/pesquisa",
+    "/mapa",
+    "/parceiro",
+    "/monitores",
+    "/institucional",
+    "/guia-pais",
+    "/blog",
+    "/sobre",
+    "/seguranca",
+    "/termos",
+    "/privacidade",
+    "/cookies",
   ];
 
-  const staticUrls: MetadataRoute.Sitemap = langs.flatMap((lang) =>
-    staticPaths.map((p) => ({
-      url: `${baseUrl}/${lang}${p.path}`,
-      lastModified: now,
-      changeFrequency: p.freq,
-      priority: p.priority,
-      alternates: alt(p.path),
-    }))
-  );
+  const urlsEstaticas: MetadataRoute.Sitemap = [];
+  for (const lang of idiomas) {
+    for (const rota of rotasEstaticas) {
+      urlsEstaticas.push({
+        url: `${baseUrl}/${lang}${rota}`,
+        lastModified: agora,
+        changeFrequency: rota === "" || rota === "/pesquisa" ? "daily" : "weekly",
+        priority: rota === "" ? 1.0 : rota === "/pesquisa" || rota === "/parceiro" ? 0.9 : 0.7,
+      });
+    }
+  }
 
-  // ═══════════════════════════════════════════
-  // 2. CAMPOS DE FÉRIAS
-  // ═══════════════════════════════════════════
-  const { data: campos } = await supabase
-    .from('campos')
-    .select('id, updated_at')
-    .not('contrato_parceiro_url', 'is', null);
+  // 2. Rotas Programáticas SEO ("Isca" Google)
+  const rotasProgramaticas = [
+    "surf/algarve",
+    "futebol/madrid",
+    "ingles/reino-unido",
+    "desporto/lisboa",
+    "tecnologia/porto",
+    "aventura/espanha",
+  ];
 
-  const camposUrls: MetadataRoute.Sitemap = (campos || []).flatMap((c) => {
-    const path = `/campo/${c.id}`;
-    const lastMod = c.updated_at ? new Date(c.updated_at) : now;
-    return langs.map((lang) => ({
-      url: `${baseUrl}/${lang}${path}`,
-      lastModified: lastMod,
-      changeFrequency: 'weekly' as const,
-      priority: 0.85,
-      alternates: alt(path),
-    }));
+  const urlsProgramaticas: MetadataRoute.Sitemap = [];
+  for (const lang of idiomas) {
+    for (const slug of rotasProgramaticas) {
+      urlsProgramaticas.push({
+        url: `${baseUrl}/${lang}/${slug}`,
+        lastModified: agora,
+        changeFrequency: "weekly",
+        priority: 0.85,
+      });
+    }
+  }
+
+  // 3. Distritos e Países Principais
+  const distritos = ["Lisboa", "Porto", "Faro", "Braga", "Setúbal", "Coimbra", "Aveiro", "Leiria", "Viana do Castelo"];
+  const paises = ["Portugal", "Espanha", "Reino Unido", "França"];
+
+  const urlsGeograficas: MetadataRoute.Sitemap = [];
+  for (const lang of idiomas) {
+    for (const d of distritos) {
+      urlsGeograficas.push({
+        url: `${baseUrl}/${lang}/distrito/${encodeURIComponent(d)}`,
+        lastModified: agora,
+        changeFrequency: "weekly",
+        priority: 0.8,
+      });
+    }
+    for (const p of paises) {
+      urlsGeograficas.push({
+        url: `${baseUrl}/${lang}/pesquisa/pais/${encodeURIComponent(p)}`,
+        lastModified: agora,
+        changeFrequency: "weekly",
+        priority: 0.8,
+      });
+    }
+  }
+
+  // 4. Campos Dinâmicos, Perfis de Parceiros e Artigos do Blog
+  const [{ data: campos }, { data: posts }] = await Promise.all([
+    supabase
+      .from("campos")
+      .select("id, organizador_id, created_at")
+      .eq("ativo", true)
+      .not("contrato_parceiro_url", "is", null),
+    supabase
+      .from("blog_posts")
+      .select("slug, created_at")
+      .eq("publicado", true),
+  ]);
+
+  const urlsCampos: MetadataRoute.Sitemap = [];
+  const organizadoresIds = new Set<string>();
+
+  if (campos) {
+    for (const campo of campos) {
+      if (campo.organizador_id) organizadoresIds.add(campo.organizador_id);
+      for (const lang of idiomas) {
+        urlsCampos.push({
+          url: `${baseUrl}/${lang}/campo/${campo.id}`,
+          lastModified: campo.created_at ? new Date(campo.created_at) : agora,
+          changeFrequency: "weekly",
+          priority: 0.9,
+        });
+      }
+    }
+  }
+
+  const urlsParceiros: MetadataRoute.Sitemap = [];
+  organizadoresIds.forEach((orgId) => {
+    for (const lang of idiomas) {
+      urlsParceiros.push({
+        url: `${baseUrl}/${lang}/parceiro/${orgId}`,
+        lastModified: agora,
+        changeFrequency: "weekly",
+        priority: 0.75,
+      });
+    }
   });
 
-  // ═══════════════════════════════════════════
-  // 3. PAÍSES (Guias de destino)
-  // ═══════════════════════════════════════════
-  const { data: paises } = await supabase.from('paises').select('nome, updated_at');
+  const urlsBlog: MetadataRoute.Sitemap = [];
+  if (posts) {
+    for (const post of posts) {
+      if (!post.slug) continue;
+      for (const lang of idiomas) {
+        urlsBlog.push({
+          url: `${baseUrl}/${lang}/blog/${encodeURIComponent(post.slug)}`,
+          lastModified: post.created_at ? new Date(post.created_at) : agora,
+          changeFrequency: "monthly",
+          priority: 0.7,
+        });
+      }
+    }
+  }
 
-  const paisesUrls: MetadataRoute.Sitemap = (paises || []).flatMap((p) => {
-    const path = `/pesquisa/pais/${encodeURIComponent(p.nome)}`;
-    const lastMod = p.updated_at ? new Date(p.updated_at) : now;
-    return langs.map((lang) => ({
-      url: `${baseUrl}/${lang}${path}`,
-      lastModified: lastMod,
-      changeFrequency: 'weekly' as const,
-      priority: 0.8,
-      alternates: alt(path),
-    }));
-  });
-
-  // ═══════════════════════════════════════════
-  // 4. DISTRITOS (Guias de destino)
-  // ═══════════════════════════════════════════
-  const { data: distritos } = await supabase.from('distritos').select('nome, updated_at');
-
-  const distritosUrls: MetadataRoute.Sitemap = (distritos || []).flatMap((d) => {
-    const path = `/distrito/${encodeURIComponent(d.nome)}`;
-    const lastMod = d.updated_at ? new Date(d.updated_at) : now;
-    return langs.map((lang) => ({
-      url: `${baseUrl}/${lang}${path}`,
-      lastModified: lastMod,
-      changeFrequency: 'weekly' as const,
-      priority: 0.8,
-      alternates: alt(path),
-    }));
-  });
-
-  // ═══════════════════════════════════════════
-  // 5. BLOG POSTS
-  // ═══════════════════════════════════════════
-  const { data: posts } = await supabase
-    .from('blog_posts')
-    .select('slug, updated_at, created_at')
-    .eq('publicado', true);
-
-  const blogUrls: MetadataRoute.Sitemap = (posts || []).flatMap((p) => {
-    const path = `/blog/${p.slug}`;
-    const lastMod = new Date(p.updated_at || p.created_at || now);
-    return langs.map((lang) => ({
-      url: `${baseUrl}/${lang}${path}`,
-      lastModified: lastMod,
-      changeFrequency: 'monthly' as const,
-      priority: 0.75,
-      alternates: alt(path),
-    }));
-  });
-
-  // ═══════════════════════════════════════════
-  // 6. INSTITUCIONAL — INICIATIVAS
-  // ═══════════════════════════════════════════
-  const { data: iniciativas } = await supabase
-    .from('institucional_iniciativas')
-    .select('id, updated_at')
-    .eq('is_active', true);
-
-  const iniciativasUrls: MetadataRoute.Sitemap = (iniciativas || []).flatMap((i) => {
-    const path = `/institucional/${i.id}`;
-    const lastMod = i.updated_at ? new Date(i.updated_at) : now;
-    return langs.map((lang) => ({
-      url: `${baseUrl}/${lang}${path}`,
-      lastModified: lastMod,
-      changeFrequency: 'weekly' as const,
-      priority: 0.75,
-      alternates: alt(path),
-    }));
-  });
-
-  // ═══════════════════════════════════════════
-  // 7. INSTITUCIONAL — DISTRITOS
-  // ═══════════════════════════════════════════
-  const distritosInstitucional = new Set<string>();
-  (iniciativas || []).forEach((i: any) => {
-    // como o select anterior não trouxe distrito, assumimos slug só se existir
-  });
-
-  // Re-query só com distrito
-  const { data: instDistritos } = await supabase
-    .from('institucional_iniciativas')
-    .select('distrito')
-    .eq('is_active', true);
-
-  (instDistritos || []).forEach((i: any) => {
-    if (i.distrito && i.distrito.trim()) distritosInstitucional.add(i.distrito.trim());
-  });
-
-  const instDistritosUrls: MetadataRoute.Sitemap = Array.from(distritosInstitucional).flatMap((d) => {
-    const slug = d.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
-    const path = `/institucional/distrito/${slug}`;
-    return langs.map((lang) => ({
-      url: `${baseUrl}/${lang}${path}`,
-      lastModified: now,
-      changeFrequency: 'weekly' as const,
-      priority: 0.7,
-      alternates: alt(path),
-    }));
-  });
-
-  // ═══════════════════════════════════════════
-  // RESULTADO FINAL
-  // ═══════════════════════════════════════════
   return [
-    ...staticUrls,
-    ...camposUrls,
-    ...paisesUrls,
-    ...distritosUrls,
-    ...blogUrls,
-    ...iniciativasUrls,
-    ...instDistritosUrls,
+    ...urlsEstaticas,
+    ...urlsProgramaticas,
+    ...urlsGeograficas,
+    ...urlsCampos,
+    ...urlsParceiros,
+    ...urlsBlog,
   ];
 }
