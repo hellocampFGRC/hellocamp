@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 
 export default function FaturacaoPage({
   params,
@@ -19,6 +20,7 @@ export default function FaturacaoPage({
   const [camposParceiro, setCamposParceiro] = useState<any[]>([]);
   const [reservasFull, setReservasFull] = useState<any[]>([]);
   const [filtroCampoId, setFiltroCampoId] = useState<string>("todos");
+  const [isCampoDropdownOpen, setIsCampoDropdownOpen] = useState(false);
 
   useEffect(() => {
     const carregarDados = async () => {
@@ -30,99 +32,102 @@ export default function FaturacaoPage({
         return;
       }
 
+      const uid = session.user.id;
+
       const { data: perfilData } = await supabase
         .from("perfis")
         .select("*")
-        .eq("id", session.user.id)
-        .single();
+        .eq("id", uid)
+        .maybeSingle();
       setPerfil(perfilData || {});
 
       const { data: camposData } = await supabase
         .from("campos")
-        .select("id, nome, preco, taxa_comissao, base_comissao, contrato_parceiro_url")
-        .eq("organizador_id", session.user.id);
-
-      setCamposParceiro(camposData || []);
-
-      // JOIN direto e seguro apenas das reservas deste organizador
-      const { data: reservasData } = await supabase
-        .from("reservas")
         .select(
-          `
-          *,
-          criancas ( id, nome ),
-          perfis:cliente_id ( id, nome_completo, nif )
-        `
+          "id, nome, preco, taxa_comissao, base_comissao, contrato_parceiro_url, modalidade_reserva"
         )
-        .eq("organizador_id", session.user.id)
+        .eq("organizador_id", uid);
+
+      const listaCampos = camposData || [];
+      setCamposParceiro(listaCampos);
+      const idsCampos = listaCampos.map((c: any) => c.id);
+
+      // Busca reservas por organizador_id OU campo_id
+      let queryRes = supabase
+        .from("reservas")
+        .select("*")
         .order("created_at", { ascending: false });
 
-      if (reservasData) {
-        const reservasConstruidas = reservasData
-          .filter((res: any) => res.status_pagamento !== "Externo") // Inscrições manuais externas não entram na faturação Stripe
-          .map((res: any) => {
-            const campoEncontrado =
-              camposData?.find((c) => c.id === res.campo_id) || {};
-            const criancaEncontrada = Array.isArray(res.criancas)
-              ? res.criancas[0]
-              : res.criancas || {};
-            const paiEncontrado = Array.isArray(res.perfis)
-              ? res.perfis[0]
-              : res.perfis || {};
-
-            const dataReserva = new Date(res.created_at).getTime();
-            const minutosPassados = (new Date().getTime() - dataReserva) / (1000 * 60);
-
-            let estadoReal = res.status_pagamento || "Pendente";
-            if (estadoReal === "Pendente" && minutosPassados > 30) {
-              estadoReal = "Abandonada";
-            }
-
-            return {
-              ...res,
-              status_pagamento_real: estadoReal,
-              campos: campoEncontrado,
-              criancas: criancaEncontrada,
-              perfis: paiEncontrado,
-            };
-          });
-        setReservasFull(reservasConstruidas);
+      if (idsCampos.length > 0) {
+        queryRes = queryRes.or(
+          `organizador_id.eq.${uid},campo_id.in.(${idsCampos.join(",")})`
+        );
+      } else {
+        queryRes = queryRes.eq("organizador_id", uid);
       }
 
+      const { data: reservasData } = await queryRes;
+      const listaReservas = reservasData || [];
+
+      const criancasIds = Array.from(
+        new Set(listaReservas.map((r: any) => r.crianca_id).filter(Boolean))
+      );
+      const clientesIds = Array.from(
+        new Set(listaReservas.map((r: any) => r.cliente_id).filter(Boolean))
+      );
+
+      const [resCriancas, resPerfisPais] = await Promise.all([
+        criancasIds.length > 0
+          ? supabase
+              .from("criancas")
+              .select("id, nome")
+              .in("id", criancasIds)
+          : Promise.resolve({ data: [] }),
+        clientesIds.length > 0
+          ? supabase
+              .from("perfis")
+              .select("id, nome_completo, nif")
+              .in("id", clientesIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const reservasConstruidas = listaReservas.map((res: any) => {
+        const campoEncontrado =
+          listaCampos.find((c: any) => c.id === res.campo_id) || {};
+        const criancaEncontrada =
+          (resCriancas.data || []).find((cr: any) => cr.id === res.crianca_id) ||
+          {};
+        const paiEncontrado =
+          (resPerfisPais.data || []).find((p: any) => p.id === res.cliente_id) ||
+          {};
+
+        const dataReserva = new Date(res.created_at).getTime();
+        const minutosPassados = (Date.now() - dataReserva) / (1000 * 60);
+
+        let estadoReal = res.status_pagamento || res.status || "Pendente";
+        if (
+          estadoReal === "Pendente" &&
+          minutosPassados > 30 &&
+          !res.respostas_customizadas?.pedido_pai_pendente
+        ) {
+          estadoReal = "Abandonada";
+        }
+
+        return {
+          ...res,
+          status_pagamento_real: estadoReal,
+          campos: campoEncontrado,
+          criancas: criancaEncontrada,
+          perfis: paiEncontrado,
+        };
+      });
+
+      setReservasFull(reservasConstruidas);
       setLoading(false);
     };
+
     carregarDados();
   }, []);
-
-  const handleSaveDetails = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { error } = await supabase
-        .from("perfis")
-        .update({
-          empresa_nome: perfil.empresa_nome,
-          nif_empresa: perfil.nif_empresa,
-        })
-        .eq("id", session.user.id);
-
-      if (error) throw error;
-      alert(
-        isEn
-          ? "Company details updated successfully!"
-          : "Dados fiscais atualizados com sucesso!"
-      );
-    } catch (err: any) {
-      alert("Erro: " + err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleStripeConnect = async () => {
     setConnectLoading(true);
@@ -132,39 +137,51 @@ export default function FaturacaoPage({
       } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch("/api/stripe-connect", {
+      const res = await fetch("/api/stripe-connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: session.user.id,
           email: session.user.email,
-          lang: lang,
+          lang,
         }),
       });
-
-      const data = await response.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao ligar à Stripe.");
       if (data.url) window.location.href = data.url;
-      else
-        alert(
-          (isEn ? "Stripe connection error: " : "Erro ao conectar com a Stripe: ") +
-            data.error
-        );
     } catch (err: any) {
-      alert((isEn ? "Technical error: " : "Erro técnico: ") + err.message);
+      alert(err.message);
+      setConnectLoading(false);
     }
-    setConnectLoading(false);
+  };
+
+  const handleSaveDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("perfis")
+        .update({
+          empresa_nome: perfil.empresa_nome,
+          nif_empresa: perfil.nif_empresa,
+        })
+        .eq("id", perfil.id);
+      if (error) throw error;
+      alert(
+        isEn
+          ? "Company billing details saved!"
+          : "Dados fiscais guardados com sucesso!"
+      );
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
     return (
-      <div
-        style={{
-          padding: "4rem",
-          textAlign: "center",
-          fontWeight: "bold",
-          color: "#64748b",
-        }}
-      >
+      <div className="p-12 text-center font-bold text-slate-400 text-sm uppercase tracking-widest animate-pulse">
         {isEn
           ? "Loading financial data..."
           : "A carregar dados financeiros e faturas..."}
@@ -177,10 +194,7 @@ export default function FaturacaoPage({
       ? reservasFull
       : reservasFull.filter((r) => r.campo_id === filtroCampoId);
 
-  const taxaComissaoGeral =
-    perfil?.taxa_comissao !== null && perfil?.taxa_comissao !== undefined
-      ? Number(perfil.taxa_comissao)
-      : 12;
+  const taxaComissaoGeral = perfil?.taxa_comissao ?? 12;
   const baseIncidenciaGeral = perfil?.base_comissao || "total";
 
   let totalVolume = 0;
@@ -189,14 +203,13 @@ export default function FaturacaoPage({
 
   const historicoCalculado = reservasAtivas.map((res) => {
     const valorReserva = Number(res.valor_total) || 0;
-    const isConfirmada =
-      res.status_pagamento_real === "Pago" ||
-      res.status_pagamento_real === "Sinal Pago";
-    const isInativa = !isConfirmada;
+    const status = res.status_pagamento_real;
 
-    if (isConfirmada) {
-      totalVolume += valorReserva;
-    }
+    // CORRIGIDO: Apenas reservas efetivamente pagas via HelloCamp contam no saldo financeiro!
+    const isValidaFinanceiramente =
+      status === "Pago" ||
+      status === "Sinal Pago" ||
+      status === "Aguardando Pagamento Extra";
 
     const campoAssociado = res.campos;
     const taxaLinha =
@@ -214,15 +227,19 @@ export default function FaturacaoPage({
       valorIncidencia = 0;
     }
 
-    const valorComissao = isConfirmada ? valorIncidencia * (taxaLinha / 100) : 0;
+    const valorComissao = isValidaFinanceiramente
+      ? valorIncidencia * (taxaLinha / 100)
+      : 0;
 
-    if (isConfirmada) {
+    if (isValidaFinanceiramente) {
+      totalVolume += valorReserva;
       totalComissoesGeradas += valorComissao;
       saldoParceiroSeraTransferido += valorReserva - valorComissao;
     }
 
     return {
       ...res,
+      isValidaFinanceiramente,
       valorIncidencia,
       valorComissao,
       taxaAplicada: taxaLinha,
@@ -230,7 +247,6 @@ export default function FaturacaoPage({
       campoFormatado: campoAssociado,
       paiFormatado: res.perfis,
       criancaFormatado: res.criancas,
-      isInativa,
     };
   });
 
@@ -248,201 +264,145 @@ export default function FaturacaoPage({
     campoFiltradoData && campoFiltradoData.base_comissao
       ? campoFiltradoData.base_comissao
       : baseIncidenciaGeral;
-  const contratoExibido =
-    campoFiltradoData?.contrato_parceiro_url ||
-    perfil?.contrato_parceiro_url ||
-    null;
 
-  const cardStyle: React.CSSProperties = {
-    backgroundColor: "white",
-    padding: "2rem",
-    borderRadius: "1.25rem",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)",
-    display: "flex",
-    flexDirection: "column",
-  };
-  const cardTitleStyle: React.CSSProperties = {
-    fontSize: "1.125rem",
-    fontWeight: "900",
-    color: "#0f172a",
-    marginTop: 0,
-    marginBottom: "1.5rem",
-  };
-  const labelStyle: React.CSSProperties = {
-    display: "block",
-    fontSize: "11px",
-    fontWeight: "800",
-    color: "#64748b",
-    textTransform: "uppercase",
-    marginBottom: "0.5rem",
-  };
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "0.875rem 1rem",
-    borderRadius: "0.75rem",
-    border: "1px solid #cbd5e1",
-    fontSize: "14px",
-    fontWeight: "bold",
-    color: "#0f172a",
-    boxSizing: "border-box",
-  };
-  const selectStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "0.875rem 1rem",
-    borderRadius: "0.75rem",
-    border: "1px solid #cbd5e1",
-    fontSize: "14px",
-    cursor: "pointer",
-  };
+  const temContratoAssinado =
+    !!perfil?.contrato_dados?.assinaturaNome ||
+    perfil?.status_contrato === "Aprovado";
 
   return (
-    <main
-      style={{
-        maxWidth: "1100px",
-        margin: "0 auto",
-        fontFamily: "sans-serif",
-        padding: "1rem",
-        paddingBottom: "4rem",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-end",
-          marginBottom: "2.5rem",
-          flexWrap: "wrap",
-          gap: "1rem",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: "2rem",
-              fontWeight: "900",
-              color: "#0f172a",
-              margin: 0,
-            }}
+    <main className="max-w-6xl mx-auto font-sans pb-20">
+      {/* BANNER DE AVISO SE AINDA NÃO ASSINOU CONTRATO */}
+      {!temContratoAssinado && (
+        <div className="bg-amber-50 border-2 border-amber-200 p-5 rounded-3xl mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <span className="text-3xl">⚠️</span>
+            <div>
+              <h3 className="m-0 text-sm md:text-base font-black text-amber-950">
+                {isEn
+                  ? "Pending Global Partnership Contract"
+                  : "Contrato Global de Parceria Pendente de Assinatura"}
+              </h3>
+              <p className="m-0 text-xs font-medium text-amber-800 mt-0.5">
+                {isEn
+                  ? "Please sign your Global Contract to formalize your commission rate and enable automated payouts."
+                  : "Assine o seu Contrato Global para formalizar as suas condições de faturação e desbloquear as transferências."}
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/${lang}/admin/contrato`}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-widest no-underline whitespace-nowrap"
           >
+            {isEn ? "Sign Contract" : "Assinar Contrato"} &rarr;
+          </Link>
+        </div>
+      )}
+
+      {/* CABEÇALHO + DROPDOWN CUSTOMIZADO DE CAMPO */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">
             {isEn ? "Billing & Automated Payouts" : "Faturação e Pagamentos"}
           </h1>
-          <p style={{ color: "#64748b", marginTop: "0.5rem", fontSize: "15px" }}>
+          <p className="text-slate-500 mt-1 text-sm font-medium mb-0">
             {isEn
-              ? "Track splits, manage company info and connect your bank account via Stripe."
-              : "Controle a divisão de valores e sincronize o seu banco para receber o dinheiro."}
+              ? "Track splits, manage company tax info, and connect your bank account via Stripe."
+              : "Controle a divisão de valores, dados fiscais e sincronize o seu banco via Stripe."}
           </p>
         </div>
 
-        <div style={{ minWidth: "280px" }}>
-          <label
-            style={{
-              display: "block",
-              fontSize: "12px",
-              fontWeight: "800",
-              color: "#334155",
-              textTransform: "uppercase",
-              marginBottom: "0.5rem",
-            }}
-          >
-            {isEn ? "Filter by Camp" : "Filtrar Finanças por Campo"}
+        {/* DROPDOWN CUSTOMIZADO (SEM <select> NATIVO) */}
+        <div className="relative min-w-[280px] w-full md:w-auto">
+          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+            {isEn ? "Filter Finances by Camp" : "Filtrar Finanças por Campo"}
           </label>
-          <select
-            value={filtroCampoId}
-            onChange={(e) => setFiltroCampoId(e.target.value)}
-            style={{
-              ...selectStyle,
-              borderColor: "#167524",
-              backgroundColor: "#f0fdf4",
-              color: "#167524",
-              fontWeight: "800",
-            }}
+          <div
+            onClick={() => setIsCampoDropdownOpen(!isCampoDropdownOpen)}
+            className="w-full p-3.5 bg-emerald-50 border border-[#167524] rounded-xl text-xs font-black text-[#167524] cursor-pointer flex items-center justify-between shadow-sm"
           >
-            <option value="todos">
-              {isEn
-                ? "All Active Camps (Global)"
-                : "Visão Global (Todos os Campos)"}
-            </option>
-            {camposParceiro.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
+            <span className="truncate">
+              {filtroCampoId === "todos"
+                ? isEn
+                  ? "All Active Camps (Global)"
+                  : "Visão Global (Todos os Campos)"
+                : campoFiltradoData?.nome || "Campo Selecionado"}
+            </span>
+            <span className="text-[10px] ml-2">▼</span>
+          </div>
+          {isCampoDropdownOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setIsCampoDropdownOpen(false)}
+              />
+              <div className="absolute top-[calc(100%+6px)] right-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto">
+                <div
+                  onClick={() => {
+                    setFiltroCampoId("todos");
+                    setIsCampoDropdownOpen(false);
+                  }}
+                  className="p-3 text-xs font-black text-[#167524] hover:bg-emerald-50 cursor-pointer border-b border-slate-100"
+                >
+                  {isEn
+                    ? "All Active Camps (Global)"
+                    : "Visão Global (Todos os Campos)"}
+                </div>
+                {camposParceiro.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      setFiltroCampoId(c.id);
+                      setIsCampoDropdownOpen(false);
+                    }}
+                    className="p-3 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0"
+                  >
+                    {c.nome}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* BANNER STRIPE CONNECT */}
+      {/* BLOCO STRIPE CONNECT */}
       <div
-        style={{
-          marginBottom: "2.5rem",
-          padding: "2rem",
-          borderRadius: "1.25rem",
-          backgroundColor: perfil?.stripe_account_id ? "#f0fdf4" : "#f8fafc",
-          border: `1px solid ${perfil?.stripe_account_id ? "#bbf7d0" : "#e2e8f0"}`,
-        }}
+        className={`mb-8 p-6 md:p-8 rounded-3xl border ${
+          perfil?.stripe_account_id
+            ? "bg-emerald-50/70 border-emerald-200"
+            : "bg-white border-slate-200 shadow-sm"
+        }`}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "1.5rem",
-          }}
-        >
-          <div style={{ flex: 1, minWidth: "260px" }}>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: "18px",
-                fontWeight: "bold",
-                color: "#0f172a",
-              }}
-            >
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+          <div>
+            <h3 className="m-0 text-lg font-black text-slate-900">
               {perfil?.stripe_account_id
                 ? isEn
-                  ? "✓ Bank Configuration Completed"
-                  : "✓ Configuração Bancária Concluída"
+                  ? "✓ Bank Configuration Completed (Stripe)"
+                  : "✓ Configuração Bancária Concluída (Stripe)"
                 : isEn
                 ? "⚠️ Enable Automated Payouts"
-                : "⚠️ Ative os Recebimentos Automáticos"}
+                : "⚠️ Ative os Recebimentos Automáticos (Stripe)"}
             </h3>
-            <p
-              style={{
-                margin: "0.5rem 0 0 0",
-                fontSize: "14px",
-                color: "#475569",
-                lineHeight: 1.5,
-              }}
-            >
+            <p className="mt-1.5 mb-0 text-sm text-slate-600 leading-relaxed max-w-2xl">
               {perfil?.stripe_account_id
                 ? isEn
-                  ? "Your bank account is securely linked via Stripe. Booking funds (minus commission) will be transferred directly to your account."
-                  : "A sua conta bancária está vinculada de forma segura através da Stripe. O valor das inscrições (deduzido da comissão) será transferido diretamente para a sua conta."
+                  ? "Your bank account is securely linked via Stripe. Booking funds (minus commission) are transferred directly to your account."
+                  : "A sua conta bancária está vinculada de forma segura através da Stripe. O valor das inscrições (deduzido da comissão) é transferido automaticamente para a sua conta."
                 : isEn
-                ? "To receive booking payments from parents, you need to link your payment details to our partner platform Stripe."
-                : "Para poder receber os pagamentos das inscrições feitas pelos pais, necessita de associar os seus dados bancários à nossa plataforma parceira Stripe."}
+                ? "To receive booking payments directly in your bank account, link your IBAN securely via our partner Stripe."
+                : "Para receber os pagamentos das inscrições diretamente na sua conta bancária, associe o seu IBAN com segurança através da Stripe."}
             </p>
           </div>
           <button
+            type="button"
             onClick={handleStripeConnect}
             disabled={connectLoading}
-            style={{
-              padding: "1rem 1.5rem",
-              backgroundColor: "#167524",
-              color: "white",
-              fontWeight: "900",
-              borderRadius: "0.75rem",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "14px",
-              boxShadow: "0 4px 6px -1px rgba(22, 117, 36, 0.2)",
-            }}
+            className="bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs px-6 py-4 rounded-xl cursor-pointer shadow-md whitespace-nowrap transition-colors"
           >
             {connectLoading
               ? isEn
-                ? "Processing..."
+                ? "Connecting..."
                 : "A processar..."
               : perfil?.stripe_account_id
               ? isEn
@@ -450,400 +410,197 @@ export default function FaturacaoPage({
                 : "Gerir Conta Stripe"
               : isEn
               ? "Connect to Stripe"
-              : "Ligar à Stripe"}
+              : "Ligar Conta Bancária (Stripe)"}
           </button>
         </div>
       </div>
 
-      {/* KPIs FINANCEIROS */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "1.5rem",
-          marginBottom: "2.5rem",
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: "white",
-            padding: "1.5rem",
-            borderRadius: "1rem",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <p
-            style={{
-              fontSize: "12px",
-              fontWeight: "bold",
-              color: "#64748b",
-              textTransform: "uppercase",
-              marginBottom: "0.5rem",
-            }}
-          >
-            {isEn ? "Confirmed Gross Volume" : "Volume Bruto Confirmado"}
+      {/* RESUMO FINANCEIRO */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest m-0 mb-2">
+            {isEn ? "Gross Volume" : "Volume Bruto Confirmado"}
           </p>
-          <p
-            style={{
-              fontSize: "2rem",
-              fontWeight: "900",
-              color: "#0f172a",
-              margin: 0,
-            }}
-          >
+          <p className="text-3xl font-black text-slate-900 m-0">
             {totalVolume.toFixed(2)}€
           </p>
         </div>
 
-        <div
-          style={{
-            backgroundColor: "white",
-            padding: "1.5rem",
-            borderRadius: "1rem",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <p
-            style={{
-              fontSize: "12px",
-              fontWeight: "bold",
-              color: "#64748b",
-              textTransform: "uppercase",
-              marginBottom: "0.5rem",
-            }}
-          >
-            {isEn ? "Retained Commission" : "Comissão HelloCamp"}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest m-0 mb-2">
+            {isEn ? "HelloCamp Commission" : "Comissão HelloCamp"}
           </p>
-          <p
-            style={{
-              fontSize: "2rem",
-              fontWeight: "900",
-              color: "#ef4444",
-              margin: 0,
-            }}
-          >
+          <p className="text-3xl font-black text-red-500 m-0">
             {totalComissoesGeradas.toFixed(2)}€
           </p>
         </div>
 
-        <div
-          style={{
-            backgroundColor: "#f0fdf4",
-            padding: "1.5rem",
-            borderRadius: "1rem",
-            border: "1px solid #167524",
-          }}
-        >
-          <p
-            style={{
-              fontSize: "12px",
-              fontWeight: "bold",
-              color: "#167524",
-              textTransform: "uppercase",
-              marginBottom: "0.5rem",
-            }}
-          >
+        <div className="bg-emerald-50/70 p-6 rounded-2xl border border-[#167524]">
+          <p className="text-[11px] font-black text-[#167524] uppercase tracking-widest m-0 mb-2">
             {isEn ? "Your Net Balance" : "O Seu Ganho Líquido"}
           </p>
-          <p
-            style={{
-              fontSize: "2rem",
-              fontWeight: "900",
-              color: "#167524",
-              margin: 0,
-            }}
-          >
+          <p className="text-3xl font-black text-[#167524] m-0">
             {saldoParceiroSeraTransferido.toFixed(2)}€
           </p>
         </div>
       </div>
 
       {/* DADOS FISCAIS E ACORDO */}
-      <div
-        style={{
-          display: "grid",
-          gap: "2rem",
-          gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
-          marginBottom: "2.5rem",
-          alignItems: "start",
-        }}
-      >
-        <div style={cardStyle}>
-          <h2 style={cardTitleStyle}>
-            {isEn ? "Company Details" : "Dados Fiscais da Empresa"}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+          <h2 className="text-base font-black text-slate-900 uppercase tracking-widest m-0 mb-5 pb-3 border-b border-slate-100">
+            {isEn ? "Company Tax Details" : "Dados Fiscais da Empresa"}
           </h2>
-          <form
-            onSubmit={handleSaveDetails}
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-          >
+          <form onSubmit={handleSaveDetails} className="space-y-4">
             <div>
-              <label style={labelStyle}>
-                {isEn ? "Company Name" : "Nome da Empresa / Entidade"}
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                {isEn ? "Company Name *" : "Nome da Empresa / Entidade *"}
               </label>
               <input
                 type="text"
+                required
                 value={perfil.empresa_nome || ""}
                 onChange={(e) =>
                   setPerfil({ ...perfil, empresa_nome: e.target.value })
                 }
-                style={inputStyle}
-                required
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
               />
             </div>
             <div>
-              <label style={labelStyle}>{isEn ? "NIF / Tax ID" : "NIF"}</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                {isEn ? "NIF / Tax ID *" : "NIF / NIPC *"}
+              </label>
               <input
                 type="text"
+                required
                 value={perfil.nif_empresa || ""}
                 onChange={(e) =>
                   setPerfil({ ...perfil, nif_empresa: e.target.value })
                 }
-                style={inputStyle}
-                required
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
               />
             </div>
             <button
               type="submit"
               disabled={saving}
-              style={{
-                marginTop: "1rem",
-                padding: "1rem",
-                backgroundColor: "#167524",
-                color: "white",
-                fontWeight: "900",
-                borderRadius: "0.5rem",
-                border: "none",
-                cursor: "pointer",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
+              className="w-full py-3.5 bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs rounded-xl cursor-pointer transition-colors"
             >
               {saving
                 ? isEn
                   ? "Saving..."
                   : "A guardar..."
                 : isEn
-                ? "Save Details"
+                ? "Save Tax Details"
                 : "Gravar Dados Fiscais"}
             </button>
           </form>
         </div>
 
-        <div style={cardStyle}>
-          <h2 style={cardTitleStyle}>
-            {filtroCampoId === "todos"
-              ? isEn
-                ? "Your Global Agreement"
-                : "Acordo de Comissionamento Geral"
-              : isEn
-              ? "Camp Agreement"
-              : "Contrato Deste Campo"}
-          </h2>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "1.5rem",
-              flex: 1,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
-              <div
-                style={{
-                  backgroundColor: "#f8fafc",
-                  padding: "1.5rem",
-                  borderRadius: "0.75rem",
-                  border: "1px solid #e2e8f0",
-                  textAlign: "center",
-                  minWidth: "120px",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "11px",
-                    color: "#64748b",
-                    fontWeight: "bold",
-                    textTransform: "uppercase",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  {filtroCampoId === "todos"
-                    ? isEn
-                      ? "Base Rate"
-                      : "Taxa Base"
-                    : isEn
-                    ? "Camp Rate"
-                    : "Taxa do Campo"}
-                </p>
-                <span
-                  style={{
-                    fontSize: "2rem",
-                    fontWeight: "900",
-                    color: "#167524",
-                  }}
-                >
+        <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <h2 className="text-base font-black text-slate-900 uppercase tracking-widest m-0 mb-5 pb-3 border-b border-slate-100">
+              {isEn ? "Commission Agreement" : "Condições de Comissionamento"}
+            </h2>
+            <div className="flex items-center gap-5 mb-6">
+              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center min-w-[110px]">
+                <span className="block text-[10px] font-black uppercase text-slate-400 mb-1">
+                  {isEn ? "Rate" : "Taxa"}
+                </span>
+                <span className="text-3xl font-black text-[#167524]">
                   {taxaExibida}%
                 </span>
               </div>
               <div>
-                <p
-                  style={{
-                    fontSize: "11px",
-                    color: "#64748b",
-                    fontWeight: "bold",
-                    textTransform: "uppercase",
-                    marginBottom: "0.25rem",
-                  }}
-                >
+                <span className="block text-[10px] font-black uppercase text-slate-400 mb-1">
                   {isEn ? "Incidence Base" : "Base de Incidência"}
-                </p>
-                <p
-                  style={{
-                    fontSize: "14px",
-                    color: "#0f172a",
-                    fontWeight: "bold",
-                    margin: "0 0 0.5rem 0",
-                  }}
-                >
+                </span>
+                <p className="text-sm font-black text-slate-900 m-0">
                   {baseExibida === "apenas_programa"
                     ? isEn
                       ? "Base program only (Extras excluded)"
                       : "Apenas sobre o Programa Base"
                     : isEn
                     ? "Total value (Program + Extras)"
-                    : "Sobre Valor Total da Reserva"}
+                    : "Sobre o Valor Total da Reserva"}
                 </p>
+                <span
+                  className={`inline-block mt-2 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md ${
+                    temContratoAssinado
+                      ? "bg-emerald-50 text-[#167524]"
+                      : "bg-amber-100 text-amber-900"
+                  }`}
+                >
+                  {temContratoAssinado
+                    ? isEn
+                      ? "✓ Contract Signed"
+                      : "✓ Contrato Assinado"
+                    : isEn
+                    ? "⚠️ Signature Pending"
+                    : "⚠️ Assinatura Pendente"}
+                </span>
               </div>
             </div>
-
-            {contratoExibido && (
-              <a
-                href={contratoExibido}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  padding: "1rem",
-                  backgroundColor: "#167524",
-                  color: "white",
-                  borderRadius: "0.5rem",
-                  textDecoration: "none",
-                  fontWeight: "bold",
-                  fontSize: "13px",
-                  textAlign: "center",
-                  display: "block",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                📥{" "}
-                {isEn
-                  ? "Download Verified Contract"
-                  : "Descarregar Contrato Validado"}
-              </a>
-            )}
-
-            <div
-              style={{
-                backgroundColor: "#f8fafc",
-                padding: "1rem",
-                borderRadius: "0.5rem",
-                border: "1px solid #cbd5e1",
-                marginTop: "auto",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: "12px",
-                  color: "#475569",
-                  margin: 0,
-                  fontWeight: "bold",
-                  lineHeight: 1.4,
-                }}
-              >
-                💡{" "}
-                {isEn
-                  ? "Commission fees are auto-deducted directly at checkout transaction."
-                  : "As comissões da plataforma são deduzidas e divididas automaticamente no ato do pagamento."}
-              </p>
-            </div>
           </div>
+
+          <Link
+            href={`/${lang}/admin/contrato`}
+            className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white text-center font-black uppercase tracking-widest text-xs rounded-xl no-underline transition-colors"
+          >
+            📝{" "}
+            {temContratoAssinado
+              ? isEn
+                ? "View / Download Global Contract"
+                : "Consultar / Descarregar Contrato Global"
+              : isEn
+              ? "Sign Global Contract Now"
+              : "Assinar Contrato Global Agora"}
+          </Link>
         </div>
       </div>
 
-      {/* HISTÓRICO DE TRANSAÇÕES */}
-      <div
-        style={{
-          backgroundColor: "white",
-          padding: "2rem",
-          borderRadius: "1.25rem",
-          border: "1px solid #e2e8f0",
-          boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)",
-        }}
-      >
-        <h2 style={cardTitleStyle}>
-          {isEn ? "Transaction History" : "Histórico de Transações"}
+      {/* TABELA DE HISTÓRICO DE TRANSAÇÕES */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+        <h2 className="text-base font-black text-slate-900 uppercase tracking-widest m-0 mb-6 pb-3 border-b border-slate-100">
+          {isEn ? "Transaction History" : "Histórico de Transações e Reservas"}
         </h2>
 
         {historicoCalculado.length === 0 ? (
-          <div
-            style={{
-              padding: "3rem",
-              textAlign: "center",
-              color: "#64748b",
-              backgroundColor: "#f8fafc",
-              borderRadius: "0.75rem",
-              border: "1px dashed #cbd5e1",
-            }}
-          >
+          <div className="p-12 text-center text-slate-400 font-bold text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">
             {isEn
-              ? "No financial history available yet."
-              : "Ainda não existem transações para a seleção efetuada."}
+              ? "No transactions recorded yet."
+              : "Ainda não existem transações registadas para esta seleção."}
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "14px",
-                textAlign: "left",
-              }}
-            >
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm text-left">
               <thead>
-                <tr
-                  style={{ borderBottom: "2px solid #e2e8f0", color: "#64748b" }}
-                >
-                  <th style={{ padding: "1rem", fontWeight: "bold" }}>
-                    {isEn ? "Date" : "Data"}
+                <tr className="border-b-2 border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="p-3">{isEn ? "Date" : "Data"}</th>
+                  <th className="p-3">
+                    {isEn ? "Program / Child" : "Programa / Participante"}
                   </th>
-                  <th style={{ padding: "1rem", fontWeight: "bold" }}>
-                    {isEn ? "Program / Child" : "Programa / Criança"}
-                  </th>
-                  <th style={{ padding: "1rem", fontWeight: "bold" }}>
+                  <th className="p-3">
                     {isEn ? "Parent / Tax ID" : "Encarregado / NIF"}
                   </th>
-                  <th style={{ padding: "1rem", fontWeight: "bold" }}>
-                    {isEn ? "Gross Value" : "Valor Total"}
+                  <th className="p-3">
+                    {isEn ? "Gross Value" : "Valor Bruto"}
                   </th>
-                  <th
-                    style={{
-                      padding: "1rem",
-                      fontWeight: "bold",
-                      color: "#ef4444",
-                    }}
-                  >
-                    {isEn ? "HQ Commission" : "Comissão"}
+                  <th className="p-3 text-red-500">
+                    {isEn ? "Commission" : "Comissão"}
                   </th>
-                  <th style={{ padding: "1rem", fontWeight: "bold" }}>
-                    {isEn ? "Status" : "Estado"}
+                  <th className="p-3 text-[#167524]">
+                    {isEn ? "Net Payout" : "Líquido Parceiro"}
                   </th>
+                  <th className="p-3">{isEn ? "Status" : "Estado"}</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {historicoCalculado.map((res) => {
-                  const eReembolsado = res.status_pagamento_real === "Reembolsado";
-                  const eAbandonada = res.status_pagamento_real === "Abandonada";
-                  const isInativa = res.isInativa;
+                  const eReembolsado =
+                    res.status_pagamento_real === "Reembolsado";
+                  const eAbandonada =
+                    res.status_pagamento_real === "Abandonada";
+                  const isInativa = !res.isValidaFinanceiramente;
 
                   const nomePai =
                     res.nome_encarregado ||
@@ -851,94 +608,70 @@ export default function FaturacaoPage({
                     "N/D";
                   const nifPai =
                     res.nif_encarregado || res.paiFormatado?.nif || "S/ NIF";
+                  const nomeCrianca =
+                    res.criancaFormatado?.nome ||
+                    res.respostas_customizadas?.nome_crianca ||
+                    "Participante";
 
                   return (
                     <tr
                       key={res.id}
-                      style={{
-                        borderBottom: "1px solid #f1f5f9",
-                        opacity: isInativa ? 0.55 : 1,
-                      }}
+                      className={isInativa ? "opacity-60 bg-slate-50/50" : ""}
                     >
-                      <td style={{ padding: "1rem", color: "#475569" }}>
+                      <td className="p-3 text-slate-600">
                         {new Date(res.created_at).toLocaleDateString("pt-PT")}
-                        <div
-                          style={{
-                            fontSize: "11px",
-                            fontWeight: "bold",
-                            marginTop: "4px",
-                          }}
-                        >
-                          {res.metodo_pagamento ||
-                            (eAbandonada ? "Sessão Expirada" : "Stripe")}
+                        <div className="text-[10px] font-bold text-slate-400">
+                          {res.metodo_pagamento || "Stripe"}
                         </div>
                       </td>
-                      <td style={{ padding: "1rem" }}>
-                        <div style={{ fontWeight: "bold", color: "#0f172a" }}>
-                          {res.campoFormatado?.nome || "N/D"}
+                      <td className="p-3">
+                        <div className="font-black text-slate-900">
+                          {res.campoFormatado?.nome || "Programa HelloCamp"}
                         </div>
-                        <div style={{ fontSize: "12px", color: "#64748b" }}>
-                          👦 {res.criancaFormatado?.nome || "Participante"} (
-                          {res.turno_nome})
+                        <div className="text-xs text-slate-500">
+                          👦 {nomeCrianca} ({res.turno_nome})
                         </div>
                       </td>
-                      <td style={{ padding: "1rem" }}>
-                        <div style={{ fontWeight: "bold", color: "#334155" }}>
+                      <td className="p-3">
+                        <div className="font-bold text-slate-800">
                           {nomePai}
                         </div>
-                        <div style={{ fontSize: "11px", color: "#64748b" }}>
+                        <div className="text-xs text-slate-500">
                           NIF: {nifPai}
                         </div>
                       </td>
-                      <td style={{ padding: "1rem", fontWeight: "bold" }}>
+                      <td className="p-3 font-black text-slate-900">
                         {Number(res.valor_total || 0).toFixed(2)}€
                       </td>
-                      <td
-                        style={{
-                          padding: "1rem",
-                          fontWeight: "bold",
-                          color: isInativa ? "#94a3b8" : "#ef4444",
-                        }}
-                      >
-                        {isInativa ? "0.00€" : `${res.valorComissao.toFixed(2)}€`}
-                        {!isInativa && (
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "10px",
-                              color: "#94a3b8",
-                              fontWeight: "normal",
-                            }}
-                          >
-                            ({res.taxaAplicada}%)
-                          </span>
-                        )}
+                      <td className="p-3 font-bold text-red-500">
+                        {isInativa
+                          ? "0.00€"
+                          : `-${res.valorComissao.toFixed(2)}€ (${
+                              res.taxaAplicada
+                            }%)`}
                       </td>
-                      <td style={{ padding: "1rem" }}>
+                      <td className="p-3 font-black text-[#167524]">
+                        {isInativa
+                          ? "0.00€"
+                          : `${(
+                              Number(res.valor_total || 0) - res.valorComissao
+                            ).toFixed(2)}€`}
+                      </td>
+                      <td className="p-3">
                         <span
-                          style={{
-                            padding: "0.25rem 0.75rem",
-                            borderRadius: "999px",
-                            fontSize: "11px",
-                            fontWeight: "900",
-                            textTransform: "uppercase",
-                            backgroundColor:
-                              res.status_pagamento_real === "Pago" ||
-                              res.status_pagamento_real === "Sinal Pago"
-                                ? "#f0fdf4"
-                                : eReembolsado
-                                ? "#fef2f2"
-                                : "#f1f5f9",
-                            color:
-                              res.status_pagamento_real === "Pago" ||
-                              res.status_pagamento_real === "Sinal Pago"
-                                ? "#167524"
-                                : eReembolsado
-                                ? "#dc2626"
-                                : "#64748b",
-                          }}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            res.isValidaFinanceiramente
+                              ? "bg-emerald-100 text-[#167524]"
+                              : eReembolsado
+                              ? "bg-red-100 text-red-700"
+                              : "bg-slate-200 text-slate-600"
+                          }`}
                         >
-                          {res.status_pagamento_real}
+                          {eAbandonada
+                            ? isEn
+                              ? "Unfinished"
+                              : "Não Concluída"
+                            : res.status_pagamento_real}
                         </span>
                       </td>
                     </tr>
