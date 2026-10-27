@@ -1,263 +1,276 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import React, { useState, useEffect, use } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
-// ==========================================
-// ÍCONES SVG INLINE (substituem os emojis)
-// ==========================================
-const IconSearch = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
-const IconBuilding = ({ className = "w-6 h-6" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="4" y="2" width="16" height="20" rx="1" />
-    <line x1="9" y1="22" x2="9" y2="18" />
-    <line x1="15" y1="22" x2="15" y2="18" />
-    <line x1="8" y1="6" x2="10" y2="6" />
-    <line x1="8" y1="10" x2="10" y2="10" />
-    <line x1="8" y1="14" x2="10" y2="14" />
-    <line x1="14" y1="6" x2="16" y2="6" />
-    <line x1="14" y1="10" x2="16" y2="10" />
-    <line x1="14" y1="14" x2="16" y2="14" />
-  </svg>
-);
-
-const IconMapPin = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-    <circle cx="12" cy="10" r="3" />
-  </svg>
-);
-
-const IconUsers = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-
-// Fallback de imagem (SVG data URI - sem 404s)
 const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 600'%3E%3Crect fill='%23e2e8f0' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='40' font-weight='bold' fill='%2394a3b8' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
 
-// ==========================================
-// COMPONENTE PRINCIPAL
-// ==========================================
-export default function InstitucionalIndexPage({ params }: { params: Promise<{ lang: string }> }) {
+export default function InstitucionalIndexPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
   const { lang } = use(params);
-  const isEn = lang === 'en';
+  const isEn = lang === "en";
 
   const [iniciativas, setIniciativas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pesquisa, setPesquisa] = useState('');
-  const [distrito, setDistrito] = useState('');
-  const [distritosDisponiveis, setDistritosDisponiveis] = useState<string[]>([]);
+  const [pesquisa, setPesquisa] = useState("");
+  const [distrito, setDistrito] = useState("");
+  const [distritosDisponiveis, setDistritosDisponiveis] = useState<string[]>(
+    []
+  );
+  const [isDistDropdownOpen, setIsDistDropdownOpen] = useState(false);
 
   useEffect(() => {
     const fetchIniciativas = async () => {
       setLoading(true);
       const { data, error } = await supabase
-        .from('institucional_iniciativas')
-        .select('id, titulo, entidade_organizadora, imagem_capa_url, logotipo_url, distrito, concelho, idade_min_global, idade_max_global, is_active')
-        .eq('is_active', true);
+        .from("institucional_iniciativas")
+        .select(
+          "id, titulo, entidade_organizadora, imagem_capa_url, logotipo_url, distrito, concelho, idade_min_global, idade_max_global, is_active"
+        )
+        .eq("is_active", true)
+        .order("titulo", { ascending: true });
 
-      if (error) {
-        console.error("Erro ao carregar iniciativas:", error);
-        setIniciativas([]);
-      } else if (data) {
+      if (!error && data) {
         setIniciativas(data);
-        // Extrair distritos únicos dinamicamente
-        const setDistritos = new Set<string>();
-        data.forEach((p: any) => {
-          if (p.distrito && p.distrito.trim()) setDistritos.add(p.distrito.trim());
-        });
-        setDistritosDisponiveis(Array.from(setDistritos).sort());
+        const dists = Array.from(
+          new Set(data.map((i: any) => i.distrito).filter(Boolean))
+        ).sort() as string[];
+        setDistritosDisponiveis(dists);
       }
       setLoading(false);
     };
+
     fetchIniciativas();
   }, []);
 
-  const programasFiltrados = iniciativas.filter(p => {
-    const termo = pesquisa.toLowerCase().trim();
-    const matchPesquisa =
-      !termo ||
-      p.titulo?.toLowerCase().includes(termo) ||
-      p.entidade_organizadora?.toLowerCase().includes(termo) ||
-      p.concelho?.toLowerCase().includes(termo);
-    const matchDistrito = distrito === '' || p.distrito?.toLowerCase() === distrito.toLowerCase();
-    return matchPesquisa && matchDistrito;
-  });
+  const normalize = (s?: string) =>
+    (s || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
 
-  const limparFiltros = () => {
-    setPesquisa('');
-    setDistrito('');
-  };
+  const iniciativasFiltradas = iniciativas.filter((item) => {
+    const matchDistrito =
+      !distrito || normalize(item.distrito) === normalize(distrito);
+    const q = normalize(pesquisa);
+    const matchTexto =
+      !q ||
+      normalize(item.titulo).includes(q) ||
+      normalize(item.entidade_organizadora).includes(q) ||
+      normalize(item.concelho).includes(q) ||
+      normalize(item.distrito).includes(q);
+    return matchDistrito && matchTexto;
+  });
 
   return (
     <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24">
+      {/* HERO INSTITUCIONAL */}
+      <section className="bg-gradient-to-br from-[#0E3A68] to-slate-900 text-white pt-16 pb-20 px-4 md:px-6 text-center">
+        <div className="max-w-4xl mx-auto">
+          <span className="inline-block bg-white/10 border border-white/20 text-[#e2a41d] text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full mb-4">
+            🏛️{" "}
+            {isEn
+              ? "Municipalities & Parish Councils"
+              : "Diretório de Câmaras Municipais e Juntas de Freguesia"}
+          </span>
+          <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-4">
+            {isEn
+              ? "Public & Municipal Holiday Programs"
+              : "Campos de Férias Municipais e Autárquicos"}
+          </h1>
+          <p className="text-blue-100/80 text-sm md:text-lg font-medium max-w-2xl mx-auto mb-10">
+            {isEn
+              ? "Discover accessible holiday programs organized by City Councils and Parish Councils across Portugal."
+              : "Consulte num único lugar os programas de ocupação de tempos livres (OTL) e colónias de férias promovidos pelas autarquias."}
+          </p>
 
-      {/* HERO */}
-      <div className="bg-slate-900 pt-20 pb-24 px-6 text-center">
-        <h1 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">
-          {isEn ? 'Public & Municipal Programs' : 'Programas de Câmaras e Juntas'}
-        </h1>
-        <p className="text-slate-400 font-medium max-w-2xl mx-auto text-lg">
-          {isEn
-            ? 'Official youth initiatives promoted by Parish Councils and Municipalities.'
-            : 'Iniciativas oficiais de tempos livres promovidas por Juntas de Freguesia e Municípios.'}
-        </p>
-      </div>
+          {/* BARRA DE PESQUISA + DROPDOWN CUSTOMIZADO DE DISTRITO */}
+          <div className="bg-white p-3 rounded-2xl shadow-2xl max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-12 gap-3 text-left">
+            <div className="sm:col-span-7 flex items-center px-4 bg-slate-50 rounded-xl border border-slate-200">
+              <span className="text-slate-400 mr-3">🔍</span>
+              <input
+                type="text"
+                value={pesquisa}
+                onChange={(e) => setPesquisa(e.target.value)}
+                placeholder={
+                  isEn
+                    ? "Search by municipality, parish, or program..."
+                    : "Pesquisar por Câmara, Junta, Concelho ou Programa..."
+                }
+                className="w-full py-3.5 bg-transparent text-sm font-bold text-slate-900 outline-none placeholder:text-slate-400"
+              />
+            </div>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-6 -mt-10 relative z-10">
-
-        {/* BARRA DE PESQUISA E FILTROS */}
-        <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 flex flex-col md:flex-row gap-4 mb-10">
-          <div className="flex-1 relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-              <IconSearch className="w-4 h-4" />
-            </span>
-            <input
-              type="text"
-              placeholder={isEn ? "Search programs, municipalities..." : "Pesquisar programas, municípios..."}
-              value={pesquisa}
-              onChange={(e) => setPesquisa(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-12 pr-4 text-sm font-medium outline-none focus:border-emerald-500 transition-colors"
-            />
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-            <select
-              value={distrito}
-              onChange={(e) => setDistrito(e.target.value)}
-              className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium outline-none cursor-pointer hover:bg-slate-50 min-w-[160px]"
-            >
-              <option value="">{isEn ? 'All Districts' : 'Todos os Distritos'}</option>
-              {distritosDisponiveis.map(d => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={limparFiltros}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-3 rounded-xl text-sm font-bold transition-colors whitespace-nowrap cursor-pointer"
-            >
-              {isEn ? 'Clear' : 'Limpar'}
-            </button>
+            <div className="sm:col-span-5 relative">
+              <div
+                onClick={() => setIsDistDropdownOpen(!isDistDropdownOpen)}
+                className="w-full h-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-slate-800 cursor-pointer flex items-center justify-between hover:border-[#0E3A68]"
+              >
+                <span className="truncate">
+                  📍 {distrito || (isEn ? "All Districts" : "Todos os Distritos")}
+                </span>
+                <span className="text-[10px] text-slate-400 ml-2">▼</span>
+              </div>
+              {isDistDropdownOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsDistDropdownOpen(false)}
+                  />
+                  <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto">
+                    <div
+                      onClick={() => {
+                        setDistrito("");
+                        setIsDistDropdownOpen(false);
+                      }}
+                      className="p-3.5 text-xs font-black text-[#0E3A68] hover:bg-blue-50 cursor-pointer border-b border-slate-100"
+                    >
+                      {isEn ? "All Districts" : "Todos os Distritos"}
+                    </div>
+                    {distritosDisponiveis.map((d) => (
+                      <div
+                        key={d}
+                        onClick={() => {
+                          setDistrito(d);
+                          setIsDistDropdownOpen(false);
+                        }}
+                        className="p-3.5 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0"
+                      >
+                        {d}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
+      </section>
 
-        {/* RESULTADOS */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="bg-white rounded-2xl border border-slate-200 overflow-hidden animate-pulse">
-                <div className="h-48 bg-slate-200" />
-                <div className="p-5 space-y-3">
-                  <div className="h-4 bg-slate-200 rounded w-2/3" />
-                  <div className="h-5 bg-slate-200 rounded w-full" />
-                  <div className="h-3 bg-slate-200 rounded w-1/2" />
-                </div>
-              </div>
+      {/* ATALHOS DE DISTRITOS */}
+      {distritosDisponiveis.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 md:px-6 pt-8">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
+            {distritosDisponiveis.map((d) => (
+              <Link
+                key={d}
+                href={`/${lang}/institucional/distrito/${encodeURIComponent(
+                  d.toLowerCase().replace(/\s+/g, "-")
+                )}`}
+                className="px-4 py-2 bg-white hover:bg-[#0E3A68] hover:text-white border border-slate-200 rounded-full text-xs font-black text-slate-700 whitespace-nowrap no-underline shadow-sm transition-colors"
+              >
+                🏛️ {d}
+              </Link>
             ))}
           </div>
-        ) : programasFiltrados.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-              <IconBuilding className="w-8 h-8" />
-            </div>
-            <p className="text-slate-500 font-bold text-lg">
-              {isEn ? 'No programs found.' : 'Nenhum programa encontrado.'}
+        </section>
+      )}
+
+      {/* GRELHA DE INICIATIVAS */}
+      <section className="max-w-7xl mx-auto px-4 md:px-6 py-10">
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="bg-white rounded-3xl border border-slate-200 overflow-hidden animate-pulse h-80"
+              />
+            ))}
+          </div>
+        ) : iniciativasFiltradas.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-slate-200 p-16 text-center shadow-sm">
+            <span className="text-5xl block mb-4">🏛️</span>
+            <h3 className="text-xl font-black text-slate-900 m-0 mb-2">
+              {isEn
+                ? "No municipal programs found"
+                : "Nenhuma iniciativa municipal encontrada"}
+            </h3>
+            <p className="text-sm text-slate-500 mb-6">
+              {isEn
+                ? "Try clearing your search or selecting another region."
+                : "Tente limpar a pesquisa ou selecionar outro distrito."}
             </p>
-            {(pesquisa || distrito) && (
-              <button
-                type="button"
-                onClick={limparFiltros}
-                className="mt-4 text-sm font-bold text-emerald-600 hover:text-emerald-700 underline underline-offset-2 cursor-pointer"
-              >
-                {isEn ? 'Clear filters' : 'Limpar filtros'}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                setPesquisa("");
+                setDistrito("");
+              }}
+              className="bg-[#0E3A68] text-white font-black uppercase tracking-widest text-xs px-6 py-3 rounded-xl cursor-pointer"
+            >
+              {isEn ? "Reset Filters" : "Ver Todas as Autarquias"}
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {programasFiltrados.map(iniciativa => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {iniciativasFiltradas.map((iniciativa) => (
               <Link
                 key={iniciativa.id}
                 href={`/${lang}/institucional/${iniciativa.id}`}
-                className="group flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl hover:border-emerald-200 transition-all duration-300 overflow-hidden"
+                className="group flex flex-col bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-xl hover:border-[#0E3A68]/30 transition-all duration-300 overflow-hidden no-underline text-inherit"
               >
-
                 <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
                   <img
                     loading="lazy"
                     src={iniciativa.imagem_capa_url || FALLBACK_IMG}
-                    onError={(e) => { e.currentTarget.src = FALLBACK_IMG; }}
+                    onError={(e) => {
+                      e.currentTarget.src = FALLBACK_IMG;
+                    }}
                     alt={iniciativa.titulo}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
-                  <div className="absolute top-3 left-3 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">
-                    {isEn ? 'Public Entity' : 'Entidade Pública'}
-                  </div>
+                  {iniciativa.distrito && (
+                    <span className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm text-[#0E3A68] text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg shadow-sm">
+                      📍 {iniciativa.concelho || iniciativa.distrito}
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex flex-col p-5 flex-1 relative pt-8">
+                <div className="flex flex-col p-6 flex-1 relative pt-9">
                   <div className="absolute -top-6 left-5 w-12 h-12 bg-white rounded-full p-1.5 shadow-md border border-slate-100 flex items-center justify-center overflow-hidden">
                     {iniciativa.logotipo_url ? (
                       <img
                         loading="lazy"
                         src={iniciativa.logotipo_url}
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         alt="Logo"
                         className="w-full h-full object-contain"
                       />
                     ) : (
-                      <span className="text-slate-500">
-                        <IconBuilding className="w-5 h-5" />
-                      </span>
+                      <span className="text-lg">🏛️</span>
                     )}
                   </div>
 
-                  <p className="text-xs font-bold text-slate-500 mb-1 line-clamp-1">
-                    {iniciativa.entidade_organizadora || (isEn ? 'Official Entity' : 'Entidade Oficial')}
+                  <p className="text-xs font-bold text-slate-400 m-0 mb-1 line-clamp-1">
+                    {iniciativa.entidade_organizadora ||
+                      (isEn ? "Official Entity" : "Entidade Municipal")}
                   </p>
-                  <h3 className="text-lg font-black text-slate-900 leading-tight mb-4 group-hover:text-emerald-600 transition-colors line-clamp-2">
+                  <h3 className="text-lg font-black text-slate-900 leading-tight m-0 mb-3 group-hover:text-[#0E3A68] line-clamp-2">
                     {iniciativa.titulo}
                   </h3>
 
-                  <div className="space-y-2 mb-6 mt-auto">
-                    <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-                      <span className="text-slate-400">
-                        <IconUsers className="w-4 h-4" />
-                      </span>
-                      {iniciativa.idade_min_global || 6} - {iniciativa.idade_max_global || 16} {isEn ? 'years' : 'anos'}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-                      <span className="text-slate-400">
-                        <IconMapPin className="w-4 h-4" />
-                      </span>
-                      <span className="line-clamp-1">
-                        {iniciativa.concelho || 'Portugal'}{iniciativa.distrito ? `, ${iniciativa.distrito}` : ''}
-                      </span>
-                    </div>
-                  </div>
+                  {(iniciativa.idade_min_global ||
+                    iniciativa.idade_max_global) && (
+                    <p className="text-xs font-bold text-slate-500 m-0 mb-4">
+                      👶 {iniciativa.idade_min_global || 6} -{" "}
+                      {iniciativa.idade_max_global || 16}{" "}
+                      {isEn ? "years" : "anos"}
+                    </p>
+                  )}
 
-                  <div className="w-full text-center border border-emerald-600 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white font-bold text-sm py-2.5 rounded-lg transition-colors">
-                    {isEn ? 'View Details' : 'Ver mais detalhes'}
+                  <div className="w-full text-center bg-slate-50 group-hover:bg-[#0E3A68] text-[#0E3A68] group-hover:text-white font-black uppercase tracking-widest text-[11px] py-3 rounded-xl transition-colors mt-auto">
+                    {isEn ? "View Programs" : "Ver Programas e Inscrição"}
                   </div>
                 </div>
               </Link>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </main>
   );
 }

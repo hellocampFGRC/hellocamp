@@ -1,95 +1,97 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 
-export default function FormContactoCampo({ 
-  campoId, 
-  organizadorId, 
-  nomeCampo, 
-  dict, 
-  isEn, 
-  lang 
+export default function FormContactoCampo({
+  campoId,
+  organizadorId,
+  nomeCampo,
+  dict,
+  isEn,
+  lang,
 }: any) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [sucesso, setSucesso] = useState(false);
+  const [isLogged, setIsLogged] = useState(false);
 
   const [form, setForm] = useState({
-    nome: "", apelido: "", email: "", telefone: "", idade: "", mensagem: ""
+    nome: "",
+    apelido: "",
+    email: "",
+    telefone: "",
+    idade: "",
+    mensagem: "",
   });
+
+  // Se o pai já estiver logado, pré-preenche os dados para facilitar!
+  useEffect(() => {
+    const prefillUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      setIsLogged(true);
+
+      const { data: perfil } = await supabase
+        .from("perfis")
+        .select("nome_completo, email, telefone")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      const partesNome = (
+        perfil?.nome_completo ||
+        session.user.user_metadata?.nome_completo ||
+        ""
+      ).split(" ");
+      setForm((prev) => ({
+        ...prev,
+        nome: partesNome[0] || "",
+        apelido: partesNome.slice(1).join(" ") || "",
+        email: perfil?.email || session.user.email || "",
+        telefone: perfil?.telefone || "",
+      }));
+    };
+    prefillUser();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // 1. VERIFICAR SESSÃO DO UTILIZADOR PARA O SENDER_ID
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id || null;
-
-      // 2. PREPARAR O TEXTO DA MENSAGEM PARA A BASE DE DADOS
-      // Agrupamos os dados de contacto no texto, já que a tabela não tem colunas para nome/email
-      const textoMensagem = `Formulário de Contacto: ${nomeCampo}
-Nome: ${form.nome} ${form.apelido}
-Email: ${form.email}
-Telefone: ${form.telefone}
-Idade do Participante: ${form.idade}
-
-Mensagem:
-${form.mensagem}`;
-
-      // 3. GUARDAR A MENSAGEM NA TABELA "mensagens" NO SUPABASE
-      const { error: dbError } = await supabase.from('mensagens').insert([
-        {
-          campo_id: campoId || null,
-          receiver_id: organizadorId || null,
-          sender_id: userId,
-          texto: textoMensagem,
-          lida: false
-        }
-      ]);
-
-      if (dbError) {
-        console.error("Erro ao guardar na base de dados:", dbError);
-        throw new Error("Erro a guardar mensagem na base de dados.");
-      }
-
-      // 4. ENVIAR O EMAIL VIA API
       const formData = new FormData();
-      formData.append('First_Name', form.nome);
-      formData.append('Last_Name', form.apelido);
-      formData.append('Email', form.email);
-      formData.append('Phone', form.telefone);
-      formData.append('Age', form.idade);
-      formData.append('Message', form.mensagem);
-      formData.append('campo_id', campoId);
-      formData.append('organizador_id', organizadorId || '');
-      formData.append('_subject', `Nova Questão: ${nomeCampo}`);
-      formData.append('lang', lang);
+      formData.append("First_Name", form.nome);
+      formData.append("Last_Name", form.apelido);
+      formData.append("Email", form.email);
+      formData.append("Phone", form.telefone);
+      formData.append("Age", form.idade);
+      formData.append("Message", form.mensagem);
+      formData.append(
+        "_subject",
+        isEn
+          ? `New Question regarding ${nomeCampo} - HelloCamp`
+          : `Nova Dúvida sobre ${nomeCampo} - HelloCamp`
+      );
+      formData.append("campo_id", String(campoId || ""));
+      formData.append("organizador_id", String(organizadorId || ""));
+      formData.append("lang", lang || "pt");
 
-      const response = await fetch('/api/enviar-duvida', {
-        method: 'POST',
+      const res = await fetch("/api/enviar-duvida", {
+        method: "POST",
         body: formData,
       });
 
-      if (!response.ok) {
-        throw new Error("Erro no servidor de email");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Erro ao enviar mensagem.");
       }
 
       setSucesso(true);
-      
-      // 5. REENCAMINHAR SE TIVER SESSÃO
-      if (session) {
-        setTimeout(() => {
-          router.push(`/${lang}/cliente/mensagens`);
-        }, 2500);
-      }
-
-    } catch (err) {
-      console.error(err);
-      alert(isEn ? "Technical error. Try again later." : "Houve um erro técnico. Tente novamente mais tarde.");
+      setForm((prev) => ({ ...prev, mensagem: "" }));
+    } catch (err: any) {
+      alert(err.message);
     } finally {
       setLoading(false);
     }
@@ -97,56 +99,138 @@ ${form.mensagem}`;
 
   if (sucesso) {
     return (
-      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
-        <span className="text-5xl mb-4 block">✅</span>
-        <h4 className="text-xl font-black text-emerald-800 mb-2">
-          {isEn ? 'Message Sent Successfully!' : 'Mensagem Enviada com Sucesso!'}
+      <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl text-center">
+        <span className="text-4xl block mb-3">✅</span>
+        <h4 className="text-base font-black text-[#167524] m-0 mb-1">
+          {isEn
+            ? "Message Sent to Organizer!"
+            : "Mensagem Enviada ao Organizador!"}
         </h4>
-        <p className="text-emerald-700 font-medium">
-          {isEn 
-            ? 'The camp organizer will review your question. They will reply to your email shortly.' 
-            : 'A sua mensagem foi guardada e enviada diretamente para o Organizador. Responderão para o seu e-mail o mais breve possível.'}
+        <p className="text-xs text-slate-600 m-0 mb-4 leading-relaxed">
+          {isEn
+            ? "The camp organizer received your question and will reply to your email and in your HelloCamp Inbox."
+            : "O organizador já recebeu a sua questão na Inbox e responderá para o seu e-mail e no seu Portal de Cliente."}
         </p>
+        <div className="flex justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => setSucesso(false)}
+            className="px-4 py-2.5 bg-white border border-emerald-200 rounded-xl text-xs font-bold text-[#167524] cursor-pointer"
+          >
+            {isEn ? "Send another question" : "Enviar outra questão"}
+          </button>
+          {isLogged && (
+            <Link
+              href={`/${lang}/cliente/mensagens`}
+              className="px-5 py-2.5 bg-[#0E3A68] text-white rounded-xl text-xs font-black uppercase tracking-widest no-underline"
+            >
+              {isEn ? "Open My Inbox" : "Ver nas Minhas Mensagens"}
+            </Link>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">{dict.detalhe.nome}</label>
-          <input type="text" required value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 outline-none focus:border-emerald-500 transition-colors" />
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">
+            {isEn ? "First Name *" : "Primeiro Nome *"}
+          </label>
+          <input
+            type="text"
+            required
+            value={form.nome}
+            onChange={(e) => setForm({ ...form, nome: e.target.value })}
+            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white"
+          />
         </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">{dict.detalhe.apelido}</label>
-          <input type="text" required value={form.apelido} onChange={e => setForm({...form, apelido: e.target.value})} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 outline-none focus:border-emerald-500 transition-colors" />
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">{dict.detalhe.email_encarregado}</label>
-          <input type="email" required value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 outline-none focus:border-emerald-500 transition-colors" />
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">{dict.detalhe.contacto_telefonico}</label>
-          <input type="tel" required value={form.telefone} onChange={e => setForm({...form, telefone: e.target.value})} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 outline-none focus:border-emerald-500 transition-colors" />
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">
+            {isEn ? "Last Name" : "Apelido"}
+          </label>
+          <input
+            type="text"
+            value={form.apelido}
+            onChange={(e) => setForm({ ...form, apelido: e.target.value })}
+            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white"
+          />
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">{dict.detalhe.idade_participante}</label>
-        <input type="number" min="1" required value={form.idade} onChange={e => setForm({...form, idade: e.target.value})} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 outline-none focus:border-emerald-500 transition-colors" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">
+            E-mail *
+          </label>
+          <input
+            type="email"
+            required
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">
+            {isEn ? "Phone *" : "Telemóvel *"}
+          </label>
+          <input
+            type="tel"
+            required
+            value={form.telefone}
+            onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">
+            {isEn ? "Child's Age" : "Idade do Participante"}
+          </label>
+          <input
+            type="number"
+            min="3"
+            max="22"
+            value={form.idade}
+            onChange={(e) => setForm({ ...form, idade: e.target.value })}
+            placeholder={isEn ? "e.g., 10" : "Ex: 10"}
+            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white"
+          />
+        </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">{dict.detalhe.mensagem}</label>
-        <textarea rows={4} required value={form.mensagem} onChange={e => setForm({...form, mensagem: e.target.value})} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 outline-none focus:border-emerald-500 transition-colors resize-none"></textarea>
+      <div>
+        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">
+          {isEn ? "Your Question *" : "A sua Mensagem / Dúvida *"}
+        </label>
+        <textarea
+          rows={4}
+          required
+          value={form.mensagem}
+          onChange={(e) => setForm({ ...form, mensagem: e.target.value })}
+          placeholder={
+            isEn
+              ? "Write your question to the camp organizer..."
+              : "Escreva aqui a sua dúvida sobre horários, vagas, alimentação ou atividades..."
+          }
+          className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white resize-none"
+        />
       </div>
-      
-      <button type="submit" disabled={loading} className="self-start px-8 py-3.5 rounded-xl bg-slate-900 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-sm transition-colors shadow-sm cursor-pointer">
-        {loading ? (isEn ? 'Sending...' : 'A enviar...') : dict.detalhe.enviar_mensagem}
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full sm:w-auto px-8 py-4 bg-[#0E3A68] hover:bg-[#0b2b4d] disabled:bg-slate-300 text-white font-black uppercase tracking-widest text-xs rounded-xl shadow-md cursor-pointer transition-all"
+      >
+        {loading
+          ? isEn
+            ? "Sending..."
+            : "A enviar..."
+          : isEn
+          ? "Send Question to Organizer"
+          : "Enviar Dúvida ao Organizador"}
       </button>
     </form>
   );
