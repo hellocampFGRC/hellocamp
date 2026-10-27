@@ -1,599 +1,680 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import React from "react";
+import jsPDF from "jspdf";
 
-export default function GestaoContratoGlobalPage({ params }: { params: Promise<{ lang: string }> }) {
+export default function GestaoContratoGlobalPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
   const { lang } = use(params);
-  const router = useRouter();
-  const isEn = lang === 'en';
+  const isEn = lang === "en";
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [perfil, setPerfil] = useState<any>(null);
   const [totalCampos, setTotalCampos] = useState(0);
+  const [pdfExistenteUrl, setPdfExistenteUrl] = useState<string | null>(null);
 
-  // ESTADO: "assinar" (ainda não tem contrato) vs "ver" (já assinou)
-  const [modo, setModo] = useState<'assinar' | 'ver'>('assinar');
-  const [submitting, setSubmitting] = useState(false);
-
-  // Variáveis do Contrato (Para edição e visualização)
   const [form, setForm] = useState({
-    nomeEmpresa: "",     
-    nifEmpresa: "",      
+    empresaNome: "",
+    nif: "",
+    formaJuridica: "Lda / Sociedade por Quotas",
     pessoaContacto: "",
-    formaJuridica: "",
+    telefone: "",
     morada: "",
     codigoPostal: "",
-    telefone: "",
     emailContacto: "",
     emailReservas: "",
-    website: "",
     responsavelRGPD: "",
-    modalidadeReserva: "", 
-    linkExternoReserva: "", 
-    tipo_pagamento: "", 
-    politica_cancelamento: "", 
+    modalidadeReserva: "direta",
+    linkExternoReserva: "",
+    tipoPagamento: "100_total",
+    politicaCancelamento: "Flexível (Reembolso a 100% até 7 dias antes)",
     acordosComplementares: "",
     assinaturaNome: "",
     assinaturaCargo: "",
     concordaTermos: false,
-    dataSubmissao: "",
-    ipAssinatura: ""
   });
 
   useEffect(() => {
-    const fetchDados = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.push(`/${lang}/admin/login`); return; }
+    const carregarContrato = async () => {
+      setLoading(true);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
 
-      const userId = session.user.id;
+      const uid = session.user.id;
 
-      const { data: perfilData, error: perfilErro } = await supabase.from('perfis').select('*').eq('id', userId).single();
-      if (perfilErro || !perfilData) {
-        alert("Acesso não autorizado ou perfil não encontrado.");
-        router.push(`/${lang}/admin/dashboard`);
-        return;
+      const [{ data: perfilData }, { data: camposData }] = await Promise.all([
+        supabase.from("perfis").select("*").eq("id", uid).single(),
+        supabase
+          .from("campos")
+          .select("id, contrato_parceiro_url")
+          .eq("organizador_id", uid),
+      ]);
+
+      setPerfil(perfilData);
+      setTotalCampos(camposData?.length || 0);
+
+      const campoComPdf = camposData?.find((c) => c.contrato_parceiro_url);
+      if (campoComPdf?.contrato_parceiro_url) {
+        setPdfExistenteUrl(campoComPdf.contrato_parceiro_url);
       }
 
-      const { count } = await supabase.from('campos').select('*', { count: 'exact', head: true }).eq('organizador_id', userId);
-      
-      setPerfil(perfilData);
-      setTotalCampos(count || 0);
-
-      // Se já tem dados de contrato gravados, muda automaticamente para o modo de leitura
-      if (perfilData.contrato_dados) {
-        setModo('ver');
-        const d = perfilData.contrato_dados;
+      if (perfilData) {
+        const cd = perfilData.contrato_dados || {};
         setForm({
-          nomeEmpresa: d.empresaNome || perfilData.empresa_nome || "",
-          nifEmpresa: d.nif || perfilData.nif_empresa || "",
-          pessoaContacto: d.pessoaContacto || perfilData.nome_completo || "",
-          formaJuridica: d.formaJuridica || "",
-          morada: d.morada || "",
-          codigoPostal: d.codigoPostal || "",
-          telefone: d.telefone || perfilData.telefone || "",
-          emailContacto: d.emailContacto || perfilData.email || "",
-          emailReservas: d.emailReservas || "",
-          website: d.website || "",
-          responsavelRGPD: d.responsavelRGPD || "",
-          modalidadeReserva: d.modalidadeReserva || perfilData.modalidade_reserva || "",
-          linkExternoReserva: d.linkExternoReserva || perfilData.link_externo_reserva || "",
-          tipo_pagamento: d.tipoPagamento || "",
-          politica_cancelamento: d.politicaCancelamento || "",
-          acordosComplementares: d.acordosComplementares || "",
-          assinaturaNome: d.assinaturaNome || "",
-          assinaturaCargo: d.assinaturaCargo || "",
-          concordaTermos: true,
-          dataSubmissao: d.dataSubmissao || "",
-          ipAssinatura: d.ipAssinatura || ""
+          empresaNome:
+            cd.empresaNome ||
+            cd.nomeEmpresa ||
+            perfilData.empresa_nome ||
+            "",
+          nif: cd.nif || perfilData.nif_empresa || "",
+          formaJuridica: cd.formaJuridica || "Sociedade por Quotas (Lda)",
+          pessoaContacto:
+            cd.pessoaContacto || perfilData.nome_completo || "",
+          telefone: cd.telefone || perfilData.telefone || "",
+          morada: cd.morada || "",
+          codigoPostal: cd.codigoPostal || "",
+          emailContacto: cd.emailContacto || perfilData.email || "",
+          emailReservas:
+            cd.emailReservas || cd.emailContacto || perfilData.email || "",
+          responsavelRGPD:
+            cd.responsavelRGPD ||
+            cd.pessoaContacto ||
+            perfilData.nome_completo ||
+            "",
+          modalidadeReserva:
+            cd.modalidadeReserva ||
+            perfilData.modalidade_reserva ||
+            "direta",
+          linkExternoReserva:
+            cd.linkExternoReserva ||
+            perfilData.link_externo_reserva ||
+            "",
+          tipoPagamento: cd.tipoPagamento || cd.tipo_pagamento || "100_total",
+          politicaCancelamento:
+            cd.politicaCancelamento ||
+            cd.politica_cancelamento ||
+            "Flexível (Reembolso a 100% até 7 dias antes)",
+          acordosComplementares: cd.acordosComplementares || "",
+          assinaturaNome:
+            cd.assinaturaNome || perfilData.nome_completo || "",
+          assinaturaCargo: cd.assinaturaCargo || "Representante Legal",
+          concordaTermos: !!perfilData.contrato_dados,
         });
-      } else {
-        // Modo Preenchimento
-        setModo('assinar');
-        setForm(prev => ({
-          ...prev,
-          nomeEmpresa: perfilData.empresa_nome || "",
-          nifEmpresa: perfilData.nif_empresa || "",
-          emailContacto: perfilData.email || "",
-          telefone: perfilData.telefone || "",
-          pessoaContacto: perfilData.nome_completo || "",
-          modalidadeReserva: perfilData.modalidade_reserva || "",
-          linkExternoReserva: perfilData.link_externo_reserva || "",
-        }));
       }
 
       setLoading(false);
     };
-    fetchDados();
-  }, [lang, router]);
 
-  const handleSubmeter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.modalidadeReserva) { alert("Por favor, selecione a modalidade de reserva no Anexo 1."); return; }
-    if (form.modalidadeReserva === 'link_externo' && !form.linkExternoReserva) { alert("Por favor, insira o link externo do formulário de reserva no Anexo 1."); return; }
-    if (form.modalidadeReserva !== 'link_externo' && (!form.tipo_pagamento || !form.politica_cancelamento)) { alert("Por favor, preencha as opções obrigatórias de pagamento e cancelamento nos anexos seguintes."); return; }
-    if (!form.assinaturaNome || !form.assinaturaCargo || !form.concordaTermos) { alert("Por favor, preencha os dados da assinatura e confirme a aceitação dos termos no final do documento."); return; }
+    carregarContrato();
+  }, []);
 
-    setSubmitting(true);
+  const gerarPdfBlob = () => {
+    const isPt = !isEn;
+    const doc = new jsPDF({ format: "a4", unit: "mm" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const taxaComissao = perfil?.taxa_comissao ?? 12;
+    const baseComissao = perfil?.base_comissao || "total";
+    const timestamp =
+      perfil?.contrato_dados?.dataSubmissao || new Date().toISOString();
 
-    let userIP = "Desconhecido";
-    try {
-      const res = await fetch("https://api.ipify.org?format=json");
-      if (res.ok) {
-        const ipData = await res.json();
-        userIP = ipData.ip;
-      }
-    } catch (err) { console.error("Não foi possível capturar o IP."); }
+    const blueBrand: [number, number, number] = [14, 58, 104];
+    const goldBrand: [number, number, number] = [226, 164, 29];
+    const greenBrand: [number, number, number] = [5, 150, 105];
+    const slateDark: [number, number, number] = [30, 41, 59];
 
-    const payloadJSON = {
-      pessoaContacto: form.pessoaContacto, formaJuridica: form.formaJuridica, morada: form.morada,
-      codigoPostal: form.codigoPostal, telefone: form.telefone, emailContacto: form.emailContacto,
-      emailReservas: form.emailReservas, website: form.website, responsavelRGPD: form.responsavelRGPD,
-      modalidadeReserva: form.modalidadeReserva, linkExternoReserva: form.modalidadeReserva === 'link_externo' ? form.linkExternoReserva : "",
-      tipoPagamento: form.modalidadeReserva !== 'link_externo' ? form.tipo_pagamento : "",
-      politicaCancelamento: form.modalidadeReserva !== 'link_externo' ? form.politica_cancelamento : "",
-      acordosComplementares: form.acordosComplementares, assinaturaNome: form.assinaturaNome,
-      assinaturaCargo: form.assinaturaCargo, empresaNome: form.nomeEmpresa, nif: form.nifEmpresa,
-      dataSubmissao: new Date().toISOString(), ipAssinatura: userIP
-    };
+    doc.setFillColor(...blueBrand);
+    doc.rect(0, 0, pageWidth, 38, "F");
+    doc.setFillColor(...goldBrand);
+    doc.rect(0, 38, pageWidth, 2, "F");
 
-    const { error: perfilError } = await supabase.from('perfis').update({
-       empresa_nome: form.nomeEmpresa, nif_empresa: form.nifEmpresa, telefone: form.telefone,
-       contrato_dados: payloadJSON, status_contrato: 'Pendente de Revisão',
-       modalidade_reserva: form.modalidadeReserva, link_externo_reserva: form.modalidadeReserva === 'link_externo' ? form.linkExternoReserva : null
-    }).eq('id', perfil.id);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Hello", pageWidth / 2 - 9, 15, { align: "right" });
+    doc.setTextColor(...goldBrand);
+    doc.text("Camp", pageWidth / 2 - 9, 15, { align: "left" });
 
-    if (perfilError) { alert("Falha na gravação do perfil!"); setSubmitting(false); return; }
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.text(
+      isPt
+        ? "ACORDO GLOBAL DE INTERMEDIAÇÃO E SERVIÇOS"
+        : "GLOBAL INTERMEDIATION AND SERVICES AGREEMENT",
+      pageWidth / 2,
+      24,
+      { align: "center" }
+    );
 
-    const { error: camposError } = await supabase.from('campos').update({
-      contrato_dados: payloadJSON, status_aprovacao: 'Pendente', modalidade_reserva: form.modalidadeReserva,
-      link_externo_reserva: form.modalidadeReserva === 'link_externo' ? form.linkExternoReserva : null,
-      tipo_pagamento: form.modalidadeReserva !== 'link_externo' ? form.tipo_pagamento : null,
-      politica_cancelamento: form.modalidadeReserva !== 'link_externo' ? form.politica_cancelamento : null
-    }).eq('organizador_id', perfil.id);
+    let y = 48;
+    doc.setTextColor(...blueBrand);
+    doc.setFontSize(10);
+    doc.text(
+      isPt
+        ? "1. IDENTIFICAÇÃO DO PARCEIRO ORGANIZADOR"
+        : "1. PARTNER IDENTIFICATION",
+      15,
+      y
+    );
+    y += 7;
 
-    if (camposError) { alert("Falha na atualização dos campos!"); setSubmitting(false); return; }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...slateDark);
+    doc.text(`Empresa: ${form.empresaNome} (${form.formaJuridica})`, 15, y);
+    doc.text(`NIF: ${form.nif} | Contacto: ${form.pessoaContacto} (${form.telefone})`, 15, y + 5);
+    doc.text(`Morada: ${form.morada}, ${form.codigoPostal}`, 15, y + 10);
+    doc.text(`E-mail Oficial: ${form.emailContacto} | RGPD: ${form.responsavelRGPD}`, 15, y + 15);
 
-    alert("Contrato Global submetido com sucesso! A aguardar validação da equipa HelloCamp.");
-    window.location.reload(); // Recarrega a página para entrar no modo de leitura (VerContrato)
+    y += 26;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...blueBrand);
+    doc.text(
+      isPt
+        ? "2. CONDIÇÕES OPERACIONAIS E COMISSIONAMENTO"
+        : "2. OPERATIONAL & COMMISSION TERMS",
+      15,
+      y
+    );
+    y += 7;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...slateDark);
+    doc.text(`• Taxa de Comissão Acordada: ${taxaComissao}% (IVA incluído) | Base: ${baseComissao}`, 15, y);
+    doc.text(`• Modalidade de Reserva: ${form.modalidadeReserva}`, 15, y + 5);
+    if (form.modalidadeReserva === "link_externo") {
+      doc.text(`• Link Externo: ${form.linkExternoReserva}`, 15, y + 10);
+    } else {
+      doc.text(
+        `• Regra de Pagamento: ${form.tipoPagamento} | Política: ${form.politicaCancelamento}`,
+        15,
+        y + 10
+      );
+    }
+
+    y += 22;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...greenBrand);
+    doc.text(
+      `Assinado digitalmente por: ${form.assinaturaNome} (${form.assinaturaCargo}) em ${new Date(
+        timestamp
+      ).toLocaleString("pt-PT")}`,
+      15,
+      y
+    );
+
+    return doc;
   };
 
-  if (loading) return <div className="p-20 text-center font-bold text-slate-500 animate-pulse">A carregar documentos legais...</div>;
+  const handleDownloadPdf = () => {
+    setDownloadingPdf(true);
+    try {
+      const doc = gerarPdfBlob();
+      doc.save(
+        `Contrato_Global_HelloCamp_${(form.empresaNome || "Parceiro").replace(
+          /\s+/g,
+          "_"
+        )}.pdf`
+      );
+    } catch (e) {
+      console.error(e);
+    }
+    setDownloadingPdf(false);
+  };
 
-  const dataAtual = new Date().toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' });
-  const dataSubmissaoExibicao = form.dataSubmissao ? new Date(form.dataSubmissao).toLocaleDateString('pt-PT', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-  
-  const inputClass = "border-b border-slate-300 outline-none bg-transparent px-2 py-2 text-slate-800 placeholder:text-slate-300 w-full focus:border-[#167524] transition-colors";
-  const inputClassCustom = "border-b-2 border-slate-900 outline-none bg-transparent px-2 py-2 text-base font-black text-slate-900 placeholder:text-slate-300 w-full focus:border-[#167524] transition-colors";
+  const handleGuardarEAssinar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.concordaTermos) {
+      alert(
+        isEn
+          ? "Please accept the contractual terms."
+          : "Por favor, confirme a aceitação dos termos contratuais."
+      );
+      return;
+    }
 
-  const isVer = modo === 'ver';
-  
-  // Lógica Visual do Modo Leitura
-  let statusColor = "bg-amber-100 text-amber-800 border-amber-200";
-  const status = (perfil.status_contrato || 'Pendente').toLowerCase();
-  if (status === 'validado' || status === 'aprovado' || status === 'ativo') statusColor = "bg-[#167524]/10 text-[#167524] border-[#167524]/20";
+    setSaving(true);
+    try {
+      const doc = gerarPdfBlob();
+      const pdfBlob = doc.output("blob");
+      const pdfFile = new File([pdfBlob], `contrato_${perfil.id}.pdf`, {
+        type: "application/pdf",
+      });
 
-  let modalidadeNome = "";
-  if (form.modalidadeReserva === 'direta') modalidadeNome = "✅ Reserva Direta com Pagamento Automático";
-  else if (form.modalidadeReserva === 'email') modalidadeNome = "✅ Comunicação por E-mail (Reserva Sob Consulta)";
-  else if (form.modalidadeReserva === 'link_externo') modalidadeNome = "✅ Formulário ou Link Externo (Redirecionamento)";
+      const novoContratoDados = {
+        ...perfil?.contrato_dados,
+        ...form,
+        taxaComissao: perfil?.taxa_comissao ?? 12,
+        baseComissao: perfil?.base_comissao || "total",
+        dataSubmissao: new Date().toISOString(),
+      };
 
-  const comissaoText = perfil.taxa_comissao !== null && perfil.taxa_comissao !== undefined ? perfil.taxa_comissao : 12;
-  let baseComissaoText = "Sobre Valor Total (Programa + Extras)";
-  if (perfil.base_comissao === "apenas_programa") baseComissaoText = "Apenas sobre Valor Base do Programa";
-  if (perfil.base_comissao === "sem_comissao") baseComissaoText = "Isento de Comissão (0%)";
+      const formData = new FormData();
+      formData.append("id", perfil.id);
+      formData.append("email", perfil.email);
+      formData.append("lang", lang);
+      formData.append("contratoDados", JSON.stringify(novoContratoDados));
+      formData.append("pdf", pdfFile);
+
+      const res = await fetch("/api/contratos/assinar", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao guardar contrato.");
+
+      setPerfil((prev: any) => ({
+        ...prev,
+        status_contrato: "Aprovado",
+        contrato_dados: novoContratoDados,
+        modalidade_reserva: form.modalidadeReserva,
+      }));
+      if (data.url) setPdfExistenteUrl(data.url);
+
+      alert(
+        isEn
+          ? "Global Agreement updated and signed successfully!"
+          : "Acordo Global atualizado e assinado com sucesso!"
+      );
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-12 text-center text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">
+        {isEn ? "Loading Global Agreement..." : "A carregar o seu Acordo Global..."}
+      </div>
+    );
+  }
+
+  const jaAssinado =
+    perfil?.status_contrato === "Aprovado" || !!perfil?.contrato_dados;
 
   return (
-    <main className="min-h-screen bg-slate-50 py-10 px-4 md:px-8 font-sans text-slate-900">
-      <div className="max-w-[1000px] mx-auto">
-        
-        {/* BARRA DE FERRAMENTAS DE TOPO */}
-        <div className="mb-6 flex flex-wrap justify-between items-center gap-4 bg-white p-5 rounded-2xl shadow-sm border border-slate-200 print:hidden">
-          <Link href={`/${lang}/admin/dashboard`} className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-2">
-            &larr; Voltar ao Painel
+    <div className="max-w-5xl mx-auto font-sans pb-16">
+      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <span
+            className={`inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-2 ${
+              jaAssinado
+                ? "bg-emerald-50 text-[#167524] border border-emerald-200"
+                : "bg-amber-50 text-amber-800 border border-amber-200"
+            }`}
+          >
+            {jaAssinado
+              ? isEn
+                ? "✓ Active & Signed Agreement"
+                : "✓ Contrato Global Ativo e Assinado"
+              : isEn
+              ? "⚠️ Signature Pending"
+              : "⚠️ Assinatura Pendente"}
+          </span>
+          <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">
+            {isEn ? "Global Partnership Agreement" : "Contrato Global de Parceria B2B"}
+          </h1>
+          <p className="text-sm text-slate-500 font-medium mt-1 mb-0">
+            {isEn
+              ? `This single agreement covers all ${totalCampos} program(s) associated with your organizer account.`
+              : `Este acordo único abrange todos os ${totalCampos} programa(s) associados à sua conta de organizador.`}
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          {pdfExistenteUrl && (
+            <a
+              href={pdfExistenteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black uppercase tracking-widest text-xs px-5 py-3 rounded-xl no-underline shadow-sm transition-colors"
+            >
+              📥 {isEn ? "View Signed PDF" : "Abrir PDF Arquivado"}
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-black uppercase tracking-widest text-xs px-5 py-3 rounded-xl cursor-pointer shadow-sm transition-colors"
+          >
+            📄 {isEn ? "Generate PDF Copy" : "Descarregar Cópia PDF"}
+          </button>
+        </div>
+      </div>
+
+      {/* RESUMO DA TAXA ACORDADA */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-2xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#167524] block mb-1">
+            {isEn ? "Agreed Commission Rate" : "Taxa de Comissão Acordada"}
+          </span>
+          <span className="text-3xl font-black text-[#167524]">
+            {perfil?.taxa_comissao ?? 12}%
+          </span>
+          <span className="block text-xs text-slate-500 mt-1 font-medium">
+            {isEn ? "VAT included (Success fee only)" : "IVA incluído (Apenas sobre vendas)"}
+          </span>
+        </div>
+
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
+            {isEn ? "Commission Base" : "Base de Incidência"}
+          </span>
+          <span className="text-base font-black text-slate-900 block mt-1">
+            {perfil?.base_comissao === "apenas_programa"
+              ? isEn
+                ? "Base Program Only"
+                : "Apenas Valor Base do Programa"
+              : isEn
+              ? "Total Booking Value"
+              : "Sobre o Valor Total da Reserva"}
+          </span>
+        </div>
+
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
+            {isEn ? "Covered Programs" : "Programas Abrangidos"}
+          </span>
+          <span className="text-base font-black text-slate-900 block mt-1">
+            {totalCampos} {isEn ? "Camps / Activities" : "Campos / Atividades"}
+          </span>
+          <Link
+            href={`/${lang}/admin/campos`}
+            className="text-xs font-bold text-[#167524] underline mt-1 inline-block"
+          >
+            {isEn ? "View my camps" : "Ver os meus campos"} &rarr;
           </Link>
-          
-          {isVer && (
-            <div className="flex items-center gap-3">
-              <div className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest shadow-sm ${statusColor}`}>
-                Estado: {perfil.status_contrato || 'Pendente'}
+        </div>
+      </div>
+
+      {/* FORMULÁRIO DE DADOS CONTRATUAIS E OPERACIONAIS */}
+      <form
+        onSubmit={handleGuardarEAssinar}
+        className="bg-white p-6 md:p-10 rounded-3xl border border-slate-200 shadow-sm space-y-8"
+      >
+        <div>
+          <h2 className="text-lg font-black text-slate-900 m-0 mb-4 pb-3 border-b border-slate-100">
+            1. {isEn ? "Legal & Billing Identification" : "Identificação Legal e Faturação"}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                {isEn ? "Company / Legal Name *" : "Nome da Empresa / Entidade *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={form.empresaNome}
+                onChange={(e) => setForm({ ...form, empresaNome: e.target.value })}
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                {isEn ? "Tax ID (NIF / VAT) *" : "NIF / NIPC *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={form.nif}
+                onChange={(e) => setForm({ ...form, nif: e.target.value })}
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                {isEn ? "Contact Person *" : "Pessoa de Contacto *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={form.pessoaContacto}
+                onChange={(e) =>
+                  setForm({ ...form, pessoaContacto: e.target.value })
+                }
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                {isEn ? "Phone *" : "Telefone *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={form.telefone}
+                onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                {isEn ? "Billing Address *" : "Morada Fiscal Completa *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={form.morada}
+                onChange={(e) => setForm({ ...form, morada: e.target.value })}
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-lg font-black text-slate-900 m-0 mb-4 pb-3 border-b border-slate-100">
+            2. {isEn ? "Booking & Operational Model" : "Modelo de Reserva e Operação"}
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {[
+              {
+                id: "direta",
+                titulo: isEn ? "Direct Checkout" : "Reserva Direta (Stripe)",
+                desc: isEn
+                  ? "Automatic online payment & instant confirmation."
+                  : "Pagamento automático online e gestão integrada.",
+              },
+              {
+                id: "email",
+                titulo: isEn ? "Upon Request (Email)" : "Reserva Sob Consulta",
+                desc: isEn
+                  ? "Receive booking requests by email."
+                  : "Receba pedidos de reserva e confirme em 48h.",
+              },
+              {
+                id: "link_externo",
+                titulo: isEn ? "External Form Link" : "Link Externo Próprio",
+                desc: isEn
+                  ? "Redirect parents to your own form."
+                  : "Redirecione os pais para o seu formulário.",
+              },
+            ].map((mod) => (
+              <label
+                key={mod.id}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col gap-1 ${
+                  form.modalidadeReserva === mod.id
+                    ? "bg-emerald-50/70 border-[#167524] shadow-sm"
+                    : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="modalidadeReserva"
+                    value={mod.id}
+                    checked={form.modalidadeReserva === mod.id}
+                    onChange={(e) =>
+                      setForm({ ...form, modalidadeReserva: e.target.value })
+                    }
+                    className="accent-[#167524]"
+                  />
+                  <span className="font-black text-sm text-slate-900">
+                    {mod.titulo}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-500 pl-6">{mod.desc}</span>
+              </label>
+            ))}
+          </div>
+
+          {form.modalidadeReserva === "link_externo" ? (
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                {isEn ? "External Booking URL *" : "URL do Formulário Externo *"}
+              </label>
+              <input
+                type="url"
+                required
+                placeholder="https://..."
+                value={form.linkExternoReserva}
+                onChange={(e) =>
+                  setForm({ ...form, linkExternoReserva: e.target.value })
+                }
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                  {isEn ? "Payment Rule" : "Regra de Cobrança no Checkout"}
+                </label>
+                <select
+                  value={form.tipoPagamento}
+                  onChange={(e) =>
+                    setForm({ ...form, tipoPagamento: e.target.value })
+                  }
+                  className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
+                >
+                  <option value="100_total">
+                    {isEn ? "100% Paid on Booking" : "100% Pago no Ato da Reserva"}
+                  </option>
+                  <option value="50_sinal">
+                    {isEn
+                      ? "50% Deposit + 50% Later"
+                      : "50% Sinal + 50% 1 Semana Antes"}
+                  </option>
+                </select>
               </div>
-              <button onClick={() => window.print()} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all shadow-md">
-                🖨️ Imprimir PDF
-              </button>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                  {isEn ? "Cancellation Policy" : "Política de Cancelamento Padrão"}
+                </label>
+                <select
+                  value={form.politicaCancelamento}
+                  onChange={(e) =>
+                    setForm({ ...form, politicaCancelamento: e.target.value })
+                  }
+                  className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
+                >
+                  <option value="Flexível (Reembolso a 100% até 7 dias antes)">
+                    {isEn
+                      ? "Flexible (100% up to 7 days prior)"
+                      : "Flexível (Reembolso a 100% até 7 dias antes)"}
+                  </option>
+                  <option value="Moderada (Reembolso a 50% até 15 dias antes)">
+                    {isEn
+                      ? "Moderate (50% up to 15 days prior)"
+                      : "Moderada (Reembolso a 50% até 15 dias antes)"}
+                  </option>
+                  <option value="Estrita (Sem reembolso após reserva)">
+                    {isEn
+                      ? "Strict (No refund after booking)"
+                      : "Estrita (Sem reembolso após reserva)"}
+                  </option>
+                </select>
+              </div>
             </div>
           )}
         </div>
 
-        <form id="contrato-form" onSubmit={handleSubmeter} className="bg-white shadow-xl border border-slate-200 p-8 md:p-16 rounded-[2rem] font-serif print:shadow-none print:p-0 print:border-none">
-          
-          {/* CABEÇALHO COM LOGO OFICIAL */}
-          <div className="text-center mb-16">
-            <div className="text-3xl md:text-4xl font-black tracking-tighter mb-8 font-sans flex justify-center items-center">
-              <span className="text-[#0E3A68]">Hello</span><span className="text-[#e2a41d]">Camp</span>
-            </div>
-            <h1 className="text-xl md:text-2xl font-bold uppercase mb-2 tracking-widest border-b-2 border-slate-900 inline-block pb-2">
-              Contrato Global de {isVer ? 'Intermediação' : 'Parceiro'}
-            </h1>
-            <p className="text-sm font-bold text-slate-500 mt-3 font-sans uppercase tracking-widest">
-              {isVer ? 'CÓPIA DO PARCEIRO (DOCUMENTO VINCULATIVO)' : 'Um acordo único para toda a sua operação.'}
-            </p>
-          </div>
-
-          {/* AS 4 FASES EXPLICATIVAS (SÓ APARECE AO ASSINAR) */}
-          {!isVer && (
-            <div className="space-y-12 mb-16 font-sans">
-              <div className="flex flex-col md:flex-row gap-6 items-start">
-                <div className="w-14 h-14 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">📝</div>
-                <div>
-                  <h3 className="text-base font-black uppercase text-slate-900 mb-2">1. Celebração do contrato</h3>
-                  <p className="text-slate-600 text-sm leading-relaxed">Celebração do contrato de parceria com a HelloCamp. Este contrato regula a divulgação e a intermediação das suas ofertas através da plataforma HelloCamp. O acordo mantém-se válido até ao final do ano civil em curso, sendo automaticamente renovado, salvo denúncia.</p>
-                </div>
-              </div>
-              <div className="flex flex-col md:flex-row gap-6 items-start">
-                <div className="w-14 h-14 bg-blue-50 text-blue-600 border border-blue-100 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">🏖️</div>
-                <div>
-                  <h3 className="text-base font-black uppercase text-slate-900 mb-2">2. Divulgação das ofertas</h3>
-                  <p className="text-slate-600 text-sm leading-relaxed">A HelloCamp procede à recolha e organização das informações relativas às atividades disponibilizadas pelo parceiro, criando as respetivas páginas na plataforma. Promovemos os programas e partilhamos a sua marca sem esconder os seus contactos.</p>
-                </div>
-              </div>
-              <div className="flex flex-col md:flex-row gap-6 items-start">
-                <div className="w-14 h-14 bg-amber-50 text-amber-600 border border-amber-100 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">💻</div>
-                <div>
-                  <h3 className="text-base font-black uppercase text-slate-900 mb-2">3. Reservas Automáticas</h3>
-                  <p className="text-slate-600 text-sm leading-relaxed">As reservas poderão ser efetuadas diretamente através da HelloCamp. Sempre que uma reserva seja realizada, comunicaremos os dados clínicos, fichas médicas e detalhes do participante.</p>
-                </div>
-              </div>
-              <div className="flex flex-col md:flex-row gap-6 items-start">
-                <div className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">€</div>
-                <div>
-                  <h3 className="text-base font-black uppercase text-slate-900 mb-2">4. Pagamento da Comissão</h3>
-                  <p className="text-slate-600 text-sm leading-relaxed">A HelloCamp cobra uma comissão sobre cada reserva concluída. O modelo de pagamento poderá assumir diferentes formas (direta, e-mail ou externa). As condições serão definidas de acordo com as escolhas nos Anexos Operacionais.</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!isVer && <div className="h-0.5 bg-slate-900 w-full my-16"></div>}
-
-          {/* DADOS DAS PARTES */}
-          <div className="space-y-6 text-[14px] md:text-[15px] text-justify">
-            {!isVer && <h2 className="text-2xl font-bold text-center uppercase tracking-widest mb-10">Preenchimento de Dados</h2>}
-
-            <p className="mb-4 text-slate-800 font-bold">Entre:</p>
-            <div className="ml-4 md:ml-8 mb-8 space-y-1 bg-slate-50 p-5 rounded-xl border border-slate-200 font-sans text-sm">
-              <p className="font-black text-slate-900">HelloCamp Portugal</p>
-              <p>Website: www.hellocamp.pt</p>
-              <p>E-mail: info@hellocamp.pt</p>
-            </div>
-
-            <p className="mb-4 text-slate-800 font-bold">E</p>
-            
-            {/* DADOS DO PARCEIRO */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8 ml-4 md:ml-8 mb-8 bg-slate-50 p-6 md:p-8 border border-slate-200 font-sans text-sm shadow-sm rounded-2xl">
-              <div className="flex flex-col md:col-span-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nome da Empresa (Faturação) *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.nomeEmpresa}</span> : <input required type="text" className={inputClassCustom} value={form.nomeEmpresa} onChange={e => setForm({...form, nomeEmpresa: e.target.value})} placeholder="Designação legal" />}
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">NIF *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.nifEmpresa}</span> : <input required type="text" className={inputClassCustom} value={form.nifEmpresa} onChange={e => setForm({...form, nifEmpresa: e.target.value})} placeholder="Ex: 500 000 000" />}
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Pessoa de Contacto *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.pessoaContacto}</span> : <input required type="text" className={inputClass} value={form.pessoaContacto} onChange={e => setForm({...form, pessoaContacto: e.target.value})} placeholder="Nome completo" />}
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Forma Jurídica *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.formaJuridica}</span> : <input required type="text" className={inputClass} value={form.formaJuridica} onChange={e => setForm({...form, formaJuridica: e.target.value})} placeholder="Ex: Lda, Associação" />}
-              </div>
-              <div className="flex flex-col md:col-span-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Morada Sede Fiscal *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.morada}</span> : <input required type="text" className={inputClass} value={form.morada} onChange={e => setForm({...form, morada: e.target.value})} placeholder="Morada completa" />}
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Código Postal e Localidade *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.codigoPostal}</span> : <input required type="text" className={inputClass} value={form.codigoPostal} onChange={e => setForm({...form, codigoPostal: e.target.value})} placeholder="0000-000 Localidade" />}
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Número de Telefone *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.telefone}</span> : <input required type="text" className={inputClass} value={form.telefone} onChange={e => setForm({...form, telefone: e.target.value})} />}
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">E-mail Comercial *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.emailContacto}</span> : <input required type="email" className={inputClass} value={form.emailContacto} onChange={e => setForm({...form, emailContacto: e.target.value})} />}
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">E-mail Exclusivo de Reservas *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.emailReservas}</span> : <input required type="email" className={inputClass} value={form.emailReservas} onChange={e => setForm({...form, emailReservas: e.target.value})} />}
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Website</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.website || "N/A"}</span> : <input type="text" className={inputClass} value={form.website} onChange={e => setForm({...form, website: e.target.value})} placeholder="Opcional" />}
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Responsável RGPD *</label>
-                {isVer ? <span className="font-black text-base text-slate-900">{form.responsavelRGPD}</span> : <input required type="text" className={inputClass} value={form.responsavelRGPD} onChange={e => setForm({...form, responsavelRGPD: e.target.value})} placeholder="Nome do gestor de dados" />}
-              </div>
-            </div>
-            
-            <div className="text-center p-6 md:p-8 border-y border-slate-200 bg-slate-50 rounded-2xl font-sans">
-               <p className="font-bold text-lg mb-3 text-slate-600">É celebrado o presente contrato de intermediação e divulgação comercial aplicável a:</p>
-               <span className="block text-xl md:text-2xl font-black text-[#167524] uppercase tracking-widest">
-                  Todas as atividades organizadas por {form.nomeEmpresa || "a Vossa Entidade"}
-               </span>
-               {!isVer && (
-                 <span className="block text-sm text-slate-500 mt-3 font-medium max-w-xl mx-auto">
-                    Este contrato abrange todos os {totalCampos > 0 ? `${totalCampos} campo(s)` : 'campos'} de férias atuais e quaisquer futuros programas criados pelo parceiro na plataforma HelloCamp.
-                 </span>
-               )}
-            </div>
-          </div>
-
-          <div className="space-y-6 text-[14px] md:text-[15px] text-justify pt-12">
-            <h3 className="font-bold text-lg md:text-xl uppercase tracking-widest border-b border-slate-900 pb-2 mb-8 font-sans">Cláusulas Contratuais</h3>
-            
-            <h4 className="font-bold font-sans">Artigo 1.º – Comissão</h4>
-            {isVer ? (
-              <p className="mb-4">O Parceiro compromete-se a pagar à HelloCamp uma comissão de {comissaoText}% (IVA incluído) sobre cada reserva efetuada através da plataforma. Incidência: {baseComissaoText}.</p>
-            ) : (
-              <p className="mb-4">O Parceiro compromete-se a pagar à HelloCamp a comissão (IVA incluído) acordada sobre cada reserva efetuada através da plataforma, nos termos definidos no presente contrato ou no Painel Financeiro.</p>
-            )}
-            <p className="mb-4">A comissão é calculada sobre o valor efetivamente pago pelo cliente relativamente à atividade reservada, incluindo serviços adicionais contratados. A comissão torna-se devida após a confirmação da reserva pelo Parceiro e a transmissão dos respetivos dados.</p>
-            <p className="mb-8">Caso uma reserva não possa ser realizada por motivos devidamente justificados, nomeadamente indisponibilidade da atividade, o Parceiro deverá informar a HelloCamp de imediato.</p>
-
-            <h4 className="font-bold font-sans">Artigo 2.º – Condições de Pagamento e Faturação</h4>
-            <p className="mb-8">As comissões devidas à HelloCamp serão faturadas de acordo com o modelo de pagamento acordado. O Parceiro compromete-se a liquidar as faturas emitidas pela HelloCamp dentro dos prazos nelas indicados.</p>
-
-            <h4 className="font-bold font-sans">Artigo 3.º – Obrigações do Parceiro</h4>
-            <p className="mb-4">O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades. Garante que possui todos os direitos sobre os conteúdos disponibilizados à HelloCamp (direitos de autor e de imagem).</p>
-            <p className="mb-8">Os preços divulgados na plataforma HelloCamp não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas da mesma atividade.</p>
-
-            <h4 className="font-bold font-sans">Artigo 4.º – Duração e Renovação</h4>
-            <p className="mb-8">O presente contrato produz efeitos a partir da data da sua assinatura por ambas as partes e mantém-se válido até ao final do ano civil, sendo automaticamente renovado por períodos sucessivos de um ano.</p>
-
-            <h4 className="font-bold font-sans">Artigo 5.º – Limitação de Responsabilidade e Seguros</h4>
-            <p className="mb-4">A HelloCamp atua exclusivamente como plataforma intermediária. Não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes ou disputas durante as atividades.</p>
-            <p className="mb-8">O Parceiro é o único e exclusivo responsável pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei, licenças e certificações exigidas para o exercício da sua atividade.</p>
-
-            <h4 className="font-bold font-sans border-l-4 border-slate-900 pl-4 mt-10 py-1 bg-slate-50">Artigo 7.º – Validade da Assinatura e Convenção de Prova</h4>
-            <p className="mb-4 bg-slate-50 p-4 rounded-r-xl">As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos (designadamente a aposição do nome do representante legal no portal web da HelloCamp). Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP e timestamp) constituem meio de prova plenamente válido, renunciando o Parceiro a invocar a nulidade do contrato com fundamento na ausência de assinatura autógrafa.</p>
-          </div>
-
-          <div className="h-px bg-slate-300 w-full my-12"></div>
-
-          {/* ANEXOS E OPÇÕES DE OPERAÇÃO */}
-          <div className="space-y-12 font-sans text-sm text-slate-800">
-            
-            {/* ANEXO 1 */}
-            <div className="bg-slate-50 p-6 md:p-8 rounded-2xl border border-slate-200">
-              <h3 className="font-black text-base md:text-lg mb-5 text-slate-900 uppercase border-l-4 border-[#167524] pl-3">Anexo 1 – Procedimento de Reserva</h3>
-              
-              {isVer ? (
-                <div className="p-5 bg-white border border-slate-300 rounded-xl shadow-sm">
-                  <strong className="block text-slate-900 mb-1">{modalidadeNome}</strong>
-                  {form.modalidadeReserva === 'link_externo' && form.linkExternoReserva && (
-                    <p className="mt-3 text-slate-600 bg-slate-50 p-3 rounded-lg text-xs font-mono break-all border border-slate-200">
-                      URL Oficial: {form.linkExternoReserva}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <p className="mb-6 font-medium text-slate-500">Selecione a modalidade de gestão de reservas aplicável à sua parceria.</p>
-                  
-                  <label className={`flex items-start gap-4 cursor-pointer p-5 rounded-xl border-2 transition-colors ${form.modalidadeReserva === 'direta' ? 'bg-white border-[#167524] shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                    <input type="radio" name="anexo1" required value="direta" checked={form.modalidadeReserva === 'direta'} onChange={e => setForm({...form, modalidadeReserva: e.target.value})} className="mt-1 w-5 h-5 accent-[#167524]" />
-                    <div>
-                      <strong className="block text-slate-900 mb-1.5 text-base">Reserva Direta no Checkout (Recomendado)</strong>
-                      <span className="text-slate-600 leading-relaxed block text-xs">As reservas efetuadas através da plataforma HelloCamp serão registadas diretamente no sistema de reservas do Parceiro. O formulário recolherá todas as fichas médicas. O Parceiro compromete-se a manter as disponibilidades atualizadas.</span>
-                    </div>
-                  </label>
-
-                  <label className={`flex items-start gap-4 cursor-pointer p-5 rounded-xl border-2 transition-colors ${form.modalidadeReserva === 'email' ? 'bg-white border-[#167524] shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                    <input type="radio" name="anexo1" required value="email" checked={form.modalidadeReserva === 'email'} onChange={e => setForm({...form, modalidadeReserva: e.target.value})} className="mt-1 w-5 h-5 accent-[#167524]" />
-                    <div>
-                      <strong className="block text-slate-900 mb-1.5 text-base">Comunicação por E-mail (Sob Consulta)</strong>
-                      <span className="text-slate-600 leading-relaxed block text-xs">A HelloCamp enviará por e-mail os dados do participante. O Parceiro dispõe de 2 dias úteis para comunicar a rejeição da reserva. Na ausência de resposta, a reserva considerar-se-á aceite e faturada.</span>
-                    </div>
-                  </label>
-
-                  <label className={`flex items-start gap-4 cursor-pointer p-5 rounded-xl border-2 transition-colors ${form.modalidadeReserva === 'link_externo' ? 'bg-white border-[#167524] shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                    <input type="radio" name="anexo1" required value="link_externo" checked={form.modalidadeReserva === 'link_externo'} onChange={e => setForm({...form, modalidadeReserva: e.target.value})} className="mt-1 w-5 h-5 accent-[#167524] flex-shrink-0" />
-                    <div className="w-full">
-                      <strong className="block text-slate-900 mb-1.5 text-base">Formulário Externo Próprio (Redirecionamento)</strong>
-                      <span className="text-slate-600 leading-relaxed block mb-4 text-xs">O tráfego é redirecionado para o seu website. A HelloCamp recolhe apenas a Lead Inicial (Nome e Email). O Parceiro compromete-se sob compromisso de honra a ser verdadeiro na comunicação mensal de inscrições finalizadas.</span>
-                      
-                      {form.modalidadeReserva === 'link_externo' && (
-                        <div className="bg-slate-50 border border-slate-200 p-5 rounded-xl mt-4 w-full">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
-                            Insira o Link Externo (URL) Principal *
-                          </label>
-                          <input 
-                            type="url" 
-                            required 
-                            placeholder="https://meusite.com/inscricao" 
-                            className="w-full border border-slate-300 rounded-lg p-3 text-sm font-bold outline-none focus:border-[#167524] shadow-inner"
-                            value={form.linkExternoReserva}
-                            onChange={e => setForm({...form, linkExternoReserva: e.target.value})}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </label>
-                </div>
-              )}
-            </div>
-
-            {/* ANEXOS 2 E 3 CONDICIONAIS */}
-            {form.modalidadeReserva !== 'link_externo' ? (
-              <>
-                <div className="bg-[#167524]/5 p-6 md:p-8 rounded-2xl border border-[#167524]/20">
-                  <h3 className="font-black text-base md:text-lg mb-5 text-[#167524] uppercase border-l-4 border-[#167524] pl-3">Anexo 2 – Pagamento e comissão</h3>
-                  
-                  {isVer ? (
-                    <div className="p-5 bg-white border border-[#167524]/40 rounded-xl shadow-sm">
-                      <strong className="block text-[#167524] font-black">
-                        {form.tipo_pagamento === '100_total' ? '✅ 100% Pago no Ato da Reserva (Imediato)' : '✅ Sinal de 50% Agora + 50% Antes'}
-                      </strong>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <p className="mb-5 text-sm text-[#167524]/80 font-medium">O Parceiro autoriza a HelloCamp a receber um depósito efetuado através da plataforma segura Stripe.</p>
-                      
-                      <label className={`flex items-start gap-4 cursor-pointer p-5 rounded-xl border-2 transition-colors ${form.tipo_pagamento === '100_total' ? 'bg-white border-[#167524] shadow-sm' : 'border-[#167524]/20 hover:border-[#167524]/50 bg-white/50'}`}>
-                        <input type="radio" name="anexo2" required value="100_total" checked={form.tipo_pagamento === '100_total'} onChange={e => setForm({...form, tipo_pagamento: e.target.value})} className="mt-1 w-5 h-5 accent-[#167524]" />
-                        <div>
-                          <strong className="block text-slate-900 mb-1">100% Pago no Ato da Reserva (Pagamento Imediato)</strong>
-                          <span className="text-slate-600 text-xs leading-relaxed block">O cliente liquida a totalidade do valor do programa para assegurar a vaga de imediato.</span>
-                        </div>
-                      </label>
-
-                      <label className={`flex items-start gap-4 cursor-pointer p-5 rounded-xl border-2 transition-colors ${form.tipo_pagamento === '50_sinal' ? 'bg-white border-[#167524] shadow-sm' : 'border-[#167524]/20 hover:border-[#167524]/50 bg-white/50'}`}>
-                        <input type="radio" name="anexo2" required value="50_sinal" checked={form.tipo_pagamento === '50_sinal'} onChange={e => setForm({...form, tipo_pagamento: e.target.value})} className="mt-1 w-5 h-5 accent-[#167524]" />
-                        <div>
-                          <strong className="block text-slate-900 mb-1">Sinal de 50% Agora + 50% 1 Semana Antes</strong>
-                          <span className="text-slate-600 text-xs leading-relaxed block">A plataforma debitará automaticamente a segunda metade do cartão do cliente 7 dias antes.</span>
-                        </div>
-                      </label>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-amber-50 p-6 md:p-8 rounded-2xl border border-amber-200">
-                  <h3 className="font-black text-base md:text-lg mb-5 text-amber-900 uppercase border-l-4 border-amber-500 pl-3">Anexo 3 – Política de Cancelamento</h3>
-                  
-                  {isVer ? (
-                    <div className="p-5 bg-white border border-amber-400 rounded-xl shadow-sm">
-                      <strong className="block text-amber-900 font-black">✅ {form.politica_cancelamento}</strong>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <p className="mb-5 text-sm text-amber-800 font-medium">A comissão da HelloCamp será sempre ajustada proporcionalmente ao montante que o Parceiro retiver.</p>
-                      
-                      <label className={`flex items-start gap-4 cursor-pointer p-5 rounded-xl border-2 transition-colors ${form.politica_cancelamento === 'Flexível (Reembolso a 100% até 7 dias antes)' ? 'bg-white border-amber-500 shadow-sm' : 'border-amber-200 hover:border-amber-300 bg-white/50'}`}>
-                        <input type="radio" name="anexo3" required value="Flexível (Reembolso a 100% até 7 dias antes)" checked={form.politica_cancelamento === 'Flexível (Reembolso a 100% até 7 dias antes)'} onChange={e => setForm({...form, politica_cancelamento: e.target.value})} className="mt-1 w-5 h-5 accent-amber-600" />
-                        <div>
-                          <strong className="block text-slate-900 mb-1 text-sm">Flexível (Reembolso a 100% até 7 dias antes)</strong>
-                        </div>
-                      </label>
-
-                      <label className={`flex items-start gap-4 cursor-pointer p-5 rounded-xl border-2 transition-colors ${form.politica_cancelamento === 'Moderada (Reembolso a 50% até 15 dias antes)' ? 'bg-white border-amber-500 shadow-sm' : 'border-amber-200 hover:border-amber-300 bg-white/50'}`}>
-                        <input type="radio" name="anexo3" required value="Moderada (Reembolso a 50% até 15 dias antes)" checked={form.politica_cancelamento === 'Moderada (Reembolso a 50% até 15 dias antes)'} onChange={e => setForm({...form, politica_cancelamento: e.target.value})} className="mt-1 w-5 h-5 accent-amber-600" />
-                        <div>
-                          <strong className="block text-slate-900 mb-1 text-sm">Moderada (Reembolso a 50% até 15 dias antes)</strong>
-                        </div>
-                      </label>
-
-                      <label className={`flex items-start gap-4 cursor-pointer p-5 rounded-xl border-2 transition-colors ${form.politica_cancelamento === 'Estrita (Sem reembolso após reserva)' ? 'bg-white border-amber-500 shadow-sm' : 'border-amber-200 hover:border-amber-300 bg-white/50'}`}>
-                        <input type="radio" name="anexo3" required value="Estrita (Sem reembolso após reserva)" checked={form.politica_cancelamento === 'Estrita (Sem reembolso após reserva)'} onChange={e => setForm({...form, politica_cancelamento: e.target.value})} className="mt-1 w-5 h-5 accent-amber-600" />
-                        <div>
-                          <strong className="block text-slate-900 mb-1 text-sm">Estrita (Sem reembolso após reserva)</strong>
-                        </div>
-                      </label>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                 <h3 className="font-black text-lg mb-4 text-slate-600 uppercase border-l-4 border-slate-400 pl-3">Anexos 2 e 3 – Gestão Externa</h3>
-                 <p className="text-slate-600 font-medium text-sm">As políticas financeiras e de cancelamento são geridas externamente no seu website/formulário. A comissão é faturada pela HelloCamp consoante as leads validadas mensalmente.</p>
-              </div>
-            )}
-
-            {/* ANEXO 4 */}
-            {(isVer && form.acordosComplementares) || !isVer ? (
-              <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 className="font-black text-lg mb-4 text-slate-900 uppercase border-l-4 border-slate-400 pl-3">Anexo 4 – Acordos Extraordinários</h3>
-                {isVer ? (
-                  <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap font-medium text-sm text-slate-700">
-                    {form.acordosComplementares}
-                  </div>
-                ) : (
-                  <>
-                    <p className="mb-4 text-sm text-slate-500 font-medium">Preencha apenas se acordou exceções contratuais (ex: isenções).</p>
-                    <textarea 
-                      className="w-full border border-slate-300 p-5 rounded-xl bg-slate-50 outline-none focus:border-[#167524] transition-all text-sm" 
-                      rows={3} 
-                      value={form.acordosComplementares} 
-                      onChange={e => setForm({...form, acordosComplementares: e.target.value})}
-                      placeholder="Insira as cláusulas de exceção pré-acordadas, ou deixe em branco."
-                    ></textarea>
-                  </>
-                )}
-              </div>
-            ) : null}
-
-          </div>
-
-          {/* ZONA DE ASSINATURAS FINAIS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 mt-16 pt-12 border-t-[3px] border-slate-900 font-sans">
+        {/* ASSINATURA DIGITAL */}
+        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+          <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 m-0 mb-4">
+            3. {isEn ? "Digital Signature" : "Assinatura Digital do Representante"}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <h4 className="font-black mb-6 uppercase tracking-widest text-slate-900 text-[11px]">Pela HelloCamp</h4>
-              <p className="font-serif text-2xl italic text-slate-400 mb-2">Administração HelloCamp</p>
-              <p className="text-sm font-bold text-slate-400 border-t border-slate-200 mt-8 pt-4 uppercase tracking-widest text-[10px]">Data: {isVer ? dataSubmissaoExibicao : dataAtual}</p>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                {isEn ? "Signatory Full Name *" : "Nome do Signatário *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={form.assinaturaNome}
+                onChange={(e) =>
+                  setForm({ ...form, assinaturaNome: e.target.value })
+                }
+                className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-serif italic font-bold text-slate-900"
+              />
             </div>
-
             <div>
-              <h4 className="font-black mb-6 uppercase tracking-widest text-slate-900 text-[11px]">Pelo Parceiro</h4>
-              
-              {isVer ? (
-                <>
-                  <p className="font-serif text-3xl italic text-slate-900 mb-2">{form.assinaturaNome}</p>
-                  <p className="text-sm font-black text-slate-500 mb-4">{form.assinaturaCargo}</p>
-                  <p className="text-sm font-bold text-slate-400 border-t border-slate-200 mt-8 pt-4 uppercase tracking-widest text-[10px]">Submetido a: {dataSubmissaoExibicao}</p>
-                  
-                  <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl shadow-inner">
-                     <p className="text-[10px] text-slate-400 font-mono font-bold mb-1 uppercase">Registo de Aceitação Legal</p>
-                     <p className="text-[11px] text-slate-600 font-mono m-0">Endereço IP: {form.ipAssinatura || 'Registado pelo Servidor'}</p>
-                     <div className="mt-3 inline-flex items-center gap-2 bg-[#167524]/10 text-[#167524] px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-[#167524]/20">
-                       <span>✓</span> Termos Aceites
-                     </div>
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-5">
-                  <div className="flex flex-col">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Escreva o seu Nome *</label>
-                    <input required type="text" className="border-b-2 border-slate-900 bg-transparent outline-none py-2 text-2xl font-serif italic text-slate-900 focus:border-[#167524] transition-colors" value={form.assinaturaNome} onChange={e => setForm({...form, assinaturaNome: e.target.value})} placeholder="A sua Assinatura" />
-                  </div>
-                  <div className="flex flex-col">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Cargo *</label>
-                    <input required type="text" className="border-b border-slate-300 bg-transparent outline-none py-2 font-bold text-slate-900 focus:border-[#167524] transition-colors" value={form.assinaturaCargo} onChange={e => setForm({...form, assinaturaCargo: e.target.value})} placeholder="Ex: Sócio-Gerente" />
-                  </div>
-                  <p className="text-sm font-bold text-slate-400 border-t border-slate-200 mt-8 pt-4 uppercase tracking-widest text-[10px]">Data: {dataAtual}</p>
-
-                  <div className="mt-8 bg-slate-50 p-5 border border-slate-200 rounded-xl shadow-inner">
-                    <label className="flex items-start gap-4 cursor-pointer group">
-                      <input type="checkbox" required checked={form.concordaTermos} onChange={e => setForm({...form, concordaTermos: e.target.checked})} className="mt-1 w-5 h-5 accent-[#167524] cursor-pointer flex-shrink-0" />
-                      <span className="text-[11px] text-slate-600 font-bold leading-relaxed group-hover:text-slate-900 transition-colors">
-                        Declaro ter lido e aceite os termos do contrato global e a convenção de prova do Artigo 7.º. Confirmo possuir poderes legais para vincular a entidade supra identificada através desta assinatura digital.
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              )}
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                {isEn ? "Legal Role *" : "Cargo Legal *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={form.assinaturaCargo}
+                onChange={(e) =>
+                  setForm({ ...form, assinaturaCargo: e.target.value })
+                }
+                className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900"
+              />
             </div>
           </div>
 
-          {!isVer && (
-            <div className="pt-10 mt-16 border-t border-slate-200 flex justify-end font-sans">
-              <button 
-                type="submit" 
-                disabled={submitting || !form.concordaTermos || !form.assinaturaNome || !form.assinaturaCargo} 
-                className="bg-[#167524] hover:bg-[#115a1b] disabled:bg-slate-300 text-white font-black px-6 md:px-12 py-5 rounded-2xl shadow-lg shadow-[#167524]/20 transition-all hover:-translate-y-1 cursor-pointer w-full md:w-auto text-sm uppercase tracking-widest"
-              >
-                {submitting ? 'A Submeter Contrato Global...' : 'Assinar Digitalmente e Concluir'}
-              </button>
-            </div>
-          )}
+          <label className="flex items-start gap-3 cursor-pointer mt-4">
+            <input
+              type="checkbox"
+              required
+              checked={form.concordaTermos}
+              onChange={(e) =>
+                setForm({ ...form, concordaTermos: e.target.checked })
+              }
+              className="mt-1 w-4 h-4 accent-[#167524]"
+            />
+            <span className="text-xs text-slate-600 font-medium leading-relaxed">
+              {isEn
+                ? "I confirm that I have read and accept the Global Partnership Agreement terms and have legal authority to bind the organization."
+                : "Declaro que li e aceito os termos do Contrato Global de Intermediação HelloCamp e confirmo possuir poderes legais para vincular a entidade."}
+            </span>
+          </label>
+        </div>
 
-        </form>
-      </div>
-    </main>
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={saving}
+            className="bg-[#167524] hover:bg-[#115a1b] disabled:bg-slate-400 text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-xl cursor-pointer shadow-md transition-all"
+          >
+            {saving
+              ? isEn
+                ? "Saving & Propagating..."
+                : "A guardar e atualizar campos..."
+              : isEn
+              ? "Save & Sign Global Agreement"
+              : "Guardar e Assinar Acordo Global"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
