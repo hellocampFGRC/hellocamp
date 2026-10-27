@@ -6,7 +6,7 @@ import Link from "next/link";
 import BotaoPartilha from "../../components/BotaoPartilha";
 
 const FALLBACK_COVER =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 600'%3E%3Crect fill='%231e293b' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='48' font-weight='bold' fill='%23475569' text-anchor='middle' dy='.3em'%3EHelloCamp%3C/text%3E%3C/svg%3E";
+  "https://images.unsplash.com/photo-1540479859555-17af45c78602?auto=format&fit=crop&q=80&w=1200";
 
 export default function DetalheIniciativaPage({
   params,
@@ -18,66 +18,51 @@ export default function DetalheIniciativaPage({
 
   const [loading, setLoading] = useState(true);
   const [iniciativa, setIniciativa] = useState<any>(null);
+  const [outrasAutarquias, setOutrasAutarquias] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchDetalhes = async () => {
       setLoading(true);
+      try {
+        // 1. Busca via API Server-Side (contorna qualquer bloqueio de RLS e não faz joins inexistentes!)
+        let itemEncontrado = null;
+        const res = await fetch(
+          `/api/institucional?id=${encodeURIComponent(id)}`,
+          { cache: "no-store" }
+        );
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data) itemEncontrado = json.data;
+        }
 
-      // 1. Tenta procurar na tabela institucional_iniciativas
-      const { data: dataIni } = await supabase
-        .from("institucional_iniciativas")
-        .select(
-          `
-          *,
-          subprogramas:institucional_subprogramas(*),
-          locais:institucional_locais(*)
-        `
-        )
-        .eq("id", id)
-        .maybeSingle();
+        // 2. Fallback direto ao Supabase sem joins que partam a query
+        if (!itemEncontrado) {
+          const { data } = await supabase
+            .from("institucional_iniciativas")
+            .select("*")
+            .eq("id", id)
+            .maybeSingle();
+          if (data) itemEncontrado = data;
+        }
 
-      if (dataIni) {
-        setIniciativa(dataIni);
-        setLoading(false);
-        return;
-      }
+        setIniciativa(itemEncontrado);
 
-      // 2. Fallback: Procura na tabela programas_institucionais
-      const { data: dataProg } = await supabase
-        .from("programas_institucionais")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (dataProg) {
-        setIniciativa({
-          id: dataProg.id,
-          titulo: dataProg.titulo || dataProg.nome || "Programa Municipal",
-          entidade_organizadora:
-            dataProg.entidade_organizadora ||
-            dataProg.entidade ||
-            dataProg.autarquia ||
-            "Câmara Municipal / Junta",
-          descricao_html: dataProg.descricao_html || dataProg.descricao || "",
-          imagem_capa_url:
-            dataProg.imagem_capa_url ||
-            dataProg.imagem_url ||
-            dataProg.imagem ||
-            FALLBACK_COVER,
-          logotipo_url: dataProg.logotipo_url || null,
-          distrito: dataProg.distrito || dataProg.Distrito || "Portugal",
-          concelho: dataProg.concelho || dataProg.local || "",
-          idade_min_global: dataProg.idade_min_global || dataProg.idade_min || 6,
-          idade_max_global:
-            dataProg.idade_max_global || dataProg.idade_max || 16,
-          link_oficial:
-            dataProg.link_oficial || dataProg.url_oficial || dataProg.link || null,
-          subprogramas: [],
-          locais: [],
+        // 3. Carregar outras iniciativas do mesmo distrito para SEO interno
+        const resLista = await fetch("/api/institucional", {
+          cache: "no-store",
         });
+        if (resLista.ok) {
+          const jsonLista = await resLista.json();
+          const todas = jsonLista.data || [];
+          setOutrasAutarquias(
+            todas.filter((x: any) => x.id !== id).slice(0, 3)
+          );
+        }
+      } catch (err) {
+        console.error("Erro ao carregar detalhes da autarquia:", err);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     fetchDetalhes();
@@ -87,7 +72,7 @@ export default function DetalheIniciativaPage({
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400 text-xs uppercase tracking-widest animate-pulse">
         {isEn
-          ? "Loading Municipal Initiative..."
+          ? "Loading Municipal Program..."
           : "A carregar informações da autarquia..."}
       </div>
     );
@@ -102,45 +87,63 @@ export default function DetalheIniciativaPage({
         </h2>
         <Link
           href={`/${lang}/institucional`}
-          className="bg-[#0E3A68] text-white font-black uppercase tracking-widest text-xs px-5 py-3 rounded-md no-underline"
+          className="bg-[#0E3A68] text-white font-black uppercase tracking-widest text-xs px-6 py-3 rounded-md no-underline"
         >
-          &larr; {isEn ? "Back to directory" : "Voltar às Autarquias"}
+          &larr; {isEn ? "Back to directory" : "Voltar a todas as Autarquias"}
         </Link>
       </div>
     );
   }
 
+  const datasLimpaLista = (iniciativa.datas_encontradas || "")
+    .split("|")
+    .map((s: string) => s.trim())
+    .filter((s: string) => s && !s.includes("2017"));
+
   return (
     <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24">
+      {/* BARRA DE TOPO EXECUTIVA */}
       <div className="bg-[#0E3A68] text-white py-12 px-4 md:px-6 border-b border-slate-800">
         <div className="max-w-5xl mx-auto">
-          <Link
-            href={`/${lang}/institucional`}
-            className="text-xs font-black uppercase tracking-widest text-blue-200 hover:text-white no-underline inline-block mb-6"
-          >
-            &larr;{" "}
-            {isEn
-              ? "Back to Municipalities"
-              : "Voltar ao Diretório de Autarquias"}
-          </Link>
+          <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-blue-200 mb-6">
+            <Link
+              href={`/${lang}/institucional`}
+              className="hover:text-white no-underline text-blue-200"
+            >
+              {isEn ? "Municipalities" : "Autarquias"}
+            </Link>
+            <span>/</span>
+            <Link
+              href={`/${lang}/institucional/distrito/${encodeURIComponent(
+                (iniciativa.distrito || "Portugal")
+                  .toLowerCase()
+                  .replace(/\s+/g, "-")
+              )}`}
+              className="hover:text-white no-underline text-blue-200"
+            >
+              {iniciativa.distrito}
+            </Link>
+            <span>/</span>
+            <span className="text-white truncate">{iniciativa.concelho}</span>
+          </div>
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
               <span className="inline-block bg-[#e2a41d] text-slate-950 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-sm mb-3">
                 🏛️ {iniciativa.entidade_organizadora}
               </span>
-              <h1 className="text-2xl md:text-4xl font-black m-0 tracking-tight">
+              <h1 className="text-2xl md:text-4xl font-black m-0 tracking-tight leading-tight">
                 {iniciativa.titulo}
               </h1>
-              <p className="text-xs text-blue-100 font-bold m-0 mt-2">
-                📍 {iniciativa.concelho || iniciativa.distrito} • 👶{" "}
-                {iniciativa.idade_min_global || 6} -{" "}
-                {iniciativa.idade_max_global || 16}{" "}
-                {isEn ? "years" : "anos"}
+              <p className="text-xs text-blue-100 font-bold m-0 mt-3">
+                📍 Concelho: {iniciativa.concelho || iniciativa.distrito} (
+                {iniciativa.distrito}) • 👶 Idades:{" "}
+                {iniciativa.idade_min_global || 6} aos{" "}
+                {iniciativa.idade_max_global || 16} anos
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <BotaoPartilha
                 url={`https://www.hellocamp.pt/${lang}/institucional/${iniciativa.id}`}
                 titulo={iniciativa.titulo}
@@ -154,8 +157,8 @@ export default function DetalheIniciativaPage({
                   className="bg-[#e2a41d] hover:bg-[#d4991b] text-slate-950 font-black uppercase tracking-widest text-xs px-6 py-3.5 rounded-md no-underline shadow-md whitespace-nowrap"
                 >
                   {isEn
-                    ? "Go to Municipality Website ↗"
-                    : "Ver no Site da Câmara / Junta ↗"}
+                    ? "Visit Municipality Portal ↗"
+                    : "Abrir Site da Câmara / Junta ↗"}
                 </a>
               )}
             </div>
@@ -163,11 +166,28 @@ export default function DetalheIniciativaPage({
         </div>
       </div>
 
+      {/* CONTEÚDO PRINCIPAL */}
       <div className="max-w-5xl mx-auto px-4 md:px-6 pt-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-8 space-y-6">
+        {/* COLUNA ESQUERDA: DESCRIÇÃO E DATAS */}
+        <div className="lg:col-span-7 space-y-6">
+          {iniciativa.imagem_capa_url && (
+            <div className="bg-white p-3 rounded-md border border-slate-200 shadow-sm">
+              <img
+                src={iniciativa.imagem_capa_url}
+                onError={(e) => {
+                  e.currentTarget.src = FALLBACK_COVER;
+                }}
+                alt={iniciativa.titulo}
+                className="w-full max-h-80 object-cover rounded-sm"
+              />
+            </div>
+          )}
+
           <div className="bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm">
-            <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest m-0 mb-4 pb-3 border-b border-slate-100">
-              {isEn ? "Program Information" : "Informações sobre a Iniciativa"}
+            <h2 className="text-base font-black text-slate-900 uppercase tracking-widest m-0 mb-4 pb-3 border-b border-slate-100">
+              {isEn
+                ? "About this Municipal Program"
+                : "Sobre o Programa Autárquico"}
             </h2>
             {iniciativa.descricao_html ? (
               <div
@@ -176,73 +196,162 @@ export default function DetalheIniciativaPage({
               />
             ) : (
               <p className="text-sm text-slate-700 leading-relaxed m-0">
-                Este programa de férias e ocupação de tempos livres é organizado
-                diretamente por{" "}
-                <strong>{iniciativa.entidade_organizadora}</strong>. Para
-                consultar o regulamento atualizado, escalões e submeter a
-                inscrição, aceda ao website oficial da autarquia.
+                Iniciativa municipal promovida por{" "}
+                <strong>{iniciativa.entidade_organizadora}</strong> para apoio
+                às famílias durante as férias escolares.
               </p>
             )}
           </div>
 
-          {iniciativa.subprogramas?.length > 0 && (
-            <div className="bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm">
-              <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest m-0 mb-4 pb-3 border-b border-slate-100">
-                Turnos e Subprogramas
-              </h2>
-              <div className="space-y-3">
-                {iniciativa.subprogramas.map((sub: any) => (
-                  <div
-                    key={sub.id}
-                    className="p-4 bg-slate-50 rounded-md border border-slate-200"
+          {datasLimpaLista.length > 0 && (
+            <div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest m-0 mb-3">
+                📅{" "}
+                {isEn
+                  ? "Dates & Periods Mentioned"
+                  : "Datas e Períodos Identificados"}
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {datasLimpaLista.map((dt: string, i: number) => (
+                  <span
+                    key={i}
+                    className="bg-emerald-50 border border-emerald-200 text-[#167524] text-xs font-black px-3.5 py-2 rounded-sm"
                   >
-                    <h4 className="m-0 text-sm font-black text-slate-900">
-                      {sub.nome}
-                    </h4>
-                    <p className="m-0 mt-1 text-xs font-bold text-slate-500">
-                      👶 {sub.idade_min || 6}-{sub.idade_max || 16} anos{" "}
-                      {sub.localizacao_resumo
-                        ? `• 📍 ${sub.localizacao_resumo}`
-                        : ""}
-                    </p>
-                  </div>
+                    🗓️ {dt}
+                  </span>
                 ))}
               </div>
             </div>
           )}
         </div>
 
-        <aside className="lg:col-span-4 bg-white p-6 rounded-md border border-slate-200 shadow-sm space-y-4">
-          <span className="inline-block text-[10px] font-black uppercase tracking-widest text-[#0E3A68] bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-sm">
-            Informação Pública
-          </span>
-          <h3 className="text-base font-black text-slate-900 m-0">
-            Como funcionam as inscrições municipais?
-          </h3>
-          <p className="text-xs text-slate-600 leading-relaxed m-0">
-            Os programas autárquicos são geridos diretamente pelos serviços de
-            educação/juventude da respetiva Câmara Municipal ou Junta de
-            Freguesia.
-          </p>
+        {/* COLUNA DIREITA: ACESSO DIRETO À CÂMARA / JUNTA E CONTACTOS OFICIAIS */}
+        <aside className="lg:col-span-5 bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-md space-y-6">
+          <div>
+            <span className="inline-block text-[10px] font-black uppercase tracking-widest text-[#167524] bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-sm mb-2">
+              Inscrição Direta na Autarquia
+            </span>
+            <h3 className="text-xl font-black text-slate-900 m-0">
+              {isEn
+                ? "Official Registration & Contacts"
+                : "Portal Oficial e Contactos da Autarquia"}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1 mb-0 leading-relaxed">
+              {isEn
+                ? "This is a public municipal program. Registrations are handled directly on the municipality's website or parish office."
+                : "Este é um programa público promovido pela autarquia. As inscrições são realizadas diretamente nos canais oficiais abaixo:"}
+            </p>
+          </div>
 
-          {iniciativa.link_oficial ? (
-            <a
-              href={iniciativa.link_oficial}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full text-center bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs py-3.5 rounded-md no-underline shadow-sm"
+          {/* BOTÕES DE REDIRECIONAMENTO DIRETO PARA O SITE DA CÂMARA / FORMULÁRIO */}
+          <div className="space-y-3">
+            {iniciativa.link_inscricao_extraido && (
+              <a
+                href={iniciativa.link_inscricao_extraido}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full text-center bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs py-4 px-5 rounded-md no-underline shadow-sm transition-colors"
+              >
+                📝{" "}
+                {isEn
+                  ? "Open Registration Form / Notice ↗"
+                  : "Abrir Ficha / Portal de Inscrição ↗"}
+              </a>
+            )}
+
+            {iniciativa.link_oficial && (
+              <a
+                href={iniciativa.link_oficial}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full text-center bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black uppercase tracking-widest text-xs py-4 px-5 rounded-md no-underline shadow-sm transition-colors"
+              >
+                🏛️{" "}
+                {isEn
+                  ? "Visit Official Municipality Page ↗"
+                  : "Ver Página Oficial da Autarquia ↗"}
+              </a>
+            )}
+          </div>
+
+          {/* CONTACTOS DIRETOS DA CÂMARA / JUNTA */}
+          <div className="bg-slate-50 p-5 rounded-md border border-slate-200 space-y-3">
+            <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400 m-0">
+              Contactos Diretos da Entidade
+            </h4>
+
+            <p className="text-xs font-bold text-slate-800 m-0">
+              🏛️ {iniciativa.entidade_organizadora}
+            </p>
+
+            {iniciativa.telefone_contato && (
+              <p className="text-xs font-bold text-slate-700 m-0">
+                📞 Telefone:{" "}
+                <a
+                  href={`tel:${iniciativa.telefone_contato}`}
+                  className="text-[#0E3A68] underline"
+                >
+                  {iniciativa.telefone_contato}
+                </a>
+              </p>
+            )}
+
+            {iniciativa.email_contato && (
+              <p className="text-xs font-bold text-slate-700 m-0 break-all">
+                ✉️ E-mail:{" "}
+                <a
+                  href={`mailto:${iniciativa.email_contato.toLowerCase()}`}
+                  className="text-[#0E3A68] underline"
+                >
+                  {iniciativa.email_contato.toLowerCase()}
+                </a>
+              </p>
+            )}
+          </div>
+
+          {/* CTA PARA VER CAMPOS PRIVADOS COM VAGAS IMEDIATAS NO MESMO DISTRITO */}
+          <div className="pt-4 border-t border-slate-200">
+            <p className="text-xs font-bold text-slate-600 m-0 mb-3">
+              {isEn
+                ? `Looking for private camps with instant online booking in ${iniciativa.distrito}?`
+                : `Procura outros campos de férias privados com vagas imediatas em ${iniciativa.distrito}?`}
+            </p>
+            <Link
+              href={`/${lang}/distrito/${encodeURIComponent(
+                iniciativa.distrito || "Lisboa"
+              )}`}
+              className="block w-full text-center bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-300 font-black uppercase tracking-widest text-[11px] py-3 rounded-md no-underline transition-colors"
             >
-              Aceder ao Site Oficial da Autarquia ↗
-            </a>
-          ) : (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-md text-xs font-bold text-slate-600">
-              Consulte diretamente os serviços da{" "}
-              <strong>{iniciativa.entidade_organizadora}</strong> para conhecer
-              as datas de abertura das inscrições presenciais ou online.
-            </div>
-          )}
+              🏕️ Ver Campos de Férias em {iniciativa.distrito} &rarr;
+            </Link>
+          </div>
         </aside>
       </div>
+
+      {/* OUTRAS AUTARQUIAS PARA CROSS-LINKING SEO */}
+      {outrasAutarquias.length > 0 && (
+        <section className="max-w-5xl mx-auto px-4 md:px-6 pt-14">
+          <h3 className="text-base font-black text-slate-900 uppercase tracking-widest mb-4">
+            Outras Iniciativas Municipais em Destaque
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {outrasAutarquias.map((o) => (
+              <Link
+                key={o.id}
+                href={`/${lang}/institucional/${o.id}`}
+                className="bg-white p-4 rounded-md border border-slate-200 hover:border-[#0E3A68] no-underline text-inherit shadow-sm"
+              >
+                <span className="text-[10px] font-black uppercase text-[#0E3A68] block mb-1">
+                  📍 {o.concelho || o.distrito}
+                </span>
+                <h4 className="text-sm font-black text-slate-900 m-0 line-clamp-2">
+                  {o.titulo}
+                </h4>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }
