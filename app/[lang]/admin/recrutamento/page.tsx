@@ -4,141 +4,218 @@ import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
-export default function RecrutamentoParceirosPage({ params }: { params: Promise<{ lang: string }> }) {
+const DISTRITOS_PT = [
+  "Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra",
+  "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre",
+  "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"
+];
+
+const CERTIFICADOS_LISTA = [
+  "Monitor de Campos de Férias (IPDJ)",
+  "Primeiros Socorros / Suporte Básico",
+  "Nadador Salvador",
+  "Formação em Educação / Desporto",
+  "Animação Sociocultural",
+  "Fluência em Línguas Estrangeiras",
+  "Necessidades Educativas Especiais",
+];
+
+export default function RecrutamentoParceirosPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
   const { lang } = use(params);
-  const isEn = lang === 'en';
+  const isEn = lang === "en";
 
   // --- NAVEGAÇÃO E SESSÃO ---
-  const [activeTab, setActiveTab] = useState<"descobrir" | "guardados" | "mensagens">("descobrir");
+  const [activeTab, setActiveTab] = useState<
+    "descobrir" | "guardados" | "mensagens"
+  >("descobrir");
   const [loading, setLoading] = useState(true);
   const [parceiroId, setParceiroId] = useState<string | null>(null);
   const [parceiroPerfil, setParceiroPerfil] = useState<any>(null);
 
-  // --- CONTROLO DE ACESSO E TERMOS LEGAIS ---
-  const [statusContrato, setStatusContrato] = useState<string>("Não Iniciado");
+  // --- ACESSO E TERMOS ---
   const [temAcesso, setTemAcesso] = useState(false);
-  const [showLockModal, setShowLockModal] = useState(false);
-  
+  const [statusContrato, setStatusContrato] = useState("");
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [checkboxTermos, setCheckboxTermos] = useState(false);
   const [savingTerms, setSavingTerms] = useState(false);
+  const [showLockModal, setShowLockModal] = useState(false);
 
-  // --- DATA STATES ---
+  // --- DADOS DA BASE DE DADOS ---
   const [monitores, setMonitores] = useState<any[]>([]);
   const [guardadosIds, setGuardadosIds] = useState<string[]>([]);
   const [conversas, setConversas] = useState<any[]>([]);
-  
-  // --- FILTROS & SELEÇÃO ---
+
+  // --- FILTROS COM DROPDOWNS 100% CUSTOMIZADOS ---
   const [filtroDistrito, setFiltroDistrito] = useState("");
   const [filtroExperiencia, setFiltroExperiencia] = useState("");
+  const [filtroCertificado, setFiltroCertificado] = useState("");
+
+  const [isDistDropdownOpen, setIsDistDropdownOpen] = useState(false);
+  const [isExpDropdownOpen, setIsExpDropdownOpen] = useState(false);
+  const [isCertDropdownOpen, setIsCertDropdownOpen] = useState(false);
+
+  // --- LIGHTBOX DO MONITOR E CHAT ---
   const [monitorSelecionado, setMonitorSelecionado] = useState<any>(null);
   const [conversaAtiva, setConversaAtiva] = useState<any>(null);
   const [novaMensagem, setNovaMensagem] = useState("");
   const [sendingMsg, setSendingEdit] = useState(false);
 
-  // --- ESTADO DO CALENDÁRIO DA LIGHTBOX ---
+  // --- CALENDÁRIO MENSAL DA LIGHTBOX ---
   const [mesModalView, setMesModalView] = useState(new Date());
+  const mesesNomes = isEn
+    ? [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ]
+    : [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+      ];
+  const diasDaSemana = isEn
+    ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    : ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-  const mesesNomes = isEn 
-    ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-    : ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-  
-  const diasDaSemana = isEn ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-
-  // --- CARREGAMENTO INICIAL DOS DADOS REAIS ---
   const carregarDadosRecrutamento = async () => {
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session) return;
-    
+
     const userId = session.user.id;
     setParceiroId(userId);
 
-    const { data: perfilData } = await supabase.from('perfis').select('empresa_nome, termos_recrutamento_aceites').eq('id', userId).single();
+    const { data: perfilData } = await supabase
+      .from("perfis")
+      .select(
+        "empresa_nome, termos_recrutamento_aceites, status_contrato, parceiro_verificado, contrato_dados"
+      )
+      .eq("id", userId)
+      .single();
     setParceiroPerfil(perfilData);
 
     if (!perfilData?.termos_recrutamento_aceites) {
       setShowTermsModal(true);
     }
 
-    const { data: camposData } = await supabase.from('campos').select('status_aprovacao').eq('organizador_id', userId);
-    
+    const { data: camposData } = await supabase
+      .from("campos")
+      .select("status_aprovacao")
+      .eq("organizador_id", userId);
+
     let acesso = false;
     let currentStatus = isEn ? "Not Started" : "Não Iniciado";
 
-    if (camposData && camposData.length > 0) {
-      const isApproved = camposData.some(c => {
-         const st = (c.status_aprovacao || '').toLowerCase();
-         return st === 'aprovado' || st === 'validado' || st === 'ativo' || st === 'active';
+    // MELHORIA: Desbloqueia se tiver Contrato Global Aprovado OU se tiver algum Campo Aprovado
+    const temContratoGlobalAprovado =
+      perfilData?.status_contrato === "Aprovado" ||
+      perfilData?.parceiro_verificado === true;
+
+    const temCampoAprovado =
+      camposData &&
+      camposData.some((c) => {
+        const st = (c.status_aprovacao || "").toLowerCase();
+        return (
+          st === "aprovado" ||
+          st === "validado" ||
+          st === "ativo" ||
+          st === "active"
+        );
       });
-      
-      if (isApproved) {
-         acesso = true;
-         currentStatus = isEn ? "Validated" : "Validado";
-      } else {
-         currentStatus = camposData[0].status_aprovacao || (isEn ? "Pending" : "Pendente");
-      }
+
+    if (temContratoGlobalAprovado || temCampoAprovado) {
+      acesso = true;
+      currentStatus = isEn ? "Validated" : "Validado";
+    } else if (perfilData?.contrato_dados) {
+      currentStatus =
+        perfilData.status_contrato || (isEn ? "Under Review" : "Em Revisão");
     }
-    
+
     setTemAcesso(acesso);
     setStatusContrato(currentStatus);
 
-    const { data: monitoresData } = await supabase.from('monitores').select('*').order('criado_at', { ascending: false });
+    const [
+      { data: monitoresData },
+      { data: favsData },
+      { data: msgData },
+    ] = await Promise.all([
+      supabase
+        .from("monitores")
+        .select("*")
+        .order("criado_at", { ascending: false }),
+      supabase
+        .from("monitores_favoritos")
+        .select("monitor_id")
+        .eq("parceiro_id", userId),
+      supabase
+        .from("mensagens_recrutamento")
+        .select("*, monitores(nome_completo, fotografia_url, email, telefone)")
+        .eq("parceiro_id", userId)
+        .order("criado_at", { ascending: true }),
+    ]);
+
     setMonitores(monitoresData || []);
-
-    const { data: favsData } = await supabase.from('monitores_favoritos').select('monitor_id').eq('parceiro_id', userId);
     if (favsData) {
-      setGuardadosIds(favsData.map(f => f.monitor_id));
+      setGuardadosIds(favsData.map((f) => f.monitor_id));
     }
-
-    const { data: msgData } = await supabase
-      .from('mensagens_recrutamento')
-      .select('*, monitores(nome_completo, fotografia_url, email)')
-      .eq('parceiro_id', userId)
-      .order('criado_at', { ascending: true });
 
     if (msgData) {
       const threadsMap: { [key: string]: any } = {};
-      
-      msgData.forEach(msg => {
+
+      msgData.forEach((msg) => {
         const mId = msg.monitor_id;
         if (!threadsMap[mId]) {
           threadsMap[mId] = {
             monitor_id: mId,
             monitor_nome: msg.monitores?.nome_completo || "Monitor",
             monitor_email: msg.monitores?.email || "",
+            monitor_telefone: msg.monitores?.telefone || "",
             fotografia_url: msg.monitores?.fotografia_url || "",
             vaga: isEn ? "Staff Position" : "Candidatura a Monitor",
             mensagens: [],
             ultima_mensagem: "",
             data: "",
-            lida: true
+            lida: true,
           };
         }
         threadsMap[mId].mensagens.push(msg);
         threadsMap[mId].ultima_mensagem = msg.mensagem;
-        threadsMap[mId].data = new Date(msg.criado_at).toLocaleDateString('pt-PT', {hour: '2-digit', minute:'2-digit'});
-        if (msg.remetente === 'monitor' && !msg.lida) {
+        threadsMap[mId].data = new Date(msg.criado_at).toLocaleDateString(
+          "pt-PT",
+          { hour: "2-digit", minute: "2-digit" }
+        );
+        if (msg.remetente === "monitor" && !msg.lida) {
           threadsMap[mId].lida = false;
         }
       });
 
-      setConversas(Object.values(threadsMap));
-      if (conversaAtiva) setConversaAtiva(threadsMap[conversaAtiva.monitor_id] || null);
+      const listaConversas = Object.values(threadsMap);
+      setConversas(listaConversas);
+      if (conversaAtiva) {
+        setConversaAtiva(threadsMap[conversaAtiva.monitor_id] || null);
+      }
     }
+
     setLoading(false);
   };
 
   useEffect(() => {
     carregarDadosRecrutamento();
-  }, [conversaAtiva?.monitor_id]);
+  }, []);
 
   const handleAceitarTermos = async () => {
     if (!checkboxTermos || !parceiroId) return;
     setSavingTerms(true);
 
-    const { error } = await supabase.from('perfis').update({ termos_recrutamento_aceites: true }).eq('id', parceiroId);
-    
+    const { error } = await supabase
+      .from("perfis")
+      .update({ termos_recrutamento_aceites: true })
+      .eq("id", parceiroId);
+
     if (error) {
       alert("Erro ao gravar aceitação dos termos: " + error.message);
       setSavingTerms(false);
@@ -151,32 +228,115 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
 
   const toggleGuardar = async (e: React.MouseEvent, idMonitor: string) => {
     e.stopPropagation();
-    if (!temAcesso) { setShowLockModal(true); return; }
+    if (!temAcesso) {
+      setShowLockModal(true);
+      return;
+    }
     if (!parceiroId) return;
 
     if (guardadosIds.includes(idMonitor)) {
-      await supabase.from('monitores_favoritos').delete().eq('parceiro_id', parceiroId).eq('monitor_id', idMonitor);
-      setGuardadosIds(prev => prev.filter(id => id !== idMonitor));
+      await supabase
+        .from("monitores_favoritos")
+        .delete()
+        .eq("parceiro_id", parceiroId)
+        .eq("monitor_id", idMonitor);
+      setGuardadosIds((prev) => prev.filter((id) => id !== idMonitor));
     } else {
-      await supabase.from('monitores_favoritos').insert([{ parceiro_id: parceiroId, monitor_id: idMonitor }]);
-      setGuardadosIds(prev => [...prev, idMonitor]);
+      await supabase
+        .from("monitores_favoritos")
+        .insert([{ parceiro_id: parceiroId, monitor_id: idMonitor }]);
+      setGuardadosIds((prev) => [...prev, idMonitor]);
     }
+  };
+
+  const marcarComoLidas = async (mId: string) => {
+    if (!parceiroId) return;
+    await supabase
+      .from("mensagens_recrutamento")
+      .update({ lida: true })
+      .eq("parceiro_id", parceiroId)
+      .eq("monitor_id", mId)
+      .eq("remetente", "monitor");
+  };
+
+  const selecionarConversa = (conv: any) => {
+    if (!temAcesso) {
+      setShowLockModal(true);
+      return;
+    }
+    setConversaAtiva(conv);
+    marcarComoLidas(conv.monitor_id);
+  };
+
+  const iniciarConversaComMonitor = async (monitor: any) => {
+    if (!temAcesso) {
+      setShowLockModal(true);
+      return;
+    }
+    if (!parceiroId) return;
+    setMonitorSelecionado(null);
+
+    const { data: existeThread } = await supabase
+      .from("mensagens_recrutamento")
+      .select("id")
+      .eq("parceiro_id", parceiroId)
+      .eq("monitor_id", monitor.id)
+      .limit(1);
+
+    if (!existeThread || existeThread.length === 0) {
+      const msgInicial = isEn
+        ? "Hello! We reviewed your profile on HelloCamp and would love to get in touch regarding a monitor position."
+        : "Olá! Vimos o teu perfil na Bolsa de Monitores da HelloCamp e ficámos interessados em falar contigo sobre uma oportunidade na nossa equipa.";
+
+      await supabase.from("mensagens_recrutamento").insert([
+        {
+          parceiro_id: parceiroId,
+          monitor_id: monitor.id,
+          remetente: "parceiro",
+          mensagem: msgInicial,
+        },
+      ]);
+
+      if (monitor.email) {
+        fetch("/api/notificacoes/nova-mensagem-recrutamento", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            destinatarioEmail: monitor.email,
+            nomeRemetente:
+              parceiroPerfil?.empresa_nome || "Organizador HelloCamp",
+            textoMensagem: msgInicial,
+            tipoDestinatario: "monitor",
+            lang,
+          }),
+        }).catch(() => {});
+      }
+    }
+
+    await carregarDadosRecrutamento();
+    setActiveTab("mensagens");
   };
 
   const handleEnviarMensagem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!temAcesso) { setShowLockModal(true); return; }
+    if (!temAcesso) {
+      setShowLockModal(true);
+      return;
+    }
     if (!novaMensagem.trim() || !parceiroId || !conversaAtiva) return;
     setSendingEdit(true);
 
+    const textoLimpo = novaMensagem.trim();
     const payloadMsg = {
       parceiro_id: parceiroId,
       monitor_id: conversaAtiva.monitor_id,
-      remetente: 'parceiro',
-      mensagem: novaMensagem.trim()
+      remetente: "parceiro",
+      mensagem: textoLimpo,
     };
 
-    const { error } = await supabase.from('mensagens_recrutamento').insert([payloadMsg]);
+    const { error } = await supabase
+      .from("mensagens_recrutamento")
+      .insert([payloadMsg]);
 
     if (error) {
       alert("Erro ao enviar mensagem: " + error.message);
@@ -185,16 +345,17 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     }
 
     try {
-      await fetch('/api/notificacoes/nova-mensagem-recrutamento', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/notificacoes/nova-mensagem-recrutamento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           destinatarioEmail: conversaAtiva.monitor_email,
-          nomeRemetente: parceiroPerfil?.empresa_nome || "HelloCamp Parceiro",
-          textoMensagem: novaMensagem.trim(),
-          tipoDestinatario: 'monitor',
-          lang: lang
-        })
+          nomeRemetente:
+            parceiroPerfil?.empresa_nome || "HelloCamp Parceiro",
+          textoMensagem: textoLimpo,
+          tipoDestinatario: "monitor",
+          lang: lang,
+        }),
       });
     } catch (err) {
       console.error("Erro no envio do email de alerta:", err);
@@ -205,153 +366,218 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     carregarDadosRecrutamento();
   };
 
-  const marcarComoLidas = async (mId: string) => {
-    if (!parceiroId) return;
-    await supabase.from('mensagens_recrutamento').update({ lida: true }).eq('parceiro_id', parceiroId).eq('monitor_id', mId).eq('remetente', 'monitor');
-  };
-
-  const selecionarConversa = (conv: any) => {
-    if (!temAcesso) { setShowLockModal(true); return; }
-    setConversaAtiva(conv);
-    marcarComoLidas(conv.monitor_id);
-  };
-
-  const iniciarConversaComMonitor = async (monitor: any) => {
-    if (!temAcesso) { setShowLockModal(true); return; }
-    if (!parceiroId) return;
-    setMonitorSelecionado(null);
-    
-    const { data: existeThread } = await supabase.from('mensagens_recrutamento').select('id').eq('parceiro_id', parceiroId).eq('monitor_id', monitor.id).limit(1);
-
-    if (!existeThread || existeThread.length === 0) {
-      await supabase.from('mensagens_recrutamento').insert([{
-        parceiro_id: parceiroId,
-        monitor_id: monitor.id,
-        remetente: 'parceiro',
-        mensagem: isEn ? "Hello! We reviewed your profile on HelloCamp." : "Olá! Vimos o teu perfil na Bolsa de Monitores da HelloCamp e ficámos interessados."
-      }]);
-    }
-
-    await carregarDadosRecrutamento();
-    setActiveTab("mensagens");
-    
-    setTimeout(() => {
-      const threadCriada = conversas.find(c => c.monitor_id === monitor.id);
-      if (threadCriada) setConversaAtiva(threadCriada);
-    }, 400);
-  };
-
   const calcularIdade = (dataNascimento: string) => {
     if (!dataNascimento) return "N/D";
     const hoje = new Date();
     const nascimento = new Date(dataNascimento);
+    if (isNaN(nascimento.getTime())) return "N/D";
     let idade = hoje.getFullYear() - nascimento.getFullYear();
     const m = hoje.getMonth() - nascimento.getMonth();
     if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) idade--;
     return idade;
   };
 
-  const monitoresFiltrados = monitores.filter(m => {
-    const matchDistrito = filtroDistrito === "" || m.distrito_residencia === filtroDistrito;
-    const matchExperiencia = filtroExperiencia === "" || m.experiencia_anos === filtroExperiencia;
-    return matchDistrito && matchExperiencia;
+  const monitoresFiltrados = monitores.filter((m) => {
+    const matchDistrito =
+      filtroDistrito === "" ||
+      m.distrito_residencia === filtroDistrito ||
+      (Array.isArray(m.locais_atuacao) &&
+        m.locais_atuacao.some((l: string) =>
+          l.toLowerCase().includes(filtroDistrito.toLowerCase())
+        ));
+    const matchExperiencia =
+      filtroExperiencia === "" || m.experiencia_anos === filtroExperiencia;
+    const matchCertificado =
+      filtroCertificado === "" ||
+      (Array.isArray(m.certificacoes) &&
+        m.certificacoes.some((c: string) =>
+          c.toLowerCase().includes(filtroCertificado.toLowerCase())
+        ));
+    return matchDistrito && matchExperiencia && matchCertificado;
   });
 
-  const monitoresGuardados = monitores.filter(m => guardadosIds.includes(m.id));
-  const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
-  const selectClass = "w-full py-3 px-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#167524] appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.8rem_auto] bg-[position:right_1rem_center] bg-no-repeat";
+  const monitoresGuardados = monitores.filter((m) =>
+    guardadosIds.includes(m.id)
+  );
 
-  // --- LÓGICA DO CALENDÁRIO DA LIGHTBOX ---
-  const mudarMesModal = (incremento: number) => {
-    setMesModalView(prev => new Date(prev.getFullYear(), prev.getMonth() + incremento, 1));
-  };
-
-  const renderDiasCalendarioModal = (calendarioData: Record<string, string>) => {
+  // Grelha do Calendário da Lightbox do Monitor
+  const renderCalendarioDisponibilidade = (diasDisponiveis: string[] = []) => {
     const ano = mesModalView.getFullYear();
     const mes = mesModalView.getMonth();
-    
-    const diasNoMes = new Date(ano, mes + 1, 0).getDate();
-    const primeiroDia = new Date(ano, mes, 1).getDay();
-    const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1;
+    const primeiroDiaMes = new Date(ano, mes, 1).getDay();
+    const offsetSeg = primeiroDiaMes === 0 ? 6 : primeiroDiaMes - 1;
+    const totalDiasMes = new Date(ano, mes + 1, 0).getDate();
 
-    const dias = [];
-    
-    for (let i = 0; i < startDayIndex; i++) {
-      dias.push(<div key={`empty-${i}`} className="p-1"></div>);
+    const celulas = [];
+    for (let i = 0; i < offsetSeg; i++) {
+      celulas.push(<div key={`empty-${i}`} className="h-9" />);
     }
-
-    for (let i = 1; i <= diasNoMes; i++) {
-      const dataStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-      const estadoDia = calendarioData?.[dataStr];
-      
-      let coresClasses = "bg-white border-slate-100 text-slate-300"; 
-      if (estadoDia === 'Livre') coresClasses = "bg-[#167524]/10 border-[#167524] text-[#167524] font-black shadow-inner";
-      if (estadoDia === 'Ocupado') coresClasses = "bg-red-100 border-red-500 text-red-800 font-black opacity-80 line-through";
-
-      dias.push(
-        <div key={dataStr} className={`h-8 w-full rounded border text-[11px] flex items-center justify-center ${coresClasses}`}>
-          {i}
+    for (let d = 1; d <= totalDiasMes; d++) {
+      const isoDate = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(
+        d
+      ).padStart(2, "0")}`;
+      const isDisp =
+        Array.isArray(diasDisponiveis) && diasDisponiveis.includes(isoDate);
+      celulas.push(
+        <div
+          key={isoDate}
+          className={`h-9 rounded-lg flex items-center justify-center text-xs font-black ${
+            isDisp
+              ? "bg-[#167524] text-white shadow-sm"
+              : "bg-slate-100 text-slate-400"
+          }`}
+        >
+          {d}
         </div>
       );
     }
-    return dias;
+    return celulas;
   };
 
-  // --- GRELHA DE MONITORES COM EFEITO BLUR E LOCK ---
   const renderGrelhaMonitores = (lista: any[], emptyMessage: string) => {
-    if (loading) return <div className="text-center py-20 text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">{isEn ? "Loading talent pool..." : "A carregar talentos..."}</div>;
-    if (lista.length === 0) return <div className="bg-white p-12 rounded-[1.5rem] border border-slate-200 text-center shadow-sm w-full"><span className="text-4xl block mb-2">🔍</span><h3 className="text-sm font-black text-slate-900 mb-1">{isEn ? "No monitors found" : "Nenhum monitor encontrado"}</h3><p className="text-xs text-slate-500 font-medium">{emptyMessage}</p></div>;
+    if (loading) {
+      return (
+        <div className="text-center py-20 text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">
+          {isEn ? "Loading talent pool..." : "A carregar bolsa de talentos..."}
+        </div>
+      );
+    }
+    if (lista.length === 0) {
+      return (
+        <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center shadow-sm w-full">
+          <span className="text-4xl block mb-2">🔍</span>
+          <h3 className="text-base font-black text-slate-900 mb-1">
+            {isEn ? "No monitors found" : "Nenhum monitor encontrado"}
+          </h3>
+          <p className="text-xs text-slate-500 font-medium m-0">
+            {emptyMessage}
+          </p>
+        </div>
+      );
+    }
 
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full">
-        {lista.map(monitor => {
+        {lista.map((monitor) => {
           const isGuardado = guardadosIds.includes(monitor.id);
           return (
-            <div key={monitor.id} className="bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group relative">
-              
+            <div
+              key={monitor.id}
+              className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group relative"
+            >
               {!temAcesso && !showTermsModal && (
-                <div 
+                <div
                   className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[6px] cursor-pointer hover:bg-white/50 transition-colors"
                   onClick={() => setShowLockModal(true)}
                 >
-                  <div className="w-12 h-12 bg-slate-900 text-white rounded-full flex items-center justify-center text-xl shadow-lg mb-3">🔒</div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 bg-white px-4 py-2 rounded-full shadow-sm">{isEn ? "Locked Profile" : "Perfil Oculto"}</span>
+                  <div className="w-12 h-12 bg-slate-900 text-white rounded-full flex items-center justify-center text-xl shadow-lg mb-3">
+                    🔒
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 bg-white px-4 py-2 rounded-full shadow-sm">
+                    {isEn ? "Locked Profile" : "Perfil Oculto"}
+                  </span>
                 </div>
               )}
 
-              <button onClick={(e) => toggleGuardar(e, monitor.id)} className={`absolute top-4 right-4 z-10 w-10 h-10 rounded-full flex items-center justify-center border text-lg transition-colors ${isGuardado ? 'bg-amber-100 text-amber-500 border-amber-200' : 'bg-white text-slate-300 border-slate-200 hover:text-amber-400'}`}>★</button>
-              
-              <div className={`flex flex-col flex-1 ${!temAcesso ? 'select-none opacity-50' : ''}`}>
+              <button
+                type="button"
+                onClick={(e) => toggleGuardar(e, monitor.id)}
+                className={`absolute top-4 right-4 z-10 w-10 h-10 rounded-full flex items-center justify-center border text-lg transition-colors cursor-pointer ${
+                  isGuardado
+                    ? "bg-amber-100 text-amber-500 border-amber-200"
+                    : "bg-white text-slate-300 border-slate-200 hover:text-amber-400"
+                }`}
+              >
+                ★
+              </button>
+
+              <div
+                className={`flex flex-col flex-1 ${
+                  !temAcesso ? "select-none opacity-50" : ""
+                }`}
+              >
                 <div className="p-6 pb-4 border-b border-slate-100 flex items-start gap-4">
                   <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0 flex items-center justify-center shadow-inner">
-                    {monitor.fotografia_url ? <img src={monitor.fotografia_url} alt="" className="w-full h-full object-cover" /> : <span className="text-xl">🧑‍🏫</span>}
+                    {monitor.fotografia_url ? (
+                      <img
+                        src={monitor.fotografia_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xl">🧑‍🏫</span>
+                    )}
                   </div>
                   <div className="flex-1 overflow-hidden pr-8 pt-1">
-                    <h3 className="text-sm md:text-base font-black text-slate-900 leading-tight truncate transition-colors">{!temAcesso ? "Monitor Registado" : monitor.nome_completo}</h3>
+                    <h3 className="text-sm md:text-base font-black text-slate-900 leading-tight truncate m-0">
+                      {!temAcesso
+                        ? "Monitor Registado"
+                        : monitor.nome_completo}
+                    </h3>
                     <div className="text-[11px] font-bold text-slate-500 mt-1 flex items-center gap-1.5 truncate">
-                      <span>📍 {monitor.distrito_residencia}</span>
+                      <span>📍 {monitor.distrito_residencia || "Portugal"}</span>
                       <span>•</span>
-                      <span>{!temAcesso ? "**" : calcularIdade(monitor.data_nascimento)} {isEn ? "yrs" : "anos"}</span>
+                      <span>
+                        {!temAcesso
+                          ? "**"
+                          : calcularIdade(monitor.data_nascimento)}{" "}
+                        {isEn ? "yrs" : "anos"}
+                      </span>
                     </div>
                   </div>
                 </div>
+
                 <div className="p-6 flex-1 flex flex-col">
-                  <div className="mb-4">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">{isEn ? "Experience" : "Experiência"}</span>
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      {isEn ? "Experience" : "Experiência"}
+                    </span>
                     <span className="inline-block px-3 py-1 bg-slate-100 text-slate-700 text-[11px] font-bold rounded-md">
-                      {monitor.experiencia_anos === "0" ? (isEn ? "Beginner" : "Iniciante") : `${monitor.experiencia_anos} ${isEn ? "years" : "anos"}`}
+                      {monitor.experiencia_anos === "0"
+                        ? isEn
+                          ? "Beginner"
+                          : "1.ª Experiência"
+                        : `${monitor.experiencia_anos} ${
+                            isEn ? "years" : "anos"
+                          }`}
                     </span>
                   </div>
+
                   <div className="mb-6 flex-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">{isEn ? "Certificates" : "Certificações"}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">
+                      {isEn ? "Certificates" : "Certificações"}
+                    </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {monitor.certificacoes?.slice(0,2).map((cert: string) => (
-                        <span key={cert} className="px-2 py-1 bg-[#167524]/10 text-[#167524] text-[10px] font-bold uppercase tracking-wide rounded-md border border-[#167524]/20 truncate max-w-full">{cert}</span>
-                      )) || <span className="text-[11px] text-slate-400 italic font-medium">Nenhuma submetida</span>}
+                      {monitor.certificacoes?.length > 0 ? (
+                        monitor.certificacoes.slice(0, 2).map((cert: string) => (
+                          <span
+                            key={cert}
+                            className="px-2 py-1 bg-[#167524]/10 text-[#167524] text-[10px] font-bold uppercase tracking-wide rounded-md border border-[#167524]/20 truncate max-w-full"
+                          >
+                            {cert}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic font-medium">
+                          {isEn ? "None listed" : "Sem certificado anexado"}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <button onClick={() => { if(temAcesso) { setMonitorSelecionado(monitor); setMesModalView(new Date()); } else { setShowLockModal(true); } }} className="w-full py-3.5 bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest rounded-xl hover:bg-[#167524] transition-colors shadow-sm">
-                    {isEn ? "View Profile" : "Ver Perfil"}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (temAcesso) {
+                        setMonitorSelecionado(monitor);
+                        setMesModalView(new Date());
+                      } else {
+                        setShowLockModal(true);
+                      }
+                    }}
+                    className="w-full py-3.5 bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest rounded-xl hover:bg-[#167524] transition-colors shadow-sm cursor-pointer"
+                  >
+                    {isEn ? "View Full Profile & CV" : "Ver Perfil e Disponibilidade"}
                   </button>
                 </div>
               </div>
@@ -362,301 +588,609 @@ export default function RecrutamentoParceirosPage({ params }: { params: Promise<
     );
   };
 
+  const opcoesExperiencia = [
+    { val: "", label: isEn ? "Any Experience" : "Qualquer Experiência" },
+    { val: "0", label: isEn ? "Beginner (0 years)" : "Iniciante (1.ª vez)" },
+    { val: "1-2", label: isEn ? "1 to 2 years" : "1 a 2 anos" },
+    { val: "3-5", label: isEn ? "3 to 5 years" : "3 a 5 anos" },
+    { val: "5+", label: isEn ? "+5 years (Senior)" : "+5 anos (Sénior)" },
+  ];
+
   return (
-    <div className="max-w-[1400px] mx-auto flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-80px)] font-sans px-2 md:px-0">
-      
-      {/* MODAL OBRIGATÓRIO DOS TERMOS DE RECRUTAMENTO (Clickwrap Agreement) */}
-      {showTermsModal && (
-        <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
-          <div className="bg-white w-full max-w-lg rounded-[2rem] flex flex-col overflow-hidden shadow-2xl p-8 md:p-10">
-            <div className="w-20 h-20 bg-[#167524]/10 text-[#167524] rounded-full flex items-center justify-center text-4xl mx-auto mb-6 shadow-inner border border-[#167524]/20">
-              ⚖️
-            </div>
-            
-            <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">
-              {isEn ? "Legal Disclaimer" : "Aviso Legal de Recrutamento"}
-            </h2>
-            <p className="text-sm text-slate-600 font-medium mb-6 leading-relaxed text-center">
-              {isEn 
-                ? "Before accessing the talent pool, you must read and agree to our Recruitment Terms."
-                : "Antes de aceder à Bolsa de Talentos, tem de concordar com os nossos Termos de Recrutamento."}
-            </p>
+    <div className="max-w-7xl mx-auto font-sans pb-16">
+      {/* CABEÇALHO E ABAS */}
+      <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+        <div>
+          <span className="inline-block text-[10px] font-black uppercase tracking-widest text-[#167524] bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full mb-2">
+            {isEn ? "Talent Pool B2B" : "Bolsa de Monitores HelloCamp"}
+          </span>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 m-0 tracking-tight">
+            {isEn
+              ? "Staff & Monitor Recruitment"
+              : "Recrutamento de Monitores"}
+          </h1>
+          <p className="text-slate-500 text-sm font-medium mt-1 mb-0">
+            {isEn
+              ? "Find certified youth monitors, check their calendar availability, and contact them directly with 0% commission."
+              : "Encontre monitores certificados, consulte os calendários de disponibilidade e contacte-os diretamente sem custos de intermediação."}
+          </p>
+        </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8 text-sm text-slate-700 leading-relaxed font-medium shadow-inner">
-               A HelloCamp atua <strong>exclusivamente</strong> como uma plataforma digital de contacto e publicitação.
-               <br/><br/>
-               Declaramos expressamente que <strong>não validamos</strong> a identidade, não verificamos as certificações submetidas, nem solicitamos o Registo Criminal dos monitores inscritos na plataforma.
-            </div>
+        {/* ABAS */}
+        <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm w-full lg:w-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab("descobrir")}
+            className={`flex-1 lg:flex-initial px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-all ${
+              activeTab === "descobrir"
+                ? "bg-[#167524] text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            🔍 {isEn ? "Discover" : "Descobrir"} ({monitoresFiltrados.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("guardados")}
+            className={`flex-1 lg:flex-initial px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-all ${
+              activeTab === "guardados"
+                ? "bg-[#167524] text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            ★ {isEn ? "Saved" : "Guardados"} ({guardadosIds.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("mensagens")}
+            className={`flex-1 lg:flex-initial px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-all ${
+              activeTab === "mensagens"
+                ? "bg-[#167524] text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            💬 {isEn ? "Messages" : "Mensagens"} ({conversas.length})
+          </button>
+        </div>
+      </div>
 
-            <label className="flex items-start gap-3 cursor-pointer group mb-8 p-4 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200">
-              <input 
-                type="checkbox" 
-                checked={checkboxTermos} 
-                onChange={(e) => setCheckboxTermos(e.target.checked)} 
-                className="mt-1 w-5 h-5 accent-[#167524] cursor-pointer flex-shrink-0" 
-              />
-              <span className="text-xs text-slate-700 font-bold leading-relaxed">
-                {isEn ? (
-                  <>I declare that I have read and understood the <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-[#167524] hover:underline">Recruitment Terms & Conditions</Link>. I assume full responsibility for conducting interviews and legally verifying the monitor's Criminal Record before any activity begins.</>
-                ) : (
-                  <>Declaro ter lido e compreendido os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-[#167524] hover:underline">Termos e Condições de Recrutamento</Link>. Assumo total responsabilidade pela condução de entrevistas e pela exigência/verificação legal do Registo Criminal do monitor antes do início de qualquer atividade.</>
-                )}
-              </span>
+      {/* BARRA DE FILTROS COM DROPDOWNS 100% CUSTOMIZADOS (SEM <select> NATIVO!) */}
+      {activeTab === "descobrir" && (
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* 1. DROPDOWN DISTRITO */}
+          <div className="relative">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+              📍 {isEn ? "District / Region" : "Distrito / Região"}
             </label>
-
-            <button 
-              onClick={handleAceitarTermos} 
-              disabled={!checkboxTermos || savingTerms}
-              className="w-full bg-[#167524] text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#115a1b] transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            <div
+              onClick={() => setIsDistDropdownOpen(!isDistDropdownOpen)}
+              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-800 cursor-pointer flex items-center justify-between hover:border-[#167524]"
             >
-              {savingTerms ? (isEn ? "Saving..." : "A Guardar...") : (isEn ? "Accept and Enter" : "Aceitar e Entrar na Bolsa")}
-            </button>
+              <span>
+                {filtroDistrito ||
+                  (isEn ? "All Districts" : "Todos os Distritos")}
+              </span>
+              <span className="text-[10px] text-slate-400">▼</span>
+            </div>
+            {isDistDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsDistDropdownOpen(false)}
+                />
+                <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto">
+                  <div
+                    onClick={() => {
+                      setFiltroDistrito("");
+                      setIsDistDropdownOpen(false);
+                    }}
+                    className="p-3 text-xs font-black text-[#167524] hover:bg-emerald-50 cursor-pointer border-b border-slate-100"
+                  >
+                    {isEn ? "All Districts" : "Todos os Distritos"}
+                  </div>
+                  {DISTRITOS_PT.map((d) => (
+                    <div
+                      key={d}
+                      onClick={() => {
+                        setFiltroDistrito(d);
+                        setIsDistDropdownOpen(false);
+                      }}
+                      className="p-3 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0"
+                    >
+                      {d}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* 2. DROPDOWN EXPERIÊNCIA */}
+          <div className="relative">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+              ⏳ {isEn ? "Experience Level" : "Anos de Experiência"}
+            </label>
+            <div
+              onClick={() => setIsExpDropdownOpen(!isExpDropdownOpen)}
+              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-800 cursor-pointer flex items-center justify-between hover:border-[#167524]"
+            >
+              <span>
+                {
+                  opcoesExperiencia.find((o) => o.val === filtroExperiencia)
+                    ?.label
+                }
+              </span>
+              <span className="text-[10px] text-slate-400">▼</span>
+            </div>
+            {isExpDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsExpDropdownOpen(false)}
+                />
+                <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                  {opcoesExperiencia.map((op) => (
+                    <div
+                      key={op.val}
+                      onClick={() => {
+                        setFiltroExperiencia(op.val);
+                        setIsExpDropdownOpen(false);
+                      }}
+                      className="p-3 text-xs font-bold text-slate-700 hover:bg-emerald-50 cursor-pointer border-b border-slate-50 last:border-0"
+                    >
+                      {op.label}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* 3. DROPDOWN CERTIFICAÇÕES */}
+          <div className="relative">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+              🎓 {isEn ? "Certification" : "Certificação / Curso"}
+            </label>
+            <div
+              onClick={() => setIsCertDropdownOpen(!isCertDropdownOpen)}
+              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-800 cursor-pointer flex items-center justify-between hover:border-[#167524]"
+            >
+              <span className="truncate">
+                {filtroCertificado ||
+                  (isEn ? "All Certifications" : "Todas as Certificações")}
+              </span>
+              <span className="text-[10px] text-slate-400 ml-2">▼</span>
+            </div>
+            {isCertDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsCertDropdownOpen(false)}
+                />
+                <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto">
+                  <div
+                    onClick={() => {
+                      setFiltroCertificado("");
+                      setIsCertDropdownOpen(false);
+                    }}
+                    className="p-3 text-xs font-black text-[#167524] hover:bg-emerald-50 cursor-pointer border-b border-slate-100"
+                  >
+                    {isEn ? "All Certifications" : "Todas as Certificações"}
+                  </div>
+                  {CERTIFICADOS_LISTA.map((cert) => (
+                    <div
+                      key={cert}
+                      onClick={() => {
+                        setFiltroCertificado(cert);
+                        setIsCertDropdownOpen(false);
+                      }}
+                      className="p-3 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0"
+                    >
+                      {cert}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* RESTO DA PÁGINA */}
-      <div className="mb-6 flex-shrink-0 pt-4 md:pt-8">
-        <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight m-0 mb-2">{isEn ? "Staff Recruitment" : "Recrutamento de Equipa"}</h1>
-        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">{isEn ? "Find, save, and contact monitors" : "Pesquisa, Shortlist e Contacto Direto"}</p>
-        
-        <div className="flex gap-2 border-b border-slate-200 overflow-x-auto no-scrollbar">
-          <button onClick={() => setActiveTab("descobrir")} className={`px-5 py-3 text-xs font-black uppercase tracking-widest transition-colors border-b-2 whitespace-nowrap ${activeTab === "descobrir" ? "border-[#167524] text-[#167524]" : "border-transparent text-slate-400 hover:text-slate-700"}`}>
-            {isEn ? "Discover" : "Descobrir"}
-          </button>
-          <button onClick={() => setActiveTab("guardados")} className={`px-5 py-3 text-xs font-black uppercase tracking-widest transition-colors border-b-2 whitespace-nowrap flex items-center gap-2 ${activeTab === "guardados" ? "border-[#167524] text-[#167524]" : "border-transparent text-slate-400 hover:text-slate-700"}`}>
-            {isEn ? "Shortlist" : "Guardados"} 
-            {guardadosIds.length > 0 && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md text-[10px] font-black">{guardadosIds.length}</span>}
-          </button>
-          <button onClick={() => setActiveTab("mensagens")} className={`px-5 py-3 text-xs font-black uppercase tracking-widest transition-colors border-b-2 whitespace-nowrap flex items-center gap-2 ${activeTab === "mensagens" ? "border-[#167524] text-[#167524]" : "border-transparent text-slate-400 hover:text-slate-700"}`}>
-            {isEn ? "Messages" : "Mensagens"} 
-            {conversas.filter(c => !c.lida).length > 0 && <span className="bg-red-500 text-white px-2 py-0.5 rounded-md text-[10px] font-black shadow-sm">{conversas.filter(c => !c.lida).length}</span>}
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto min-h-0 relative pb-10">
-        
-        {/* TABS DE CONTEÚDO */}
-        {activeTab === "descobrir" && (
-          <div>
-            <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Distrito Geográfico</label>
-                <select className={selectClass} value={filtroDistrito} onChange={e => setFiltroDistrito(e.target.value)}>
-                  <option value="">📍 {isEn ? "All Districts" : "Todos os Distritos"}</option>
-                  {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className="flex-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Anos de Experiência</label>
-                <select className={selectClass} value={filtroExperiencia} onChange={e => setFiltroExperiencia(e.target.value)}>
-                  <option value="">⭐ {isEn ? "Any Experience" : "Qualquer Experiência"}</option>
-                  <option value="0">{isEn ? "First Time" : "Nenhuma / Primeira vez"}</option>
-                  <option value="1-2">1-2 {isEn ? "years" : "anos"}</option>
-                  <option value="3-5">3-5 {isEn ? "years" : "anos"}</option>
-                  <option value="+5">+5 {isEn ? "years" : "anos"}</option>
-                </select>
-              </div>
-            </div>
-            {renderGrelhaMonitores(monitoresFiltrados, isEn ? "Try adjusting your filters to see more results." : "Tente ajustar os filtros para encontrar a equipa ideal.")}
-          </div>
+      {/* CONTEÚDO DAS ABAS */}
+      {activeTab === "descobrir" &&
+        renderGrelhaMonitores(
+          monitoresFiltrados,
+          isEn
+            ? "Try clearing the district or certification filters."
+            : "Tente limpar os filtros de distrito ou certificação acima."
         )}
 
-        {activeTab === "guardados" && <div>{renderGrelhaMonitores(monitoresGuardados, isEn ? "No saved profiles." : "Ainda não guardou nenhum monitor nesta lista.")}</div>}
+      {activeTab === "guardados" &&
+        renderGrelhaMonitores(
+          monitoresGuardados,
+          isEn
+            ? "Click the star (★) on any monitor card to save them to your shortlist."
+            : "Clique na estrela (★) no cartão de um monitor para o guardar nos seus favoritos."
+        )}
 
-        {activeTab === "mensagens" && (
-          <div className="h-full min-h-[500px] flex bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm relative">
-            
-            {/* BLOQUEIO ESPECÍFICO NA INBOX SE NÃO TIVER ACESSO (CONTRATO) */}
-            {!temAcesso && !showTermsModal && (
-              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm p-6 text-center">
-                <div className="w-20 h-20 bg-slate-900 text-white rounded-full flex items-center justify-center text-3xl shadow-lg mb-6">🔒</div>
-                <h2 className="text-2xl font-black text-slate-900 mb-2">{isEn ? "Inbox Locked" : "Mensagens Bloqueadas"}</h2>
-                <p className="text-sm font-medium text-slate-500 max-w-sm mb-8 leading-relaxed">{isEn ? "You need an active contract to send and receive messages from monitors." : "Apenas parceiros com contrato validado e ativo podem enviar propostas e conversar diretamente com os monitores da bolsa."}</p>
-                <Link href={`/${lang}/admin/contrato`} className="bg-[#167524] text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-xl shadow-md hover:bg-[#115a1b] transition-colors no-underline">
-                  {isEn ? "Sign Global Contract" : "Assinar Contrato Global"}
-                </Link>
+      {activeTab === "mensagens" && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden grid grid-cols-1 md:grid-cols-12 h-[560px]">
+          <div className="md:col-span-4 border-r border-slate-200 overflow-y-auto">
+            {conversas.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs font-bold">
+                {isEn
+                  ? "No active recruitment chats yet."
+                  : "Ainda não iniciou nenhuma conversa com candidatos."}
+              </div>
+            ) : (
+              conversas.map((conv) => (
+                <button
+                  key={conv.monitor_id}
+                  type="button"
+                  onClick={() => selecionarConversa(conv)}
+                  className={`w-full text-left p-4 border-b border-slate-100 flex items-center gap-3 cursor-pointer ${
+                    conversaAtiva?.monitor_id === conv.monitor_id
+                      ? "bg-emerald-50 border-l-4 border-l-[#167524]"
+                      : "hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="w-11 h-11 rounded-full bg-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center font-black">
+                    {conv.fotografia_url ? (
+                      <img
+                        src={conv.fotografia_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      "🧑‍🏫"
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center">
+                      <span className="font-black text-sm text-slate-900 truncate">
+                        {conv.monitor_nome}
+                      </span>
+                      {!conv.lida && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 truncate m-0 mt-0.5">
+                      {conv.ultima_mensagem}
+                    </p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          <div className="md:col-span-8 flex flex-col bg-slate-50/50">
+            {conversaAtiva ? (
+              <>
+                <div className="bg-white p-4 px-6 border-b border-slate-200 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 m-0">
+                      {conversaAtiva.monitor_nome}
+                    </h3>
+                    <span className="text-xs text-slate-500">
+                      {conversaAtiva.monitor_email}{" "}
+                      {conversaAtiva.monitor_telefone
+                        ? `• 📞 ${conversaAtiva.monitor_telefone}`
+                        : ""}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                  {conversaAtiva.mensagens.map((m: any) => {
+                    const souParceiro = m.remetente === "parceiro";
+                    return (
+                      <div
+                        key={m.id}
+                        className={`flex flex-col ${
+                          souParceiro ? "items-end" : "items-start"
+                        }`}
+                      >
+                        <div
+                          className={`max-w-[75%] p-3.5 rounded-2xl text-sm leading-relaxed ${
+                            souParceiro
+                              ? "bg-[#167524] text-white rounded-br-none"
+                              : "bg-white border border-slate-200 text-slate-800 rounded-bl-none"
+                          }`}
+                        >
+                          {m.mensagem}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <form
+                  onSubmit={handleEnviarMensagem}
+                  className="bg-white p-4 border-t border-slate-200 flex gap-3"
+                >
+                  <input
+                    type="text"
+                    value={novaMensagem}
+                    onChange={(e) => setNovaMensagem(e.target.value)}
+                    placeholder={
+                      isEn
+                        ? "Write a message to this candidate..."
+                        : "Escreva uma mensagem para o candidato..."
+                    }
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-[#167524]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={sendingMsg || !novaMensagem.trim()}
+                    className="bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs px-6 rounded-xl cursor-pointer"
+                  >
+                    {sendingMsg ? "..." : isEn ? "Send" : "Enviar"}
+                  </button>
+                </form>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-slate-400 font-bold text-sm">
+                {isEn
+                  ? "Select a candidate conversation on the left"
+                  : "Selecione uma conversa à esquerda"}
               </div>
             )}
+          </div>
+        </div>
+      )}
 
-            <div className={`w-full md:w-1/3 lg:w-[350px] border-r border-slate-100 bg-slate-50/50 overflow-y-auto ${conversaAtiva ? 'hidden md:block' : 'block'} ${!temAcesso ? 'opacity-30 pointer-events-none' : ''}`}>
-              {conversas.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 font-bold text-sm h-full flex flex-col items-center justify-center">Nenhuma conversa ativa.</div>
-              ) : (
-                conversas.map(conv => (
-                  <button key={conv.monitor_id} onClick={() => selecionarConversa(conv)} className={`w-full text-left p-5 border-b border-slate-100 flex flex-col bg-transparent hover:bg-white transition-colors ${conversaAtiva?.monitor_id === conv.monitor_id ? 'bg-white border-l-4 border-l-[#167524]' : ''}`}>
-                    <div className="flex justify-between items-center w-full mb-1">
-                      <span className="text-sm font-black text-slate-900 truncate pr-2">{conv.monitor_nome}</span>
-                      <span className="text-[9px] font-bold text-slate-400 flex-shrink-0 uppercase tracking-widest">{conv.data}</span>
-                    </div>
-                    <p className={`text-xs mt-1 mb-0 truncate w-full ${conv.lida ? 'text-slate-500' : 'text-slate-950 font-black'}`}>{conv.ultima_mensagem}</p>
-                  </button>
-                ))
-              )}
-            </div>
-            
-            <div className={`w-full md:w-2/3 lg:flex-1 flex flex-col bg-white ${!conversaAtiva ? 'hidden md:flex' : 'flex'} ${!temAcesso ? 'opacity-30 pointer-events-none' : ''}`}>
-              {!conversaAtiva ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-slate-300 p-8">
-                  <span className="text-4xl mb-4 opacity-50">💬</span>
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">{isEn ? "Select a candidate to chat" : "Selecione um candidato para falar"}</p>
+      {/* =================================================================== */}
+      {/* LIGHTBOX / MODAL DE PERFIL COMPLETO DO MONITOR                      */}
+      {/* =================================================================== */}
+      {monitorSelecionado && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setMonitorSelecionado(null)}
+        >
+          <div
+            className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 md:p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 pb-6 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-3xl flex-shrink-0">
+                  {monitorSelecionado.fotografia_url ? (
+                    <img
+                      src={monitorSelecionado.fotografia_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    "🧑‍🏫"
+                  )}
                 </div>
-              ) : (
-                <>
-                  <div className="px-6 py-4 border-b border-slate-100 bg-white shadow-sm flex items-center justify-between z-10">
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => setConversaAtiva(null)} className="md:hidden w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 font-black mr-2">&larr;</button>
-                      <div className="w-10 h-10 rounded-full bg-[#167524]/10 text-[#167524] font-black uppercase flex items-center justify-center text-lg">{conversaAtiva.monitor_nome.charAt(0)}</div>
-                      <div className="text-sm font-black text-slate-900">{conversaAtiva.monitor_nome}</div>
-                    </div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 m-0">
+                    {monitorSelecionado.nome_completo}
+                  </h2>
+                  <p className="text-xs font-bold text-slate-500 m-0 mt-1">
+                    📍 {monitorSelecionado.distrito_residencia} • 🎂{" "}
+                    {calcularIdade(monitorSelecionado.data_nascimento)}{" "}
+                    {isEn ? "years old" : "anos"}
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2 text-xs font-bold text-[#167524]">
+                    {monitorSelecionado.email && (
+                      <span>✉️ {monitorSelecionado.email}</span>
+                    )}
+                    {monitorSelecionado.telefone && (
+                      <span>• 📞 {monitorSelecionado.telefone}</span>
+                    )}
                   </div>
-                  
-                  <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-slate-50/50">
-                    {conversaAtiva.mensagens.map((msg: any) => (
-                      <div key={msg.id} className={`flex flex-col max-w-[85%] sm:max-w-[70%] ${msg.remetente === 'parceiro' ? 'ml-auto items-end' : 'items-start'}`}>
-                        <div className={`p-4 rounded-2xl text-[15px] font-medium leading-relaxed shadow-sm ${msg.remetente === 'parceiro' ? 'bg-[#167524] text-white rounded-tr-none' : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'}`}>
-                          {msg.mensagem}
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5 px-2">
-                          {new Date(msg.criado_at).toLocaleTimeString('pt-PT', {hour: '2-digit', minute:'2-digit'})}
-                        </span>
-                      </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMonitorSelecionado(null)}
+                className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 font-black cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6">
+              {/* Sobre e Certificações */}
+              <div className="space-y-5">
+                <div>
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                    {isEn ? "About & Experience" : "Apresentação e Experiência"}
+                  </h4>
+                  <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100 m-0">
+                    {monitorSelecionado.biografia ||
+                      monitorSelecionado.sobre_mim ||
+                      (isEn
+                        ? "Motivated monitor available for summer camps and youth activities."
+                        : "Monitor disponível para integrar equipas em campos de férias e atividades juvenis.")}
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                    {isEn ? "Certifications" : "Certificações e Competências"}
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {monitorSelecionado.certificacoes?.map((c: string) => (
+                      <span
+                        key={c}
+                        className="px-3 py-1.5 bg-emerald-50 text-[#167524] border border-emerald-200 rounded-xl text-xs font-bold"
+                      >
+                        ✓ {c}
+                      </span>
                     ))}
                   </div>
-                  
-                  <form onSubmit={handleEnviarMensagem} className="p-4 md:p-6 border-t border-slate-100 flex gap-3 bg-white">
-                    <div className="flex-1 bg-slate-50 rounded-2xl flex items-center px-4 border border-slate-200 focus-within:border-[#167524] focus-within:bg-white transition-colors shadow-inner">
-                      <input type="text" value={novaMensagem} onChange={e => setNovaMensagem(e.target.value)} placeholder={isEn ? "Type a message..." : "Escreva uma mensagem de recrutamento..."} className="flex-1 py-3.5 bg-transparent outline-none text-[15px] font-medium text-slate-800" />
-                    </div>
-                    <button type="submit" disabled={sendingMsg || !novaMensagem.trim()} className="w-14 h-14 flex items-center justify-center bg-[#167524] text-white rounded-2xl font-black transition-all hover:bg-[#115a1b] disabled:opacity-50 disabled:cursor-not-allowed shadow-md">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                    </button>
-                  </form>
-                </>
-              )}
+                </div>
+
+                {monitorSelecionado.curriculo_url && (
+                  <div>
+                    <a
+                      href={monitorSelecionado.curriculo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 bg-[#0E3A68] text-white font-black uppercase tracking-widest text-xs px-5 py-3 rounded-xl no-underline shadow-sm"
+                    >
+                      📄 {isEn ? "Download Resume (CV)" : "Abrir Currículo (PDF)"}
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Calendário Mensal de Disponibilidade */}
+              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMesModalView(
+                        new Date(
+                          mesModalView.getFullYear(),
+                          mesModalView.getMonth() - 1,
+                          1
+                        )
+                      )
+                    }
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 font-black cursor-pointer"
+                  >
+                    &larr;
+                  </button>
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-900">
+                    {mesesNomes[mesModalView.getMonth()]}{" "}
+                    {mesModalView.getFullYear()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMesModalView(
+                        new Date(
+                          mesModalView.getFullYear(),
+                          mesModalView.getMonth() + 1,
+                          1
+                        )
+                      )
+                    }
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 font-black cursor-pointer"
+                  >
+                    &rarr;
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                  {diasDaSemana.map((d) => (
+                    <span
+                      key={d}
+                      className="text-[10px] font-black text-slate-400 uppercase"
+                    >
+                      {d}
+                    </span>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {renderCalendarioDisponibilidade(
+                    monitorSelecionado.dias_disponiveis || []
+                  )}
+                </div>
+                <p className="text-[10px] font-bold text-[#167524] mt-3 mb-0 text-center">
+                  🟩 {isEn ? "Green = Available Days" : "Verde = Dias Disponíveis"}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-5 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => iniciarConversaComMonitor(monitorSelecionado)}
+                className="bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-xl shadow-md cursor-pointer"
+              >
+                💬{" "}
+                {isEn
+                  ? "Send Direct Proposal"
+                  : "Enviar Mensagem de Recrutamento"}
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* MODAL / LIGHTBOX DE PERFIL COMPLETO (SÓ APARECE SE TIVER ACESSO) */}
-      {monitorSelecionado && temAcesso && !showTermsModal && (
-        <div className="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-4 md:p-8 backdrop-blur-sm">
-          <div className="bg-slate-50 w-full max-w-5xl max-h-[95vh] rounded-[2rem] flex flex-col overflow-hidden shadow-2xl">
-            
-            <div className="px-6 md:px-8 py-5 border-b border-slate-200 flex justify-between items-center bg-white flex-shrink-0 z-10">
-               <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Candidate Dossier" : "Dossier do Candidato"}</div>
-               <button onClick={() => setMonitorSelecionado(null)} className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:text-slate-900 font-bold text-xl transition-colors cursor-pointer">&times;</button>
+      {/* MODAL DE BLOQUEIO (SE AINDA NÃO TIVER CONTRATO ASSINADO) */}
+      {showLockModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 text-center shadow-2xl border border-slate-200">
+            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+              🔒
             </div>
-
-            <div className="flex-1 overflow-y-auto p-4 md:p-8">
-               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-                  
-                  {/* Coluna Esquerda */}
-                  <div className="lg:col-span-1 flex flex-col gap-6">
-                     <div className="bg-white rounded-[1.5rem] p-8 border border-slate-200 shadow-sm text-center">
-                        <div className="w-32 h-32 mx-auto rounded-full bg-slate-100 border-4 border-white shadow-md overflow-hidden mb-5">
-                           {monitorSelecionado.fotografia_url ? <img src={monitorSelecionado.fotografia_url} alt="Foto" className="w-full h-full object-cover" /> : <span className="text-5xl mt-7 block">🧑‍🏫</span>}
-                        </div>
-                        <h2 className="text-2xl font-black text-slate-900 mb-1">{monitorSelecionado.nome_completo}</h2>
-                        <p className="text-sm font-bold text-slate-500 mb-0">{calcularIdade(monitorSelecionado.data_nascimento)} {isEn ? "years old" : "anos"}</p>
-                        
-                        <div className="mt-6 text-left bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3">
-                           <span className="text-xl">📍</span>
-                           <div>
-                             <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? "Residency" : "Residência Base"}</span>
-                             <span className="text-sm font-black text-slate-800">{monitorSelecionado.distrito_residencia}</span>
-                           </div>
-                        </div>
-                     </div>
-
-                     <div className="bg-white rounded-[1.5rem] p-6 md:p-8 border border-slate-200 shadow-sm flex flex-col gap-3">
-                        <span className="block text-[10px] text-center font-black uppercase tracking-widest text-slate-400 mb-2">{isEn ? "Direct Contact" : "Contacto Direto"}</span>
-                        <button onClick={() => iniciarConversaComMonitor(monitorSelecionado)} className="w-full bg-[#167524] text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#115a1b] transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer">
-                          💬 {isEn ? "Start Chat" : "Iniciar Chat Interno"}
-                        </button>
-                        <a href={`tel:${monitorSelecionado.telefone}`} className="w-full bg-white border-2 border-slate-200 text-slate-700 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest text-center hover:bg-slate-50 transition-all no-underline flex items-center justify-center gap-2">
-                          📞 {isEn ? "Call Monitor" : "Ligar para o Telemóvel"}
-                        </a>
-                     </div>
-                  </div>
-
-                  {/* Coluna Direita */}
-                  <div className="lg:col-span-2 flex flex-col gap-6 md:gap-8">
-                     
-                     <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm">
-                        <h4 className="text-[11px] font-black uppercase tracking-widest text-[#167524] mb-4">{isEn ? "Presentation / Bio" : "Carta de Apresentação"}</h4>
-                        <p className="text-[15px] text-slate-700 leading-relaxed font-medium m-0 whitespace-pre-wrap">{monitorSelecionado.bio || "Sem carta de apresentação."}</p>
-                     </div>
-
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm">
-                           <h4 className="text-[11px] font-black uppercase tracking-widest text-[#167524] mb-3">{isEn ? "Experience" : "Experiência"}</h4>
-                           <span className="text-3xl font-black text-slate-900">{monitorSelecionado.experiencia_anos === "0" ? (isEn ? "Beginner" : "Iniciante") : `${monitorSelecionado.experiencia_anos} ${isEn ? "years" : "anos"}`}</span>
-                        </div>
-                        
-                        <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm">
-                           <h4 className="text-[11px] font-black uppercase tracking-widest text-[#167524] mb-3">{isEn ? "Willing to Work in" : "Disponível para Zonas"}</h4>
-                           <div className="flex flex-wrap gap-2">
-                              {monitorSelecionado.areas_atuacao?.length > 0 ? monitorSelecionado.areas_atuacao.map((z:string) => <span key={z} className="bg-slate-100 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-[11px] font-bold">{z}</span>) : <span className="text-xs text-slate-400">Não definidas</span>}
-                           </div>
-                        </div>
-                     </div>
-
-                     <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm">
-                        <h4 className="text-[11px] font-black uppercase tracking-widest text-[#167524] mb-4">{isEn ? "Core Certificates" : "Certificados Submetidos"}</h4>
-                        <div className="flex flex-wrap gap-2 mb-6">
-                           {monitorSelecionado.certificacoes?.length > 0 ? monitorSelecionado.certificacoes.map((c:string) => <span key={c} className="bg-[#167524]/10 text-[#167524] border border-[#167524]/20 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><span className="text-[#167524] font-black">✓</span>{c}</span>) : <span className="text-sm font-bold text-slate-400">Nenhum certificado base inserido.</span>}
-                        </div>
-
-                        {monitorSelecionado.outras_competencias && (
-                           <>
-                              <h4 className="text-[11px] font-black uppercase tracking-widest text-[#167524] mb-3 border-t border-slate-100 pt-6">{isEn ? "Other Skills" : "Outras Competências (Idiomas, Primeiros Socorros, etc)"}</h4>
-                              <p className="text-[15px] font-bold text-slate-800 m-0 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">{monitorSelecionado.outras_competencias}</p>
-                           </>
-                        )}
-                     </div>
-
-                     <div className="bg-white p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm">
-                        <h4 className="text-[11px] font-black uppercase tracking-widest text-[#167524] mb-4">{isEn ? "Seasonal Availability" : "Disponibilidade Sazonal Global"}</h4>
-                        <div className="flex flex-wrap gap-2 mb-6">
-                           {monitorSelecionado.disponibilidade?.length > 0 ? monitorSelecionado.disponibilidade.map((d:string) => <span key={d} className="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold">📅 {d}</span>) : <span className="text-sm font-bold text-slate-400">Não especificada</span>}
-                        </div>
-                        
-                        {monitorSelecionado.calendario_disponibilidade && Object.keys(monitorSelecionado.calendario_disponibilidade).length > 0 && (
-                           <div className="border-t border-slate-100 pt-6">
-                              <h4 className="text-[11px] font-black uppercase tracking-widest text-[#167524] mb-4">{isEn ? "Specific Calendar" : "Calendário Específico Diário"}</h4>
-                              
-                              <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-6 shadow-sm select-none max-w-md mx-auto">
-                                 <div className="flex justify-between items-center mb-5 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                                   <button type="button" onClick={() => mudarMesModal(-1)} className="p-2 w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-400 hover:text-[#167524] transition-colors font-black">&larr;</button>
-                                   <span className="text-xs font-black text-slate-800 uppercase tracking-widest">
-                                     {mesesNomes[mesModalView.getMonth()]} {mesModalView.getFullYear()}
-                                   </span>
-                                   <button type="button" onClick={() => mudarMesModal(1)} className="p-2 w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-400 hover:text-[#167524] transition-colors font-black">&rarr;</button>
-                                 </div>
-                                 
-                                 <div className="grid grid-cols-7 gap-1.5 mb-2 text-center">
-                                   {diasDaSemana.map(d => <span key={d} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{d}</span>)}
-                                 </div>
-                                 
-                                 <div className="grid grid-cols-7 gap-1.5">
-                                   {renderDiasCalendarioModal(monitorSelecionado.calendario_disponibilidade)}
-                                 </div>
-                                 
-                                 <div className="mt-5 pt-4 border-t border-slate-100 flex gap-4 justify-center text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#167524]/20 border-2 border-[#167524] inline-block"></span> Livre</span>
-                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-100 border-2 border-red-500 inline-block"></span> Ocupado</span>
-                                 </div>
-                              </div>
-                           </div>
-                        )}
-                     </div>
-
-                  </div>
-               </div>
+            <h3 className="text-xl font-black text-slate-900 m-0 mb-2">
+              {isEn
+                ? "Verified Partners Only"
+                : "Acesso Exclusivo a Parceiros Validados"}
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed mb-6">
+              {isEn
+                ? "To protect our monitors' personal data, you must sign your Global Partnership Agreement before unlocking full profiles and CVs."
+                : "Por motivos de proteção de dados (RGPD), o acesso aos contactos, currículos e fotografias dos monitores requer que tenha o seu Contrato Global assinado."}
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowLockModal(false)}
+                className="flex-1 py-3 rounded-xl border border-slate-200 font-bold text-xs cursor-pointer"
+              >
+                {isEn ? "Close" : "Fechar"}
+              </button>
+              <Link
+                href={`/${lang}/admin/contrato`}
+                className="flex-1 py-3 rounded-xl bg-[#167524] text-white font-black uppercase tracking-widest text-xs no-underline"
+              >
+                {isEn ? "Sign Contract" : "Assinar Contrato"}
+              </Link>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ACEITAÇÃO DE TERMOS DE RECRUTAMENTO (RGPD E REGISTO CRIMINAL) */}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl border border-slate-200">
+            <h3 className="text-xl font-black text-slate-900 m-0 mb-3">
+              🛡️{" "}
+              {isEn
+                ? "Staff Portal Terms & Legal Compliance"
+                : "Termos de Utilização da Bolsa de Monitores"}
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed mb-4">
+              {isEn
+                ? "HelloCamp acts strictly as a directory. As the hiring entity, your organization is legally responsible for interviewing candidates, verifying original certificates, and requiring a clean Criminal Record Check for contact with minors before hiring."
+                : "A HelloCamp atua estritamente como diretório tecnológico. Cabe exclusivamente à entidade organizadora entrevistar os candidatos, validar os certificados originais e exigir obrigatoriamente o Registo Criminal (para contacto com menores, nos termos da Lei n.º 113/2009) antes do início de funções."}
+            </p>
+            <label className="flex items-start gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 cursor-pointer mb-6">
+              <input
+                type="checkbox"
+                checked={checkboxTermos}
+                onChange={(e) => setCheckboxTermos(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-[#167524]"
+              />
+              <span className="text-xs font-bold text-slate-800">
+                {isEn
+                  ? "I understand and accept the legal and GDPR responsibilities regarding candidate data."
+                  : "Compreendo e aceito a responsabilidade legal pela verificação documental, registo criminal e tratamento confidencial dos dados (RGPD)."}
+              </span>
+            </label>
+            <button
+              type="button"
+              disabled={!checkboxTermos || savingTerms}
+              onClick={handleAceitarTermos}
+              className="w-full py-4 bg-[#167524] disabled:bg-slate-300 text-white font-black uppercase tracking-widest text-xs rounded-xl cursor-pointer"
+            >
+              {savingTerms
+                ? "..."
+                : isEn
+                ? "Accept & Enter Talent Pool"
+                : "Aceitar e Aceder à Bolsa de Monitores"}
+            </button>
           </div>
         </div>
       )}
