@@ -22,7 +22,7 @@ export default function GestaoCamposHQ({
     useState<string>(parceiroUrlParam);
   const [isParceiroDropdownOpen, setIsParceiroDropdownOpen] = useState(false);
 
-  // Modal de Ajuste de Comissão e Atribuição de Parceiro
+  // Modal de Ajuste Rápido de Parceiro e Comissão
   const [showModal, setShowModal] = useState(false);
   const [campoEmEdicao, setCampoEmEdicao] = useState<any>(null);
   const [openModalDropdown, setOpenModalDropdown] = useState<string | null>(
@@ -77,7 +77,7 @@ export default function GestaoCamposHQ({
         ...campo,
         precoCalculado: precoMinimo,
         perfis: organizador || {
-          empresa_nome: "Sem Parceiro Associado",
+          empresa_nome: "Listagem SEO / Sem Parceiro",
           email: "",
           status_contrato: null,
         },
@@ -170,7 +170,7 @@ export default function GestaoCamposHQ({
 
   if (loading) {
     return (
-      <div className="p-12 text-center text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">
+      <div className="p-12 text-center text-slate-500 font-bold text-xs uppercase tracking-widest animate-pulse">
         A carregar todos os programas do Marketplace...
       </div>
     );
@@ -178,13 +178,18 @@ export default function GestaoCamposHQ({
 
   return (
     <div className="max-w-7xl mx-auto font-sans pb-20">
-      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+      {/* CABEÇALHO EXECUTIVO COM BOTÃO DE ADICIONAR NOVO CAMPO */}
+      <div className="mb-6 flex flex-col lg:flex-row lg:items-end justify-between gap-4 bg-white p-6 border border-slate-200 rounded-md shadow-sm">
         <div>
+          <span className="inline-block text-[10px] font-black uppercase tracking-widest text-[#0E3A68] bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-sm mb-2">
+            SuperAdmin Master HQ
+          </span>
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight m-0">
-            Moderação de Campos & Comissões
+            Gestão Global de Campos & Comissões
           </h1>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1 mb-0">
-            {camposFiltrados.length} Programas Registados
+          <p className="text-xs font-bold text-slate-500 mt-1 mb-0">
+            {camposFiltrados.length} Programas Registados • Crie novos campos em
+            nome de qualquer parceiro ou para SEO.
           </p>
         </div>
 
@@ -193,15 +198,15 @@ export default function GestaoCamposHQ({
             type="text"
             value={pesquisa}
             onChange={(e) => setPesquisa(e.target.value)}
-            placeholder="Pesquisar campo ou parceiro..."
-            className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 outline-none min-w-[220px]"
+            placeholder="Pesquisar campo, local ou parceiro..."
+            className="bg-slate-50 border border-slate-300 rounded-md px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-slate-900 focus:bg-white min-w-[220px]"
           />
 
           {/* DROPDOWN CUSTOMIZADO DE FILTRO POR PARCEIRO */}
-          <div className="relative min-w-[240px]">
+          <div className="relative min-w-[230px]">
             <div
               onClick={() => setIsParceiroDropdownOpen(!isParceiroDropdownOpen)}
-              className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-800 cursor-pointer flex justify-between items-center"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-md text-xs font-black text-slate-800 cursor-pointer flex justify-between items-center hover:border-slate-900"
             >
               <span className="truncate">
                 {filtroParceiroId === "todos"
@@ -217,7 +222,7 @@ export default function GestaoCamposHQ({
                   className="fixed inset-0 z-40"
                   onClick={() => setIsParceiroDropdownOpen(false)}
                 />
-                <div className="absolute top-[calc(100%+4px)] right-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto">
+                <div className="absolute top-[calc(100%+4px)] right-0 w-full bg-white border border-slate-300 rounded-md shadow-xl z-50 max-h-60 overflow-y-auto">
                   <div
                     onClick={() => {
                       setFiltroParceiroId("todos");
@@ -243,31 +248,44 @@ export default function GestaoCamposHQ({
               </>
             )}
           </div>
+
+          {/* BOTÃO ADICIONAR NOVO CAMPO NO SUPERADMIN */}
+          <Link
+            href={`/${lang}/superadmin/campos/editar/novo${
+              filtroParceiroId !== "todos"
+                ? `?parceiro=${filtroParceiroId}`
+                : ""
+            }`}
+            className="bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs px-5 py-2.5 rounded-md no-underline shadow-sm transition-colors whitespace-nowrap"
+          >
+            + Adicionar Novo Campo
+          </Link>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-3xl overflow-x-auto shadow-sm">
+      {/* TABELA DE CAMPOS */}
+      <div className="bg-white border border-slate-200 rounded-md overflow-x-auto shadow-sm">
         <table className="w-full text-left min-w-[900px] border-collapse">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Programa / Local
+              <th className="px-5 py-3.5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Programa / Localização
               </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              <th className="px-5 py-3.5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 Parceiro Organizador
               </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Preço / Comissão
+              <th className="px-5 py-3.5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Preço Base / Taxa
               </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Estado Online
+              <th className="px-5 py-3.5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Estado de Publicação
               </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">
+              <th className="px-5 py-3.5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">
                 Ações SuperAdmin
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-200">
             {camposFiltrados.map((c) => {
               const isAprovado = c.status_aprovacao === "Aprovado";
               const taxaEfetiva =
@@ -277,56 +295,56 @@ export default function GestaoCamposHQ({
 
               return (
                 <tr key={c.id} className="hover:bg-slate-50/80">
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-4">
                     <Link
                       href={`/${lang}/campo/${c.id}`}
                       target="_blank"
-                      className="font-black text-sm text-slate-900 hover:text-blue-600 no-underline block"
+                      className="font-black text-sm text-slate-900 hover:text-[#0E3A68] no-underline block"
                     >
                       {c.nome} ↗
                     </Link>
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs text-slate-500 font-medium">
                       📍 {c.Distrito || c.local} • {c.categoria}
                     </span>
                   </td>
 
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-4">
                     <div className="font-bold text-sm text-slate-800">
                       {c.perfis?.empresa_nome ||
                         c.perfis?.nome_completo ||
-                        "Sem Parceiro"}
+                        "Listagem Direta / Sem Parceiro"}
                     </div>
                     <div className="text-xs text-slate-400">
                       {c.perfis?.email}
                     </div>
                   </td>
 
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-4">
                     <div className="font-black text-sm text-slate-900">
                       {c.precoCalculado > 0 ? `${c.precoCalculado}€` : "--"}
                     </div>
-                    <span className="text-[10px] font-black text-[#167524] bg-emerald-50 px-2 py-0.5 rounded">
-                      {taxaEfetiva}% Fee
+                    <span className="text-[10px] font-black text-[#167524] bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-sm">
+                      {taxaEfetiva}% Comissão
                     </span>
                   </td>
 
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-4">
                     <button
                       type="button"
                       onClick={() => handleToggleAprovacaoRapida(c)}
-                      className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest cursor-pointer border ${
+                      className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-widest cursor-pointer border ${
                         isAprovado && c.ativo
-                          ? "bg-emerald-100 text-[#167524] border-emerald-200"
-                          : "bg-amber-100 text-amber-900 border-amber-200"
+                          ? "bg-emerald-50 text-[#167524] border-emerald-300"
+                          : "bg-amber-50 text-amber-900 border-amber-300"
                       }`}
                     >
                       {isAprovado && c.ativo
-                        ? "✓ Aprovado Online"
-                        : "⏳ Pendente (Clicar p/ Ativar)"}
+                        ? "✓ Online (Ativo)"
+                        : "⏳ Oculto (Clicar p/ Ativar)"}
                     </button>
                   </td>
 
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-5 py-4 text-right">
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
@@ -344,22 +362,22 @@ export default function GestaoCamposHQ({
                           });
                           setShowModal(true);
                         }}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-black uppercase tracking-widest text-[10px] px-3.5 py-2 rounded-xl cursor-pointer"
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-black uppercase tracking-widest text-[10px] px-3 py-2 rounded-md cursor-pointer"
                       >
-                        ⚙️ Parceiro / Fee
+                        ⚙️ Parceiro / Taxa
                       </button>
 
                       <Link
                         href={`/${lang}/superadmin/campos/editar/${c.id}`}
-                        className="bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded-xl no-underline flex items-center"
+                        className="bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded-md no-underline flex items-center"
                       >
-                        ✏️ Editar Tudo
+                        ✏️ Editar Campo
                       </Link>
 
                       <button
                         type="button"
                         onClick={() => handleApagarCampo(c.id, c.nome)}
-                        className="bg-red-50 hover:bg-red-100 text-red-600 font-black text-xs px-3 py-2 rounded-xl cursor-pointer"
+                        className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-black text-xs px-3 py-2 rounded-md cursor-pointer"
                       >
                         🗑️
                       </button>
@@ -379,19 +397,18 @@ export default function GestaoCamposHQ({
           onClick={() => setShowModal(false)}
         >
           <div
-            className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 shadow-2xl"
+            className="bg-white rounded-md max-w-md w-full p-6 border border-slate-300 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-black text-slate-900 m-0 mb-4">
+            <h3 className="text-lg font-black text-slate-900 m-0 mb-4 pb-3 border-b border-slate-200">
               ⚙️ Configurar: {campoEmEdicao.nome}
             </h3>
             <form
               onSubmit={handleSalvarComissaoEParceiro}
               className="space-y-4"
             >
-              {/* Dropdown Customizado de Parceiro */}
               <div className="relative">
-                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">
+                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
                   Parceiro Proprietário do Campo
                 </label>
                 <div
@@ -400,7 +417,7 @@ export default function GestaoCamposHQ({
                       openModalDropdown === "org" ? null : "org"
                     )
                   }
-                  className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black cursor-pointer flex justify-between items-center"
+                  className="w-full p-3 bg-slate-50 border border-slate-300 rounded-md text-xs font-black cursor-pointer flex justify-between items-center"
                 >
                   <span className="truncate">
                     {parceirosLista.find(
@@ -409,12 +426,24 @@ export default function GestaoCamposHQ({
                       parceirosLista.find(
                         (p) => p.id === campoEmEdicao.organizador_id
                       )?.email ||
-                      "Selecionar Parceiro..."}
+                      "Sem Parceiro (Listagem Direta / SEO)"}
                   </span>
                   <span>▼</span>
                 </div>
                 {openModalDropdown === "org" && (
-                  <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto">
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-300 rounded-md shadow-xl z-50 max-h-52 overflow-y-auto">
+                    <div
+                      onClick={() => {
+                        setCampoEmEdicao({
+                          ...campoEmEdicao,
+                          organizador_id: "",
+                        });
+                        setOpenModalDropdown(null);
+                      }}
+                      className="p-3 text-xs font-black text-slate-500 hover:bg-slate-50 cursor-pointer border-b border-slate-100"
+                    >
+                      -- Sem Parceiro (Listagem Direta / SEO) --
+                    </div>
                     {parceirosLista.map((p) => (
                       <div
                         key={p.id}
@@ -435,13 +464,13 @@ export default function GestaoCamposHQ({
               </div>
 
               <div>
-                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">
+                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
                   Taxa de Comissão Específica (%) (Vazio = Herdar do Parceiro)
                 </label>
                 <input
                   type="number"
                   step="0.1"
-                  placeholder="Ex: 15"
+                  placeholder="Ex: 12"
                   value={campoEmEdicao.taxa_comissao}
                   onChange={(e) =>
                     setCampoEmEdicao({
@@ -449,23 +478,23 @@ export default function GestaoCamposHQ({
                       taxa_comissao: e.target.value,
                     })
                   }
-                  className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black"
+                  className="w-full p-3 bg-slate-50 border border-slate-300 rounded-md text-sm font-black"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold cursor-pointer"
+                  className="px-4 py-2.5 rounded-md border border-slate-300 bg-white text-xs font-bold cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#167524] text-white font-black uppercase tracking-widest text-xs px-6 py-2.5 rounded-xl cursor-pointer"
+                  className="bg-[#167524] text-white font-black uppercase tracking-widest text-xs px-6 py-2.5 rounded-md cursor-pointer"
                 >
-                  Guardar
+                  Guardar Alterações
                 </button>
               </div>
             </form>
