@@ -5,25 +5,72 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-export default function RegistoMonitorPage({ params }: { params: Promise<{ lang: string }> }) {
+const DISTRITOS_PT = [
+  "Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra",
+  "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre",
+  "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"
+];
+
+const LISTA_CERTIFICADOS = [
+  {
+    id: "Monitor de Campos de Férias (IPDJ)",
+    pt: "Monitor de Campos de Férias (IPDJ)",
+    en: "Camp Monitor (IPDJ)",
+  },
+  {
+    id: "Primeiros Socorros / Suporte Básico",
+    pt: "Primeiros Socorros / Suporte Básico",
+    en: "First Aid / Basic Life Support",
+  },
+  { id: "Nadador Salvador", pt: "Nadador Salvador", en: "Lifeguard" },
+  {
+    id: "Formação em Educação / Desporto",
+    pt: "Formação em Educação / Desporto",
+    en: "Education / Sports Degree",
+  },
+  {
+    id: "Animação Sociocultural",
+    pt: "Animação Sociocultural",
+    en: "Sociocultural Animation",
+  },
+  {
+    id: "Fluência em Línguas Estrangeiras",
+    pt: "Fluência em Línguas Estrangeiras",
+    en: "Foreign Languages Fluency",
+  },
+  {
+    id: "Necessidades Educativas Especiais",
+    pt: "Experiência com Necessidades Educativas Especiais",
+    en: "Special Needs Experience",
+  },
+];
+
+const LISTA_EPOCAS = [
+  { id: "Pascoa", pt: "Férias da Páscoa", en: "Easter Break" },
+  { id: "Verao", pt: "Férias de Verão (Época Alta)", en: "Summer Holidays" },
+  { id: "Natal", pt: "Férias de Natal", en: "Christmas Break" },
+];
+
+export default function RegistoMonitorPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
   const { lang } = use(params);
-  const isEn = lang === 'en';
+  const isEn = lang === "en";
   const router = useRouter();
 
-  // --- ESTADOS GERAIS ---
   const [submitting, setSubmitting] = useState(false);
-  
-  // FOTO E CV
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  // Foto e CV
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoUrl, setFotoUrl] = useState<string>("");
-  
   const [uploadingCV, setUploadingCV] = useState(false);
   const [cvUrl, setCvUrl] = useState<string>("");
   const [cvFileName, setCvFileName] = useState<string>("");
 
   const [termosAceites, setTermosAceites] = useState(false);
-
-  // --- ESTADOS DE AUTENTICAÇÃO ---
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
 
@@ -31,84 +78,79 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     nome_completo: "",
     data_nascimento: "",
     telefone: "",
-    distrito_residencia: "",
+    distrito_residencia: "Lisboa",
     experiencia_anos: "0",
     outras_competencias: "",
-    bio: ""
+    bio: "",
   });
 
   const [certificacoes, setCertificacoes] = useState<string[]>([]);
-  const [disponibilidadeEpocas, setDisponibilidadeEpocas] = useState<string[]>([]);
+  const [disponibilidadeEpocas, setDisponibilidadeEpocas] = useState<string[]>([
+    "Verao",
+  ]);
   const [areasAtuacao, setAreasAtuacao] = useState<string[]>([]);
 
-  // --- ESTADOS DO CALENDÁRIO INTERATIVO ---
+  // Calendário
   const [dataVisualizada, setDataVisualizada] = useState(new Date());
-  const [calendario, setCalendario] = useState<Record<string, 'Livre' | 'Ocupado'>>({});
+  const [calendario, setCalendario] = useState<Record<string, string>>({});
 
-  // --- LISTAS DE DADOS ---
-  const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
-  
   const opcoesAtuacao = [
-    ...distritosPT,
-    isEn ? "Nationwide (With Accommodation)" : "Em todo o país (Com Alojamento / Deslocação)"
+    ...DISTRITOS_PT,
+    isEn
+      ? "Nationwide (With Accommodation)"
+      : "Em todo o país (Com Alojamento / Deslocação)",
   ];
 
-  const listaCertificados = [
-    { id: "IPDJ", pt: "Monitor de Campos de Férias (IPDJ)", en: "Camp Monitor (IPDJ)" },
-    { id: "Socorrismo", pt: "Primeiros Socorros / Suporte Básico", en: "First Aid / Basic Life Support" },
-    { id: "Nadador", pt: "Nadador Salvador", en: "Lifeguard" },
-    { id: "Professor", pt: "Formação em Educação / Desporto", en: "Education / Sports Degree" },
-    { id: "Animacao", pt: "Animação Sociocultural", en: "Sociocultural Animation" },
-    { id: "Linguas", pt: "Fluência em Línguas Estrangeiras", en: "Foreign Languages Fluency" },
-    { id: "Artes", pt: "Artes Plásticas / Música / Teatro", en: "Arts / Music / Theater" },
-    { id: "NEE", pt: "Experiência com Necessidades Educativas Especiais", en: "Special Needs Experience" }
-  ];
+  const mesesNomes = isEn
+    ? [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ]
+    : [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+      ];
+  const diasDaSemana = isEn
+    ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    : ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-  const listaEpocas = [
-    { id: "Pascoa", pt: "Férias da Páscoa", en: "Easter Break" },
-    { id: "Verao", pt: "Férias de Verão (Época Alta)", en: "Summer Holidays" },
-    { id: "Natal", pt: "Férias de Natal", en: "Christmas Break" }
-  ];
-
-  // --- MENOR DE IDADE LÓGICA (AVISO) ---
-  const calcularIdade = (dataNascimento: string) => {
-    if (!dataNascimento) return 18; 
-    const hoje = new Date();
-    const nascimento = new Date(dataNascimento);
-    let idade = hoje.getFullYear() - nascimento.getFullYear();
-    const m = hoje.getMonth() - nascimento.getMonth();
-    if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) idade--;
-    return idade;
-  };
-  const eMenor = calcularIdade(formData.data_nascimento) < 18;
-
-  // --- HANDLERS ---
   const handleCheckboxChange = (id: string, tipo: "cert" | "disp" | "zona") => {
     if (tipo === "cert") {
-      setCertificacoes(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+      setCertificacoes((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
     } else if (tipo === "disp") {
-      setDisponibilidadeEpocas(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+      setDisponibilidadeEpocas((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
     } else if (tipo === "zona") {
-      setAreasAtuacao(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+      setAreasAtuacao((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
     }
   };
 
-  const handleUploadFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadFoto = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     try {
       setUploadingFoto(true);
-      if (!event.target.files || event.target.files.length === 0) throw new Error('Deve selecionar uma imagem.');
-
+      if (!event.target.files || event.target.files.length === 0) return;
       const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage.from('monitores-fotos').upload(fileName, file, { upsert: false });
+      const fileExt = file.name.split(".").pop();
+      const fileName = `foto_${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("monitores-fotos")
+        .upload(fileName, file);
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('monitores-fotos').getPublicUrl(fileName);
+      const { data: urlData } = supabase.storage
+        .from("monitores-fotos")
+        .getPublicUrl(fileName);
       setFotoUrl(urlData.publicUrl);
     } catch (error: any) {
-      alert((isEn ? 'Error uploading photo: ' : 'Erro no upload da foto: ') + error.message);
+      alert(error.message);
     } finally {
       setUploadingFoto(false);
     }
@@ -117,39 +159,40 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   const handleUploadCV = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploadingCV(true);
-      if (!event.target.files || event.target.files.length === 0) throw new Error('Nenhum ficheiro selecionado.');
-
+      if (!event.target.files || event.target.files.length === 0) return;
       const file = event.target.files[0];
-      if (!file.type.includes('pdf') && !file.name.endsWith('.doc') && !file.name.endsWith('.docx')) {
-         throw new Error('Apenas ficheiros PDF ou Word são permitidos.');
-      }
-
       setCvFileName(file.name);
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `cv_${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage.from('monitores-cvs').upload(fileName, file, { upsert: false });
+      const { error: uploadError } = await supabase.storage
+        .from("monitores-cvs")
+        .upload(fileName, file);
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('monitores-cvs').getPublicUrl(fileName);
+      const { data: urlData } = supabase.storage
+        .from("monitores-cvs")
+        .getPublicUrl(fileName);
       setCvUrl(urlData.publicUrl);
     } catch (error: any) {
       setCvFileName("");
-      alert((isEn ? 'Error uploading CV: ' : 'Erro no upload do Currículo: ') + error.message);
+      alert(error.message);
     } finally {
       setUploadingCV(false);
     }
   };
 
   const mudarMes = (incremento: number) => {
-    setDataVisualizada(prev => new Date(prev.getFullYear(), prev.getMonth() + incremento, 1));
+    setDataVisualizada(
+      (prev) => new Date(prev.getFullYear(), prev.getMonth() + incremento, 1)
+    );
   };
 
   const toggleDiaCalendario = (dataISO: string) => {
-    setCalendario(prev => {
+    setCalendario((prev) => {
       const atual = prev[dataISO];
-      if (!atual) return { ...prev, [dataISO]: 'Livre' };
-      if (atual === 'Livre') return { ...prev, [dataISO]: 'Ocupado' };
+      if (!atual) return { ...prev, [dataISO]: "Livre" };
+      if (atual === "Livre") return { ...prev, [dataISO]: "Ocupado" };
       const novo = { ...prev };
       delete novo[dataISO];
       return novo;
@@ -159,26 +202,37 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
   const renderDiasCalendario = () => {
     const ano = dataVisualizada.getFullYear();
     const mes = dataVisualizada.getMonth();
-    
     const diasNoMes = new Date(ano, mes + 1, 0).getDate();
     const primeiroDia = new Date(ano, mes, 1).getDay();
     const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1;
 
     const dias = [];
     for (let i = 0; i < startDayIndex; i++) {
-      dias.push(<div key={`empty-${i}`} className="p-2"></div>);
+      dias.push(<div key={`empty-${i}`} className="p-2" />);
     }
 
     for (let i = 1; i <= diasNoMes; i++) {
-      const dataStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      const dataStr = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(
+        i
+      ).padStart(2, "0")}`;
       const estadoDia = calendario[dataStr];
-      
-      let coresClasses = "bg-white border-slate-200 text-slate-700 hover:bg-slate-100";
-      if (estadoDia === 'Livre') coresClasses = "bg-emerald-100 border-emerald-500 text-emerald-800 font-black shadow-inner";
-      if (estadoDia === 'Ocupado') coresClasses = "bg-red-100 border-red-500 text-red-800 font-black opacity-80 line-through";
+
+      let coresClasses =
+        "bg-white border-slate-200 text-slate-700 hover:bg-slate-100";
+      if (estadoDia === "Livre")
+        coresClasses =
+          "bg-emerald-100 border-emerald-500 text-emerald-800 font-black shadow-inner";
+      if (estadoDia === "Ocupado")
+        coresClasses =
+          "bg-red-100 border-red-500 text-red-800 font-black opacity-80 line-through";
 
       dias.push(
-        <button key={dataStr} type="button" onClick={() => toggleDiaCalendario(dataStr)} className={`h-10 md:h-12 w-full rounded-xl border text-sm md:text-base transition-all duration-200 flex items-center justify-center cursor-pointer ${coresClasses}`}>
+        <button
+          key={dataStr}
+          type="button"
+          onClick={() => toggleDiaCalendario(dataStr)}
+          className={`h-10 md:h-11 w-full rounded-xl border text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${coresClasses}`}
+        >
           {i}
         </button>
       );
@@ -186,347 +240,518 @@ export default function RegistoMonitorPage({ params }: { params: Promise<{ lang:
     return dias;
   };
 
-  const mesesNomes = isEn ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] : ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-  const diasDaSemana = isEn ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-
-  // --- SUBMISSÃO ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!termosAceites) {
-      alert(isEn ? "You must accept the Terms and Conditions." : "Tem de aceitar os Termos e Condições para continuar.");
+      alert(
+        isEn
+          ? "You must accept the Terms and Conditions."
+          : "Tem de aceitar os Termos e Condições para continuar."
+      );
       return;
     }
-
     if (areasAtuacao.length === 0) {
-      alert(isEn ? "Please select at least one work area." : "Por favor, selecione pelo menos uma zona de atuação.");
+      alert(
+        isEn
+          ? "Please select at least one work area."
+          : "Por favor, selecione pelo menos uma zona de atuação."
+      );
       return;
     }
 
     setSubmitting(true);
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: authEmail,
-      password: authPassword,
-      options: {
-        data: {
-          nome_completo: formData.nome_completo,
-          telefone: formData.telefone,
-          role: 'monitor'
-        }
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: authEmail.trim(),
+        password: authPassword,
+        options: {
+          data: {
+            nome_completo: formData.nome_completo,
+            telefone: formData.telefone,
+            role: "monitor",
+          },
+        },
+      });
+
+      if (authError || !authData.user) {
+        throw new Error(authError?.message || "Erro ao criar conta.");
       }
-    });
 
-    if (authError || !authData.user) {
-      alert((isEn ? "Error creating account: " : "Erro ao criar conta: ") + (authError?.message || ""));
-      setSubmitting(false);
-      return;
-    }
+      const userId = authData.user.id;
 
-    const userId = authData.user.id;
+      await supabase.from("perfis").upsert({
+        id: userId,
+        nome_completo: formData.nome_completo,
+        telefone: formData.telefone,
+        role: "monitor",
+        email: authEmail.trim(),
+      });
 
-    await supabase.from('perfis').update({
-      nome_completo: formData.nome_completo,
-      telefone: formData.telefone,
-      role: 'monitor',
-      email: authEmail
-    }).eq('id', userId);
+      // Extrai array de dias livres para compatibilidade total com a página de Recrutamento do Parceiro!
+      const diasLivresArray = Object.entries(calendario)
+        .filter(([_, estado]) => estado === "Livre")
+        .map(([dt]) => dt);
 
-    const payload = {
-      id: userId,
-      email: authEmail,
-      nome_completo: formData.nome_completo,
-      data_nascimento: formData.data_nascimento,
-      telefone: formData.telefone,
-      distrito_residencia: formData.distrito_residencia,
-      experiencia_anos: formData.experiencia_anos,
-      outras_competencias: formData.outras_competencias,
-      bio: formData.bio,
-      fotografia_url: fotoUrl,
-      cv_url: cvUrl,
-      certificacoes,
-      disponibilidade: disponibilidadeEpocas,
-      areas_atuacao: areasAtuacao,
-      calendario_disponibilidade: calendario
-    };
+      const payload: Record<string, any> = {
+        id: userId,
+        email: authEmail.trim(),
+        nome_completo: formData.nome_completo,
+        data_nascimento: formData.data_nascimento,
+        telefone: formData.telefone,
+        distrito_residencia: formData.distrito_residencia,
+        experiencia_anos: formData.experiencia_anos,
+        outras_competencias: formData.outras_competencias,
+        bio: formData.bio,
+        fotografia_url: fotoUrl,
+        cv_url: cvUrl,
+        certificacoes,
+        disponibilidade: disponibilidadeEpocas,
+        areas_atuacao: areasAtuacao,
+        calendario_disponibilidade: calendario,
+      };
 
-    const { error: monitorError } = await supabase.from("monitores").insert([payload]);
+      const { error: monitorError } = await supabase
+        .from("monitores")
+        .upsert([payload]);
 
-    if (monitorError) {
-      alert((isEn ? "Error saving profile details: " : "Erro ao guardar dados de monitor: ") + monitorError.message);
-      setSubmitting(false);
-    } else {
+      if (monitorError) throw monitorError;
+
       router.push(`/${lang}/monitores/portal/perfil`);
+    } catch (err: any) {
+      alert(err.message);
+      setSubmitting(false);
     }
   };
 
-  const labelClass = "text-[10px] md:text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 block ml-1";
-  const inputClass = "w-full py-3.5 px-5 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-bold text-slate-900 outline-none focus:bg-white focus:border-[#2563eb] transition-all shadow-sm placeholder-slate-400";
-  const selectClass = "w-full py-3.5 px-5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm md:text-base font-bold text-slate-900 outline-none focus:bg-white focus:border-[#2563eb] appearance-none cursor-pointer transition-all shadow-sm bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%232563eb%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1.25rem_center] bg-no-repeat";
+  const labelClass =
+    "block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-1";
+  const inputClass =
+    "w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#2563eb] focus:bg-white transition-colors";
+
+  const opcoesExp = [
+    {
+      val: "0",
+      label: isEn
+        ? "First Time / No experience"
+        : "Nenhuma / Primeira experiência",
+    },
+    { val: "1-2", label: isEn ? "1-2 years" : "1 a 2 anos de experiência" },
+    { val: "3-5", label: isEn ? "3-5 years" : "3 a 5 anos de experiência" },
+    { val: "+5", label: isEn ? "+5 years (Senior)" : "+5 anos (Sénior)" },
+  ];
 
   return (
-    <div className="w-full flex-1 bg-slate-50 text-slate-900 py-6 md:py-12 px-2 md:px-8 font-sans">
-      <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-[2rem] shadow-xl overflow-hidden">
-        
-        {/* BANNER SUPERIOR */}
-        <div className="bg-[#1e3a8a] text-white p-8 md:p-12 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#2563eb] bg-white px-4 py-1.5 rounded-full shadow-sm">
-            {isEn ? "Join our Network" : "Bolsa de Talentos HelloCamp"}
+    <main className="min-h-screen bg-slate-50 py-12 px-4 font-sans">
+      <div className="max-w-4xl mx-auto">
+        <Link
+          href={`/${lang}/monitores`}
+          className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 mb-6 no-underline"
+        >
+          &larr; {isEn ? "Back" : "Voltar à Bolsa de Monitores"}
+        </Link>
+
+        <div className="mb-10">
+          <span className="inline-block bg-blue-50 text-[#2563eb] border border-blue-200 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-3">
+            100% Grátis • Sem Comissões
           </span>
-          <h1 className="text-3xl md:text-5xl font-black tracking-tight mt-5 mb-3 leading-tight">
-            {isEn ? "Promote Yourself as a Camp Monitor" : "Trabalha em Campos de Férias"}
+          <h1 className="text-3xl md:text-5xl font-black text-slate-900 m-0 tracking-tight">
+            {isEn ? "Create Monitor Profile" : "Criar Perfil de Monitor"}
           </h1>
-          <p className="text-sm md:text-base text-blue-100 font-medium m-0 leading-relaxed max-w-xl">
-            {isEn 
-              ? "Publish your availability, experience, and certificates so hundreds of verified camps can find and hire you directly." 
-              : "Cria a tua conta, define a tua disponibilidade no calendário, e sê encontrado diretamente pelas entidades organizadoras."}
-          </p>
         </div>
 
-        {/* ALERTA: MENOR DE IDADE REGISTO */}
-        {eMenor && formData.data_nascimento && (
-          <div className="m-6 md:mx-12 p-6 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-start gap-4 shadow-sm">
-            <span className="text-3xl">⚠️</span>
-            <div>
-              <h4 className="font-black text-amber-900 text-sm md:text-base mb-1">Aviso para Menores de Idade</h4>
-              <p className="text-amber-800 text-xs md:text-sm font-medium m-0 leading-relaxed">
-                Reparámos que tens menos de 18 anos. Podes avançar e criar o teu perfil agora, mas para ficares visível aos organizadores de campos, precisarás de imprimir e submeter um documento de autorização assinado pelos teus pais. (Poderás tratar disto mais tarde dentro do teu Perfil!)
-              </p>
-            </div>
-          </div>
-        )}
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* 1. CREDENCIAIS E DADOS PESSOAIS */}
+          <div className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
+            <h2 className="text-lg font-black text-slate-900 m-0 pb-4 border-b border-slate-100">
+              1. {isEn ? "Account & Personal Details" : "Conta e Dados Pessoais"}
+            </h2>
 
-        {/* FORMULÁRIO */}
-        <form onSubmit={handleSubmit} className="p-6 md:p-12 pt-0 md:pt-6 space-y-12">
-          
-          {/* SECÇÃO 1: FOTO E CV & IDENTIFICAÇÃO BÁSICA */}
-          <div>
-            <h3 className="text-xl md:text-2xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6 tracking-tight">
-              {isEn ? "1. Personal Profile & Resume" : "1. O teu Perfil Pessoal e CV"}
-            </h3>
-            
-            <div className="mb-6 flex flex-col sm:flex-row items-center gap-6 p-6 md:p-8 bg-slate-50 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="w-28 h-28 rounded-full bg-white border-4 border-slate-100 shadow-md overflow-hidden flex items-center justify-center flex-shrink-0 relative">
-                {fotoUrl ? (
-                  <img src={fotoUrl} alt="Preview" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-4xl text-slate-300">📸</span>
-                )}
-                {uploadingFoto && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><div className="w-6 h-6 border-4 border-[#2563eb] border-t-transparent rounded-full animate-spin"></div></div>}
+            {/* Upload Foto e CV */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <div className="w-16 h-16 rounded-full bg-white border border-slate-200 overflow-hidden flex items-center justify-center text-2xl flex-shrink-0">
+                  {fotoUrl ? (
+                    <img
+                      src={fotoUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    "📸"
+                  )}
+                </div>
+                <div className="flex-1">
+                  <span className="block text-xs font-black text-slate-900 mb-1">
+                    {isEn ? "Profile Photo" : "Fotografia de Rosto"}
+                  </span>
+                  <label className="inline-block bg-white border border-slate-300 text-slate-700 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl cursor-pointer hover:border-[#2563eb]">
+                    {uploadingFoto
+                      ? "..."
+                      : isEn
+                      ? "Upload Photo"
+                      : "Escolher Foto"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadFoto}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
-              <div className="flex-1 text-center sm:text-left">
-                <label className="block text-base font-black text-slate-900 mb-1">{isEn ? "Profile Picture" : "A Tua Fotografia de Perfil"}</label>
-                <p className="text-xs text-slate-500 font-bold mb-4">{isEn ? "Camps prefer profiles with clear photos." : "Um perfil com fotografia atrai 3x mais propostas de recrutamento."}</p>
-                <div className="relative inline-block w-full sm:w-auto">
-                  <input type="file" accept="image/*" onChange={handleUploadFoto} disabled={uploadingFoto} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                  <button type="button" className="w-full sm:w-auto bg-white border-2 border-slate-200 text-slate-700 font-bold text-xs uppercase tracking-widest px-6 py-3 rounded-xl shadow-sm hover:border-[#2563eb] hover:text-[#2563eb] transition-colors pointer-events-none">
-                    {uploadingFoto ? (isEn ? "Uploading..." : "A carregar...") : (isEn ? "Choose from device" : "Escolher Imagem")}
-                  </button>
+
+              <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-2xl flex-shrink-0">
+                  📄
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="block text-xs font-black text-slate-900 mb-1 truncate">
+                    {cvFileName ||
+                      (isEn ? "Resume / CV (Optional)" : "Currículo PDF (Opcional)")}
+                  </span>
+                  <label className="inline-block bg-white border border-slate-300 text-slate-700 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl cursor-pointer hover:border-[#2563eb]">
+                    {uploadingCV ? "..." : isEn ? "Upload CV" : "Anexar CV"}
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleUploadCV}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
               </div>
             </div>
 
-            <div className="mb-8 flex flex-col sm:flex-row items-center gap-6 p-6 md:p-8 bg-slate-50 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="w-20 h-20 rounded-2xl bg-white border border-slate-200 shadow-md flex items-center justify-center flex-shrink-0 relative">
-                <span className="text-3xl text-slate-400">📄</span>
-                {uploadingCV && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><div className="w-5 h-5 border-2 border-[#2563eb] border-t-transparent rounded-full animate-spin"></div></div>}
-              </div>
-              <div className="flex-1 text-center sm:text-left">
-                <label className="block text-base font-black text-slate-900 mb-1">{isEn ? "Upload your Resume (CV)" : "Anexar Currículo (CV)"} <span className="text-slate-400 text-[10px] ml-1 uppercase tracking-widest">(Opcional)</span></label>
-                <p className="text-xs text-slate-500 font-bold mb-4">{isEn ? "PDF or Word files only. It will only be visible to verified camps." : "Apenas ficheiros PDF ou DOCX. Fica visível apenas para os organizadores."}</p>
-                <div className="relative inline-block w-full sm:w-auto">
-                  <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleUploadCV} disabled={uploadingCV} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                  <button type="button" className="w-full sm:w-auto bg-white border-2 border-slate-200 text-slate-700 font-bold text-xs uppercase tracking-widest px-6 py-3 rounded-xl shadow-sm hover:border-[#2563eb] hover:text-[#2563eb] transition-colors pointer-events-none">
-                    {uploadingCV ? (isEn ? "Uploading..." : "A carregar...") : (cvFileName ? `✔️ ${cvFileName.substring(0, 15)}...` : (isEn ? "Upload Resume" : "Carregar Currículo"))}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="sm:col-span-2">
-                <label className={labelClass}>{isEn ? "Full Name" : "Nome Completo"}</label>
-                <input type="text" required className={inputClass} value={formData.nome_completo} onChange={e => setFormData({...formData, nome_completo: e.target.value})} placeholder="Ex: João Silva Martins" />
+                <label className={labelClass}>
+                  {isEn ? "Full Name *" : "Nome Completo *"}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.nome_completo}
+                  onChange={(e) =>
+                    setFormData({ ...formData, nome_completo: e.target.value })
+                  }
+                  className={inputClass}
+                />
               </div>
+
               <div>
-                <label className={labelClass}>{isEn ? "Date of Birth" : "Data de Nascimento"}</label>
-                <input type="date" required className={inputClass} value={formData.data_nascimento} onChange={e => setFormData({...formData, data_nascimento: e.target.value})} />
+                <label className={labelClass}>
+                  {isEn ? "Date of Birth *" : "Data de Nascimento *"}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.data_nascimento}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      data_nascimento: e.target.value,
+                    })
+                  }
+                  className={inputClass}
+                />
               </div>
+
               <div>
-                <label className={labelClass}>{isEn ? "Phone Number" : "Contacto Telefónico"}</label>
-                <input type="tel" required className={inputClass} value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} placeholder="Ex: 912 345 678" />
+                <label className={labelClass}>
+                  {isEn ? "Phone *" : "Telemóvel *"}
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={formData.telefone}
+                  onChange={(e) =>
+                    setFormData({ ...formData, telefone: e.target.value })
+                  }
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>E-mail (Login) *</label>
+                <input
+                  type="email"
+                  required
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  {isEn ? "Password *" : "Palavra-Passe *"}
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className={inputClass}
+                />
               </div>
             </div>
           </div>
 
-          {/* SECÇÃO 2: LOCALIZAÇÃO & ATUAÇÃO */}
-          <div>
-            <h3 className="text-xl md:text-2xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6 tracking-tight">
-              {isEn ? "2. Location & Work Areas" : "2. Zonas de Atuação"}
-            </h3>
-            
-            <div className="mb-6 relative">
-              <label className={labelClass}>{isEn ? "Where do you currently live?" : "Onde reside atualmente?"}</label>
-              <select required className={selectClass} value={formData.distrito_residencia} onChange={e => setFormData({...formData, distrito_residencia: e.target.value})}>
-                <option value="">{isEn ? "Select..." : "Selecionar o seu distrito..."}</option>
-                {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
+          {/* 2. ZONAS DE ATUAÇÃO (COM DROPDOWN CUSTOMIZADO) */}
+          <div className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
+            <h2 className="text-lg font-black text-slate-900 m-0 pb-4 border-b border-slate-100">
+              2. {isEn ? "Location & Work Zones" : "Residência e Zonas de Atuação"}
+            </h2>
 
-            <div className="p-6 md:p-8 bg-slate-50 border border-slate-200 rounded-2xl shadow-sm">
-              <label className={labelClass}>{isEn ? "Where are you willing to work?" : "Em que zonas está disponível para trabalhar?"}</label>
-              <p className="text-xs text-slate-500 font-medium mb-6 leading-relaxed max-w-2xl">{isEn ? "You can select multiple zones, including 'Nationwide if accommodation is provided'." : "Pode selecionar múltiplas opções. Muitos campos de férias fora da sua área de residência oferecem dormida e alimentação gratuitas a monitores."}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-                {opcoesAtuacao.map(zona => (
-                  <label key={zona} className={`flex items-center gap-3 p-4 bg-white border-2 rounded-xl cursor-pointer transition-all select-none ${areasAtuacao.includes(zona) ? 'border-[#2563eb] bg-blue-50/30 shadow-sm' : 'border-slate-200 hover:border-[#2563eb]/50'}`}>
-                    <input type="checkbox" checked={areasAtuacao.includes(zona)} onChange={() => handleCheckboxChange(zona, "zona")} className="w-5 h-5 accent-[#2563eb] cursor-pointer flex-shrink-0" />
-                    <span className="text-xs font-bold text-slate-700 leading-tight">{zona}</span>
-                  </label>
-                ))}
+            <div className="relative">
+              <label className={labelClass}>
+                {isEn ? "District of Residence *" : "Distrito de Residência *"}
+              </label>
+              <div
+                onClick={() =>
+                  setOpenDropdown(
+                    openDropdown === "distrito" ? null : "distrito"
+                  )
+                }
+                className={`${inputClass} cursor-pointer flex justify-between items-center`}
+              >
+                <span>{formData.distrito_residencia}</span>
+                <span className="text-[10px] text-slate-400">▼</span>
               </div>
-            </div>
-          </div>
-
-          {/* SECÇÃO 3: EXPERIÊNCIA E COMPETÊNCIAS */}
-          <div>
-            <h3 className="text-xl md:text-2xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6 tracking-tight">
-              {isEn ? "3. Experience & Skills" : "3. Experiência e Competências"}
-            </h3>
-            
-            <div className="mb-8 relative max-w-md">
-              <label className={labelClass}>{isEn ? "Years of Experience" : "Anos de Experiência na Área"}</label>
-              <select className={selectClass} value={formData.experiencia_anos} onChange={e => setFormData({...formData, experiencia_anos: e.target.value})}>
-                <option value="0">{isEn ? "First Time / No experience" : "Nenhuma / Primeira vez"}</option>
-                <option value="1-2">1-2 {isEn ? "years" : "anos"}</option>
-                <option value="3-5">3-5 {isEn ? "years" : "anos"}</option>
-                <option value="+5">+5 {isEn ? "years" : "anos"}</option>
-              </select>
-            </div>
-
-            <div className="mb-8">
-              <label className={labelClass}>{isEn ? "Certificates & Core Skills" : "Certificações e Habilidades Base"}</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mt-3">
-                {listaCertificados.map(c => (
-                  <label key={c.id} className={`flex items-center gap-3 p-4 bg-white border-2 rounded-xl cursor-pointer transition-all select-none ${certificacoes.includes(c.id) ? 'border-[#2563eb] bg-blue-50/30 shadow-sm' : 'border-slate-200 hover:border-[#2563eb]/50 hover:bg-slate-50'}`}>
-                    <input type="checkbox" checked={certificacoes.includes(c.id)} onChange={() => handleCheckboxChange(c.id, "cert")} className="w-5 h-5 accent-[#2563eb] cursor-pointer flex-shrink-0" />
-                    <span className="text-xs font-bold text-slate-700">{isEn ? c.en : c.pt}</span>
-                  </label>
-                ))}
-              </div>
+              {openDropdown === "distrito" && (
+                <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto">
+                  {DISTRITOS_PT.map((d) => (
+                    <div
+                      key={d}
+                      onClick={() => {
+                        setFormData({ ...formData, distrito_residencia: d });
+                        setOpenDropdown(null);
+                      }}
+                      className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer"
+                    >
+                      {d}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
-              <label className={labelClass}>{isEn ? "Other relevant skills (Optional)" : "Outras Competências / Talentos (Opcional)"}</label>
-              <input type="text" className={inputClass} value={formData.outras_competencias} onChange={e => setFormData({...formData, outras_competencias: e.target.value})} placeholder={isEn ? "E.g. Yoga instructor, DJ, Photography..." : "Ex: Toco viola, Instrutor de Yoga, Dança, Fotografia, Programação..."} />
+              <label className={labelClass}>
+                {isEn
+                  ? "Where are you available to work? *"
+                  : "Em que distritos estás disponível para trabalhar? *"}
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-2">
+                {opcoesAtuacao.map((zona) => (
+                  <label
+                    key={zona}
+                    className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-xs font-bold ${
+                      areasAtuacao.includes(zona)
+                        ? "border-[#2563eb] bg-blue-50 text-[#2563eb]"
+                        : "border-slate-200 bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={areasAtuacao.includes(zona)}
+                      onChange={() => handleCheckboxChange(zona, "zona")}
+                      className="accent-[#2563eb]"
+                    />
+                    <span className="truncate">{zona}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* SECÇÃO 4: DISPONIBILIDADE E PITCH */}
-          <div>
-            <h3 className="text-xl md:text-2xl font-black text-slate-900 border-b border-slate-100 pb-3 mb-6 tracking-tight">
-              {isEn ? "4. Availability & Pitch" : "4. Disponibilidade e Apresentação"}
-            </h3>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-10 mb-10">
+          {/* 3. EXPERIÊNCIA, CERTIFICAÇÕES E CALENDÁRIO */}
+          <div className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
+            <h2 className="text-lg font-black text-slate-900 m-0 pb-4 border-b border-slate-100">
+              3.{" "}
+              {isEn
+                ? "Experience, Certificates & Calendar"
+                : "Experiência, Certificações e Calendário"}
+            </h2>
+
+            <div className="relative">
+              <label className={labelClass}>
+                {isEn ? "Years of Experience" : "Anos de Experiência"}
+              </label>
+              <div
+                onClick={() =>
+                  setOpenDropdown(openDropdown === "exp" ? null : "exp")
+                }
+                className={`${inputClass} cursor-pointer flex justify-between items-center`}
+              >
+                <span>
+                  {
+                    opcoesExp.find((o) => o.val === formData.experiencia_anos)
+                      ?.label
+                  }
+                </span>
+                <span className="text-[10px] text-slate-400">▼</span>
+              </div>
+              {openDropdown === "exp" && (
+                <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                  {opcoesExp.map((op) => (
+                    <div
+                      key={op.val}
+                      onClick={() => {
+                        setFormData({ ...formData, experiencia_anos: op.val });
+                        setOpenDropdown(null);
+                      }}
+                      className="p-3.5 text-xs font-bold hover:bg-blue-50 cursor-pointer"
+                    >
+                      {op.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className={labelClass}>
+                {isEn ? "Certifications" : "Certificações"}
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                {LISTA_CERTIFICADOS.map((c) => (
+                  <label
+                    key={c.id}
+                    className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer text-xs font-bold ${
+                      certificacoes.includes(c.id)
+                        ? "border-[#2563eb] bg-blue-50 text-[#2563eb]"
+                        : "border-slate-200 bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={certificacoes.includes(c.id)}
+                      onChange={() => handleCheckboxChange(c.id, "cert")}
+                      className="accent-[#2563eb]"
+                    />
+                    <span>{isEn ? c.en : c.pt}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
               <div>
-                <label className={labelClass}>{isEn ? "General Availability" : "Disponibilidade Sazonal Geral"}</label>
-                <p className="text-xs text-slate-500 font-medium mb-4">{isEn ? "Select the school holidays you are usually free." : "Selecione as interrupções letivas principais onde tem interesse e disponibilidade para trabalhar."}</p>
-                <div className="flex flex-col gap-3">
-                  {listaEpocas.map(e => (
-                    <label key={e.id} className={`flex items-center gap-4 p-4 bg-white border-2 rounded-xl cursor-pointer transition-colors select-none ${disponibilidadeEpocas.includes(e.id) ? 'border-[#2563eb] bg-blue-50/30' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <input type="checkbox" checked={disponibilidadeEpocas.includes(e.id)} onChange={() => handleCheckboxChange(e.id, "disp")} className="w-5 h-5 accent-[#2563eb] cursor-pointer flex-shrink-0" />
-                      <span className="text-sm font-bold text-slate-800">{isEn ? e.en : e.pt}</span>
+                <label className={labelClass}>
+                  {isEn ? "Holiday Availability" : "Épocas de Férias"}
+                </label>
+                <div className="space-y-2.5">
+                  {LISTA_EPOCAS.map((ep) => (
+                    <label
+                      key={ep.id}
+                      className="flex items-center gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer text-xs font-bold"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={disponibilidadeEpocas.includes(ep.id)}
+                        onChange={() => handleCheckboxChange(ep.id, "disp")}
+                        className="accent-[#2563eb]"
+                      />
+                      <span>{isEn ? ep.en : ep.pt}</span>
                     </label>
                   ))}
                 </div>
+
+                <div className="mt-6">
+                  <label className={labelClass}>
+                    {isEn ? "Short Bio / Pitch *" : "Apresentação / Bio *"}
+                  </label>
+                  <textarea
+                    rows={4}
+                    required
+                    value={formData.bio}
+                    onChange={(e) =>
+                      setFormData({ ...formData, bio: e.target.value })
+                    }
+                    placeholder="Fala sobre a tua motivação e experiência com crianças e jovens..."
+                    className={`${inputClass} resize-none`}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className={labelClass}>{isEn ? "Specific Calendar" : "Calendário Específico Diário (Opcional mas recomendado)"}</label>
-                <p className="text-xs text-slate-500 font-medium mb-4 leading-relaxed">{isEn ? "Click days to mark: Green (Available) or Red (Busy)." : "Clique nos dias para definir a sua agenda: 1x Livre (Verde), 2x Ocupado (Vermelho). Atualize sempre que necessário."}</p>
-                
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm select-none">
-                  <div className="flex justify-between items-center mb-5 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                    <button type="button" onClick={() => mudarMes(-1)} className="p-2 w-10 h-10 flex items-center justify-center rounded-lg text-slate-600 font-bold hover:bg-white hover:text-[#2563eb] transition-colors shadow-sm">&larr;</button>
-                    <span className="text-xs font-black text-slate-800 uppercase tracking-widest">
-                      {mesesNomes[dataVisualizada.getMonth()]} {dataVisualizada.getFullYear()}
+              {/* Calendário Interativo */}
+              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                <div className="flex justify-between items-center mb-4">
+                  <button
+                    type="button"
+                    onClick={() => mudarMes(-1)}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 font-black cursor-pointer"
+                  >
+                    &larr;
+                  </button>
+                  <span className="text-xs font-black uppercase tracking-widest">
+                    {mesesNomes[dataVisualizada.getMonth()]}{" "}
+                    {dataVisualizada.getFullYear()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => mudarMes(1)}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 font-black cursor-pointer"
+                  >
+                    &rarr;
+                  </button>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                  {diasDaSemana.map((d) => (
+                    <span
+                      key={d}
+                      className="text-[10px] font-black text-slate-400"
+                    >
+                      {d}
                     </span>
-                    <button type="button" onClick={() => mudarMes(1)} className="p-2 w-10 h-10 flex items-center justify-center rounded-lg text-slate-600 font-bold hover:bg-white hover:text-[#2563eb] transition-colors shadow-sm">&rarr;</button>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 md:gap-1.5 mb-2 text-center">
-                    {diasDaSemana.map(d => <span key={d} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{d}</span>)}
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 md:gap-1.5">
-                    {renderDiasCalendario()}
-                  </div>
-                  <div className="mt-5 pt-4 border-t border-slate-100 flex gap-4 justify-center text-[10px] font-black uppercase tracking-widest text-slate-500">
-                     <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-100 border-2 border-emerald-500 inline-block"></span> Livre</span>
-                     <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-100 border-2 border-red-500 inline-block"></span> Ocupado</span>
-                  </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {renderDiasCalendario()}
                 </div>
               </div>
             </div>
-
-            <div>
-              <label className={labelClass}>{isEn ? "Short Bio / Pitch" : "A sua Bio / Carta de Apresentação"}</label>
-              <p className="text-xs text-slate-500 font-medium mb-3">{isEn ? "Write a short paragraph about why you're a great fit." : "O que é que as empresas vão ler sobre si? Quais são os seus pontos fortes e dinâmicas que gosta de organizar com as crianças?"}</p>
-              <textarea rows={5} required className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-[#2563eb] focus:ring-4 focus:ring-blue-50 transition-all shadow-sm resize-none" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} placeholder={isEn ? "Hi! I'm energetic and love working with kids..." : "Sou um monitor super dinâmico, adoro desporto e tenho muita facilidade em cativar e liderar grupos grandes..."} />
-            </div>
           </div>
 
-          {/* SECÇÃO FINAL: DADOS DE ACESSO */}
-          <div className="pt-10 border-t-2 border-slate-100">
-            <h3 className="text-xl md:text-2xl font-black text-slate-900 pb-3 mb-6 tracking-tight">
-              {isEn ? "5. Access Credentials" : "5. Dados de Acesso ao Portal"}
-            </h3>
-            <p className="text-sm text-slate-500 font-medium mb-8 max-w-2xl">
-              {isEn ? "Define the email and password you'll use to log in to your Monitor Portal." : "Defina o e-mail e palavra-passe que vai utilizar para aceder à sua conta de Monitor, responder a mensagens e aceitar trabalhos."}
-            </p>
+          <div className="bg-white p-6 rounded-2xl border border-slate-200">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                required
+                checked={termosAceites}
+                onChange={(e) => setTermosAceites(e.target.checked)}
+                className="mt-1 w-5 h-5 accent-[#2563eb]"
+              />
+              <span className="text-xs font-bold text-slate-600">
+                Li e aceito os{" "}
+                <Link
+                  href={`/${lang}/monitores/termos`}
+                  target="_blank"
+                  className="text-[#2563eb] underline"
+                >
+                  Termos de Utilização da Bolsa de Monitores
+                </Link>{" "}
+                e autorizo a partilha do meu perfil com organizadores verificados.
+              </span>
+            </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
-              <div>
-                <label className={labelClass}>{isEn ? "Login Email" : "E-mail de Login"}</label>
-                <input type="email" required className={inputClass} value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="O seu e-mail de acesso" />
-              </div>
-              <div>
-                <label className={labelClass}>{isEn ? "Password" : "Palavra-Passe"}</label>
-                <input type="password" required minLength={6} className={inputClass} value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
-              </div>
-            </div>
-
-            <div className="bg-slate-50 p-6 md:p-8 rounded-2xl border border-slate-200 mb-8 shadow-inner">
-              <label className="flex items-start gap-4 cursor-pointer group">
-                <input 
-                  type="checkbox" 
-                  required
-                  checked={termosAceites}
-                  onChange={(e) => setTermosAceites(e.target.checked)}
-                  className="mt-1 w-6 h-6 accent-[#2563eb] cursor-pointer flex-shrink-0"
-                />
-                <span className="text-xs md:text-sm font-bold text-slate-600 leading-relaxed group-hover:text-slate-900 transition-colors">
-                  {isEn ? (
-                    <>I declare that the information provided is completely true. I also acknowledge that I have read and agree to the <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-[#2563eb] font-black hover:underline">Terms & Conditions</Link> regarding the use of this portal, including data sharing consent.</>
-                  ) : (
-                    <>Declaro sob compromisso de honra que as informações fornecidas são verdadeiras. Tomei conhecimento e aceito os <Link href={`/${lang}/monitores/termos`} target="_blank" className="text-[#2563eb] font-black hover:underline">Termos e Condições</Link> da plataforma, autorizando expressamente a partilha do meu perfil, CV e contactos com as entidades organizadoras para fins de recrutamento.</>
-                  )}
-                </span>
-              </label>
-            </div>
-
-            <div className="flex justify-end">
-              <button 
-                type="submit" 
-                disabled={submitting || !termosAceites} 
-                className="w-full sm:w-auto bg-[#2563eb] text-white font-black uppercase tracking-widest text-sm px-12 py-5 rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:-translate-y-1 transition-all disabled:opacity-50 disabled:transform-none cursor-pointer"
-              >
-                {submitting ? (isEn ? "Creating Account..." : "A Criar Perfil...") : (isEn ? "Create Profile" : "Publicar o meu Perfil na Bolsa")}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full mt-6 py-4 bg-[#2563eb] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-xs rounded-xl shadow-lg cursor-pointer"
+            >
+              {submitting
+                ? "..."
+                : isEn
+                ? "Create Monitor Account"
+                : "Concluir Registo de Monitor"}
+            </button>
           </div>
-
         </form>
       </div>
-    </div>
+    </main>
   );
 }

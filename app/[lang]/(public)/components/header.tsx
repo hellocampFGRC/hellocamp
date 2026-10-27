@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import AuthButton from "./AuthButton";
 import LanguageSwitcher from "./LanguageSwitcher";
 
@@ -14,6 +14,8 @@ interface HeaderProps {
 export default function Header({ dict, lang }: HeaderProps) {
   const isEn = lang === "en";
   const router = useRouter();
+  const pathname = usePathname();
+
   const [menuAberto, setMenuAberto] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [termoPesquisa, setTermoPesquisa] = useState("");
@@ -38,68 +40,103 @@ export default function Header({ dict, lang }: HeaderProps) {
     setSearchOpen(false);
     setMenuAberto(false);
     if (termoPesquisa.trim()) {
-      router.push(`/${lang}/pesquisa?q=${encodeURIComponent(termoPesquisa.trim())}`);
+      router.push(
+        `/${lang}/pesquisa?q=${encodeURIComponent(termoPesquisa.trim())}`
+      );
     } else {
       router.push(`/${lang}/pesquisa`);
     }
   };
 
+  const navLinks = [
+    {
+      href: `/${lang}/pesquisa`,
+      label: isEn ? "Explore Camps" : "Explorar Campos",
+      active: pathname.includes("/pesquisa"),
+    },
+    {
+      href: `/${lang}/institucional`,
+      label: isEn ? "Municipalities" : "Autarquias",
+      active: pathname.includes("/institucional"),
+    },
+    {
+      href: `/${lang}/monitores`,
+      label: isEn ? "Monitors" : "Monitores",
+      active: pathname.includes("/monitores"),
+    },
+    {
+      href: `/${lang}/guia-pais`,
+      label: isEn ? "Parents Guide" : "Guia de Pais",
+      active: pathname.includes("/guia-pais"),
+    },
+    {
+      href: `/${lang}/blog`,
+      label: "Blog",
+      active: pathname.includes("/blog"),
+    },
+  ];
+
   return (
     <>
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 font-sans">
-        <div className="max-w-[1280px] mx-auto px-4 md:px-8 h-16 md:h-20 flex items-center justify-between gap-4">
-          
-          {/* ESQUERDA: LOGO + NAVEGAÇÃO DESKTOP */}
-          <div className="flex items-center gap-8">
-            <Link href={`/${lang}`} className="text-2xl font-black tracking-tight flex items-center no-underline">
-              <span className="text-[#0E3A68]">Hello</span>
-              <span className="text-[#e2a41d]">Camp</span>
-            </Link>
+      <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 font-sans">
+        <div className="max-w-[1280px] mx-auto px-4 md:px-8 h-16 md:h-[74px] flex items-center justify-between gap-4">
+          {/* ESQUERDA: LOGÓTIPO */}
+          <Link
+            href={`/${lang}`}
+            className="text-2xl font-black tracking-tight flex items-center no-underline flex-shrink-0"
+          >
+            <span className="text-[#0E3A68]">Hello</span>
+            <span className="text-[#e2a41d]">Camp</span>
+          </Link>
 
-            <nav className="hidden lg:flex items-center gap-6 text-sm font-bold text-slate-600">
-              <Link href={`/${lang}/pesquisa`} className="hover:text-[#0E3A68] transition-colors no-underline">
-                {isEn ? "Explore Camps" : "Explorar Campos"}
+          {/* CENTRO: NAVEGAÇÃO DESKTOP (SEMPRE EM LINHA ÚNICA, SEM QUEBRAS) */}
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
+            {navLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`px-3.5 py-2 rounded-xl text-[13px] font-bold whitespace-nowrap no-underline transition-colors ${
+                  item.active
+                    ? "text-[#0E3A68] bg-slate-100 font-black"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                }`}
+              >
+                {item.label}
               </Link>
-              <Link href={`/${lang}/mapa`} className="hover:text-[#0E3A68] transition-colors no-underline flex items-center gap-1.5">
-                <span>🗺️</span> {isEn ? "Interactive Map" : "Mapa"}
-              </Link>
-              <Link href={`/${lang}/institucional`} className="hover:text-[#0E3A68] transition-colors no-underline">
-                {isEn ? "Municipalities & Schools" : "Câmaras e Juntas"}
-              </Link>
-              <Link href={`/${lang}/monitores`} className="hover:text-[#2563eb] transition-colors no-underline">
-                {isEn ? "Staff Portal" : "Bolsa de Monitores"}
-              </Link>
-              <Link href={`/${lang}/guia-pais`} className="hover:text-[#0E3A68] transition-colors no-underline">
-                {isEn ? "Parents Guide" : "Guia de Pais"}
-              </Link>
-              <Link href={`/${lang}/blog`} className="hover:text-[#0E3A68] transition-colors no-underline">
-                Blog
-              </Link>
-            </nav>
-          </div>
+            ))}
+          </nav>
 
-          {/* DIREITA: PESQUISA RÁPIDA + PARCEIROS + IDIOMA + AUTH */}
-          <div className="flex items-center gap-3 md:gap-4">
+          {/* DIREITA: PESQUISA + PARCEIROS + IDIOMA + CONTA */}
+          <div className="flex items-center gap-2.5 md:gap-3.5 flex-shrink-0">
+            {/* Botão Lupa Minimalista */}
             <button
+              type="button"
               onClick={() => setSearchOpen(true)}
-              className="hidden sm:flex items-center gap-2 bg-slate-100 hover:bg-slate-200/80 text-slate-500 px-3.5 py-2 rounded-full text-xs font-bold transition-colors border border-slate-200 cursor-pointer"
+              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200/80 text-slate-600 flex items-center justify-center transition-colors border border-slate-200/80 cursor-pointer"
               title={isEn ? "Quick Search (⌘K)" : "Pesquisa Rápida (⌘K)"}
+              aria-label="Pesquisar"
             >
-              <svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-              <span className="hidden xl:inline">{isEn ? "Search..." : "Pesquisar..."}</span>
-              <kbd className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-400 font-sans">⌘K</kbd>
             </button>
 
-            {/* LINK PARCEIROS DESKTOP (Singular /parceiro) */}
+            {/* Botão Parceiros B2B */}
             <Link
               href={`/${lang}/parceiro`}
-              className="hidden md:inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-[#167524] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3.5 py-2 rounded-full transition-colors no-underline"
+              className="hidden md:inline-flex items-center text-[11px] font-black uppercase tracking-wider text-[#167524] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3.5 py-2 rounded-full transition-colors no-underline whitespace-nowrap"
             >
-              {isEn ? "For Organizers" : "Parceiros"}
+              {isEn ? "Partners" : "Parceiros"}
             </Link>
+
+            <div className="hidden sm:block h-4 w-px bg-slate-200" />
 
             <div className="hidden sm:block">
               <LanguageSwitcher lang={lang} />
@@ -107,19 +144,40 @@ export default function Header({ dict, lang }: HeaderProps) {
 
             <AuthButton dict={dict} lang={lang} />
 
-            {/* BOTÃO HAMBURGER MOBILE */}
+            {/* Botão Menu Mobile */}
             <button
+              type="button"
               onClick={() => setMenuAberto(!menuAberto)}
               className="lg:hidden p-2 rounded-xl text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               aria-label="Menu"
             >
               {menuAberto ? (
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth="2.5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               ) : (
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth="2.5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
                 </svg>
               )}
             </button>
@@ -128,70 +186,44 @@ export default function Header({ dict, lang }: HeaderProps) {
 
         {/* DRAWER MENU MOBILE */}
         {menuAberto && (
-          <div className="lg:hidden bg-white border-t border-slate-200 px-6 py-6 shadow-xl flex flex-col gap-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="lg:hidden bg-white border-t border-slate-200 px-6 py-6 shadow-xl flex flex-col gap-3">
             <form onSubmit={handleQuickSearch} className="relative w-full mb-2">
               <input
                 type="text"
                 value={termoPesquisa}
                 onChange={(e) => setTermoPesquisa(e.target.value)}
-                placeholder={isEn ? "Search camps, sports, cities..." : "Pesquisar campos, desportos, locais..."}
+                placeholder={
+                  isEn
+                    ? "Search camps, sports, cities..."
+                    : "Pesquisar campos, desportos, locais..."
+                }
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-[#0E3A68]"
               />
-              <button type="submit" className="absolute right-3 top-2.5 text-slate-400 hover:text-[#0E3A68]">
+              <button
+                type="submit"
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-[#0E3A68] bg-transparent border-0 cursor-pointer"
+              >
                 🔍
               </button>
             </form>
 
-            <Link
-              href={`/${lang}/pesquisa`}
-              onClick={() => setMenuAberto(false)}
-              className="text-base font-black text-slate-800 py-2 border-b border-slate-100 no-underline"
-            >
-              🏕️ {isEn ? "Explore All Camps" : "Explorar Campos"}
-            </Link>
-            <Link
-              href={`/${lang}/mapa`}
-              onClick={() => setMenuAberto(false)}
-              className="text-base font-black text-slate-800 py-2 border-b border-slate-100 no-underline"
-            >
-              🗺️ {isEn ? "Interactive Map" : "Mapa Interativo"}
-            </Link>
-            <Link
-              href={`/${lang}/institucional`}
-              onClick={() => setMenuAberto(false)}
-              className="text-base font-black text-slate-800 py-2 border-b border-slate-100 no-underline"
-            >
-              🏛️ {isEn ? "Municipalities & Schools" : "Câmaras e Juntas"}
-            </Link>
-            <Link
-              href={`/${lang}/monitores`}
-              onClick={() => setMenuAberto(false)}
-              className="text-base font-black text-[#2563eb] py-2 border-b border-slate-100 no-underline"
-            >
-              🎒 {isEn ? "Staff & Monitors Portal" : "Bolsa de Monitores"}
-            </Link>
-            <Link
-              href={`/${lang}/guia-pais`}
-              onClick={() => setMenuAberto(false)}
-              className="text-base font-black text-slate-800 py-2 border-b border-slate-100 no-underline"
-            >
-              👨‍👩‍👧 {isEn ? "Parents Guide" : "Guia de Pais"}
-            </Link>
-            <Link
-              href={`/${lang}/blog`}
-              onClick={() => setMenuAberto(false)}
-              className="text-base font-black text-slate-800 py-2 border-b border-slate-100 no-underline"
-            >
-              📰 Blog
-            </Link>
+            {navLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMenuAberto(false)}
+                className="text-sm font-black text-slate-800 py-2.5 border-b border-slate-100 no-underline"
+              >
+                {item.label}
+              </Link>
+            ))}
 
-            {/* CORRIGIDO: Aponta para /${lang}/parceiro em vez de /${lang}/ser-parceiro (que dava 404) */}
             <Link
               href={`/${lang}/parceiro`}
               onClick={() => setMenuAberto(false)}
               className="mt-2 w-full text-center bg-[#167524] text-white font-black uppercase tracking-widest text-xs py-3.5 rounded-xl no-underline shadow-md"
             >
-              {isEn ? "Become a Partner (B2B)" : "Ser Parceiro Organizador"}
+              {isEn ? "For Organizers (B2B)" : "Área de Parceiros (B2B)"}
             </Link>
 
             <div className="pt-4 flex items-center justify-between border-t border-slate-100">
@@ -211,7 +243,7 @@ export default function Header({ dict, lang }: HeaderProps) {
           onClick={() => setSearchOpen(false)}
         >
           <div
-            className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 p-6 animate-in zoom-in-95 duration-150"
+            className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -219,8 +251,9 @@ export default function Header({ dict, lang }: HeaderProps) {
                 {isEn ? "Quick Search" : "Pesquisa Rápida"}
               </span>
               <button
+                type="button"
                 onClick={() => setSearchOpen(false)}
-                className="text-xs font-bold text-slate-400 hover:text-slate-700 cursor-pointer"
+                className="text-xs font-bold text-slate-400 hover:text-slate-700 cursor-pointer bg-transparent border-0"
               >
                 ESC ✕
               </button>
@@ -231,37 +264,20 @@ export default function Header({ dict, lang }: HeaderProps) {
                 autoFocus
                 value={termoPesquisa}
                 onChange={(e) => setTermoPesquisa(e.target.value)}
-                placeholder={isEn ? "Type a sport, city, or camp name..." : "Escreva um desporto, cidade ou nome do campo..."}
+                placeholder={
+                  isEn
+                    ? "Type a sport, city, or camp name..."
+                    : "Escreva um desporto, cidade ou nome do campo..."
+                }
                 className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-base font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white"
               />
               <button
                 type="submit"
                 className="bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black uppercase tracking-widest text-xs px-6 py-3.5 rounded-xl transition-colors cursor-pointer"
               >
-                {isEn ? "Go" : "Ir"}
+                {isEn ? "Search" : "Ir"}
               </button>
             </form>
-            <div className="mt-5 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest w-full mb-1">
-                {isEn ? "Popular Searches:" : "Pesquisas Populares:"}
-              </span>
-              {[
-                { label: "Surf", url: `/${lang}/pesquisa?q=Surf` },
-                { label: isEn ? "Sports" : "Desporto", url: `/${lang}/pesquisa?categoria=Desporto` },
-                { label: "Lisboa", url: `/${lang}/distrito/Lisboa` },
-                { label: "Porto", url: `/${lang}/distrito/Porto` },
-                { label: isEn ? "Languages" : "Línguas", url: `/${lang}/pesquisa?categoria=${encodeURIComponent("Línguas")}` },
-              ].map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.url}
-                  onClick={() => setSearchOpen(false)}
-                  className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-[#0E3A68] hover:text-white px-3 py-1.5 rounded-lg transition-colors no-underline"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
           </div>
         </div>
       )}

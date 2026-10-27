@@ -24,7 +24,7 @@ export default function CheckoutPage({
   const [isGuest, setIsGuest] = useState(true);
   const [processingState, setProcessingState] = useState(false);
 
-  // Estados de Formulário
+  // Estados do Formulário de Encarregado e Participantes
   const [guestData, setGuestData] = useState({
     nome: "",
     email: "",
@@ -41,7 +41,7 @@ export default function CheckoutPage({
   // Dropdowns Customizados (Zero <select> nativos)
   const [openDropdownKey, setOpenDropdownKey] = useState<string | null>(null);
 
-  // Modal Novo Participante no Checkout
+  // Modal de Adicionar Novo Participante
   const [showModal, setShowModal] = useState(false);
   const [savingChild, setSavingChild] = useState(false);
   const [indexToAssign, setIndexToAssign] = useState(0);
@@ -54,18 +54,26 @@ export default function CheckoutPage({
     doencas_cronicas: "",
   });
 
-  // Parâmetros do URL
+  // Parâmetros vindos da CaixaReserva via URL
   const quantidade = Math.max(
     1,
     parseInt(searchParams.get("quantidade_criancas") || "1", 10)
   );
   const extSeguro = searchParams.get("ext_seguro") === "true";
   const extTransporte = searchParams.get("ext_transporte") === "true";
+  const descontoUrlValor = Number(searchParams.get("desconto_valor")) || 0;
+  const descontoUrlNome = searchParams.get("desconto_nome") || "";
 
   let turnoSelecionado: any = null;
   try {
     const rawTurno = searchParams.get("turno");
     if (rawTurno) turnoSelecionado = JSON.parse(rawTurno);
+  } catch {}
+
+  let alojamentoSelecionadoUrl: any = null;
+  try {
+    const rawAloj = searchParams.get("alojamento");
+    if (rawAloj) alojamentoSelecionadoUrl = JSON.parse(rawAloj);
   } catch {}
 
   let opcoesParticipantesUrl: Record<number, Record<string, string>> = {};
@@ -119,7 +127,8 @@ export default function CheckoutPage({
             supabase
               .from("criancas")
               .select("*")
-              .eq("cliente_id", session.user.id),
+              .eq("cliente_id", session.user.id)
+              .order("created_at", { ascending: false }),
             supabase
               .from("reservas")
               .select("crianca_id, turno_nome, status_pagamento")
@@ -254,12 +263,16 @@ export default function CheckoutPage({
     (p: string) => p.startsWith("TEXTO|") || !p.startsWith("ESCOLHA|")
   );
 
-  // Cálculos Financeiros
+  // =========================================================================
+  // CÁLCULOS FINANCEIROS COMPLETOS (PROGRAMA + ALOJAMENTO + TAXAS - DESCONTO)
+  // =========================================================================
   const multiplicador = Number(turnoSelecionado?.multiplicador) || 1;
   const totalDiasExtras = Number(turnoSelecionado?.quantidade) || 1;
   const precoBaseUnitario =
     (Number(turnoSelecionado?.preco) || Number(campo.preco) || 0) *
     multiplicador;
+
+  const custoAlojamentoUnit = Number(alojamentoSelecionadoUrl?.custoUnit) || 0;
 
   const custoSeguroUnit = extSeguro
     ? campo.tipo_extra_seguro === "diario"
@@ -273,8 +286,20 @@ export default function CheckoutPage({
       : Number(campo.extra_transporte || 0)
     : 0;
 
-  const precoFinalTotal =
-    (precoBaseUnitario + custoSeguroUnit + custoTransporteUnit) * quantidade;
+  const taxaMatriculaUnit = Number(campo.taxa_matricula) || 0;
+  const taxaMaterialUnit = Number(campo.taxa_material) || 0;
+
+  const precoFinalTotal = Math.max(
+    0,
+    (precoBaseUnitario +
+      custoAlojamentoUnit +
+      custoSeguroUnit +
+      custoTransporteUnit +
+      taxaMatriculaUnit +
+      taxaMaterialUnit) *
+      quantidade -
+      descontoUrlValor
+  );
 
   const isPagamentoFracionado = campo.tipo_pagamento === "50_sinal";
   const valorACobrarAgora = isPagamentoFracionado
@@ -322,7 +347,6 @@ export default function CheckoutPage({
 
     try {
       if (isExterna) {
-        // Grava a Lead diretamente e notifica o parceiro por e-mail
         await supabase.from("leads_externas").insert([
           {
             campo_id: campo.id,
@@ -376,8 +400,10 @@ export default function CheckoutPage({
             extras_escolhidos: {
               ext_seguro: extSeguro,
               ext_transporte: extTransporte,
+              extAlojamento: alojamentoSelecionadoUrl?.nome || null,
               dias_inscritos: totalDiasExtras,
               dias_soltos: turnoSelecionado?.dias_soltos || [],
+              data_inicio: turnoSelecionado?.data_inicio || null,
             },
             respostas_customizadas: respostasCustomizadas,
             opcoes_participantes_url: opcoesParticipantesUrl,
@@ -423,7 +449,7 @@ export default function CheckoutPage({
         </div>
       )}
 
-      {/* MODAL NOVO PARTICIPANTE */}
+      {/* MODAL ADICIONAR NOVO PARTICIPANTE */}
       {showModal && !isExterna && (
         <div
           className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -664,7 +690,6 @@ export default function CheckoutPage({
                           : `Participante ${participantNumber}`}
                       </label>
 
-                      {/* DROPDOWN CUSTOMIZADO DE SELEÇÃO DE CRIANÇA */}
                       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
                         <div className="relative flex-1">
                           <div
@@ -688,7 +713,7 @@ export default function CheckoutPage({
                             <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
                               {criancas.length === 0 ? (
                                 <div className="p-3.5 text-xs text-slate-400 font-bold">
-                                  Clique em "+ Novo" ao lado para adicionar.
+                                  Clique em &quot;+ Adicionar Novo&quot; ao lado.
                                 </div>
                               ) : (
                                 criancas.map((c) => {
@@ -936,11 +961,22 @@ export default function CheckoutPage({
                 </span>
               </div>
 
+              {custoAlojamentoUnit > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-500">
+                    🛏️ {alojamentoSelecionadoUrl?.nome || "Alojamento"}
+                  </span>
+                  <span className="font-black text-slate-900">
+                    +{(custoAlojamentoUnit * quantidade).toFixed(2)}€
+                  </span>
+                </div>
+              )}
+
               {extSeguro && (
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-slate-500">🛡️ Seguro</span>
                   <span className="font-black text-slate-900">
-                    {(custoSeguroUnit * quantidade).toFixed(2)}€
+                    +{(custoSeguroUnit * quantidade).toFixed(2)}€
                   </span>
                 </div>
               )}
@@ -951,8 +987,37 @@ export default function CheckoutPage({
                     🚌 Transporte
                   </span>
                   <span className="font-black text-slate-900">
-                    {(custoTransporteUnit * quantidade).toFixed(2)}€
+                    +{(custoTransporteUnit * quantidade).toFixed(2)}€
                   </span>
+                </div>
+              )}
+
+              {taxaMatriculaUnit > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-500">
+                    📝 Taxa Matrícula
+                  </span>
+                  <span className="font-black text-slate-900">
+                    +{(taxaMatriculaUnit * quantidade).toFixed(2)}€
+                  </span>
+                </div>
+              )}
+
+              {taxaMaterialUnit > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-500">
+                    🎒 Taxa Material
+                  </span>
+                  <span className="font-black text-slate-900">
+                    +{(taxaMaterialUnit * quantidade).toFixed(2)}€
+                  </span>
+                </div>
+              )}
+
+              {descontoUrlValor > 0 && (
+                <div className="flex justify-between items-center text-[#167524] font-black bg-emerald-50 p-2.5 rounded-xl">
+                  <span>✨ {descontoUrlNome || "Desconto"}</span>
+                  <span>-{descontoUrlValor.toFixed(2)}€</span>
                 </div>
               )}
             </div>
