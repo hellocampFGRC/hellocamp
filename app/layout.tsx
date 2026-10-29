@@ -1,20 +1,32 @@
-// app/layout.tsx
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css"; // O caminho para o teu CSS global
+import { Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "700", "900"],
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
-  title: "HelloCamp | Os Melhores Campos de Férias",
-  description: "Descubra e reserve os melhores campos de férias em Portugal e no estrangeiro para as suas crianças. Desporto, Aventura, Tecnologia, Artes e Línguas.",
+  title: "HelloCamp | Mais que um campo de férias",
+  description: "Explora, aprende e cresce num só lugar. Encontra os melhores campos de férias para as tuas crianças.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="pt" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
-      <body className="h-full antialiased">{children}</body>
+    <html lang="pt" className={inter.variable}>
+      <body className="min-h-screen flex flex-col bg-[#F8FAFC] text-[#0F172A] font-sans antialiased selection:bg-[#F59E0B]/20 selection:text-[#0F172A]">
+        {children}
+        <Analytics />
+        <SpeedInsights />
+      </body>
     </html>
   );
 }
