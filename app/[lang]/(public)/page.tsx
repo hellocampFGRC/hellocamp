@@ -135,7 +135,7 @@ export default async function HomePage({
         <div className="relative z-10 w-full max-w-6xl mx-auto px-4 md:px-6 flex flex-col items-center mt-8">
           
           <div className="text-center mb-10 md:mb-14 w-full">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-md text-xs font-black uppercase tracking-widest text-[#F59E0B] mb-6 backdrop-blur-md shadow-sm">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-md text-xs font-black uppercase tracking-widest text-amber-300 mb-6 backdrop-blur-md shadow-sm">
               <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] animate-pulse" />
               {isEn ? "More than a holiday camp" : "Mais que um campo de férias"}
             </div>
@@ -156,9 +156,10 @@ export default async function HomePage({
                   {isEn ? 'Find your next adventure' : 'Encontra a próxima aventura'}
                 </span>
                 
+                {/* BOTÃO DO MAPA INTERATIVO (Texto Branco em fundo Azul Vivo) */}
                 <Link 
                   href={`/${lang}/mapa`} 
-                  className="inline-flex items-center gap-2 bg-[#F8FAFC] text-[#2563EB] hover:bg-blue-50 px-4 py-2 rounded-md text-xs font-black no-underline transition-colors ml-auto shadow-sm border border-slate-200"
+                  className="inline-flex items-center gap-2 bg-[#2563EB] text-white hover:bg-blue-700 px-4 py-2 rounded-md text-xs font-black no-underline transition-colors ml-auto shadow-sm"
                 >
                   <span>🗺️</span> {isEn ? "Interactive Map" : "Ver no Mapa"}
                 </Link>
@@ -220,10 +221,11 @@ export default async function HomePage({
                 </div>
               </div>
 
+              {/* BOTÃO DE PESQUISA (Amarelo Solar com Texto Branco) */}
               <div className="flex justify-center mt-8 md:absolute md:-bottom-[4rem] md:left-1/2 md:-translate-x-1/2">
-                <button type="submit" className="group w-full md:w-64 bg-[#F59E0B] hover:bg-amber-500 rounded-md flex items-center justify-center gap-3 py-4 md:py-5 shadow-xl shadow-amber-500/30 transition-all hover:-translate-y-1 cursor-pointer border-0">
-                  <svg className="w-5 h-5 text-[#0F172A]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                  <span className="text-[#0F172A] text-xs font-black uppercase tracking-widest">{isEn ? "Search Camps" : "Pesquisar Campos"}</span>
+                <button type="submit" className="group w-full md:w-64 bg-[#F59E0B] hover:bg-amber-600 rounded-md flex items-center justify-center gap-3 py-4 md:py-5 shadow-xl shadow-amber-500/30 transition-all hover:-translate-y-1 cursor-pointer border-0">
+                  <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <span className="text-white text-xs font-black uppercase tracking-widest">{isEn ? "Search Camps" : "Pesquisar Campos"}</span>
                 </button>
               </div>
             </form>
@@ -303,6 +305,7 @@ export default async function HomePage({
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'Prices from' : 'Desde'}</p>
                           <p className="text-2xl font-black text-[#2563EB] m-0">{precoVisivel > 0 ? `${precoVisivel}€` : 'Sob Consulta'}</p>
                         </div>
+                        {/* BOTÃO DO CARTÃO (Texto Branco em fundo Preto/Azul Vivo) */}
                         <span className="bg-[#0F172A] group-hover:bg-[#2563EB] text-white px-5 py-2.5 rounded-md text-xs font-black uppercase tracking-widest transition-colors shadow-sm">
                           {isEn ? 'View Dates' : 'Ver Detalhes'}
                         </span>
@@ -371,7 +374,7 @@ export default async function HomePage({
                     />
                     <div className="absolute inset-0 flex flex-col justify-end p-8 bg-gradient-to-t from-black/80 via-black/20 to-transparent">
                       <h3 className="text-2xl font-black text-white tracking-tight">{nomePais}</h3>
-                      <p className="mt-1 text-sm font-bold text-[#F59E0B]">{isEn ? pais.desc_en : pais.desc}</p>
+                      <p className="mt-1 text-sm font-bold text-amber-300">{isEn ? pais.desc_en : pais.desc}</p>
                     </div>
                   </Link>
                 );
