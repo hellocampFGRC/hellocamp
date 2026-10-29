@@ -40,7 +40,7 @@ export default async function ParceiroLandingPage({
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-md text-xs font-black uppercase tracking-widest text-emerald-300 mb-8 backdrop-blur-md">
             <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A] animate-pulse" />
-            {isEn ? "HelloCamp B2B Network" : "Rede de Parceiros B2B"}[cite: 2]
+            {isEn ? "HelloCamp B2B Network" : "Rede de Parceiros B2B"}
           </div>
 
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight mb-6 leading-[1.1]">
@@ -66,7 +66,7 @@ export default async function ParceiroLandingPage({
               href={`/${lang}/login`}
               className="w-full sm:w-auto bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-sm px-10 py-5 rounded-md transition-all backdrop-blur-md no-underline"
             >
-              {isEn ? "Partner Login" : "Entrar no Portal"}[cite: 4]
+              {isEn ? "Partner Login" : "Entrar no Portal"}
             </Link>
           </div>
         </div>
