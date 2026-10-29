@@ -35,11 +35,25 @@ export default async function HomePage({
 
   const todayISO = new Date().toISOString().split("T")[0];
 
-  const { data: camposDeFerias } = await supabase
+  // 1. Buscar todos os campos ativos e aprovados para verificar quais distritos e países têm atividade real
+  const { data: todosCamposAtivos } = await supabase
     .from("campos")
-    .select("*")
-    .eq("ativo", true)
-    .limit(6);
+    .select("id, nome, categoria, categoria_en, Distrito, local, pais, pais_en, preco, imagem, pacotes, ativo, status_aprovacao")
+    .eq("ativo", true);
+
+  const camposValidos = todosCamposAtivos || [];
+
+  // 2. Extrair dinamicamente quais distritos e países têm campos ativos no momento
+  const distritosComCampos = new Set(
+    camposValidos.map((c: any) => (c.Distrito || c.local || "").toLowerCase().trim()).filter(Boolean)
+  );
+
+  const paisesComCampos = new Set(
+    camposValidos.map((c: any) => (c.pais || "portugal").toLowerCase().trim()).filter(Boolean)
+  );
+
+  // Filtrar apenas os 6 primeiros para o destaque principal
+  const camposDeFerias = camposValidos.slice(0, 6);
 
   const paisesOpcoes = [
     { valor: "Portugal", label: "Portugal" },
@@ -58,10 +72,10 @@ export default async function HomePage({
 
   const categoriasOpcoes = [
     { valor: "Desporto", label: isEn ? "Sports" : "Desporto" },
-    { valor: "Aventura %26 Natureza", label: isEn ? "Adventure & Nature" : "Aventura & Natureza" },
+    { valor: "Aventura & Natureza", label: isEn ? "Adventure & Nature" : "Aventura & Natureza" },
     { valor: "Surf", label: "Surf & Náutica" },
-    { valor: "Tecnologia %26 Ciência", label: isEn ? "Tech & Science" : "Tecnologia & Ciência" },
-    { valor: "Artes %26 Criatividade", label: isEn ? "Arts & Creativity" : "Artes & Criatividade" },
+    { valor: "Tecnologia & Ciência", label: isEn ? "Tech & Science" : "Tecnologia & Ciência" },
+    { valor: "Artes & Criatividade", label: isEn ? "Arts & Creativity" : "Artes & Criatividade" },
     { valor: "Línguas", label: isEn ? "Languages" : "Línguas" },
   ];
 
@@ -71,18 +85,30 @@ export default async function HomePage({
     { valor: "13-18", label: isEn ? "13 to 18 years" : "13 a 18 anos" },
   ];
 
-  const distritosAtivosCards = [
+  // Listas base de distritos/regiões
+  const todosDistritosCards = [
     { nome: "Lisboa", nome_en: "Lisbon", imagem: "https://images.unsplash.com/photo-1585208798174-6cedd86e019a?auto=format&fit=crop&q=80&w=1200" },
     { nome: "Porto", nome_en: "Porto", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=1200" },
     { nome: "Faro", nome_en: "Faro", imagem: "https://images.unsplash.com/photo-1533556019545-21d7b322a46c?auto=format&fit=crop&q=80&w=1200" },
     { nome: "Braga", nome_en: "Braga", imagem: "https://images.unsplash.com/photo-1563806229-37330eb02d33?auto=format&fit=crop&q=80&w=1200" },
   ];
 
-  const paisesAtivosCards = [
+  // Filtrar APENAS distritos que têm campos ativos neste momento
+  const distritosAtivosCards = todosDistritosCards.filter(d => 
+    distritosComCampos.has(d.nome.toLowerCase().trim())
+  );
+
+  // Listas base de países
+  const todosPaisesCards = [
     { nome: "Portugal", nome_en: "Portugal", imagem: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=800", desc: "Aventura e Sol", desc_en: "Adventure and Sun" },
     { nome: "Espanha", nome_en: "Spain", imagem: "https://images.unsplash.com/photo-1543783207-ec64e4d95325?auto=format&fit=crop&q=80&w=800", desc: "Cultura e Diversão", desc_en: "Culture and Fun" },
     { nome: "Reino Unido", nome_en: "United Kingdom", imagem: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&q=80&w=800", desc: "Inglês Nativo", desc_en: "Native English" },
   ];
+
+  // Filtrar APENAS países que têm campos ativos neste momento
+  const paisesAtivosCards = todosPaisesCards.filter(p => 
+    paisesComCampos.has(p.nome.toLowerCase().trim())
+  );
 
   const LINKS_SEO_PROGRAMATICOS = [
     { url: "pesquisa?categoria=Surf", pt: "Campos de Surf em Portugal", en: "Surf Camps in Portugal" },
@@ -111,14 +137,14 @@ export default async function HomePage({
           <div className="text-center mb-10 md:mb-14 w-full">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-md text-xs font-black uppercase tracking-widest text-[#F59E0B] mb-6 backdrop-blur-md shadow-sm">
               <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] animate-pulse" />
-              {isEn ? "More than a holiday camp" : "Mais que um campo de férias"}
+              {isEn ? "More than a holiday camp" : "Mais que um campo de férias"}[cite: 1]
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight drop-shadow-lg">
-              {isEn ? "Camps that create great stories." : "Campos que criam grandes histórias."}
+              {isEn ? "Camps that create great stories." : "Campos que criam grandes histórias."}[cite: 2]
             </h1>
             <p className="mt-4 md:mt-6 text-lg md:text-2xl font-medium text-slate-200 tracking-wide leading-relaxed max-w-3xl mx-auto drop-shadow-md">
-              {isEn ? "Explore, learn, and grow in one place." : "Explora, aprende e cresce num só lugar."}
+              {isEn ? "Explore, learn, and grow in one place." : "Explora, aprende e cresce num só lugar."}[cite: 2]
             </p>
           </div>
 
@@ -223,15 +249,22 @@ export default async function HomePage({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {camposDeFerias.map((campo, index) => {
+              {camposDeFerias.map((campo: any, index: number) => {
                 const campoId = campo.id ?? index + 1;
                 const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
                 const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
                 const localCampo = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
                 
                 let precoVisivel = campo.preco || 0;
-                if (!precoVisivel && campo.pacotes?.length > 0) {
-                  const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes?.map((v: any) => v.preco) || []);
+                let pacotesArray = [];
+                if (typeof campo.pacotes === 'string') {
+                  try { pacotesArray = JSON.parse(campo.pacotes); } catch(e) { pacotesArray = []; }
+                } else if (Array.isArray(campo.pacotes)) {
+                  pacotesArray = campo.pacotes;
+                }
+
+                if (!precoVisivel && pacotesArray.length > 0) {
+                  const todosPrecos = pacotesArray.flatMap((p: any) => p.variantes?.map((v: any) => Number(v.preco) || 0) || []);
                   if (todosPrecos.length > 0) precoVisivel = Math.min(...todosPrecos);
                 }
 
@@ -283,7 +316,7 @@ export default async function HomePage({
         </section>
       )}
 
-      {/* NAVEGAÇÃO POR DISTRITOS E REGIÕES (FOTOS ORIGINAIS) */}
+      {/* NAVEGAÇÃO POR DISTRITOS E REGIÕES (APENAS COM CAMPOS ATIVOS) */}
       {distritosAtivosCards.length > 0 && (
         <section className="bg-white py-20 border-t border-slate-200/80">
           <div className="max-w-[1280px] mx-auto px-4 md:px-8">
@@ -297,7 +330,7 @@ export default async function HomePage({
               {distritosAtivosCards.map((distrito) => {
                 const nomeDistrito = isEn ? distrito.nome_en : distrito.nome;
                 return (
-                  <Link href={`/${lang}/distrito/${encodeURIComponent(distrito.nome)}`} key={distrito.nome} className="group relative block h-[220px] w-full overflow-hidden rounded-md bg-slate-900 shadow-sm hover:shadow-xl transition-all duration-300">
+                  <Link href={`/${lang}/distrito/${encodeURIComponent(distrito.nome)}`} key={distrito.nome} className="group relative block h-[220px] w-full overflow-hidden rounded-md bg-slate-900 shadow-sm hover:shadow-xl transition-all duration-300 no-underline">
                     <img 
                       src={distrito.imagem} 
                       alt={nomeDistrito} 
@@ -315,7 +348,7 @@ export default async function HomePage({
         </section>
       )}
 
-      {/* PAÍSES (FOTOS ORIGINAIS) */}
+      {/* PAÍSES (APENAS COM CAMPOS ATIVOS) */}
       {paisesAtivosCards.length > 0 && (
         <section className="bg-[#F8FAFC] py-20 border-t border-slate-200/80">
           <div className="max-w-[1280px] mx-auto px-4 md:px-8">
@@ -329,7 +362,7 @@ export default async function HomePage({
               {paisesAtivosCards.map((pais) => {
                 const nomePais = isEn ? pais.nome_en : pais.nome;
                 return (
-                  <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(pais.nome)}`} key={pais.nome} className="group relative block h-[240px] w-full overflow-hidden rounded-md bg-slate-900 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  <Link href={`/${lang}/pesquisa/pais/${encodeURIComponent(pais.nome)}`} key={pais.nome} className="group relative block h-[240px] w-full overflow-hidden rounded-md bg-slate-900 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 no-underline">
                     <img 
                       src={pais.imagem} 
                       alt={nomePais} 
