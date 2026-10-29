@@ -1,269 +1,434 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { Metadata } from "next";
 import BotaoFavorito from "../components/BotaoFavorito";
-import { unstable_cache } from "next/cache";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-const escapeOr = (str: any) => (typeof str === 'string' ? str.replace(/[,()]/g, ' ').trim() : '');
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}): Promise<Metadata> {
+  const { lang } = await params;
+  const isEn = lang === "en";
 
-// ═══════════════════════════════════════════
-// CACHE DE DADOS (24 HORAS) - ZERO EGRESS
-// ═══════════════════════════════════════════
-const getCamposCacheados = unstable_cache(
-  async () => {
-    const { data } = await supabase
-      .from("campos")
-      .select("*")
-      .not("contrato_parceiro_url", "is", null)
-      .order("nome");
-    return data || [];
-  },
-  ['cache-pesquisa-campos'],
-  { revalidate: 86400 } // 24 horas
-);
+  return {
+    title: isEn
+      ? "Search Holiday Camps & Youth Programs | HelloCamp"
+      : "Pesquisar Campos de Férias e Programas | HelloCamp",
+    description: isEn
+      ? "Filter and compare verified summer camps by sport, age, location, and date."
+      : "Filtre e compare campos de férias verificados por desporto, idade, distrito, país e datas.",
+  };
+}
 
-// ==========================================
-// COMPONENTE SERVIDOR DE ALTA PERFORMANCE
-// ==========================================
-export default async function PaginaPesquisa({
+const normalize = (str: string) =>
+  (str || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+export default async function PesquisaPage({
   params,
   searchParams,
 }: {
   params: Promise<{ lang: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: Promise<{ [key: string]: string | undefined }>;
 }) {
   const { lang } = await params;
-  const isEn = lang === 'en';
-  const resolvedSearchParams = await searchParams;
+  const sp = await searchParams;
+  const isEn = lang === "en";
 
-  const qParam = (resolvedSearchParams.q as string) || "";
-  const catParam = (resolvedSearchParams.categoria as string) || "";
-  const distParam = (resolvedSearchParams.distrito as string) || "";
-  const idadeParam = (resolvedSearchParams.idade as string) || "";
-  const paisParam = (resolvedSearchParams.pais as string) || "";
-  const dataParam = (resolvedSearchParams.data as string) || "";
+  const qParam = sp?.q || "";
+  const paisParam = sp?.pais || "";
+  const distritoParam = sp?.distrito || "";
+  const categoriaParam = sp?.categoria || "";
+  const idadeParam = sp?.idade || "";
+  const dataParam = sp?.data || "";
+  const ordemParam = sp?.ordem || "relevancia";
 
-  const mostrarDistritos = paisParam === "" || paisParam.toLowerCase() === "portugal";
-  const filtrosAtivos = !!(qParam || catParam || distParam || idadeParam || paisParam || dataParam);
+  const { data: todosCampos } = await supabase
+    .from("campos")
+    .select("*")
+    .eq("ativo", true)
+    .order("created_at", { ascending: false });
 
-  const todosOsCampos = await getCamposCacheados();
+  const listaBruta = todosCampos || [];
 
-  const catSet = new Set<string>();
-  const idadeSet = new Set<string>();
-  
-  todosOsCampos.forEach(c => {
-    if (c.categoria?.trim()) catSet.add(c.categoria.trim());
-    if (c.idade?.trim()) idadeSet.add(c.idade.trim());
+  const resultados = listaBruta.filter((c: any) => {
+    if (qParam) {
+      const qNorm = normalize(qParam);
+      const texto = normalize(
+        `${c.nome || ""} ${c.nome_en || ""} ${c.categoria || ""} ${
+          c.Distrito || ""
+        } ${c.local || ""} ${c.descricao || ""}`
+      );
+      if (!texto.includes(qNorm)) return false;
+    }
+
+    if (paisParam) {
+      const paisCampo = normalize(c.pais || "Portugal");
+      if (!paisCampo.includes(normalize(paisParam))) return false;
+    }
+
+    if (distritoParam) {
+      const locCampo = normalize(`${c.Distrito || ""} ${c.local || ""}`);
+      if (!locCampo.includes(normalize(distritoParam))) return false;
+    }
+
+    if (categoriaParam) {
+      const catNorm = normalize(categoriaParam);
+      const catCampo = normalize(`${c.categoria || ""} ${c.categoria_en || ""}`);
+      if (
+        !catCampo.includes(catNorm) &&
+        !(catNorm.includes("desporto") && catCampo.includes("futebol")) &&
+        !(catNorm.includes("linguas") && catCampo.includes("ingles"))
+      ) {
+        return false;
+      }
+    }
+
+    if (idadeParam) {
+      const matchRange = idadeParam.match(/(\d+)\D+(\d+)/);
+      const matchCampo = (c.idade || "").match(/(\d+)\D+(\d+)/);
+      if (matchRange && matchCampo) {
+        const minFiltro = parseInt(matchRange[1], 10);
+        const maxFiltro = parseInt(matchRange[2], 10);
+        const minCampo = parseInt(matchCampo[1], 10);
+        const maxCampo = parseInt(matchCampo[2], 10);
+        if (maxCampo < minFiltro || minCampo > maxFiltro) return false;
+      }
+    }
+
+    if (dataParam) {
+      const dataText = JSON.stringify(c.pacotes || "") + (c.datas || "");
+      if (dataText.length > 5 && !dataText.includes(dataParam.slice(0, 7))) {
+        return false;
+      }
+    }
+
+    return true;
   });
-  
-  const categoriasDisponiveis = Array.from(catSet).sort();
-  const idadesDisponiveis = Array.from(idadeSet).sort();
 
-  let resultados = todosOsCampos;
+  const obterPrecoMinimo = (campo: any) => {
+    let p = Number(campo.preco) || 0;
+    let pacotesArray = [];
+    if (typeof campo.pacotes === "string") {
+      try {
+        pacotesArray = JSON.parse(campo.pacotes);
+      } catch {
+        pacotesArray = [];
+      }
+    } else if (Array.isArray(campo.pacotes)) {
+      pacotesArray = campo.pacotes;
+    }
+    if (!p && pacotesArray.length > 0) {
+      const precos = pacotesArray
+        .flatMap((pac: any) =>
+          Array.isArray(pac.variantes)
+            ? pac.variantes.map((v: any) => Number(v.preco) || 0)
+            : []
+        )
+        .filter((val: number) => val > 0);
+      if (precos.length > 0) p = Math.min(...precos);
+    }
+    return p;
+  };
 
-  if (qParam) {
-    const termos = escapeOr(qParam).toLowerCase().split(/\s+/).filter(Boolean);
-    resultados = resultados.filter(campo => {
-      const textoBuscavel = `${campo.nome || ''} ${campo.descricao || ''} ${campo.categoria || ''} ${campo.local || ''} ${campo.Distrito || ''} ${campo.pais || ''} ${campo.pais_en || ''} ${campo.nome_en || ''} ${campo.descricao_en || ''}`.toLowerCase();
-      return termos.every(termo => textoBuscavel.includes(termo));
-    });
-  }
-
-  if (catParam) {
-    resultados = resultados.filter(c => c.categoria === catParam);
-  }
-  
-  if (distParam && mostrarDistritos) {
-    resultados = resultados.filter(c => (c.Distrito || '').toLowerCase().includes(escapeOr(distParam).toLowerCase()));
-  }
-  
-  if (idadeParam) {
-    resultados = resultados.filter(c => c.idade === idadeParam);
-  }
-  
-  // FILTRAGEM RIGOROSA PELA COLUNA DE PAÍS (PT e EN)
-  if (paisParam) {
-    resultados = resultados.filter(c => {
-      const p1 = (c.pais || '').toLowerCase();
-      const p2 = (c.pais_en || '').toLowerCase();
-      const termo = escapeOr(paisParam).toLowerCase();
-      return p1.includes(termo) || p2.includes(termo);
-    });
-  }
-  
-  if (dataParam) {
-    resultados = resultados.filter(c => {
-      if (!c.data_inicio) return false;
-      return new Date(c.data_inicio) >= new Date(dataParam);
-    });
+  if (ordemParam === "preco_asc") {
+    resultados.sort((a, b) => obterPrecoMinimo(a) - obterPrecoMinimo(b));
+  } else if (ordemParam === "preco_desc") {
+    resultados.sort((a, b) => obterPrecoMinimo(b) - obterPrecoMinimo(a));
   }
 
-  const distritosPT = ["Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"];
-  const todayISO = new Date().toISOString().split('T')[0];
+  const distritosPT = [
+    "Aveiro",
+    "Beja",
+    "Braga",
+    "Bragança",
+    "Castelo Branco",
+    "Coimbra",
+    "Évora",
+    "Faro",
+    "Guarda",
+    "Leiria",
+    "Lisboa",
+    "Portalegre",
+    "Porto",
+    "Santarém",
+    "Setúbal",
+    "Viana do Castelo",
+    "Vila Real",
+    "Viseu",
+  ];
 
-  const baseInputClass = "w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0E3A68] focus:bg-white transition-colors shadow-sm cursor-pointer hover:border-slate-300";
-  const customSelectClass = `${baseInputClass} pr-10 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.75rem_auto] bg-[position:right_1rem_center] bg-no-repeat`;
+  const temFiltros =
+    qParam ||
+    paisParam ||
+    distritoParam ||
+    categoriaParam ||
+    idadeParam ||
+    dataParam;
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
-      
-      {/* ═══════════════════════════════════════════ */}
-      {/* BARRA DE PESQUISA SUPERIOR (FILTROS)        */}
-      {/* ═══════════════════════════════════════════ */}
-      <section className="bg-white border-b border-slate-200 pt-8 pb-10 px-4 md:px-6 shadow-sm relative z-20">
-        <div className="max-w-[1100px] mx-auto">
-          <nav className="flex items-center gap-2 text-[10px] font-black text-slate-400 mb-6 tracking-widest uppercase">
-            <Link href={`/${lang}`} className="hover:text-[#0E3A68] transition-colors">{isEn ? 'Home' : 'Início'}</Link>
-            <span>/</span>
-            <span className="text-slate-900">{isEn ? 'Search' : 'Pesquisa'}</span>
-          </nav>
+    <main className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A] pb-24">
+      {/* HEADER DA PESQUISA */}
+      <section className="bg-[#2563EB] text-white pt-12 pb-16 px-4 md:px-8 border-b-4 border-[#F59E0B]">
+        <div className="max-w-[1280px] mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div>
+            <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-3">
+              {isEn ? "Directory & Booking" : "Diretório Oficial"}
+            </span>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white m-0">
+              {isEn ? "Explore Holiday Camps" : "Explorar Campos de Férias"}
+            </h1>
+            <p className="text-blue-100 text-sm md:text-base font-medium mt-2 mb-0">
+              {isEn
+                ? "Compare verified programs, dates, and prices in one place."
+                : "Compare programas verificados, datas e preços num só lugar."}
+            </p>
+          </div>
 
-          <h1 className="text-3xl md:text-4xl font-black text-slate-900 mb-8 tracking-tight">
-            {filtrosAtivos ? (isEn ? 'Search Results' : 'Resultados da Pesquisa') : (isEn ? 'Explore All Camps' : 'Explorar Todos os Campos')}
-          </h1>
+          <Link
+            href={`/${lang}/mapa`}
+            className="bg-[#F59E0B] hover:bg-amber-600 text-white px-6 py-3.5 rounded-md text-xs font-black uppercase tracking-widest no-underline transition-all shadow-md flex items-center justify-center gap-2 w-fit"
+          >
+            <span>🗺️</span>{" "}
+            {isEn ? "Open Interactive Map" : "Ver no Mapa Interativo"}
+          </Link>
+        </div>
+      </section>
 
-          <form method="GET" action={`/${lang}/pesquisa`} className="flex flex-col gap-6">
-            
-            <div className="relative w-full">
-              <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                <svg className="w-5 h-5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              </div>
+      {/* BARRA DE FILTROS */}
+      <section className="max-w-[1280px] mx-auto px-4 md:px-8 -mt-8 relative z-20 mb-10">
+        <form
+          action={`/${lang}/pesquisa`}
+          method="GET"
+          className="bg-white p-6 rounded-md shadow-xl border border-slate-200 space-y-4"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div className="md:col-span-4">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                {isEn ? "Keyword" : "Pesquisa Livre"}
+              </label>
               <input
                 type="text"
                 name="q"
                 defaultValue={qParam}
-                placeholder={isEn ? "Search by name, sport, or location (e.g., Surf in Porto)..." : "Pesquise por nome, desporto ou local (ex: Surf no Porto)..."}
-                className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-base font-bold text-slate-900 outline-none focus:border-[#0E3A68] focus:bg-white focus:ring-4 focus:ring-[#0E3A68]/10 transition-all shadow-sm placeholder:text-slate-400 placeholder:font-medium hover:border-slate-300"
+                placeholder={
+                  isEn
+                    ? "Surf, Football, Robotics, Lisbon..."
+                    : "Surf, Futebol, Robótica, Lisboa..."
+                }
+                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white"
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Country' : 'País'}</label>
-                <select name="pais" defaultValue={paisParam} className={customSelectClass}>
-                  <option value="">{isEn ? 'All Countries' : 'Todos'}</option>
-                  <option value="Portugal">Portugal</option>
-                  <option value="Espanha">{isEn ? 'Spain' : 'Espanha'}</option>
-                  <option value="Reino Unido">{isEn ? 'United Kingdom' : 'Reino Unido'}</option>
-                  <option value="França">{isEn ? 'France' : 'França'}</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Category' : 'Categoria'}</label>
-                <select name="categoria" defaultValue={catParam} className={customSelectClass}>
-                  <option value="">{isEn ? 'All Categories' : 'Todas'}</option>
-                  {categoriasDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-
-              {mostrarDistritos && (
-                <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Distrito</label>
-                  <select name="distrito" defaultValue={distParam} className={customSelectClass}>
-                    <option value="">{isEn ? 'All Districts' : 'Todos'}</option>
-                    {distritosPT.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Age Group' : 'Idade'}</label>
-                <select name="idade" defaultValue={idadeParam} className={customSelectClass}>
-                  <option value="">{isEn ? 'All Ages' : 'Todas'}</option>
-                  {idadesDisponiveis.map(i => <option key={i} value={i}>{i}</option>)}
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? 'Start Date' : 'Data Início'}</label>
-                <input
-                  type="date"
-                  name="data"
-                  defaultValue={dataParam}
-                  min={todayISO}
-                  className={baseInputClass}
-                />
-              </div>
-
-              <button type="submit" className="w-full py-3.5 bg-[#e2a41d] hover:bg-[#d4991b] text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md mt-auto hover:-translate-y-0.5">
-                {isEn ? 'Search' : 'Pesquisar'}
-              </button>
+            <div className="md:col-span-2">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                {isEn ? "District" : "Distrito"}
+              </label>
+              <select
+                name="distrito"
+                defaultValue={distritoParam}
+                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-3 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] cursor-pointer"
+              >
+                <option value="">
+                  {isEn ? "All Districts" : "Todos os Distritos"}
+                </option>
+                {distritosPT.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {filtrosAtivos && (
-              <div className="text-right mt-1">
-                <Link href={`/${lang}/pesquisa`} className="text-[10px] font-black text-red-600 hover:text-red-700 transition-colors uppercase tracking-widest bg-red-50 hover:bg-red-100 px-4 py-2 rounded-lg border border-red-100 inline-block shadow-sm">
-                  ✕ {isEn ? 'Clear filters' : 'Limpar filtros'}
+            <div className="md:col-span-2">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                {isEn ? "Category" : "Categoria"}
+              </label>
+              <select
+                name="categoria"
+                defaultValue={categoriaParam}
+                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-3 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] cursor-pointer"
+              >
+                <option value="">
+                  {isEn ? "All Categories" : "Todas as Categorias"}
+                </option>
+                <option value="Desporto">{isEn ? "Sports" : "Desporto"}</option>
+                <option value="Surf">Surf & Náutica</option>
+                <option value="Aventura & Natureza">
+                  {isEn ? "Adventure & Nature" : "Aventura & Natureza"}
+                </option>
+                <option value="Tecnologia & Ciência">
+                  {isEn ? "Tech & Science" : "Tecnologia & Ciência"}
+                </option>
+                <option value="Artes & Criatividade">
+                  {isEn ? "Arts & Creativity" : "Artes & Criatividade"}
+                </option>
+                <option value="Línguas">{isEn ? "Languages" : "Línguas"}</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                {isEn ? "Age Group" : "Faixa Etária"}
+              </label>
+              <select
+                name="idade"
+                defaultValue={idadeParam}
+                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-3 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] cursor-pointer"
+              >
+                <option value="">
+                  {isEn ? "All Ages" : "Todas as Idades"}
+                </option>
+                <option value="3-6">3 - 6 {isEn ? "years" : "anos"}</option>
+                <option value="7-12">7 - 12 {isEn ? "years" : "anos"}</option>
+                <option value="13-18">13 - 18 {isEn ? "years" : "anos"}</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-2 flex items-end">
+              <button
+                type="submit"
+                className="w-full bg-[#F59E0B] hover:bg-amber-600 text-white font-black uppercase tracking-widest text-xs py-3.5 px-4 rounded-md transition-colors cursor-pointer border-0 shadow-sm"
+              >
+                {isEn ? "Filter Results" : "Filtrar Campos"}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-black text-slate-500">
+                {resultados.length}{" "}
+                {isEn ? "programs found" : "programas encontrados"}
+              </span>
+              {temFiltros && (
+                <Link
+                  href={`/${lang}/pesquisa`}
+                  className="bg-[#F43F5E] hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-md no-underline"
+                >
+                  ✕ {isEn ? "Clear Filters" : "Limpar Filtros"}
                 </Link>
-              </div>
-            )}
-          </form>
-        </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {isEn ? "Sort by:" : "Ordenar:"}
+              </label>
+              <select
+                name="ordem"
+                defaultValue={ordemParam}
+                className="bg-[#F8FAFC] border border-slate-200 rounded-md px-3 py-1.5 text-xs font-bold text-[#0F172A] outline-none"
+              >
+                <option value="relevancia">
+                  {isEn ? "Featured" : "Relevância"}
+                </option>
+                <option value="preco_asc">
+                  {isEn ? "Price: Low to High" : "Preço: Mais Baixo"}
+                </option>
+                <option value="preco_desc">
+                  {isEn ? "Price: High to Low" : "Preço: Mais Alto"}
+                </option>
+              </select>
+            </div>
+          </div>
+        </form>
       </section>
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* GRID DE RESULTADOS OTIMIZADA PARA CONVERSÃO */}
-      {/* ═══════════════════════════════════════════ */}
-      <section className="max-w-[1100px] mx-auto px-4 py-12 md:py-16">
-        {(!resultados || resultados.length === 0) ? (
-          <div className="text-center p-12 bg-white rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center gap-4 max-w-2xl mx-auto">
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl border border-slate-100 mb-2">🏕️</div>
-            <h3 className="text-2xl font-black text-slate-900 tracking-tight">{isEn ? 'No camps found' : 'Nenhum programa encontrado'}</h3>
-            <p className="text-sm text-slate-500 font-medium">
-              {isEn ? 'Try adjusting your filters, selecting a different date, or searching for something more generic.' : 'Não encontrámos resultados exatos. Tente remover o filtro da data ou pesquisar de forma mais genérica (Ex: Futebol).'}
+      {/* GRELHA DE RESULTADOS */}
+      <section className="max-w-[1280px] mx-auto px-4 md:px-8">
+        {resultados.length === 0 ? (
+          <div className="bg-white rounded-md border border-slate-200 p-12 text-center shadow-sm max-w-xl mx-auto">
+            <span className="text-5xl block mb-4">🏕️</span>
+            <h2 className="text-2xl font-black text-[#0F172A] mb-2">
+              {isEn
+                ? "No camps match your exact filters"
+                : "Nenhum campo encontrado com estes filtros"}
+            </h2>
+            <p className="text-slate-500 text-sm font-medium mb-6">
+              {isEn
+                ? "Try clearing some filters or exploring all active programs."
+                : "Experimente limpar os filtros selecionados para ver todos os programas ativos."}
             </p>
-            <Link href={`/${lang}/pesquisa`} className="mt-4 bg-[#0E3A68] text-white font-black uppercase tracking-widest text-[10px] px-8 py-4 rounded-xl hover:bg-[#0b2b4d] transition-colors shadow-lg">
-              {isEn ? 'Clear all filters' : 'Ver todos os programas'}
+            <Link
+              href={`/${lang}/pesquisa`}
+              className="inline-block bg-[#2563EB] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-md no-underline shadow-sm"
+            >
+              {isEn ? "Show All Camps" : "Ver Todos os Campos"}
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-            {resultados.map((campo) => {
-              const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
-              const catCampo = isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
-              const localCampo = isEn && campo.local_en ? campo.local_en : (campo.Distrito || campo.local);
-              const idadeCampo = isEn && campo.idade_en ? campo.idade_en : campo.idade;
-
-              let precoVisivel = campo.preco || 0;
-              if (!precoVisivel && campo.pacotes?.length > 0) {
-                const todosPrecos = campo.pacotes.flatMap((p: any) => p.variantes?.map((v: any) => v.preco) || []);
-                if (todosPrecos.length > 0) precoVisivel = Math.min(...todosPrecos);
-              }
-
-              const imgUrl = campo.imagem?.startsWith('http') ? campo.imagem : '/og-image.jpg';
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {resultados.map((campo: any) => {
+              const nome = isEn && campo.nome_en ? campo.nome_en : campo.nome;
+              const cat =
+                isEn && campo.categoria_en
+                  ? campo.categoria_en
+                  : campo.categoria;
+              const local =
+                isEn && campo.local_en
+                  ? campo.local_en
+                  : campo.Distrito || campo.local || "Portugal";
+              const preco = obterPrecoMinimo(campo);
+              const imgUrl = campo.imagem?.startsWith("http")
+                ? campo.imagem
+                : "/og-image.jpg";
 
               return (
-                <div key={campo.id} className="group flex flex-col bg-white rounded-[2rem] overflow-hidden border border-slate-200 relative shadow-sm hover:shadow-[0_20px_60px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1">
-                  <Link href={`/${lang}/campo/${campo.id}`} className="absolute inset-0 z-10"><span className="sr-only">Explorar {nomeCampo}</span></Link>
-                  <div className="absolute top-4 right-4 z-20"><BotaoFavorito campoId={campo.id} /></div>
-                  
-                  <div className="relative h-60 w-full overflow-hidden bg-slate-100">
-                    <div 
-                      className="absolute inset-0 w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                      style={{ backgroundImage: `url('${imgUrl}')` }}
+                <div
+                  key={campo.id}
+                  className="group flex flex-col bg-white border border-slate-200 rounded-md shadow-sm hover:shadow-xl hover:border-[#2563EB] transition-all duration-300 hover:-translate-y-1 overflow-hidden relative"
+                >
+                  <Link
+                    href={`/${lang}/campo/${campo.id}`}
+                    className="absolute inset-0 z-10"
+                  >
+                    <span className="sr-only">Ver {nome}</span>
+                  </Link>
+
+                  <div className="absolute top-4 right-4 z-20">
+                    <BotaoFavorito campoId={campo.id} />
+                  </div>
+
+                  <div className="relative h-60 w-full bg-slate-100 overflow-hidden">
+                    <img
+                      src={imgUrl}
+                      alt={nome}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                     />
-                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#0E3A68] rounded-lg z-0 shadow-sm">
-                      {catCampo}
+                    <div className="absolute top-4 left-4 bg-[#2563EB] text-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md shadow-sm">
+                      {cat}
                     </div>
                   </div>
 
                   <div className="flex flex-col p-6 flex-1 pointer-events-none">
-                    <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                      <svg className="w-3 h-3 text-[#e2a41d]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                      {localCampo}
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                      <span>📍 {local}</span>
+                      {campo.idade && <span>• 👶 {campo.idade}</span>}
                     </div>
-                    <h3 className="text-xl font-black text-slate-900 leading-tight mb-2 line-clamp-2">{nomeCampo}</h3>
-                    <p className="text-sm text-slate-500 font-medium mb-6">{isEn ? 'Ages:' : 'Idades:'} <span className="text-slate-900 font-bold">{idadeCampo}</span></p>
-                    
-                    <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
+
+                    <h3 className="text-xl font-black text-[#0F172A] leading-tight mb-4 line-clamp-2">
+                      {nome}
+                    </h3>
+
+                    <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
                       <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{isEn ? 'From' : 'A partir de'}</p>
-                        <p className="text-2xl font-black text-[#0E3A68] m-0">{precoVisivel > 0 ? `${precoVisivel}€` : '--'}</p>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                          {isEn ? "From" : "Desde"}
+                        </span>
+                        <span className="text-2xl font-black text-[#2563EB]">
+                          {preco > 0 ? `${preco}€` : "Sob Consulta"}
+                        </span>
                       </div>
-                      <span className="bg-slate-100 text-[#0E3A68] px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors group-hover:bg-[#0E3A68] group-hover:text-white shadow-sm">
-                        {isEn ? 'View Dates' : 'Ver Datas'}
+                      <span className="bg-[#0F172A] group-hover:bg-[#2563EB] text-white px-5 py-2.5 rounded-md text-xs font-black uppercase tracking-widest transition-colors shadow-sm">
+                        {isEn ? "View Dates" : "Ver Detalhes"}
                       </span>
                     </div>
                   </div>
