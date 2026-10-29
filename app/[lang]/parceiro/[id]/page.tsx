@@ -34,6 +34,7 @@ export async function generateMetadata({
       parceiro.descricao ||
       parceiro.biografia_empresa
     : parceiro.descricao || parceiro.biografia_empresa;
+
   const descCurta = bioRaw
     ? bioRaw.substring(0, 155) + "..."
     : isEn
@@ -71,11 +72,11 @@ export default async function PaginaParceiroPublica({
 
   if (!parceiro) {
     return (
-      <div className="flex min-h-[75vh] flex-col items-center justify-center bg-slate-50 p-6 text-center font-sans">
+      <div className="flex min-h-[75vh] flex-col items-center justify-center bg-[#F8FAFC] p-6 text-center font-sans">
         <div className="w-20 h-20 bg-white rounded-md flex items-center justify-center shadow-sm border border-slate-200 mb-6 text-4xl">
           🏢
         </div>
-        <h1 className="text-3xl font-black text-slate-900 m-0 mb-2">
+        <h1 className="text-3xl font-black text-[#0F172A] m-0 mb-2">
           {isEn ? "Partner not found" : "Organizador não encontrado"}
         </h1>
         <p className="text-sm text-slate-500 mb-6">
@@ -85,7 +86,7 @@ export default async function PaginaParceiroPublica({
         </p>
         <Link
           href={`/${lang}/pesquisa`}
-          className="bg-[#0E3A68] text-white px-6 py-3.5 rounded-md font-black uppercase tracking-widest text-xs hover:bg-[#0b2b4d] transition-colors no-underline shadow-sm"
+          className="bg-[#2563EB] hover:bg-blue-700 text-white px-6 py-3.5 rounded-md font-black uppercase tracking-widest text-xs transition-colors no-underline shadow-sm"
         >
           {isEn ? "Explore All Camps" : "Explorar Todos os Campos"}
         </Link>
@@ -126,14 +127,9 @@ export default async function PaginaParceiroPublica({
     parceiro.ano_fundacao || parceiro.contrato_dados?.ano_fundacao || null;
 
   const cidadesAtuacao = Array.from(
-    new Set(
-      campos
-        .map((c: any) => c.Distrito || c.local)
-        .filter(Boolean)
-    )
+    new Set(campos.map((c: any) => c.Distrito || c.local).filter(Boolean))
   );
 
-  // Calcular média global de estrelas do parceiro
   const camposComReview = campos.filter((c: any) => Number(c.rating_score) > 0);
   const mediaGlobalParceiro =
     camposComReview.length > 0
@@ -155,26 +151,26 @@ export default async function PaginaParceiroPublica({
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24">
+    <main className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A] pb-24">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
       />
 
-      {/* 1. BANNER CORPORATIVO DO PARCEIRO (DESIGN EXECUTIVO RETO rounded-md) */}
-      <section className="bg-[#0E3A68] text-white pt-10 pb-14 px-4 md:px-6 border-b border-slate-800">
+      {/* CABEÇALHO DO PERFIL DO PARCEIRO */}
+      <section className="bg-[#2563EB] text-white pt-10 pb-14 px-4 md:px-6 border-b-4 border-[#F59E0B]">
         <div className="max-w-[1150px] mx-auto">
-          <nav className="flex items-center gap-2 text-[10px] font-black text-blue-200 mb-8 tracking-widest uppercase">
+          <nav className="flex items-center gap-2 text-[10px] font-black text-blue-100 mb-8 tracking-widest uppercase">
             <Link
               href={`/${lang}`}
-              className="hover:text-white transition-colors no-underline text-blue-200"
+              className="hover:text-white transition-colors no-underline text-blue-100"
             >
               {isEn ? "Home" : "Início"}
             </Link>
             <span>/</span>
             <Link
               href={`/${lang}/pesquisa`}
-              className="hover:text-white transition-colors no-underline text-blue-200"
+              className="hover:text-white transition-colors no-underline text-blue-100"
             >
               {isEn ? "Organizers" : "Organizadores"}
             </Link>
@@ -183,8 +179,7 @@ export default async function PaginaParceiroPublica({
           </nav>
 
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-8">
-            {/* CAIXA DO LOGÓTIPO OFICIAL */}
-            <div className="w-28 h-28 md:w-36 md:h-36 bg-white rounded-md p-3 shadow-xl border-2 border-white/20 flex-shrink-0 flex items-center justify-center overflow-hidden">
+            <div className="w-28 h-28 md:w-36 md:h-36 bg-white rounded-md p-3 shadow-xl border-2 border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden">
               {parceiro.logotipo_url ? (
                 <img
                   src={parceiro.logotipo_url}
@@ -192,34 +187,33 @@ export default async function PaginaParceiroPublica({
                   className="w-full h-full object-contain"
                 />
               ) : (
-                <span className="text-5xl font-black text-[#0E3A68]">
+                <span className="text-5xl font-black text-[#2563EB]">
                   {nomeEmpresa.charAt(0).toUpperCase()}
                 </span>
               )}
             </div>
 
-            {/* INFORMAÇÃO DE TOPO */}
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-3">
-                <span className="bg-[#e2a41d] text-slate-950 px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-widest">
+                <span className="bg-[#F59E0B] text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest">
                   {isEn ? "Official Organizer" : "Organizador Oficial"}
                 </span>
 
                 {(parceiro.parceiro_verificado ||
                   parceiro.status_contrato === "Aprovado") && (
-                  <span className="bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-widest">
+                  <span className="bg-[#16A34A] text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest">
                     ✓ {isEn ? "Verified Entity" : "Entidade Verificada"}
                   </span>
                 )}
 
                 {anoFundacao && (
-                  <span className="bg-white/10 border border-white/20 text-white px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-widest">
+                  <span className="bg-white/15 border border-white/30 text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest">
                     🏛️ {isEn ? `Est. ${anoFundacao}` : `Desde ${anoFundacao}`}
                   </span>
                 )}
 
                 {mediaGlobalParceiro > 0 && (
-                  <span className="bg-amber-400/20 border border-amber-300/40 text-amber-200 px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-widest">
+                  <span className="bg-[#F59E0B] text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest">
                     ★ {mediaGlobalParceiro.toFixed(1)}
                   </span>
                 )}
@@ -240,9 +234,8 @@ export default async function PaginaParceiroPublica({
         </div>
       </section>
 
-      {/* 2. CORPO DIVIDIDO: SIDEBAR SOBRE A ENTIDADE + GRELHA DE PROGRAMAS */}
+      {/* CORPO: DETALHES + PROGRAMAS */}
       <section className="max-w-[1150px] mx-auto px-4 md:px-6 pt-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* COLUNA ESQUERDA: SOBRE A ENTIDADE & CONTACTOS (4 Colunas) */}
         <aside className="lg:col-span-4 bg-white rounded-md border border-slate-200 p-6 shadow-sm space-y-6 lg:sticky lg:top-24">
           <div>
             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest m-0 mb-3 pb-2 border-b border-slate-100">
@@ -266,7 +259,7 @@ export default async function PaginaParceiroPublica({
               {isEn ? "Information & Contacts" : "Informações e Contactos"}
             </h3>
 
-            <div className="flex items-center gap-2.5 text-slate-700 font-bold">
+            <div className="flex items-center gap-2.5 text-[#0F172A] font-bold">
               <span>🏕️</span>
               <span>
                 {campos.length}{" "}
@@ -285,7 +278,7 @@ export default async function PaginaParceiroPublica({
                   }
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#0E3A68] font-black hover:underline truncate"
+                  className="text-[#2563EB] font-black hover:underline truncate"
                 >
                   {isEn ? "Official Website ↗" : "Visitar Website Oficial ↗"}
                 </a>
@@ -297,7 +290,7 @@ export default async function PaginaParceiroPublica({
                 <span>✉️</span>
                 <a
                   href={`mailto:${emailPublico}`}
-                  className="text-slate-700 font-bold hover:text-[#0E3A68] truncate"
+                  className="text-slate-700 font-bold hover:text-[#2563EB] truncate"
                 >
                   {emailPublico}
                 </a>
@@ -309,7 +302,7 @@ export default async function PaginaParceiroPublica({
                 <span>📞</span>
                 <a
                   href={`tel:${telefonePublico}`}
-                  className="text-slate-700 font-bold hover:text-[#0E3A68]"
+                  className="text-slate-700 font-bold hover:text-[#2563EB]"
                 >
                   {telefonePublico}
                 </a>
@@ -318,7 +311,7 @@ export default async function PaginaParceiroPublica({
           </div>
 
           <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-md">
-            <span className="block text-[10px] font-black uppercase tracking-widest text-[#167524] mb-1">
+            <span className="block text-[10px] font-black uppercase tracking-widest text-[#16A34A] mb-1">
               🛡️ {isEn ? "HelloCamp Guarantee" : "Garantia HelloCamp"}
             </span>
             <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
@@ -329,15 +322,14 @@ export default async function PaginaParceiroPublica({
           </div>
         </aside>
 
-        {/* COLUNA DIREITA: PROGRAMAS DO PARCEIRO (8 Colunas) */}
         <div className="lg:col-span-8">
           <div className="flex items-center justify-between mb-6 pb-3 border-b border-slate-200">
-            <h2 className="text-xl font-black text-slate-900 m-0">
+            <h2 className="text-xl font-black text-[#0F172A] m-0">
               {isEn
                 ? `Programs by ${nomeEmpresa}`
                 : `Programas e Campos de ${nomeEmpresa}`}
             </h2>
-            <span className="text-xs font-black text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-sm">
+            <span className="text-xs font-black text-white bg-[#2563EB] px-3 py-1 rounded-md">
               {campos.length} {isEn ? "Available" : "Disponíveis"}
             </span>
           </div>
@@ -345,7 +337,7 @@ export default async function PaginaParceiroPublica({
           {campos.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-md p-12 text-center shadow-sm">
               <span className="text-4xl block mb-3">🏕️</span>
-              <h3 className="text-base font-black text-slate-900 m-0 mb-1">
+              <h3 className="text-base font-black text-[#0F172A] m-0 mb-1">
                 {isEn
                   ? "No active programs at the moment"
                   : "Sem programas ativos de momento"}
@@ -371,7 +363,11 @@ export default async function PaginaParceiroPublica({
                     : campo.Distrito || campo.local;
 
                 let precoVisivel = Number(campo.preco) || 0;
-                if (!precoVisivel && Array.isArray(campo.pacotes) && campo.pacotes.length > 0) {
+                if (
+                  !precoVisivel &&
+                  Array.isArray(campo.pacotes) &&
+                  campo.pacotes.length > 0
+                ) {
                   const precos = campo.pacotes.flatMap((p: any) =>
                     Array.isArray(p.variantes)
                       ? p.variantes
@@ -389,7 +385,7 @@ export default async function PaginaParceiroPublica({
                 return (
                   <div
                     key={campo.id}
-                    className="group flex flex-col bg-white rounded-md overflow-hidden border border-slate-200 relative shadow-sm hover:border-[#0E3A68] transition-all"
+                    className="group flex flex-col bg-white rounded-md overflow-hidden border border-slate-200 relative shadow-sm hover:border-[#2563EB] transition-all"
                   >
                     <Link
                       href={`/${lang}/campo/${campo.id}`}
@@ -407,7 +403,7 @@ export default async function PaginaParceiroPublica({
                         alt={nomeCampo}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
-                      <div className="absolute top-3 left-3 bg-slate-950/90 text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-sm">
+                      <div className="absolute top-3 left-3 bg-[#2563EB] text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md">
                         {catCampo}
                       </div>
                     </div>
@@ -417,7 +413,7 @@ export default async function PaginaParceiroPublica({
                         📍 {localCampo}{" "}
                         {campo.idade ? `• 👶 ${campo.idade}` : ""}
                       </span>
-                      <h3 className="text-lg font-black text-slate-900 leading-snug mb-4 line-clamp-2">
+                      <h3 className="text-lg font-black text-[#0F172A] leading-snug mb-4 line-clamp-2">
                         {nomeCampo}
                       </h3>
 
@@ -426,11 +422,11 @@ export default async function PaginaParceiroPublica({
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 m-0">
                             {isEn ? "From" : "Desde"}
                           </p>
-                          <p className="text-2xl font-black text-[#0E3A68] m-0">
+                          <p className="text-2xl font-black text-[#2563EB] m-0">
                             {precoVisivel > 0 ? `${precoVisivel}€` : "--"}
                           </p>
                         </div>
-                        <span className="bg-slate-900 group-hover:bg-[#0E3A68] text-white px-4 py-2.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-colors">
+                        <span className="bg-[#0F172A] group-hover:bg-[#2563EB] text-white px-4 py-2.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-colors">
                           {isEn ? "View Dates" : "Ver Datas"} &rarr;
                         </span>
                       </div>
