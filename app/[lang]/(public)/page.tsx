@@ -137,14 +137,14 @@ export default async function HomePage({
           <div className="text-center mb-10 md:mb-14 w-full">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-md text-xs font-black uppercase tracking-widest text-[#F59E0B] mb-6 backdrop-blur-md shadow-sm">
               <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] animate-pulse" />
-              {isEn ? "More than a holiday camp" : "Mais que um campo de férias"}[cite: 1]
+              {isEn ? "More than a holiday camp" : "Mais que um campo de férias"}
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight drop-shadow-lg">
-              {isEn ? "Camps that create great stories." : "Campos que criam grandes histórias."}[cite: 2]
+              {isEn ? "Camps that create great stories." : "Campos que criam grandes histórias."}
             </h1>
             <p className="mt-4 md:mt-6 text-lg md:text-2xl font-medium text-slate-200 tracking-wide leading-relaxed max-w-3xl mx-auto drop-shadow-md">
-              {isEn ? "Explore, learn, and grow in one place." : "Explora, aprende e cresce num só lugar."}[cite: 2]
+              {isEn ? "Explore, learn, and grow in one place." : "Explora, aprende e cresce num só lugar."}
             </p>
           </div>
 
