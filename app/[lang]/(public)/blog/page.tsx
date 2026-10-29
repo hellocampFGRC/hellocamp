@@ -7,6 +7,60 @@ import { supabase } from "@/lib/supabase";
 const FALLBACK_BLOG =
   "https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&q=80&w=1000";
 
+const ARTIGOS_B2B_GARANTIDOS = [
+  {
+    id: "b2b-1",
+    slug: "como-esgotar-vagas-campo-de-ferias",
+    audiencia: "parceiros",
+    categoria: "Crescimento & Vendas",
+    categoria_en: "Growth & Sales",
+    created_at: "2026-03-15T10:00:00Z",
+    imagem_url:
+      "https://images.unsplash.com/photo-1526676037777-05a232554f77?auto=format&fit=crop&q=80&w=1000",
+    titulo: "Como esgotar as vagas do seu Campo de Férias mais cedo este verão",
+    titulo_en: "How to sell out your Summer Camp spots earlier this season",
+    resumo:
+      "Descubra como estruturar pacotes com sinal de 30%, descontos automáticos de irmãos e fotografias de alta conversão na sua montra HelloCamp.",
+    resumo_en:
+      "Learn how to structure packages with a 30% deposit, automatic sibling discounts, and high-converting photography on your HelloCamp showcase.",
+    link_direto: "/parceiro",
+  },
+  {
+    id: "b2b-2",
+    slug: "gestao-fichas-medicas-alergias-campos-ferias",
+    audiencia: "parceiros",
+    categoria: "Operações & Segurança",
+    categoria_en: "Operations & Safety",
+    created_at: "2026-03-22T10:00:00Z",
+    imagem_url:
+      "https://images.unsplash.com/photo-1540479859555-17af45c78602?auto=format&fit=crop&q=80&w=1000",
+    titulo: "Adeus às folhas de Excel soltas: Gestão digital de alergias e fichas médicas",
+    titulo_en: "Goodbye messy spreadsheets: Digital management of allergies and medical forms",
+    resumo:
+      "Como automatizar a recolha de restrições alimentares, medicação e contactos de emergência no ato da inscrição e exportar tudo em 1 clique.",
+    resumo_en:
+      "How to automate the collection of dietary restrictions, medication, and emergency contacts at checkout and export everything in 1 click.",
+    link_direto: "/parceiro",
+  },
+  {
+    id: "b2b-3",
+    slug: "recrutar-monitores-certificados-ipdj",
+    audiencia: "parceiros",
+    categoria: "Recrutamento & Staff",
+    categoria_en: "Recruitment & Staff",
+    created_at: "2026-04-02T10:00:00Z",
+    imagem_url:
+      "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&q=80&w=1000",
+    titulo: "Guia prático para recrutar Monitores Certificados (IPDJ e Socorrismo)",
+    titulo_en: "Practical guide to recruiting Certified Camp Monitors (IPDJ & First Aid)",
+    resumo:
+      "Utilize a Bolsa de Talentos HelloCamp para filtrar candidatos pelo seu distrito, semanas de disponibilidade e certificações oficiais.",
+    resumo_en:
+      "Use the HelloCamp Talent Pool to filter candidates by your district, availability weeks, and official certifications.",
+    link_direto: "/monitores",
+  },
+];
+
 export default function BlogIndexPage({
   params,
 }: {
@@ -29,7 +83,14 @@ export default function BlogIndexPage({
         .eq("publicado", true)
         .order("created_at", { ascending: false });
 
-      setPosts(data || []);
+      const bdPosts = data || [];
+      const temParceirosNaBD = bdPosts.some((p) => p.audiencia === "parceiros");
+
+      if (!temParceirosNaBD) {
+        setPosts([...bdPosts, ...ARTIGOS_B2B_GARANTIDOS]);
+      } else {
+        setPosts(bdPosts);
+      }
       setLoading(false);
     }
     loadPosts();
@@ -69,40 +130,48 @@ export default function BlogIndexPage({
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A] pb-24">
-      {/* HEADER EDITORIAL */}
-      <section className="bg-[#0F172A] text-white pt-20 pb-28 text-center relative overflow-hidden border-b-8 border-[#F59E0B]">
-        <div className="max-w-4xl mx-auto px-4 relative z-10">
-          <span className="inline-block text-[10px] font-black tracking-widest text-white bg-[#F59E0B] px-3.5 py-1.5 rounded-md uppercase mb-6">
-            {isEn ? "Editorial & Guides" : "Editorial & Guias"}
-          </span>
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-6 leading-tight text-white">
-            {isEn ? "HelloCamp Journal" : "Recursos & Blog HelloCamp"}
-          </h1>
-          <p className="text-slate-300 text-lg md:text-xl font-medium max-w-2xl mx-auto leading-relaxed">
+      {/* HERO VIBRANTE COM O MESMO DESIGN DA PÁGINA PARCEIROS */}
+      <section className="relative overflow-hidden bg-[#2563EB] text-white pt-20 pb-28 md:pt-24 md:pb-32 px-4 md:px-8 border-b-8 border-[#F59E0B]">
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#F59E0B] opacity-90 pointer-events-none hidden lg:block" />
+        <div className="absolute bottom-[-60px] left-[-60px] w-72 h-72 rounded-full bg-[#16A34A] opacity-90 pointer-events-none hidden lg:block" />
+        <div className="absolute top-1/3 left-10 w-20 h-20 rounded-2xl bg-[#F43F5E] rotate-12 opacity-90 pointer-events-none hidden xl:block" />
+
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 border border-white/30 rounded-md text-xs font-black uppercase tracking-widest text-white mb-6 backdrop-blur-md shadow-sm">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
+            {isEn ? "HelloCamp Editorial & Guides" : "Revista & Guias HelloCamp"}
+          </div>
+
+          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-5 leading-tight text-white">
             {isEn
-              ? "Expert articles, tips, and guides to help you plan the perfect summer experience."
-              : "Artigos, dicas de especialistas e guias práticos para famílias e organizadores de campos de férias."}
+              ? "Stories, Tips & Camp Guides"
+              : "Dicas, Guias e Histórias de Verão"}
+          </h1>
+          <p className="text-blue-100 text-lg md:text-xl font-medium max-w-2xl mx-auto leading-relaxed">
+            {isEn
+              ? "Practical articles for families choosing the best summer camp and strategies for partner organizers."
+              : "Artigos práticos para famílias escolherem o campo ideal e estratégias de gestão para entidades organizadoras."}
           </p>
         </div>
       </section>
 
-      {/* NAVEGAÇÃO E FILTROS */}
+      {/* SELETOR DE AUDIÊNCIA E CATEGORIAS */}
       <section className="max-w-6xl mx-auto px-4 md:px-8 py-10 -mt-14 relative z-20">
         <div className="flex justify-center mb-10">
-          <div className="flex bg-white p-1.5 rounded-md shadow-xl border border-slate-200">
+          <div className="flex bg-white p-2 rounded-md shadow-xl border border-slate-200 gap-2">
             <button
               type="button"
               onClick={() => {
                 setAudiencia("pais");
                 setCategoriaAtiva("Tudo");
               }}
-              className={`px-8 py-3.5 rounded-md text-xs font-black tracking-widest uppercase transition-all cursor-pointer border-0 ${
+              className={`px-7 py-4 rounded-md text-xs font-black tracking-widest uppercase transition-all cursor-pointer border-0 ${
                 audiencia === "pais"
-                  ? "bg-[#2563EB] text-white shadow-md"
-                  : "bg-transparent text-slate-600 hover:text-[#0F172A]"
+                  ? "bg-[#F59E0B] text-white shadow-md"
+                  : "bg-transparent text-slate-600 hover:bg-slate-100"
               }`}
             >
-              {isEn ? "For Families" : "Para Famílias"}
+              👨‍👩‍👧 {isEn ? "For Families" : "Para Famílias"}
             </button>
             <button
               type="button"
@@ -110,18 +179,18 @@ export default function BlogIndexPage({
                 setAudiencia("parceiros");
                 setCategoriaAtiva("Tudo");
               }}
-              className={`px-8 py-3.5 rounded-md text-xs font-black tracking-widest uppercase transition-all cursor-pointer border-0 ${
+              className={`px-7 py-4 rounded-md text-xs font-black tracking-widest uppercase transition-all cursor-pointer border-0 ${
                 audiencia === "parceiros"
                   ? "bg-[#16A34A] text-white shadow-md"
-                  : "bg-transparent text-slate-600 hover:text-[#0F172A]"
+                  : "bg-transparent text-slate-600 hover:bg-slate-100"
               }`}
             >
-              {isEn ? "For Organizers" : "Para Organizadores"}
+              🏢 {isEn ? "For Organizers" : "Para Organizadores"}
             </button>
           </div>
         </div>
 
-        {/* CATEGORIAS */}
+        {/* FILTRO DE CATEGORIAS */}
         {!loading && categorias.length > 1 && (
           <div className="flex flex-wrap gap-3 mb-12 justify-center">
             {categorias.map((cat) => (
@@ -134,7 +203,7 @@ export default function BlogIndexPage({
                     ? audiencia === "pais"
                       ? "bg-[#2563EB] border-[#2563EB] text-white"
                       : "bg-[#16A34A] border-[#16A34A] text-white"
-                    : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-[#2563EB]"
                 }`}
               >
                 {cat === "Tudo"
@@ -164,17 +233,6 @@ export default function BlogIndexPage({
               </div>
             ))}
           </div>
-        ) : postsFiltrados.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-md border border-slate-200 shadow-sm max-w-2xl mx-auto">
-            <h3 className="text-2xl font-black text-[#0F172A] mb-2">
-              {isEn ? "No articles published yet" : "Sem artigos publicados"}
-            </h3>
-            <p className="text-slate-500 font-medium">
-              {isEn
-                ? "We are preparing new guides for this section."
-                : "A nossa equipa editorial está a preparar novos conteúdos para esta secção."}
-            </p>
-          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {postsFiltrados.map((post) => {
@@ -185,12 +243,15 @@ export default function BlogIndexPage({
               const categoria =
                 isEn && post.categoria_en ? post.categoria_en : post.categoria;
               const isPartner = audiencia === "parceiros";
+              const destinoHref = post.link_direto
+                ? `/${lang}${post.link_direto}`
+                : `/${lang}/blog/${post.slug}`;
 
               return (
                 <Link
                   key={post.id}
-                  href={`/${lang}/blog/${post.slug}`}
-                  className="group bg-white rounded-md border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col hover:-translate-y-1 no-underline"
+                  href={destinoHref}
+                  className="group bg-white rounded-md border border-slate-200 shadow-sm hover:shadow-xl hover:border-[#2563EB] transition-all duration-300 overflow-hidden flex flex-col hover:-translate-y-1 no-underline"
                 >
                   <div className="relative w-full h-60 bg-slate-100 overflow-hidden">
                     <img
@@ -204,7 +265,7 @@ export default function BlogIndexPage({
                     />
                     {categoria && (
                       <div
-                        className={`absolute top-4 left-4 px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest text-white shadow-sm ${
+                        className={`absolute top-4 left-4 px-3.5 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest text-white shadow-sm ${
                           isPartner ? "bg-[#16A34A]" : "bg-[#2563EB]"
                         }`}
                       >
@@ -224,11 +285,11 @@ export default function BlogIndexPage({
                     </p>
                     <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
                       <span
-                        className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-widest text-white ${
-                          isPartner ? "bg-[#16A34A]" : "bg-[#2563EB]"
+                        className={`px-5 py-2.5 rounded-md text-[10px] font-black uppercase tracking-widest text-white shadow-sm ${
+                          isPartner ? "bg-[#16A34A]" : "bg-[#F59E0B]"
                         }`}
                       >
-                        {isEn ? "Read Article →" : "Ler Artigo →"}
+                        {isEn ? "Read Guide →" : "Ler Guia →"}
                       </span>
                     </div>
                   </div>

@@ -1,27 +1,10 @@
-import { supabase } from "@/lib/supabase";
+"use client";
+
+import React, { useState, useEffect, useRef, use, Suspense } from "react";
 import Link from "next/link";
-import { Metadata } from "next";
+import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import BotaoFavorito from "../components/BotaoFavorito";
-
-export const dynamic = "force-dynamic";
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ lang: string }>;
-}): Promise<Metadata> {
-  const { lang } = await params;
-  const isEn = lang === "en";
-
-  return {
-    title: isEn
-      ? "Search Holiday Camps & Youth Programs | HelloCamp"
-      : "Pesquisar Campos de Férias e Programas | HelloCamp",
-    description: isEn
-      ? "Filter and compare verified summer camps by sport, age, location, and date."
-      : "Filtre e compare campos de férias verificados por desporto, idade, distrito, país e datas.",
-  };
-}
 
 const normalize = (str: string) =>
   (str || "")
@@ -30,87 +13,180 @@ const normalize = (str: string) =>
     .toLowerCase()
     .trim();
 
-export default async function PesquisaPage({
-  params,
-  searchParams,
+interface OptionItem {
+  value: string;
+  label: string;
+}
+
+function CustomDropdown({
+  label,
+  value,
+  options,
+  onChange,
+  placeholder,
 }: {
-  params: Promise<{ lang: string }>;
-  searchParams: Promise<{ [key: string]: string | undefined }>;
+  label: string;
+  value: string;
+  options: OptionItem[];
+  onChange: (val: string) => void;
+  placeholder: string;
 }) {
-  const { lang } = await params;
-  const sp = await searchParams;
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedLabel =
+    options.find((o) => o.value === value)?.label || placeholder;
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+        {label}
+      </label>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`w-full bg-[#F8FAFC] border ${
+          open ? "border-[#2563EB] bg-white" : "border-slate-200"
+        } rounded-md px-3.5 py-3 text-left text-sm font-bold text-[#0F172A] flex items-center justify-between transition-all cursor-pointer shadow-sm hover:border-[#2563EB]`}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <svg
+          className={`w-4 h-4 text-slate-500 transition-transform flex-shrink-0 ml-2 ${
+            open ? "rotate-180 text-[#2563EB]" : ""
+          }`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth="2.5"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-md shadow-2xl max-h-64 overflow-y-auto py-1">
+          {options.map((opt) => {
+            const active = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center justify-between cursor-pointer border-0 transition-colors ${
+                  active
+                    ? "bg-[#2563EB] text-white font-black"
+                    : "bg-white text-[#0F172A] hover:bg-slate-100"
+                }`}
+              >
+                <span className="truncate">{opt.label}</span>
+                {active && <span>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PesquisaConteudo({ lang }: { lang: string }) {
   const isEn = lang === "en";
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const qParam = sp?.q || "";
-  const paisParam = sp?.pais || "";
-  const distritoParam = sp?.distrito || "";
-  const categoriaParam = sp?.categoria || "";
-  const idadeParam = sp?.idade || "";
-  const dataParam = sp?.data || "";
-  const ordemParam = sp?.ordem || "relevancia";
+  const [todosCampos, setTodosCampos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const { data: todosCampos } = await supabase
-    .from("campos")
-    .select("*")
-    .eq("ativo", true)
-    .order("created_at", { ascending: false });
+  const [q, setQ] = useState(searchParams.get("q") || "");
+  const [distrito, setDistrito] = useState(searchParams.get("distrito") || "");
+  const [categoria, setCategoria] = useState(searchParams.get("categoria") || "");
+  const [idade, setIdade] = useState(searchParams.get("idade") || "");
+  const [dataInicio, setDataInicio] = useState(searchParams.get("data") || "");
+  const [ordem, setOrdem] = useState(searchParams.get("ordem") || "relevancia");
 
-  const listaBruta = todosCampos || [];
+  useEffect(() => {
+    setQ(searchParams.get("q") || "");
+    setDistrito(searchParams.get("distrito") || "");
+    setCategoria(searchParams.get("categoria") || "");
+    setIdade(searchParams.get("idade") || "");
+    setDataInicio(searchParams.get("data") || "");
+    setOrdem(searchParams.get("ordem") || "relevancia");
+  }, [searchParams]);
 
-  const resultados = listaBruta.filter((c: any) => {
-    if (qParam) {
-      const qNorm = normalize(qParam);
-      const texto = normalize(
-        `${c.nome || ""} ${c.nome_en || ""} ${c.categoria || ""} ${
-          c.Distrito || ""
-        } ${c.local || ""} ${c.descricao || ""}`
-      );
-      if (!texto.includes(qNorm)) return false;
+  useEffect(() => {
+    async function carregarCampos() {
+      setLoading(true);
+      const { data } = await supabase
+        .from("campos")
+        .select("*")
+        .eq("ativo", true)
+        .order("created_at", { ascending: false });
+
+      setTodosCampos(data || []);
+      setLoading(false);
     }
+    carregarCampos();
+  }, []);
 
-    if (paisParam) {
-      const paisCampo = normalize(c.pais || "Portugal");
-      if (!paisCampo.includes(normalize(paisParam))) return false;
-    }
+  const distritosOpcoes: OptionItem[] = [
+    { value: "", label: isEn ? "All Districts" : "Todos os Distritos" },
+    ...[
+      "Aveiro",
+      "Beja",
+      "Braga",
+      "Bragança",
+      "Castelo Branco",
+      "Coimbra",
+      "Évora",
+      "Faro",
+      "Guarda",
+      "Leiria",
+      "Lisboa",
+      "Portalegre",
+      "Porto",
+      "Santarém",
+      "Setúbal",
+      "Viana do Castelo",
+      "Vila Real",
+      "Viseu",
+    ].map((d) => ({ value: d, label: d })),
+  ];
 
-    if (distritoParam) {
-      const locCampo = normalize(`${c.Distrito || ""} ${c.local || ""}`);
-      if (!locCampo.includes(normalize(distritoParam))) return false;
-    }
+  const categoriasOpcoes: OptionItem[] = [
+    { value: "", label: isEn ? "All Categories" : "Todas as Categorias" },
+    { value: "Desporto", label: isEn ? "Sports & Football" : "Desporto & Futebol" },
+    { value: "Surf", label: "Surf & Náutica" },
+    { value: "Aventura & Natureza", label: isEn ? "Adventure & Nature" : "Aventura & Natureza" },
+    { value: "Tecnologia & Ciência", label: isEn ? "Tech & Science" : "Tecnologia & Ciência" },
+    { value: "Artes & Criatividade", label: isEn ? "Arts & Creativity" : "Artes & Criatividade" },
+    { value: "Línguas", label: isEn ? "Languages" : "Línguas" },
+  ];
 
-    if (categoriaParam) {
-      const catNorm = normalize(categoriaParam);
-      const catCampo = normalize(`${c.categoria || ""} ${c.categoria_en || ""}`);
-      if (
-        !catCampo.includes(catNorm) &&
-        !(catNorm.includes("desporto") && catCampo.includes("futebol")) &&
-        !(catNorm.includes("linguas") && catCampo.includes("ingles"))
-      ) {
-        return false;
-      }
-    }
+  const idadesOpcoes: OptionItem[] = [
+    { value: "", label: isEn ? "All Ages" : "Todas as Idades" },
+    { value: "3-6", label: isEn ? "3 to 6 years" : "3 a 6 anos" },
+    { value: "7-12", label: isEn ? "7 to 12 years" : "7 a 12 anos" },
+    { value: "13-18", label: isEn ? "13 to 18 years" : "13 a 18 anos" },
+  ];
 
-    if (idadeParam) {
-      const matchRange = idadeParam.match(/(\d+)\D+(\d+)/);
-      const matchCampo = (c.idade || "").match(/(\d+)\D+(\d+)/);
-      if (matchRange && matchCampo) {
-        const minFiltro = parseInt(matchRange[1], 10);
-        const maxFiltro = parseInt(matchRange[2], 10);
-        const minCampo = parseInt(matchCampo[1], 10);
-        const maxCampo = parseInt(matchCampo[2], 10);
-        if (maxCampo < minFiltro || minCampo > maxFiltro) return false;
-      }
-    }
-
-    if (dataParam) {
-      const dataText = JSON.stringify(c.pacotes || "") + (c.datas || "");
-      if (dataText.length > 5 && !dataText.includes(dataParam.slice(0, 7))) {
-        return false;
-      }
-    }
-
-    return true;
-  });
+  const ordemOpcoes: OptionItem[] = [
+    { value: "relevancia", label: isEn ? "Featured" : "Relevância" },
+    { value: "preco_asc", label: isEn ? "Price: Low to High" : "Preço: Mais Baixo" },
+    { value: "preco_desc", label: isEn ? "Price: High to Low" : "Preço: Mais Alto" },
+  ];
 
   const obterPrecoMinimo = (campo: any) => {
     let p = Number(campo.preco) || 0;
@@ -137,49 +213,85 @@ export default async function PesquisaPage({
     return p;
   };
 
-  if (ordemParam === "preco_asc") {
-    resultados.sort((a, b) => obterPrecoMinimo(a) - obterPrecoMinimo(b));
-  } else if (ordemParam === "preco_desc") {
-    resultados.sort((a, b) => obterPrecoMinimo(b) - obterPrecoMinimo(a));
-  }
+  const resultados = todosCampos
+    .filter((c: any) => {
+      if (q) {
+        const qNorm = normalize(q);
+        const texto = normalize(
+          `${c.nome || ""} ${c.nome_en || ""} ${c.categoria || ""} ${
+            c.Distrito || ""
+          } ${c.local || ""} ${c.descricao || ""}`
+        );
+        if (!texto.includes(qNorm)) return false;
+      }
 
-  const distritosPT = [
-    "Aveiro",
-    "Beja",
-    "Braga",
-    "Bragança",
-    "Castelo Branco",
-    "Coimbra",
-    "Évora",
-    "Faro",
-    "Guarda",
-    "Leiria",
-    "Lisboa",
-    "Portalegre",
-    "Porto",
-    "Santarém",
-    "Setúbal",
-    "Viana do Castelo",
-    "Vila Real",
-    "Viseu",
-  ];
+      if (distrito) {
+        const locCampo = normalize(`${c.Distrito || ""} ${c.local || ""}`);
+        if (!locCampo.includes(normalize(distrito))) return false;
+      }
 
-  const temFiltros =
-    qParam ||
-    paisParam ||
-    distritoParam ||
-    categoriaParam ||
-    idadeParam ||
-    dataParam;
+      if (categoria) {
+        const catNorm = normalize(categoria);
+        const catCampo = normalize(
+          `${c.categoria || ""} ${c.categoria_en || ""}`
+        );
+        if (
+          !catCampo.includes(catNorm) &&
+          !(catNorm.includes("desporto") && catCampo.includes("futebol")) &&
+          !(catNorm.includes("linguas") && catCampo.includes("ingles"))
+        ) {
+          return false;
+        }
+      }
+
+      if (idade) {
+        const matchRange = idade.match(/(\d+)\D+(\d+)/);
+        const matchCampo = (c.idade || "").match(/(\d+)\D+(\d+)/);
+        if (matchRange && matchCampo) {
+          const minFiltro = parseInt(matchRange[1], 10);
+          const maxFiltro = parseInt(matchRange[2], 10);
+          const minCampo = parseInt(matchCampo[1], 10);
+          const maxCampo = parseInt(matchCampo[2], 10);
+          if (maxCampo < minFiltro || minCampo > maxFiltro) return false;
+        }
+      }
+
+      if (dataInicio) {
+        const dataText = JSON.stringify(c.pacotes || "") + (c.datas || "");
+        if (dataText.length > 5 && !dataText.includes(dataInicio.slice(0, 7))) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      if (ordem === "preco_asc") return obterPrecoMinimo(a) - obterPrecoMinimo(b);
+      if (ordem === "preco_desc") return obterPrecoMinimo(b) - obterPrecoMinimo(a);
+      return 0;
+    });
+
+  const limparFiltros = () => {
+    setQ("");
+    setDistrito("");
+    setCategoria("");
+    setIdade("");
+    setDataInicio("");
+    setOrdem("relevancia");
+    router.push(`/${lang}/pesquisa`);
+  };
+
+  const temFiltros = q || distrito || categoria || idade || dataInicio;
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A] pb-24">
       {/* HEADER DA PESQUISA */}
-      <section className="bg-[#2563EB] text-white pt-12 pb-16 px-4 md:px-8 border-b-4 border-[#F59E0B]">
-        <div className="max-w-[1280px] mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <section className="bg-[#2563EB] text-white pt-14 pb-20 px-4 md:px-8 border-b-8 border-[#F59E0B] relative overflow-hidden">
+        <div className="absolute -top-20 -right-20 w-80 h-80 bg-[#F59E0B] rounded-full opacity-90 pointer-events-none hidden lg:block" />
+        <div className="max-w-[1280px] mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6 relative z-10">
           <div>
-            <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-3">
-              {isEn ? "Directory & Booking" : "Diretório Oficial"}
+            <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-md mb-3">
+              {isEn ? "Directory & Booking" : "Diretório Oficial HelloCamp"}
             </span>
             <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white m-0">
               {isEn ? "Explore Holiday Camps" : "Explorar Campos de Férias"}
@@ -193,7 +305,7 @@ export default async function PesquisaPage({
 
           <Link
             href={`/${lang}/mapa`}
-            className="bg-[#F59E0B] hover:bg-amber-600 text-white px-6 py-3.5 rounded-md text-xs font-black uppercase tracking-widest no-underline transition-all shadow-md flex items-center justify-center gap-2 w-fit"
+            className="bg-[#F59E0B] hover:bg-amber-600 text-white px-6 py-4 rounded-md text-xs font-black uppercase tracking-widest no-underline transition-all shadow-lg flex items-center justify-center gap-2 w-fit"
           >
             <span>🗺️</span>{" "}
             {isEn ? "Open Interactive Map" : "Ver no Mapa Interativo"}
@@ -201,149 +313,100 @@ export default async function PesquisaPage({
         </div>
       </section>
 
-      {/* BARRA DE FILTROS */}
-      <section className="max-w-[1280px] mx-auto px-4 md:px-8 -mt-8 relative z-20 mb-10">
-        <form
-          action={`/${lang}/pesquisa`}
-          method="GET"
-          className="bg-white p-6 rounded-md shadow-xl border border-slate-200 space-y-4"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+      {/* BARRA DE FILTROS COM DROPDOWNS 100% CUSTOMIZADOS */}
+      <section className="max-w-[1280px] mx-auto px-4 md:px-8 -mt-10 relative z-30 mb-10">
+        <div className="bg-white p-6 rounded-md shadow-xl border border-slate-200 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             <div className="md:col-span-4">
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
                 {isEn ? "Keyword" : "Pesquisa Livre"}
               </label>
               <input
                 type="text"
-                name="q"
-                defaultValue={qParam}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
                 placeholder={
                   isEn
                     ? "Surf, Football, Robotics, Lisbon..."
                     : "Surf, Futebol, Robótica, Lisboa..."
                 }
-                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white"
+                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white shadow-sm"
+              />
+            </div>
+
+            <div className="md:col-span-3">
+              <CustomDropdown
+                label={isEn ? "District" : "Distrito"}
+                value={distrito}
+                options={distritosOpcoes}
+                onChange={setDistrito}
+                placeholder={isEn ? "All Districts" : "Todos os Distritos"}
+              />
+            </div>
+
+            <div className="md:col-span-3">
+              <CustomDropdown
+                label={isEn ? "Category" : "Categoria"}
+                value={categoria}
+                options={categoriasOpcoes}
+                onChange={setCategoria}
+                placeholder={isEn ? "All Categories" : "Todas as Categorias"}
               />
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                {isEn ? "District" : "Distrito"}
-              </label>
-              <select
-                name="distrito"
-                defaultValue={distritoParam}
-                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-3 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] cursor-pointer"
-              >
-                <option value="">
-                  {isEn ? "All Districts" : "Todos os Distritos"}
-                </option>
-                {distritosPT.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                {isEn ? "Category" : "Categoria"}
-              </label>
-              <select
-                name="categoria"
-                defaultValue={categoriaParam}
-                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-3 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] cursor-pointer"
-              >
-                <option value="">
-                  {isEn ? "All Categories" : "Todas as Categorias"}
-                </option>
-                <option value="Desporto">{isEn ? "Sports" : "Desporto"}</option>
-                <option value="Surf">Surf & Náutica</option>
-                <option value="Aventura & Natureza">
-                  {isEn ? "Adventure & Nature" : "Aventura & Natureza"}
-                </option>
-                <option value="Tecnologia & Ciência">
-                  {isEn ? "Tech & Science" : "Tecnologia & Ciência"}
-                </option>
-                <option value="Artes & Criatividade">
-                  {isEn ? "Arts & Creativity" : "Artes & Criatividade"}
-                </option>
-                <option value="Línguas">{isEn ? "Languages" : "Línguas"}</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                {isEn ? "Age Group" : "Faixa Etária"}
-              </label>
-              <select
-                name="idade"
-                defaultValue={idadeParam}
-                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-3 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] cursor-pointer"
-              >
-                <option value="">
-                  {isEn ? "All Ages" : "Todas as Idades"}
-                </option>
-                <option value="3-6">3 - 6 {isEn ? "years" : "anos"}</option>
-                <option value="7-12">7 - 12 {isEn ? "years" : "anos"}</option>
-                <option value="13-18">13 - 18 {isEn ? "years" : "anos"}</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-2 flex items-end">
-              <button
-                type="submit"
-                className="w-full bg-[#F59E0B] hover:bg-amber-600 text-white font-black uppercase tracking-widest text-xs py-3.5 px-4 rounded-md transition-colors cursor-pointer border-0 shadow-sm"
-              >
-                {isEn ? "Filter Results" : "Filtrar Campos"}
-              </button>
+              <CustomDropdown
+                label={isEn ? "Age Group" : "Faixa Etária"}
+                value={idade}
+                options={idadesOpcoes}
+                onChange={setIdade}
+                placeholder={isEn ? "All Ages" : "Todas as Idades"}
+              />
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-black text-slate-500">
+              <span className="bg-[#2563EB] text-white text-xs font-black px-3.5 py-1.5 rounded-md">
                 {resultados.length}{" "}
                 {isEn ? "programs found" : "programas encontrados"}
               </span>
               {temFiltros && (
-                <Link
-                  href={`/${lang}/pesquisa`}
-                  className="bg-[#F43F5E] hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-md no-underline"
+                <button
+                  type="button"
+                  onClick={limparFiltros}
+                  className="bg-[#F43F5E] hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest px-3.5 py-2 rounded-md border-0 cursor-pointer"
                 >
                   ✕ {isEn ? "Clear Filters" : "Limpar Filtros"}
-                </Link>
+                </button>
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                {isEn ? "Sort by:" : "Ordenar:"}
-              </label>
-              <select
-                name="ordem"
-                defaultValue={ordemParam}
-                className="bg-[#F8FAFC] border border-slate-200 rounded-md px-3 py-1.5 text-xs font-bold text-[#0F172A] outline-none"
-              >
-                <option value="relevancia">
-                  {isEn ? "Featured" : "Relevância"}
-                </option>
-                <option value="preco_asc">
-                  {isEn ? "Price: Low to High" : "Preço: Mais Baixo"}
-                </option>
-                <option value="preco_desc">
-                  {isEn ? "Price: High to Low" : "Preço: Mais Alto"}
-                </option>
-              </select>
+            <div className="w-60">
+              <CustomDropdown
+                label={isEn ? "Sort by" : "Ordenar por"}
+                value={ordem}
+                options={ordemOpcoes}
+                onChange={setOrdem}
+                placeholder={isEn ? "Featured" : "Relevância"}
+              />
             </div>
           </div>
-        </form>
+        </div>
       </section>
 
       {/* GRELHA DE RESULTADOS */}
       <section className="max-w-[1280px] mx-auto px-4 md:px-8">
-        {resultados.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <div
+                key={n}
+                className="bg-white rounded-md border border-slate-200 h-96 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : resultados.length === 0 ? (
           <div className="bg-white rounded-md border border-slate-200 p-12 text-center shadow-sm max-w-xl mx-auto">
             <span className="text-5xl block mb-4">🏕️</span>
             <h2 className="text-2xl font-black text-[#0F172A] mb-2">
@@ -356,12 +419,13 @@ export default async function PesquisaPage({
                 ? "Try clearing some filters or exploring all active programs."
                 : "Experimente limpar os filtros selecionados para ver todos os programas ativos."}
             </p>
-            <Link
-              href={`/${lang}/pesquisa`}
-              className="inline-block bg-[#2563EB] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-md no-underline shadow-sm"
+            <button
+              type="button"
+              onClick={limparFiltros}
+              className="bg-[#2563EB] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-md border-0 cursor-pointer shadow-sm"
             >
               {isEn ? "Show All Camps" : "Ver Todos os Campos"}
-            </Link>
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -439,5 +503,24 @@ export default async function PesquisaPage({
         )}
       </section>
     </main>
+  );
+}
+
+export default function PesquisaPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
+  const { lang } = use(params);
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center text-xs font-black uppercase tracking-widest text-slate-400">
+          A carregar campos...
+        </div>
+      }
+    >
+      <PesquisaConteudo lang={lang} />
+    </Suspense>
   );
 }

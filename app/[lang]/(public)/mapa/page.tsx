@@ -1,238 +1,279 @@
-import { supabase } from "@/lib/supabase";
-import { getDictionary } from "@/lib/getDictionary";
-import { unstable_cache } from "next/cache";
+"use client";
+
+import React, { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
-import { Metadata } from "next";
+import { supabase } from "@/lib/supabase";
 import MapaWrapper from "./MapaWrapper";
 
-export const dynamic = "force-dynamic";
-
-export async function generateMetadata({
+export default function PaginaMapa({
   params,
 }: {
   params: Promise<{ lang: string }>;
-}): Promise<Metadata> {
-  const { lang } = await params;
-  const isEn = lang === "en";
-
-  const title = isEn
-    ? "Interactive Summer Camps Map | HelloCamp"
-    : "Mapa Interativo de Campos de Férias | HelloCamp";
-
-  const description = isEn
-    ? "Explore all holiday camps, sports clinics, and youth activities in Portugal and Europe on our interactive map. Filter by category, age, and spoken languages."
-    : "Explore no mapa interativo todos os campos de férias em Portugal e na Europa. Filtre por categoria, faixa etária e línguas faladas.";
-
-  return {
-    title,
-    description,
-    alternates: {
-      canonical: `https://www.hellocamp.pt/${lang}/mapa`,
-      languages: {
-        "pt-PT": "https://www.hellocamp.pt/pt/mapa",
-        "en-US": "https://www.hellocamp.pt/en/mapa",
-      },
-    },
-    openGraph: {
-      title,
-      description,
-      url: `https://www.hellocamp.pt/${lang}/mapa`,
-      siteName: "HelloCamp",
-      type: "website",
-    },
-  };
-}
-
-// ═══════════════════════════════════════════
-// CACHE DE DADOS (24 HORAS) - ZERO EGRESS
-// ═══════════════════════════════════════════
-const getCamposMapaCache = unstable_cache(
-  async () => {
-    const { data } = await supabase
-      .from("campos")
-      .select(
-        "id, nome, nome_en, categoria, categoria_en, idade, idade_en, linguas_faladas, preco, pacotes, imagem, latitude, longitude"
-      )
-      .eq("ativo", true)
-      .not("contrato_parceiro_url", "is", null);
-    return data || [];
-  },
-  ["cache-mapa-campos-v3"],
-  { revalidate: 86400 }
-);
-
-export default async function PaginaMapa({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ lang: string }>;
-  searchParams?: Promise<{ [key: string]: string | undefined }>;
 }) {
-  const { lang } = await params;
-  const dict = await getDictionary(lang as "pt" | "en");
-  const sp = await searchParams;
+  const { lang } = use(params);
   const isEn = lang === "en";
 
-  const categoria = sp?.categoria || "";
-  const idade = sp?.idade || "";
-  const lingua = sp?.lingua || "";
+  const [campos, setCampos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [categoriaFiltro, setCategoriaFiltro] = useState("Todas");
+  const [distritoFiltro, setDistritoFiltro] = useState("Todos");
+  const [dropCatOpen, setDropCatOpen] = useState(false);
+  const [dropDistOpen, setDropDistOpen] = useState(false);
 
-  // 1. CARREGAR DADOS DA CACHE
-  const todosOsCamposRaw = await getCamposMapaCache();
+  const catRef = useRef<HTMLDivElement>(null);
+  const distRef = useRef<HTMLDivElement>(null);
 
-  // Garante que se o campo tiver preço base 0 mas tiver pacotes, calcula o preço mínimo para mostrar no pino do mapa
-  const todosOsCampos = todosOsCamposRaw.map((c: any) => {
-    let precoCalc = Number(c.preco) || 0;
-    if (!precoCalc && Array.isArray(c.pacotes) && c.pacotes.length > 0) {
-      const todosPrecos = c.pacotes.flatMap((p: any) =>
-        Array.isArray(p.variantes) ? p.variantes.map((v: any) => Number(v.preco) || 0).filter((v: number) => v > 0) : []
-      );
-      if (todosPrecos.length > 0) precoCalc = Math.min(...todosPrecos);
+  useEffect(() => {
+    const closeDrops = (e: MouseEvent) => {
+      if (catRef.current && !catRef.current.contains(e.target as Node)) {
+        setDropCatOpen(false);
+      }
+      if (distRef.current && !distRef.current.contains(e.target as Node)) {
+        setDropDistOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeDrops);
+    return () => document.removeEventListener("mousedown", closeDrops);
+  }, []);
+
+  useEffect(() => {
+    async function fetchCampos() {
+      setLoading(true);
+      const { data } = await supabase
+        .from("campos")
+        .select("*")
+        .eq("ativo", true);
+      setCampos(data || []);
+      setLoading(false);
     }
-    return { ...c, preco: precoCalc };
+    fetchCampos();
+  }, []);
+
+  const categorias = [
+    "Todas",
+    ...Array.from(
+      new Set(
+        campos
+          .map((c) => (isEn && c.categoria_en ? c.categoria_en : c.categoria))
+          .filter(Boolean)
+      )
+    ),
+  ];
+
+  const distritos = [
+    "Todos",
+    ...Array.from(
+      new Set(
+        campos
+          .map((c) => c.Distrito || c.local || c.local_en)
+          .filter(Boolean)
+      )
+    ).sort(),
+  ];
+
+  const camposFiltrados = campos.filter((c) => {
+    const catReal = isEn && c.categoria_en ? c.categoria_en : c.categoria;
+    if (categoriaFiltro !== "Todas" && catReal !== categoriaFiltro) {
+      return false;
+    }
+    const loc = c.Distrito || c.local;
+    if (distritoFiltro !== "Todos" && loc !== distritoFiltro) {
+      return false;
+    }
+    return true;
   });
-
-  // Extrair opções únicas para os selects de filtro
-  const categoriasMap = new Map<string, string>();
-  const idadesMap = new Map<string, string>();
-  const linguasSet = new Set<string>();
-
-  todosOsCampos.forEach((c: any) => {
-    if (c.categoria?.trim()) {
-      categoriasMap.set(c.categoria.trim(), c.categoria_en?.trim() || c.categoria.trim());
-    }
-    if (c.idade?.trim()) {
-      idadesMap.set(c.idade.trim(), c.idade_en?.trim() || c.idade.trim());
-    }
-    if (c.linguas_faladas) {
-      String(c.linguas_faladas)
-        .split(",")
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .forEach((l) => linguasSet.add(l));
-    }
-  });
-
-  const categoriasOpcoes = Array.from(categoriasMap.entries()).map(([pt, en]) => ({
-    valor: pt,
-    label: isEn ? en : pt,
-  }));
-  const idadesOpcoes = Array.from(idadesMap.entries()).map(([pt, en]) => ({
-    valor: pt,
-    label: isEn ? en : pt,
-  }));
-  const linguasUnicas = Array.from(linguasSet).sort();
-
-  // 2. FILTRAGEM INSTANTÂNEA NA RAM
-  let camposExibidos = todosOsCampos;
-
-  if (categoria) camposExibidos = camposExibidos.filter((c: any) => c.categoria === categoria);
-  if (idade) camposExibidos = camposExibidos.filter((c: any) => c.idade === idade);
-  if (lingua) {
-    camposExibidos = camposExibidos.filter((c: any) =>
-      String(c.linguas_faladas || "").toLowerCase().includes(lingua.toLowerCase())
-    );
-  }
-
-  const temFiltrosAtivos = !!(categoria || idade || lingua);
 
   return (
-    <main className="flex flex-col md:flex-row h-[calc(100vh-64px)] md:h-[calc(100vh-80px)] bg-slate-50 font-sans overflow-hidden">
-      {/* BARRA LATERAL (SIDEBAR DE FILTROS) */}
-      <aside className="w-full md:w-[380px] bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-6 md:p-8 flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 max-h-[45vh] md:max-h-full">
-        <Link
-          href={`/${lang}`}
-          className="hidden md:inline-flex items-center gap-2 mb-8 text-[10px] font-black uppercase tracking-widest text-slate-400 no-underline hover:text-slate-900 transition-colors bg-slate-50 px-3 py-1.5 rounded-lg w-max"
-        >
-          &larr; {dict.mapa.voltar}
-        </Link>
-
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight m-0">
-            {dict.mapa.filtros}
-          </h1>
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
-            {camposExibidos.length} {dict.mapa.encontrados}
-          </span>
-        </div>
-
-        <form action={`/${lang}/mapa`} method="GET" className="flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
-              {dict.mapa.categoria}
-            </label>
-            <select
-              name="categoria"
-              defaultValue={categoria}
-              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-slate-900 cursor-pointer transition-colors"
-            >
-              <option value="">{dict.mapa.todas}</option>
-              {categoriasOpcoes.map((cat) => (
-                <option key={cat.valor} value={cat.valor}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
+    <main className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A] pb-16 flex flex-col">
+      {/* BARRA DE TOPO DO MAPA */}
+      <section className="bg-[#2563EB] text-white py-8 px-4 md:px-8 border-b-4 border-[#F59E0B]">
+        <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div>
+            <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-2">
+              🗺️ {isEn ? "Geolocation Explorer" : "Exploração Geográfica"}
+            </span>
+            <h1 className="text-2xl md:text-4xl font-black tracking-tight text-white m-0">
+              {isEn
+                ? "Interactive Map of Holiday Camps"
+                : "Mapa Interativo de Campos de Férias"}
+            </h1>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
-              {dict.mapa.idade}
-            </label>
-            <select
-              name="idade"
-              defaultValue={idade}
-              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-slate-900 cursor-pointer transition-colors"
-            >
-              <option value="">{dict.mapa.qualquer_idade}</option>
-              {idadesOpcoes.map((id) => (
-                <option key={id.valor} value={id.valor}>
-                  {id.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
-              {dict.mapa.linguas}
-            </label>
-            <select
-              name="lingua"
-              defaultValue={lingua}
-              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-slate-900 cursor-pointer transition-colors"
-            >
-              <option value="">{dict.mapa.qualquer_lingua}</option>
-              {linguasUnicas.map((lin) => (
-                <option key={lin} value={lin}>
-                  {lin}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-3 mt-4">
-            <button
-              type="submit"
-              className="w-full bg-[#167524] hover:bg-[#115a1b] text-white font-black py-4 rounded-xl text-sm transition-all shadow-md cursor-pointer"
-            >
-              {dict.mapa.atualizar}
-            </button>
-            {temFiltrosAtivos && (
-              <Link
-                href={`/${lang}/mapa`}
-                className="text-xs font-bold text-red-600 hover:text-red-700 uppercase tracking-widest text-center transition-colors no-underline"
+          {/* FILTROS COM DROPDOWNS 100% CUSTOMIZADOS */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Dropdown Categoria */}
+            <div ref={catRef} className="relative w-52">
+              <button
+                type="button"
+                onClick={() => setDropCatOpen((p) => !p)}
+                className="w-full bg-white text-[#0F172A] px-4 py-3 rounded-md text-xs font-black uppercase tracking-wider flex items-center justify-between border-0 cursor-pointer shadow-md"
               >
-                {dict.mapa.limpar}
-              </Link>
+                <span className="truncate">
+                  {categoriaFiltro === "Todas"
+                    ? isEn
+                      ? "All Categories"
+                      : "Todas as Categorias"
+                    : categoriaFiltro}
+                </span>
+                <span>▾</span>
+              </button>
+              {dropCatOpen && (
+                <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-md shadow-2xl max-h-60 overflow-y-auto py-1">
+                  {categorias.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => {
+                        setCategoriaFiltro(cat);
+                        setDropCatOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center justify-between cursor-pointer border-0 ${
+                        categoriaFiltro === cat
+                          ? "bg-[#2563EB] text-white font-black"
+                          : "bg-white text-[#0F172A] hover:bg-slate-100"
+                      }`}
+                    >
+                      <span className="truncate">{cat}</span>
+                      {categoriaFiltro === cat && <span>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Dropdown Distrito */}
+            <div ref={distRef} className="relative w-52">
+              <button
+                type="button"
+                onClick={() => setDropDistOpen((p) => !p)}
+                className="w-full bg-white text-[#0F172A] px-4 py-3 rounded-md text-xs font-black uppercase tracking-wider flex items-center justify-between border-0 cursor-pointer shadow-md"
+              >
+                <span className="truncate">
+                  {distritoFiltro === "Todos"
+                    ? isEn
+                      ? "All Districts"
+                      : "Todos os Distritos"
+                    : distritoFiltro}
+                </span>
+                <span>▾</span>
+              </button>
+              {dropDistOpen && (
+                <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-md shadow-2xl max-h-60 overflow-y-auto py-1">
+                  {distritos.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => {
+                        setDistritoFiltro(d);
+                        setDropDistOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center justify-between cursor-pointer border-0 ${
+                        distritoFiltro === d
+                          ? "bg-[#2563EB] text-white font-black"
+                          : "bg-white text-[#0F172A] hover:bg-slate-100"
+                      }`}
+                    >
+                      <span className="truncate">{d}</span>
+                      {distritoFiltro === d && <span>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Link
+              href={`/${lang}/pesquisa`}
+              className="bg-[#F59E0B] hover:bg-amber-600 text-white px-5 py-3 rounded-md text-xs font-black uppercase tracking-widest no-underline shadow-md"
+            >
+              {isEn ? "List View →" : "Ver em Lista →"}
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* CORPO: LISTA LATERAL + MAPA INTERATIVO (USANDO MapaWrapper) */}
+      <section className="max-w-[1400px] mx-auto px-4 md:px-8 pt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 w-full">
+        <div className="lg:col-span-4 space-y-4 max-h-[680px] overflow-y-auto pr-1">
+          <div className="bg-white p-4 rounded-md border border-slate-200 flex items-center justify-between shadow-sm">
+            <span className="text-xs font-black uppercase tracking-widest text-[#0F172A]">
+              {camposFiltrados.length}{" "}
+              {isEn ? "Camps on Map" : "Campos no Mapa"}
+            </span>
+            {(categoriaFiltro !== "Todas" || distritoFiltro !== "Todos") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoriaFiltro("Todas");
+                  setDistritoFiltro("Todos");
+                }}
+                className="bg-[#F43F5E] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md border-0 cursor-pointer shadow-sm"
+              >
+                ✕ {isEn ? "Reset" : "Limpar"}
+              </button>
             )}
           </div>
-        </form>
-      </aside>
 
-      {/* ÁREA DO MAPA */}
-      <section className="flex-1 relative min-h-[55vh] md:min-h-0 bg-slate-200">
-        <MapaWrapper campos={camposExibidos || []} lang={lang} />
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="bg-white p-4 rounded-md h-28 animate-pulse border border-slate-200"
+                />
+              ))}
+            </div>
+          ) : camposFiltrados.length === 0 ? (
+            <div className="bg-white p-8 rounded-md text-center border border-slate-200">
+              <p className="text-sm font-bold text-slate-500 m-0">
+                {isEn
+                  ? "No camps found for this filter."
+                  : "Nenhum campo encontrado com estes filtros."}
+              </p>
+            </div>
+          ) : (
+            camposFiltrados.map((c) => {
+              const nome = isEn && c.nome_en ? c.nome_en : c.nome;
+              const local = c.Distrito || c.local || "Portugal";
+              const img = c.imagem?.startsWith("http")
+                ? c.imagem
+                : "/og-image.jpg";
+
+              return (
+                <Link
+                  key={c.id}
+                  href={`/${lang}/campo/${c.id}`}
+                  className="flex gap-4 bg-white p-3.5 rounded-md border border-slate-200 hover:border-[#2563EB] shadow-sm transition-all no-underline group"
+                >
+                  <img
+                    src={img}
+                    alt={nome}
+                    className="w-24 h-24 rounded-md object-cover flex-shrink-0 bg-slate-100"
+                  />
+                  <div className="flex flex-col justify-between flex-1 min-w-0">
+                    <div>
+                      <span className="inline-block bg-[#2563EB] text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md mb-1">
+                        {isEn && c.categoria_en ? c.categoria_en : c.categoria}
+                      </span>
+                      <h3 className="text-sm font-black text-[#0F172A] group-hover:text-[#2563EB] truncate m-0">
+                        {nome}
+                      </h3>
+                      <p className="text-[11px] font-bold text-slate-400 m-0 mt-0.5">
+                        📍 {local}
+                      </p>
+                    </div>
+                    <span className="bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md w-fit shadow-sm">
+                      {isEn ? "View Camp →" : "Ver Campo →"}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })
+          )}
+        </div>
+
+        <div className="lg:col-span-8 bg-white rounded-md border-2 border-slate-200 shadow-xl overflow-hidden min-h-[540px] lg:h-[680px]">
+          <MapaWrapper campos={camposFiltrados || []} lang={lang} />
+        </div>
       </section>
     </main>
   );
