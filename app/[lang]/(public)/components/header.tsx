@@ -51,7 +51,7 @@ export default function Header({ dict, lang }: HeaderProps) {
   const navLinks = [
     {
       href: `/${lang}/pesquisa`,
-      label: isEn ? "Explore Camps" : "Explorar Campos",
+      label: isEn ? "Explore" : "Explorar",
       active: pathname?.includes("/pesquisa"),
     },
     {
@@ -80,7 +80,7 @@ export default function Header({ dict, lang }: HeaderProps) {
     <>
       <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 font-sans">
         <div className="max-w-[1280px] mx-auto px-4 md:px-8 h-16 md:h-[74px] flex items-center justify-between gap-4">
-          {/* ESQUERDA: LOGÓTIPO NOVA IDENTIDADE */}
+          
           <Link
             href={`/${lang}`}
             className="text-2xl md:text-[26px] font-black tracking-tight flex items-center no-underline flex-shrink-0"
@@ -89,13 +89,12 @@ export default function Header({ dict, lang }: HeaderProps) {
             <span className="text-[#F59E0B]">Camp</span>
           </Link>
 
-          {/* CENTRO: NAVEGAÇÃO DESKTOP */}
           <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
             {navLinks.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-4 py-2 rounded-full text-[13px] font-bold whitespace-nowrap no-underline transition-all ${
+                className={`px-3.5 py-2 rounded-md text-[13px] font-bold whitespace-nowrap no-underline transition-all ${
                   item.active
                     ? "text-[#2563EB] bg-blue-50 font-black"
                     : "text-slate-600 hover:text-[#0F172A] hover:bg-slate-100"
@@ -106,13 +105,12 @@ export default function Header({ dict, lang }: HeaderProps) {
             ))}
           </nav>
 
-          {/* DIREITA: PESQUISA + PARCEIROS + IDIOMA + CONTA */}
           <div className="flex items-center gap-2.5 md:gap-3.5 flex-shrink-0">
-            {/* Botão Lupa Minimalista */}
+            
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="w-9 h-9 rounded-full bg-[#F8FAFC] hover:bg-slate-200/80 text-slate-600 flex items-center justify-center transition-colors border border-slate-200 cursor-pointer"
+              className="w-9 h-9 rounded-md bg-[#F8FAFC] hover:bg-slate-200/80 text-slate-600 flex items-center justify-center transition-colors border border-slate-200 cursor-pointer"
               title={isEn ? "Quick Search (⌘K)" : "Pesquisa Rápida (⌘K)"}
               aria-label="Pesquisar"
             >
@@ -128,10 +126,9 @@ export default function Header({ dict, lang }: HeaderProps) {
               </svg>
             </button>
 
-            {/* Botão Parceiros B2B - Destaque Amarelo Solar / Verde Natureza */}
             <Link
               href={`/${lang}/parceiro`}
-              className="hidden md:inline-flex items-center text-[11px] font-black uppercase tracking-wider text-[#0F172A] bg-[#F59E0B] hover:bg-[#d97706] px-4 py-2 rounded-full transition-all no-underline whitespace-nowrap shadow-sm"
+              className="hidden md:inline-flex items-center text-[11px] font-black uppercase tracking-wider text-[#0F172A] bg-[#F59E0B] hover:bg-[#d97706] px-4 py-2 rounded-md transition-all no-underline whitespace-nowrap shadow-sm"
             >
               {isEn ? "Partners" : "Parceiros"}
             </Link>
@@ -144,11 +141,10 @@ export default function Header({ dict, lang }: HeaderProps) {
 
             <AuthButton dict={dict} lang={lang} />
 
-            {/* Botão Menu Mobile */}
             <button
               type="button"
               onClick={() => setMenuAberto(!menuAberto)}
-              className="lg:hidden p-2 rounded-xl text-[#0F172A] hover:bg-slate-100 transition-colors cursor-pointer"
+              className="lg:hidden p-2 rounded-md text-[#0F172A] hover:bg-slate-100 transition-colors cursor-pointer"
               aria-label="Menu"
             >
               {menuAberto ? (
@@ -184,7 +180,6 @@ export default function Header({ dict, lang }: HeaderProps) {
           </div>
         </div>
 
-        {/* DRAWER MENU MOBILE */}
         {menuAberto && (
           <div className="lg:hidden bg-white border-t border-slate-200 px-6 py-6 shadow-xl flex flex-col gap-3">
             <form onSubmit={handleQuickSearch} className="relative w-full mb-2">
@@ -197,7 +192,7 @@ export default function Header({ dict, lang }: HeaderProps) {
                     ? "Search camps, sports, cities..."
                     : "Pesquisar campos, desportos, locais..."
                 }
-                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB]"
+                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB]"
               />
               <button
                 type="submit"
@@ -221,7 +216,7 @@ export default function Header({ dict, lang }: HeaderProps) {
             <Link
               href={`/${lang}/parceiro`}
               onClick={() => setMenuAberto(false)}
-              className="mt-2 w-full text-center bg-[#F59E0B] text-[#0F172A] font-black uppercase tracking-widest text-xs py-3.5 rounded-full no-underline shadow-md"
+              className="mt-2 w-full text-center bg-[#F59E0B] text-[#0F172A] font-black uppercase tracking-widest text-xs py-3.5 rounded-md no-underline shadow-md"
             >
               {isEn ? "For Organizers (B2B)" : "Área de Parceiros (B2B)"}
             </Link>
@@ -236,14 +231,13 @@ export default function Header({ dict, lang }: HeaderProps) {
         )}
       </header>
 
-      {/* MODAL DE PESQUISA RÁPIDA (⌘K) */}
       {searchOpen && (
         <div
           className="fixed inset-0 z-50 bg-[#0F172A]/60 backdrop-blur-sm flex items-start justify-center pt-24 px-4"
           onClick={() => setSearchOpen(false)}
         >
           <div
-            className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 p-6"
+            className="bg-white w-full max-w-xl rounded-md shadow-2xl border border-slate-200 p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -269,11 +263,11 @@ export default function Header({ dict, lang }: HeaderProps) {
                     ? "Type a sport, city, or camp name..."
                     : "Escreva um desporto, cidade ou nome do campo..."
                 }
-                className="flex-1 bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-3.5 text-base font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white"
+                className="flex-1 bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3.5 text-base font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white"
               />
               <button
                 type="submit"
-                className="bg-[#2563EB] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-xs px-6 py-3.5 rounded-xl transition-colors cursor-pointer"
+                className="bg-[#2563EB] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-xs px-6 py-3.5 rounded-md transition-colors cursor-pointer"
               >
                 {isEn ? "Search" : "Ir"}
               </button>

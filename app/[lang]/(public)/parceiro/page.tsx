@@ -34,13 +34,13 @@ export default async function ParceiroLandingPage({
       
       {/* HERO PARCEIROS */}
       <section className="bg-[#0F172A] text-white pt-24 pb-36 px-4 md:px-8 relative overflow-hidden">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#16A34A]/20 rounded-full blur-[140px] pointer-events-none" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-[#F59E0B]/20 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#16A34A]/20 rounded-md blur-[140px] pointer-events-none" />
+        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-[#F59E0B]/20 rounded-md blur-[120px] pointer-events-none" />
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-full text-xs font-black uppercase tracking-widest text-emerald-300 mb-8 backdrop-blur-md">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-md text-xs font-black uppercase tracking-widest text-emerald-300 mb-8 backdrop-blur-md">
             <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A] animate-pulse" />
-            {isEn ? "HelloCamp B2B Network" : "Rede de Parceiros B2B"}[cite: 2]
+            {isEn ? "HelloCamp B2B Network" : "Rede de Parceiros B2B"}
           </div>
 
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight mb-6 leading-[1.1]">
@@ -58,15 +58,15 @@ export default async function ParceiroLandingPage({
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link
               href={`/${lang}/registo`}
-              className="w-full sm:w-auto bg-[#F59E0B] hover:bg-amber-500 text-[#0F172A] font-black uppercase tracking-widest text-sm px-10 py-5 rounded-2xl shadow-xl transition-all hover:scale-105 no-underline"
+              className="w-full sm:w-auto bg-[#F59E0B] hover:bg-amber-500 text-[#0F172A] font-black uppercase tracking-widest text-sm px-10 py-5 rounded-md shadow-xl transition-all hover:scale-105 no-underline"
             >
               {isEn ? "Join as Partner for Free" : "Criar Conta de Parceiro Grátis"}
             </Link>
             <Link
               href={`/${lang}/login`}
-              className="w-full sm:w-auto bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-sm px-10 py-5 rounded-2xl transition-all backdrop-blur-md no-underline"
+              className="w-full sm:w-auto bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-sm px-10 py-5 rounded-md transition-all backdrop-blur-md no-underline"
             >
-              {isEn ? "Partner Login" : "Entrar no Portal"}[cite: 4]
+              {isEn ? "Partner Login" : "Entrar no Portal"}
             </Link>
           </div>
         </div>
@@ -86,8 +86,8 @@ export default async function ParceiroLandingPage({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="bg-white p-8 rounded-4xl border border-slate-200 shadow-sm flex flex-col">
-            <div className="w-14 h-14 bg-emerald-50 text-[#16A34A] rounded-2xl flex items-center justify-center text-2xl font-black mb-6 border border-emerald-100">
+          <div className="bg-white p-8 rounded-md border border-slate-200 shadow-sm flex flex-col">
+            <div className="w-14 h-14 bg-emerald-50 text-[#16A34A] rounded-md flex items-center justify-center text-2xl font-black mb-6 border border-emerald-100">
               ✓
             </div>
             <h3 className="text-xl font-black text-[#0F172A] mb-3">
@@ -100,8 +100,8 @@ export default async function ParceiroLandingPage({
             </p>
           </div>
 
-          <div className="bg-white p-8 rounded-4xl border border-slate-200 shadow-sm flex flex-col">
-            <div className="w-14 h-14 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center text-2xl font-black mb-6 border border-blue-100">
+          <div className="bg-white p-8 rounded-md border border-slate-200 shadow-sm flex flex-col">
+            <div className="w-14 h-14 bg-blue-50 text-[#2563EB] rounded-md flex items-center justify-center text-2xl font-black mb-6 border border-blue-100">
               🛡️
             </div>
             <h3 className="text-xl font-black text-[#0F172A] mb-3">
@@ -114,8 +114,8 @@ export default async function ParceiroLandingPage({
             </p>
           </div>
 
-          <div className="bg-white p-8 rounded-4xl border border-slate-200 shadow-sm flex flex-col">
-            <div className="w-14 h-14 bg-amber-50 text-[#F59E0B] rounded-2xl flex items-center justify-center text-2xl font-black mb-6 border border-amber-100">
+          <div className="bg-white p-8 rounded-md border border-slate-200 shadow-sm flex flex-col">
+            <div className="w-14 h-14 bg-amber-50 text-[#F59E0B] rounded-md flex items-center justify-center text-2xl font-black mb-6 border border-amber-100">
               ⚡
             </div>
             <h3 className="text-xl font-black text-[#0F172A] mb-3">
