@@ -81,6 +81,7 @@ export default function Header({ dict, lang }: HeaderProps) {
       <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 font-sans">
         <div className="max-w-[1280px] mx-auto px-4 md:px-8 h-16 md:h-[74px] flex items-center justify-between gap-4">
           
+          {/* LOGÓTIPO */}
           <Link
             href={`/${lang}`}
             className="text-2xl md:text-[26px] font-black tracking-tight flex items-center no-underline flex-shrink-0"
@@ -89,6 +90,7 @@ export default function Header({ dict, lang }: HeaderProps) {
             <span className="text-[#F59E0B]">Camp</span>
           </Link>
 
+          {/* NAVEGAÇÃO DESKTOP (Sem quebras de linha) */}
           <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
             {navLinks.map((item) => (
               <Link
@@ -105,8 +107,10 @@ export default function Header({ dict, lang }: HeaderProps) {
             ))}
           </nav>
 
+          {/* AÇÕES DIREITA */}
           <div className="flex items-center gap-2.5 md:gap-3.5 flex-shrink-0">
             
+            {/* Lupa de Pesquisa Rápida */}
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
@@ -126,9 +130,10 @@ export default function Header({ dict, lang }: HeaderProps) {
               </svg>
             </button>
 
+            {/* Botão Parceiros */}
             <Link
               href={`/${lang}/parceiro`}
-              className="hidden md:inline-flex items-center text-[11px] font-black uppercase tracking-wider text-[#0F172A] bg-[#F59E0B] hover:bg-[#d97706] px-4 py-2 rounded-md transition-all no-underline whitespace-nowrap shadow-sm"
+              className="hidden md:inline-flex items-center text-[11px] font-black uppercase tracking-wider text-white bg-[#F59E0B] hover:bg-amber-600 px-4 py-2 rounded-md transition-all no-underline whitespace-nowrap shadow-sm"
             >
               {isEn ? "Partners" : "Parceiros"}
             </Link>
@@ -141,6 +146,7 @@ export default function Header({ dict, lang }: HeaderProps) {
 
             <AuthButton dict={dict} lang={lang} />
 
+            {/* Menu Mobile */}
             <button
               type="button"
               onClick={() => setMenuAberto(!menuAberto)}
@@ -148,38 +154,19 @@ export default function Header({ dict, lang }: HeaderProps) {
               aria-label="Menu"
             >
               {menuAberto ? (
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  strokeWidth="2.5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               ) : (
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  strokeWidth="2.5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               )}
             </button>
           </div>
         </div>
 
+        {/* MENU MOBILE */}
         {menuAberto && (
           <div className="lg:hidden bg-white border-t border-slate-200 px-6 py-6 shadow-xl flex flex-col gap-3">
             <form onSubmit={handleQuickSearch} className="relative w-full mb-2">
@@ -187,17 +174,10 @@ export default function Header({ dict, lang }: HeaderProps) {
                 type="text"
                 value={termoPesquisa}
                 onChange={(e) => setTermoPesquisa(e.target.value)}
-                placeholder={
-                  isEn
-                    ? "Search camps, sports, cities..."
-                    : "Pesquisar campos, desportos, locais..."
-                }
+                placeholder={isEn ? "Search camps, sports, cities..." : "Pesquisar campos, desportos, locais..."}
                 className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB]"
               />
-              <button
-                type="submit"
-                className="absolute right-3 top-2.5 text-slate-400 hover:text-[#2563EB] bg-transparent border-0 cursor-pointer"
-              >
+              <button type="submit" className="absolute right-3 top-2.5 text-slate-400 hover:text-[#2563EB] bg-transparent border-0 cursor-pointer">
                 🔍
               </button>
             </form>
@@ -216,7 +196,7 @@ export default function Header({ dict, lang }: HeaderProps) {
             <Link
               href={`/${lang}/parceiro`}
               onClick={() => setMenuAberto(false)}
-              className="mt-2 w-full text-center bg-[#F59E0B] text-[#0F172A] font-black uppercase tracking-widest text-xs py-3.5 rounded-md no-underline shadow-md"
+              className="mt-2 w-full text-center bg-[#F59E0B] text-white font-black uppercase tracking-widest text-xs py-3.5 rounded-md no-underline shadow-md"
             >
               {isEn ? "For Organizers (B2B)" : "Área de Parceiros (B2B)"}
             </Link>
@@ -231,6 +211,7 @@ export default function Header({ dict, lang }: HeaderProps) {
         )}
       </header>
 
+      {/* MODAL DE PESQUISA RÁPIDA (⌘K) */}
       {searchOpen && (
         <div
           className="fixed inset-0 z-50 bg-[#0F172A]/60 backdrop-blur-sm flex items-start justify-center pt-24 px-4"
@@ -258,11 +239,7 @@ export default function Header({ dict, lang }: HeaderProps) {
                 autoFocus
                 value={termoPesquisa}
                 onChange={(e) => setTermoPesquisa(e.target.value)}
-                placeholder={
-                  isEn
-                    ? "Type a sport, city, or camp name..."
-                    : "Escreva um desporto, cidade ou nome do campo..."
-                }
+                placeholder={isEn ? "Type a sport, city, or camp name..." : "Escreva um desporto, cidade ou nome do campo..."}
                 className="flex-1 bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3.5 text-base font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white"
               />
               <button
