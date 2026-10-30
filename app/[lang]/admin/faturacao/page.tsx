@@ -3,6 +3,7 @@
 import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function FaturacaoPage({
   params,
@@ -11,169 +12,162 @@ export default function FaturacaoPage({
 }) {
   const { lang } = use(params);
   const isEn = lang === "en";
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
-  const [perfil, setPerfil] = useState<any>({});
+  const [perfil, setPerfil] = useState<any>(null);
 
   const [camposParceiro, setCamposParceiro] = useState<any[]>([]);
   const [reservasFull, setReservasFull] = useState<any[]>([]);
   const [filtroCampoId, setFiltroCampoId] = useState<string>("todos");
+  const [filtroEstado, setFiltroEstado] = useState<
+    "confirmadas" | "abandonadas" | "todas"
+  >("confirmadas");
   const [isCampoDropdownOpen, setIsCampoDropdownOpen] = useState(false);
+
+  const [ibanForm, setIbanForm] = useState("");
+  const [nifForm, setNifForm] = useState("");
+  const [empresaForm, setEmpresaForm] = useState("");
 
   useEffect(() => {
     const carregarDados = async () => {
+      setLoading(true);
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
-        setLoading(false);
+        router.push(`/${lang}/login`);
         return;
       }
 
       const uid = session.user.id;
 
-      const { data: perfilData } = await supabase
-        .from("perfis")
-        .select("*")
-        .eq("id", uid)
-        .maybeSingle();
-      setPerfil(perfilData || {});
-
-      const { data: camposData } = await supabase
-        .from("campos")
-        .select(
-          "id, nome, preco, taxa_comissao, base_comissao, contrato_parceiro_url, modalidade_reserva"
-        )
-        .eq("organizador_id", uid);
-
-      const listaCampos = camposData || [];
-      setCamposParceiro(listaCampos);
-      const idsCampos = listaCampos.map((c: any) => c.id);
-
-      // Busca reservas por organizador_id OU campo_id
-      let queryRes = supabase
-        .from("reservas")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (idsCampos.length > 0) {
-        queryRes = queryRes.or(
-          `organizador_id.eq.${uid},campo_id.in.(${idsCampos.join(",")})`
-        );
-      } else {
-        queryRes = queryRes.eq("organizador_id", uid);
-      }
-
-      const { data: reservasData } = await queryRes;
-      const listaReservas = reservasData || [];
-
-      const criancasIds = Array.from(
-        new Set(listaReservas.map((r: any) => r.crianca_id).filter(Boolean))
-      );
-      const clientesIds = Array.from(
-        new Set(listaReservas.map((r: any) => r.cliente_id).filter(Boolean))
-      );
-
-      const [resCriancas, resPerfisPais] = await Promise.all([
-        criancasIds.length > 0
-          ? supabase
-              .from("criancas")
-              .select("id, nome")
-              .in("id", criancasIds)
-          : Promise.resolve({ data: [] }),
-        clientesIds.length > 0
-          ? supabase
-              .from("perfis")
-              .select("id, nome_completo, nif")
-              .in("id", clientesIds)
-          : Promise.resolve({ data: [] }),
+      const [
+        { data: perfilData },
+        { data: camposData },
+        { data: reservasData },
+        { data: criancasData },
+        { data: perfisPaisData },
+      ] = await Promise.all([
+        supabase.from("perfis").select("*").eq("id", uid).maybeSingle(),
+        supabase
+          .from("campos")
+          .select(
+            "id, nome, preco, taxa_comissao, base_comissao, regras_comissao, contrato_parceiro_url"
+          )
+          .eq("organizador_id", uid),
+        supabase
+          .from("reservas")
+          .select("*")
+          .eq("organizador_id", uid)
+          .order("created_at", { ascending: false }),
+        supabase.from("criancas").select("id, nome"),
+        supabase.from("perfis").select("id, nome_completo, nif, email"),
       ]);
 
-      const reservasConstruidas = listaReservas.map((res: any) => {
-        const campoEncontrado =
-          listaCampos.find((c: any) => c.id === res.campo_id) || {};
-        const criancaEncontrada =
-          (resCriancas.data || []).find((cr: any) => cr.id === res.crianca_id) ||
-          {};
-        const paiEncontrado =
-          (resPerfisPais.data || []).find((p: any) => p.id === res.cliente_id) ||
-          {};
+      setPerfil(perfilData || {});
+      setIbanForm(perfilData?.iban || "");
+      setNifForm(
+        perfilData?.nif_empresa ? String(perfilData.nif_empresa) : ""
+      );
+      setEmpresaForm(
+        perfilData?.empresa_nome ||
+          perfilData?.nome_empresa ||
+          perfilData?.nome ||
+          ""
+      );
+      setCamposParceiro(camposData || []);
 
-        const dataReserva = new Date(res.created_at).getTime();
-        const minutosPassados = (Date.now() - dataReserva) / (1000 * 60);
+      if (reservasData) {
+        const reservasConstruidas = reservasData.map((res: any) => {
+          const campoEncontrado =
+            camposData?.find((c: any) => c.id === res.campo_id) || {};
+          const criancaEncontrada =
+            criancasData?.find((cr: any) => cr.id === res.crianca_id) || {};
+          const paiEncontrado =
+            perfisPaisData?.find((p: any) => p.id === res.cliente_id) || {};
 
-        let estadoReal = res.status_pagamento || res.status || "Pendente";
-        if (
-          estadoReal === "Pendente" &&
-          minutosPassados > 30 &&
-          !res.respostas_customizadas?.pedido_pai_pendente
-        ) {
-          estadoReal = "Abandonada";
-        }
+          const dataReserva = new Date(res.created_at).getTime();
+          const minutosPassados =
+            (new Date().getTime() - dataReserva) / (1000 * 60);
 
-        return {
-          ...res,
-          status_pagamento_real: estadoReal,
-          campos: campoEncontrado,
-          criancas: criancaEncontrada,
-          perfis: paiEncontrado,
-        };
-      });
+          let estadoReal = res.status_pagamento || "Pendente";
+          if (estadoReal === "Pendente" && minutosPassados > 15) {
+            estadoReal = "Abandonada";
+          }
 
-      setReservasFull(reservasConstruidas);
+          return {
+            ...res,
+            status_pagamento_real: estadoReal,
+            campos: campoEncontrado,
+            criancas: criancaEncontrada,
+            perfis: paiEncontrado,
+          };
+        });
+        setReservasFull(reservasConstruidas);
+      }
+
       setLoading(false);
     };
 
     carregarDados();
-  }, []);
+  }, [lang, router]);
 
+  // Ligar ou aceder ao Stripe Connect Express
   const handleStripeConnect = async () => {
+    if (!perfil?.id) return;
     setConnectLoading(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-
       const res = await fetch("/api/stripe-connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: session.user.id,
-          email: session.user.email,
+          userId: perfil.id,
+          email: perfil.email,
           lang,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao ligar à Stripe.");
-      if (data.url) window.location.href = data.url;
+      if (!res.ok)
+        throw new Error(
+          data.error || "Não foi possível iniciar ligação Stripe Connect."
+        );
+      if (data.url) {
+        window.location.href = data.url;
+      }
     } catch (err: any) {
-      alert(err.message);
+      alert("Aviso Stripe Connect: " + err.message);
+    } finally {
       setConnectLoading(false);
     }
   };
 
-  const handleSaveDetails = async (e: React.FormEvent) => {
+  // Guardar IBAN e Dados Fiscais
+  const handleGuardarDadosFiscais = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!perfil?.id) return;
     setSaving(true);
     try {
       const { error } = await supabase
         .from("perfis")
         .update({
-          empresa_nome: perfil.empresa_nome,
-          nif_empresa: perfil.nif_empresa,
+          iban: ibanForm.trim() || null,
+          nif_empresa: nifForm.trim() || null,
+          empresa_nome: empresaForm.trim() || null,
+          nome_empresa: empresaForm.trim() || null,
         })
         .eq("id", perfil.id);
+
       if (error) throw error;
       alert(
         isEn
-          ? "Company billing details saved!"
-          : "Dados fiscais guardados com sucesso!"
+          ? "Billing & IBAN details updated successfully!"
+          : "Dados fiscais e IBAN atualizados com sucesso!"
       );
     } catch (err: any) {
-      alert(err.message);
+      alert("Erro: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -181,507 +175,469 @@ export default function FaturacaoPage({
 
   if (loading) {
     return (
-      <div className="p-12 text-center font-bold text-slate-400 text-sm uppercase tracking-widest animate-pulse">
+      <div className="p-12 text-center font-black text-xs uppercase tracking-widest text-slate-400 animate-pulse">
         {isEn
-          ? "Loading financial data..."
-          : "A carregar dados financeiros e faturas..."}
+          ? "Loading financial data & invoices..."
+          : "A carregar dados financeiros, Stripe Connect e faturas..."}
       </div>
     );
   }
 
-  const reservasAtivas =
-    filtroCampoId === "todos"
-      ? reservasFull
-      : reservasFull.filter((r) => r.campo_id === filtroCampoId);
-
-  const taxaComissaoGeral = perfil?.taxa_comissao ?? 12;
+  const taxaComissaoGeral = Number(perfil?.taxa_comissao ?? 12);
   const baseIncidenciaGeral = perfil?.base_comissao || "total";
 
+  const reservasPorCampo =
+    filtroCampoId === "todos"
+      ? reservasFull
+      : reservasFull.filter((r: any) => r.campo_id === filtroCampoId);
+
+  const reservasExibidas = reservasPorCampo.filter((r: any) => {
+    const st = r.status_pagamento_real;
+    if (filtroEstado === "confirmadas") {
+      return st === "Pago" || st === "Sinal Pago" || st === "Externo";
+    }
+    if (filtroEstado === "abandonadas") {
+      return (
+        st === "Abandonada" ||
+        st === "Pendente" ||
+        st === "Cancelada" ||
+        st === "Reembolsado"
+      );
+    }
+    return true;
+  });
+
+  // Cálculos Financeiros Reais sobre Reservas Pagas HelloCamp
   let totalVolume = 0;
   let totalComissoesGeradas = 0;
   let saldoParceiroSeraTransferido = 0;
 
-  const historicoCalculado = reservasAtivas.map((res) => {
-    const valorReserva = Number(res.valor_total) || 0;
-    const status = res.status_pagamento_real;
+  reservasPorCampo.forEach((r: any) => {
+    const isPagaOnline =
+      (r.status_pagamento_real === "Pago" ||
+        r.status_pagamento_real === "Sinal Pago") &&
+      r.status_pagamento !== "Externo";
 
-    // CORRIGIDO: Apenas reservas efetivamente pagas via HelloCamp contam no saldo financeiro!
-    const isValidaFinanceiramente =
-      status === "Pago" ||
-      status === "Sinal Pago" ||
-      status === "Aguardando Pagamento Extra";
+    if (isPagaOnline) {
+      const valPago = Number(r.valor_pago) || Number(r.valor_total) || 0;
+      const taxaAplicada =
+        r.campos?.taxa_comissao !== null &&
+        r.campos?.taxa_comissao !== undefined
+          ? Number(r.campos.taxa_comissao)
+          : taxaComissaoGeral;
 
-    const campoAssociado = res.campos;
-    const taxaLinha =
-      campoAssociado?.taxa_comissao !== null &&
-      campoAssociado?.taxa_comissao !== undefined
-        ? Number(campoAssociado.taxa_comissao)
-        : Number(taxaComissaoGeral);
-    const baseLinha = campoAssociado?.base_comissao || baseIncidenciaGeral;
-
-    let valorIncidencia = valorReserva;
-    if (baseLinha === "apenas_programa") {
-      const precoBase = Number(campoAssociado?.preco) || valorReserva;
-      valorIncidencia = Math.min(valorReserva, precoBase);
-    } else if (baseLinha === "sem_comissao") {
-      valorIncidencia = 0;
+      const comissao = (valPago * taxaAplicada) / 100;
+      totalVolume += valPago;
+      totalComissoesGeradas += comissao;
+      saldoParceiroSeraTransferido += valPago - comissao;
     }
-
-    const valorComissao = isValidaFinanceiramente
-      ? valorIncidencia * (taxaLinha / 100)
-      : 0;
-
-    if (isValidaFinanceiramente) {
-      totalVolume += valorReserva;
-      totalComissoesGeradas += valorComissao;
-      saldoParceiroSeraTransferido += valorReserva - valorComissao;
-    }
-
-    return {
-      ...res,
-      isValidaFinanceiramente,
-      valorIncidencia,
-      valorComissao,
-      taxaAplicada: taxaLinha,
-      baseAplicada: baseLinha,
-      campoFormatado: campoAssociado,
-      paiFormatado: res.perfis,
-      criancaFormatado: res.criancas,
-    };
   });
 
-  const campoFiltradoData =
-    filtroCampoId !== "todos"
-      ? camposParceiro.find((c) => c.id === filtroCampoId)
-      : null;
-  const taxaExibida =
-    campoFiltradoData &&
-    campoFiltradoData.taxa_comissao !== null &&
-    campoFiltradoData.taxa_comissao !== undefined
-      ? campoFiltradoData.taxa_comissao
-      : taxaComissaoGeral;
-  const baseExibida =
-    campoFiltradoData && campoFiltradoData.base_comissao
-      ? campoFiltradoData.base_comissao
-      : baseIncidenciaGeral;
-
-  const temContratoAssinado =
-    !!perfil?.contrato_dados?.assinaturaNome ||
-    perfil?.status_contrato === "Aprovado";
+  const campoSelecionadoObj = camposParceiro.find(
+    (c: any) => c.id === filtroCampoId
+  );
 
   return (
-    <main className="max-w-6xl mx-auto font-sans pb-20">
-      {/* BANNER DE AVISO SE AINDA NÃO ASSINOU CONTRATO */}
-      {!temContratoAssinado && (
-        <div className="bg-amber-50 border-2 border-amber-200 p-5 rounded-3xl mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <span className="text-3xl">⚠️</span>
-            <div>
-              <h3 className="m-0 text-sm md:text-base font-black text-amber-950">
-                {isEn
-                  ? "Pending Global Partnership Contract"
-                  : "Contrato Global de Parceria Pendente de Assinatura"}
-              </h3>
-              <p className="m-0 text-xs font-medium text-amber-800 mt-0.5">
-                {isEn
-                  ? "Please sign your Global Contract to formalize your commission rate and enable automated payouts."
-                  : "Assine o seu Contrato Global para formalizar as suas condições de faturação e desbloquear as transferências."}
-              </p>
-            </div>
-          </div>
-          <Link
-            href={`/${lang}/admin/contrato`}
-            className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-widest no-underline whitespace-nowrap"
-          >
-            {isEn ? "Sign Contract" : "Assinar Contrato"} &rarr;
-          </Link>
-        </div>
-      )}
-
-      {/* CABEÇALHO + DROPDOWN CUSTOMIZADO DE CAMPO */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+    <div className="max-w-6xl mx-auto font-sans text-[#0F172A] pb-20 space-y-8">
+      {/* CABEÇALHO */}
+      <div className="bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 m-0 tracking-tight">
-            {isEn ? "Billing & Automated Payouts" : "Faturação e Pagamentos"}
-          </h1>
-          <p className="text-slate-500 mt-1 text-sm font-medium mb-0">
+          <span className="inline-block bg-[#16A34A] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-2">
+            {isEn ? "Finance & Stripe Connect" : "Finanças & Stripe Connect"}
+          </span>
+          <h1 className="text-2xl md:text-3xl font-black text-[#0F172A] m-0 tracking-tight">
             {isEn
-              ? "Track splits, manage company tax info, and connect your bank account via Stripe."
-              : "Controle a divisão de valores, dados fiscais e sincronize o seu banco via Stripe."}
+              ? "Financial Control, Payouts & Commissions"
+              : "Controlo Financeiro, Transferências e Comissões"}
+          </h1>
+          <p className="text-slate-500 mt-1 mb-0 text-xs md:text-sm font-medium">
+            {isEn
+              ? "Manage your Stripe Connect account, IBAN, agreed commission rates, and booking statements."
+              : "Gira a sua ligação Stripe Connect, IBAN, taxas de comissão contratadas e extrato detalhado de inscrições."}
           </p>
         </div>
 
-        {/* DROPDOWN CUSTOMIZADO (SEM <select> NATIVO) */}
-        <div className="relative min-w-[280px] w-full md:w-auto">
-          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-            {isEn ? "Filter Finances by Camp" : "Filtrar Finanças por Campo"}
-          </label>
-          <div
-            onClick={() => setIsCampoDropdownOpen(!isCampoDropdownOpen)}
-            className="w-full p-3.5 bg-emerald-50 border border-[#167524] rounded-xl text-xs font-black text-[#167524] cursor-pointer flex items-center justify-between shadow-sm"
-          >
-            <span className="truncate">
-              {filtroCampoId === "todos"
-                ? isEn
-                  ? "All Active Camps (Global)"
-                  : "Visão Global (Todos os Campos)"
-                : campoFiltradoData?.nome || "Campo Selecionado"}
-            </span>
-            <span className="text-[10px] ml-2">▼</span>
-          </div>
-          {isCampoDropdownOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setIsCampoDropdownOpen(false)}
-              />
-              <div className="absolute top-[calc(100%+6px)] right-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto">
-                <div
-                  onClick={() => {
-                    setFiltroCampoId("todos");
-                    setIsCampoDropdownOpen(false);
-                  }}
-                  className="p-3 text-xs font-black text-[#167524] hover:bg-emerald-50 cursor-pointer border-b border-slate-100"
-                >
-                  {isEn
-                    ? "All Active Camps (Global)"
-                    : "Visão Global (Todos os Campos)"}
-                </div>
-                {camposParceiro.map((c) => (
-                  <div
-                    key={c.id}
-                    onClick={() => {
-                      setFiltroCampoId(c.id);
-                      setIsCampoDropdownOpen(false);
-                    }}
-                    className="p-3 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0"
-                  >
-                    {c.nome}
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        <Link
+          href={`/${lang}/admin/contrato`}
+          className="bg-[#2563EB] hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest px-5 py-3.5 rounded-md no-underline shrink-0 shadow-sm"
+        >
+          📝 {isEn ? "View Global Contract" : "Ver Contrato Global"}
+        </Link>
       </div>
 
-      {/* BLOCO STRIPE CONNECT */}
-      <div
-        className={`mb-8 p-6 md:p-8 rounded-3xl border ${
-          perfil?.stripe_account_id
-            ? "bg-emerald-50/70 border-emerald-200"
-            : "bg-white border-slate-200 shadow-sm"
-        }`}
-      >
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+      {/* SECÇÃO 1: STRIPE CONNECT & DADOS BANCÁRIOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* CARTÃO STRIPE CONNECT */}
+        <div className="lg:col-span-5 bg-[#0F172A] text-white p-6 md:p-8 rounded-md border-b-4 border-[#F59E0B] shadow-sm flex flex-col justify-between">
           <div>
-            <h3 className="m-0 text-lg font-black text-slate-900">
+            <div className="flex items-center justify-between mb-4">
+              <span className="bg-[#2563EB] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                Stripe Connect
+              </span>
+              {perfil?.stripe_account_id ? (
+                <span className="bg-[#16A34A] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
+                  ✓ Conectado
+                </span>
+              ) : (
+                <span className="bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
+                  ⏳ Pendente
+                </span>
+              )}
+            </div>
+
+            <h2 className="text-xl font-black text-white m-0 mb-2">
               {perfil?.stripe_account_id
                 ? isEn
-                  ? "✓ Bank Configuration Completed (Stripe)"
-                  : "✓ Configuração Bancária Concluída (Stripe)"
+                  ? "Automatic Payouts Active"
+                  : "Recebimentos Automáticos Ativos"
                 : isEn
-                ? "⚠️ Enable Automated Payouts"
-                : "⚠️ Ative os Recebimentos Automáticos (Stripe)"}
-            </h3>
-            <p className="mt-1.5 mb-0 text-sm text-slate-600 leading-relaxed max-w-2xl">
-              {perfil?.stripe_account_id
-                ? isEn
-                  ? "Your bank account is securely linked via Stripe. Booking funds (minus commission) are transferred directly to your account."
-                  : "A sua conta bancária está vinculada de forma segura através da Stripe. O valor das inscrições (deduzido da comissão) é transferido automaticamente para a sua conta."
-                : isEn
-                ? "To receive booking payments directly in your bank account, link your IBAN securely via our partner Stripe."
-                : "Para receber os pagamentos das inscrições diretamente na sua conta bancária, associe o seu IBAN com segurança através da Stripe."}
+                ? "Connect Your Stripe Account"
+                : "Ativar Transferências Automáticas Stripe"}
+            </h2>
+            <p className="text-xs text-slate-300 leading-relaxed mb-6">
+              {isEn
+                ? "With Stripe Connect, payments made by parents by Card, MB WAY, or Multibanco are automatically split and transferred to your bank account."
+                : "Com o Stripe Connect, os pagamentos dos pais por Cartão, MB WAY ou Multibanco são divididos automaticamente e transferidos para a sua conta bancária."}
             </p>
           </div>
+
           <button
             type="button"
-            onClick={handleStripeConnect}
             disabled={connectLoading}
-            className="bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs px-6 py-4 rounded-xl cursor-pointer shadow-md whitespace-nowrap transition-colors"
+            onClick={handleStripeConnect}
+            className="w-full py-3.5 bg-[#16A34A] hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest rounded-md cursor-pointer border-0 transition-colors shadow-sm"
           >
             {connectLoading
               ? isEn
-                ? "Connecting..."
-                : "A processar..."
+                ? "Opening Stripe..."
+                : "A abrir Stripe..."
               : perfil?.stripe_account_id
               ? isEn
-                ? "Manage Stripe Account"
-                : "Gerir Conta Stripe"
+                ? "⚙️ Open Stripe Dashboard →"
+                : "⚙️ Abrir Painel Stripe Connect →"
               : isEn
-              ? "Connect to Stripe"
-              : "Ligar Conta Bancária (Stripe)"}
+              ? "🚀 Connect Bank Account via Stripe →"
+              : "🚀 Ligar Conta Bancária via Stripe →"}
           </button>
         </div>
-      </div>
 
-      {/* RESUMO FINANCEIRO */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest m-0 mb-2">
-            {isEn ? "Gross Volume" : "Volume Bruto Confirmado"}
-          </p>
-          <p className="text-3xl font-black text-slate-900 m-0">
-            {totalVolume.toFixed(2)}€
-          </p>
-        </div>
+        {/* FORMULÁRIO IBAN E DADOS FISCAIS */}
+        <form
+          onSubmit={handleGuardarDadosFiscais}
+          className="lg:col-span-7 bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between"
+        >
+          <div>
+            <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md mb-2">
+              {isEn ? "Bank Transfer & Tax ID" : "Dados Fiscais e IBAN Direto"}
+            </span>
+            <h2 className="text-lg font-black text-[#0F172A] m-0 mb-4">
+              {isEn
+                ? "IBAN & Billing Entity Details"
+                : "Conta IBAN e Identificação de Faturação"}
+            </h2>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest m-0 mb-2">
-            {isEn ? "HelloCamp Commission" : "Comissão HelloCamp"}
-          </p>
-          <p className="text-3xl font-black text-red-500 m-0">
-            {totalComissoesGeradas.toFixed(2)}€
-          </p>
-        </div>
-
-        <div className="bg-emerald-50/70 p-6 rounded-2xl border border-[#167524]">
-          <p className="text-[11px] font-black text-[#167524] uppercase tracking-widest m-0 mb-2">
-            {isEn ? "Your Net Balance" : "O Seu Ganho Líquido"}
-          </p>
-          <p className="text-3xl font-black text-[#167524] m-0">
-            {saldoParceiroSeraTransferido.toFixed(2)}€
-          </p>
-        </div>
-      </div>
-
-      {/* DADOS FISCAIS E ACORDO */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <h2 className="text-base font-black text-slate-900 uppercase tracking-widest m-0 mb-5 pb-3 border-b border-slate-100">
-            {isEn ? "Company Tax Details" : "Dados Fiscais da Empresa"}
-          </h2>
-          <form onSubmit={handleSaveDetails} className="space-y-4">
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                {isEn ? "Company Name *" : "Nome da Empresa / Entidade *"}
-              </label>
-              <input
-                type="text"
-                required
-                value={perfil.empresa_nome || ""}
-                onChange={(e) =>
-                  setPerfil({ ...perfil, empresa_nome: e.target.value })
-                }
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                  {isEn ? "Legal Entity Name" : "Designação Social da Entidade"}
+                </label>
+                <input
+                  type="text"
+                  value={empresaForm}
+                  onChange={(e) => setEmpresaForm(e.target.value)}
+                  className="w-full py-2.5 px-3.5 bg-[#F8FAFC] border border-slate-300 rounded-md text-xs font-bold text-[#0F172A] outline-none focus:border-[#2563EB]"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                  IBAN Bancário
+                </label>
+                <input
+                  type="text"
+                  value={ibanForm}
+                  onChange={(e) => setIbanForm(e.target.value)}
+                  placeholder="PT50 0000 0000 0000 0000 0000 0"
+                  className="w-full py-2.5 px-3.5 bg-[#F8FAFC] border border-slate-300 rounded-md text-xs font-mono font-bold text-[#0F172A] outline-none focus:border-[#2563EB]"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                  NIF / NIPC / Tax ID
+                </label>
+                <input
+                  type="text"
+                  value={nifForm}
+                  onChange={(e) => setNifForm(e.target.value)}
+                  placeholder="500 000 000"
+                  className="w-full py-2.5 px-3.5 bg-[#F8FAFC] border border-slate-300 rounded-md text-xs font-bold text-[#0F172A] outline-none focus:border-[#2563EB]"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                {isEn ? "NIF / Tax ID *" : "NIF / NIPC *"}
-              </label>
-              <input
-                type="text"
-                required
-                value={perfil.nif_empresa || ""}
-                onChange={(e) =>
-                  setPerfil({ ...perfil, nif_empresa: e.target.value })
-                }
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-[#167524]"
-              />
-            </div>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
+            <span className="text-[11px] font-bold text-slate-500">
+              Taxa Base Acordada: <strong>{taxaComissaoGeral}%</strong> (
+              {baseIncidenciaGeral === "apenas_programa"
+                ? "Apenas Programa"
+                : "Total da Reserva"}
+              )
+            </span>
             <button
               type="submit"
               disabled={saving}
-              className="w-full py-3.5 bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs rounded-xl cursor-pointer transition-colors"
+              className="bg-[#2563EB] hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest px-6 py-3 rounded-md cursor-pointer border-0 shadow-sm"
             >
               {saving
                 ? isEn
                   ? "Saving..."
                   : "A guardar..."
                 : isEn
-                ? "Save Tax Details"
-                : "Gravar Dados Fiscais"}
+                ? "✓ Save Details"
+                : "✓ Guardar Dados"}
             </button>
-          </form>
+          </div>
+        </form>
+      </div>
+
+      {/* SECÇÃO 2: KPIs FINANCEIROS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-md border border-slate-200 border-b-4 border-b-[#2563EB] shadow-sm">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">
+            {isEn ? "Gross Volume (Online)" : "Volume Bruto Cobrado (Online)"}
+          </span>
+          <span className="text-3xl font-black text-[#0F172A] block">
+            {totalVolume.toFixed(2)}€
+          </span>
+          <span className="text-xs font-bold text-slate-500 mt-1 block">
+            Total pago pelos encarregados de educação
+          </span>
         </div>
 
-        <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div>
-            <h2 className="text-base font-black text-slate-900 uppercase tracking-widest m-0 mb-5 pb-3 border-b border-slate-100">
-              {isEn ? "Commission Agreement" : "Condições de Comissionamento"}
-            </h2>
-            <div className="flex items-center gap-5 mb-6">
-              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center min-w-[110px]">
-                <span className="block text-[10px] font-black uppercase text-slate-400 mb-1">
-                  {isEn ? "Rate" : "Taxa"}
-                </span>
-                <span className="text-3xl font-black text-[#167524]">
-                  {taxaExibida}%
-                </span>
-              </div>
-              <div>
-                <span className="block text-[10px] font-black uppercase text-slate-400 mb-1">
-                  {isEn ? "Incidence Base" : "Base de Incidência"}
-                </span>
-                <p className="text-sm font-black text-slate-900 m-0">
-                  {baseExibida === "apenas_programa"
-                    ? isEn
-                      ? "Base program only (Extras excluded)"
-                      : "Apenas sobre o Programa Base"
-                    : isEn
-                    ? "Total value (Program + Extras)"
-                    : "Sobre o Valor Total da Reserva"}
-                </p>
-                <span
-                  className={`inline-block mt-2 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md ${
-                    temContratoAssinado
-                      ? "bg-emerald-50 text-[#167524]"
-                      : "bg-amber-100 text-amber-900"
-                  }`}
-                >
-                  {temContratoAssinado
-                    ? isEn
-                      ? "✓ Contract Signed"
-                      : "✓ Contrato Assinado"
-                    : isEn
-                    ? "⚠️ Signature Pending"
-                    : "⚠️ Assinatura Pendente"}
-                </span>
-              </div>
-            </div>
-          </div>
+        <div className="bg-white p-6 rounded-md border border-slate-200 border-b-4 border-b-[#F59E0B] shadow-sm">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">
+            {isEn
+              ? `HelloCamp Commission (${taxaComissaoGeral}%)`
+              : `Comissão HelloCamp (${taxaComissaoGeral}%)`}
+          </span>
+          <span className="text-3xl font-black text-[#F59E0B] block">
+            {totalComissoesGeradas.toFixed(2)}€
+          </span>
+          <span className="text-xs font-bold text-slate-500 mt-1 block">
+            Comissão de intermediação (IVA incluído)
+          </span>
+        </div>
 
-          <Link
-            href={`/${lang}/admin/contrato`}
-            className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white text-center font-black uppercase tracking-widest text-xs rounded-xl no-underline transition-colors"
-          >
-            📝{" "}
-            {temContratoAssinado
-              ? isEn
-                ? "View / Download Global Contract"
-                : "Consultar / Descarregar Contrato Global"
-              : isEn
-              ? "Sign Global Contract Now"
-              : "Assinar Contrato Global Agora"}
-          </Link>
+        <div className="bg-[#0F172A] text-white p-6 rounded-md border-b-4 border-b-[#16A34A] shadow-sm">
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300 block mb-2">
+            {isEn ? "Net Partner Payout" : "Receita Líquida a Transferir"}
+          </span>
+          <span className="text-3xl font-black text-white block">
+            {saldoParceiroSeraTransferido.toFixed(2)}€
+          </span>
+          <span className="text-xs font-bold text-slate-300 mt-1 block">
+            Valor líquido para a sua entidade
+          </span>
         </div>
       </div>
 
-      {/* TABELA DE HISTÓRICO DE TRANSAÇÕES */}
-      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
-        <h2 className="text-base font-black text-slate-900 uppercase tracking-widest m-0 mb-6 pb-3 border-b border-slate-100">
-          {isEn ? "Transaction History" : "Histórico de Transações e Reservas"}
-        </h2>
-
-        {historicoCalculado.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 font-bold text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-            {isEn
-              ? "No transactions recorded yet."
-              : "Ainda não existem transações registadas para esta seleção."}
+      {/* SECÇÃO 3: FILTROS E TABELA DE EXTRATO DE TRANSAÇÕES */}
+      <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-5 bg-[#F8FAFC] border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              {
+                id: "confirmadas",
+                label: isEn ? "Confirmed & Paid" : "Pagas / Confirmadas",
+                bg: "bg-[#16A34A]",
+              },
+              {
+                id: "abandonadas",
+                label: isEn
+                  ? "Abandoned / Canceled"
+                  : "Abandonadas / Reembolsadas",
+                bg: "bg-[#F43F5E]",
+              },
+              {
+                id: "todas",
+                label: isEn ? "All Transactions" : "Todo o Histórico",
+                bg: "bg-[#2563EB]",
+              },
+            ].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setFiltroEstado(t.id as any)}
+                className={`px-4 py-2.5 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer border-0 transition-colors ${
+                  filtroEstado === t.id
+                    ? `${t.bg} text-white`
+                    : "bg-slate-200 text-[#0F172A] hover:bg-slate-300"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm text-left">
-              <thead>
-                <tr className="border-b-2 border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  <th className="p-3">{isEn ? "Date" : "Data"}</th>
-                  <th className="p-3">
-                    {isEn ? "Program / Child" : "Programa / Participante"}
-                  </th>
-                  <th className="p-3">
-                    {isEn ? "Parent / Tax ID" : "Encarregado / NIF"}
-                  </th>
-                  <th className="p-3">
-                    {isEn ? "Gross Value" : "Valor Bruto"}
-                  </th>
-                  <th className="p-3 text-red-500">
-                    {isEn ? "Commission" : "Comissão"}
-                  </th>
-                  <th className="p-3 text-[#167524]">
-                    {isEn ? "Net Payout" : "Líquido Parceiro"}
-                  </th>
-                  <th className="p-3">{isEn ? "Status" : "Estado"}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {historicoCalculado.map((res) => {
-                  const eReembolsado =
-                    res.status_pagamento_real === "Reembolsado";
-                  const eAbandonada =
-                    res.status_pagamento_real === "Abandonada";
-                  const isInativa = !res.isValidaFinanceiramente;
 
-                  const nomePai =
-                    res.nome_encarregado ||
-                    res.paiFormatado?.nome_completo ||
-                    "N/D";
-                  const nifPai =
-                    res.nif_encarregado || res.paiFormatado?.nif || "S/ NIF";
-                  const nomeCrianca =
-                    res.criancaFormatado?.nome ||
-                    res.respostas_customizadas?.nome_crianca ||
-                    "Participante";
+          {/* Dropdown Customizado de Campo */}
+          <div className="relative w-full md:w-72">
+            <div
+              onClick={() => setIsCampoDropdownOpen(!isCampoDropdownOpen)}
+              className="w-full bg-white border border-slate-300 rounded-md px-4 py-2.5 text-xs font-bold text-[#0F172A] cursor-pointer flex justify-between items-center"
+            >
+              <span className="truncate">
+                {filtroCampoId === "todos"
+                  ? isEn
+                    ? "All Programs"
+                    : "Todos os Campos"
+                  : campoSelecionadoObj?.nome || "Campo"}
+              </span>
+              <span className="text-[10px] text-slate-400 ml-2">▼</span>
+            </div>
+            {isCampoDropdownOpen && (
+              <div className="absolute top-[calc(100%+4px)] right-0 w-full bg-white border border-slate-300 rounded-md shadow-xl z-30 max-h-60 overflow-y-auto">
+                <div
+                  onClick={() => {
+                    setFiltroCampoId("todos");
+                    setIsCampoDropdownOpen(false);
+                  }}
+                  className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer border-b border-slate-100"
+                >
+                  {isEn ? "All Programs" : "Todos os Campos"}
+                </div>
+                {camposParceiro.map((c: any) => (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      setFiltroCampoId(c.id);
+                      setIsCampoDropdownOpen(false);
+                    }}
+                    className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0"
+                  >
+                    {c.nome}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[850px]">
+            <thead>
+              <tr className="bg-white border-b border-slate-200">
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Data & Cliente (NIF)
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Campo / Participante
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Estado
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Valor Bruto
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Comissão
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">
+                  Valor Líquido
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 text-xs">
+              {reservasExibidas.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="p-12 text-center text-slate-400 font-bold"
+                  >
+                    Nenhum movimento financeiro encontrado neste filtro.
+                  </td>
+                </tr>
+              ) : (
+                reservasExibidas.map((r: any) => {
+                  const valBruto =
+                    Number(r.valor_pago) || Number(r.valor_total) || 0;
+                  const taxa =
+                    r.campos?.taxa_comissao !== null &&
+                    r.campos?.taxa_comissao !== undefined
+                      ? Number(r.campos.taxa_comissao)
+                      : taxaComissaoGeral;
+                  const isExterna = r.status_pagamento_real === "Externo";
+                  const comissao = isExterna ? 0 : (valBruto * taxa) / 100;
+                  const liquido = valBruto - comissao;
 
                   return (
-                    <tr
-                      key={res.id}
-                      className={isInativa ? "opacity-60 bg-slate-50/50" : ""}
-                    >
-                      <td className="p-3 text-slate-600">
-                        {new Date(res.created_at).toLocaleDateString("pt-PT")}
-                        <div className="text-[10px] font-bold text-slate-400">
-                          {res.metodo_pagamento || "Stripe"}
+                    <tr key={r.id} className="hover:bg-[#F8FAFC]">
+                      <td className="px-6 py-4">
+                        <div className="font-black text-[#0F172A]">
+                          {r.nome_encarregado ||
+                            r.perfis?.nome_completo ||
+                            "Cliente"}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-bold">
+                          {new Date(r.created_at).toLocaleDateString("pt-PT")} •
+                          NIF:{" "}
+                          {r.nif_encarregado ||
+                            r.nif_faturacao ||
+                            r.perfis?.nif ||
+                            "S/ NIF"}
                         </div>
                       </td>
-                      <td className="p-3">
-                        <div className="font-black text-slate-900">
-                          {res.campoFormatado?.nome || "Programa HelloCamp"}
+
+                      <td className="px-6 py-4">
+                        <div className="font-black text-[#2563EB]">
+                          {r.campos?.nome || "Campo"}
                         </div>
-                        <div className="text-xs text-slate-500">
-                          👦 {nomeCrianca} ({res.turno_nome})
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <div className="font-bold text-slate-800">
-                          {nomePai}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          NIF: {nifPai}
+                        <div className="text-[11px] font-bold text-slate-600">
+                          👦{" "}
+                          {r.criancas?.nome ||
+                            r.respostas_customizadas?.nome_crianca ||
+                            "Participante"}{" "}
+                          • {r.turno_nome}
                         </div>
                       </td>
-                      <td className="p-3 font-black text-slate-900">
-                        {Number(res.valor_total || 0).toFixed(2)}€
-                      </td>
-                      <td className="p-3 font-bold text-red-500">
-                        {isInativa
-                          ? "0.00€"
-                          : `-${res.valorComissao.toFixed(2)}€ (${
-                              res.taxaAplicada
-                            }%)`}
-                      </td>
-                      <td className="p-3 font-black text-[#167524]">
-                        {isInativa
-                          ? "0.00€"
-                          : `${(
-                              Number(res.valor_total || 0) - res.valorComissao
-                            ).toFixed(2)}€`}
-                      </td>
-                      <td className="p-3">
+
+                      <td className="px-6 py-4">
                         <span
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                            res.isValidaFinanceiramente
-                              ? "bg-emerald-100 text-[#167524]"
-                              : eReembolsado
-                              ? "bg-red-100 text-red-700"
-                              : "bg-slate-200 text-slate-600"
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-white ${
+                            r.status_pagamento_real === "Pago" ||
+                            r.status_pagamento_real === "Sinal Pago"
+                              ? "bg-[#16A34A]"
+                              : r.status_pagamento_real === "Externo"
+                              ? "bg-[#2563EB]"
+                              : r.status_pagamento_real === "Abandonada"
+                              ? "bg-slate-500"
+                              : "bg-[#F43F5E]"
                           }`}
                         >
-                          {eAbandonada
-                            ? isEn
-                              ? "Unfinished"
-                              : "Não Concluída"
-                            : res.status_pagamento_real}
+                          {r.status_pagamento_real}
                         </span>
+                      </td>
+
+                      <td className="px-6 py-4 font-black text-[#0F172A]">
+                        {valBruto.toFixed(2)}€
+                      </td>
+
+                      <td className="px-6 py-4 font-bold text-[#F59E0B]">
+                        {isExterna
+                          ? "0.00€ (Isento)"
+                          : `-${comissao.toFixed(2)}€ (${taxa}%)`}
+                      </td>
+
+                      <td className="px-6 py-4 text-right font-black text-sm text-[#16A34A]">
+                        {liquido.toFixed(2)}€
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

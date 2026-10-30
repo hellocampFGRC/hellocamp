@@ -3,6 +3,7 @@
 import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function EstatisticasParceiroPage({
   params,
@@ -11,436 +12,320 @@ export default function EstatisticasParceiroPage({
 }) {
   const { lang } = use(params);
   const isEn = lang === "en";
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any[]>([]);
-  const [ordenacao, setOrdenacao] = useState<"views" | "reservas" | "receita">(
-    "views"
-  );
-  const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
-
-  const [totais, setTotais] = useState({
-    visualizacoes: 0,
-    camposAtivos: 0,
-    favoritos: 0,
-    reservasConfirmadas: 0,
-    receitaBruta: 0,
-    taxaConversaoMedia: 0,
-  });
+  const [campos, setCampos] = useState<any[]>([]);
+  const [reservas, setReservas] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [wishlistsCountMap, setWishlistsCountMap] = useState<
+    Record<string, number>
+  >({});
+  const [taxaBaseParceiro, setTaxaBaseParceiro] = useState<number>(12);
 
   useEffect(() => {
-    async function fetchEstatisticas() {
-      try {
-        setLoading(true);
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session) {
-          setLoading(false);
-          return;
-        }
+    const carregarEstatisticas = async () => {
+      setLoading(true);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        router.push(`/${lang}/login`);
+        return;
+      }
 
-        const uid = session.user.id;
+      const uid = session.user.id;
 
-        // 1. Obter os campos do organizador (CORRIGIDO: Usa diretamente session.user.id e colunas reais)
-        const { data: campos } = await supabase
-          .from("campos")
-          .select(
-            "id, nome, nome_en, ativo, status_aprovacao, rating_score, total_reviews"
-          )
-          .eq("organizador_id", uid);
-
-        if (!campos || campos.length === 0) {
-          setLoading(false);
-          return;
-        }
-
-        const camposIds = campos.map((c) => c.id);
-
-        // 2. Buscar em paralelo: Visualizações Mensais, Favoritos (Wishlists) e Reservas
-        const [
-          { data: viewsData },
-          { data: favsData },
-          { data: reservasData },
-        ] = await Promise.all([
+      const [{ data: perfilData }, { data: camposData }, { data: reservasData }] =
+        await Promise.all([
           supabase
-            .from("campo_estatisticas_mensais")
-            .select("campo_id, visualizacoes, mes_ano")
-            .in("campo_id", camposIds),
+            .from("perfis")
+            .select("taxa_comissao")
+            .eq("id", uid)
+            .maybeSingle(),
+          supabase
+            .from("campos")
+            .select("*")
+            .eq("organizador_id", uid)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("reservas")
+            .select("*, criancas(*)")
+            .eq("organizador_id", uid),
+        ]);
+
+      if (perfilData?.taxa_comissao) {
+        setTaxaBaseParceiro(Number(perfilData.taxa_comissao));
+      }
+
+      const listaCampos = camposData || [];
+      setCampos(listaCampos);
+      setReservas(reservasData || []);
+
+      const camposIds = listaCampos.map((c: any) => c.id);
+      if (camposIds.length > 0) {
+        const [{ data: wishData }, { data: revData }] = await Promise.all([
           supabase
             .from("wishlist_campos")
             .select("campo_id")
             .in("campo_id", camposIds),
           supabase
-            .from("reservas")
-            .select("campo_id, status_pagamento, valor_total")
-            .eq("organizador_id", uid),
+            .from("reviews")
+            .select("*")
+            .in("campo_id", camposIds)
+            .order("created_at", { ascending: false }),
         ]);
 
-        // 3. Agregar todas as métricas por Campo
-        let totalViewsGlobais = 0;
-        let totalFavsGlobais = 0;
-        let totalReservasGlobais = 0;
-        let totalReceitaGlobal = 0;
-        let countAtivos = 0;
-
-        const camposComEstatisticas = campos.map((campo) => {
-          const st = (campo.status_aprovacao || "").toLowerCase();
-          const isOnline =
-            campo.ativo &&
-            (st === "aprovado" || st === "validado" || st === "ativo");
-          if (isOnline) countAtivos++;
-
-          // Visualizações
-          const viewsDesteCampo =
-            viewsData
-              ?.filter((v) => v.campo_id === campo.id)
-              .reduce((acc, curr) => acc + (Number(curr.visualizacoes) || 0), 0) ||
-            0;
-
-          // Favoritos
-          const favsDesteCampo =
-            favsData?.filter((f) => f.campo_id === campo.id).length || 0;
-
-          // Reservas Confirmadas e Receita
-          const reservasDesteCampo =
-            reservasData?.filter(
-              (r) =>
-                r.campo_id === campo.id &&
-                (r.status_pagamento === "Pago" ||
-                  r.status_pagamento === "Sinal Pago")
-            ) || [];
-
-          const numReservas = reservasDesteCampo.length;
-          const receitaCampo = reservasDesteCampo.reduce(
-            (acc, curr) => acc + (Number(curr.valor_total) || 0),
-            0
-          );
-
-          const taxaConversao =
-            viewsDesteCampo > 0 ? (numReservas / viewsDesteCampo) * 100 : 0;
-
-          totalViewsGlobais += viewsDesteCampo;
-          totalFavsGlobais += favsDesteCampo;
-          totalReservasGlobais += numReservas;
-          totalReceitaGlobal += receitaCampo;
-
-          return {
-            ...campo,
-            isOnline,
-            nomeDisplay: isEn && campo.nome_en ? campo.nome_en : campo.nome,
-            totalViews: viewsDesteCampo,
-            totalFavs: favsDesteCampo,
-            totalReservas: numReservas,
-            receita: receitaCampo,
-            conversao: taxaConversao,
-          };
+        const counts: Record<string, number> = {};
+        (wishData || []).forEach((w: any) => {
+          counts[w.campo_id] = (counts[w.campo_id] || 0) + 1;
         });
-
-        const conversaoGlobal =
-          totalViewsGlobais > 0
-            ? (totalReservasGlobais / totalViewsGlobais) * 100
-            : 0;
-
-        setStats(camposComEstatisticas);
-        setTotais({
-          visualizacoes: totalViewsGlobais,
-          camposAtivos: countAtivos,
-          favoritos: totalFavsGlobais,
-          reservasConfirmadas: totalReservasGlobais,
-          receitaBruta: totalReceitaGlobal,
-          taxaConversaoMedia: conversaoGlobal,
-        });
-      } catch (error) {
-        console.error("Erro ao carregar estatísticas:", error);
-      } finally {
-        setLoading(false);
+        setWishlistsCountMap(counts);
+        setReviews(revData || []);
       }
-    }
 
-    fetchEstatisticas();
-  }, [isEn]);
+      setLoading(false);
+    };
 
-  const statsOrdenados = [...stats].sort((a, b) => {
-    if (ordenacao === "reservas") return b.totalReservas - a.totalReservas;
-    if (ordenacao === "receita") return b.receita - a.receita;
-    return b.totalViews - a.totalViews;
-  });
-
-  const maxViews = Math.max(...stats.map((s) => s.totalViews), 1);
+    carregarEstatisticas();
+  }, [lang, router]);
 
   if (loading) {
     return (
-      <div className="w-full h-64 flex flex-col items-center justify-center gap-3">
-        <div className="animate-spin rounded-full h-9 w-9 border-4 border-slate-200 border-t-[#167524]"></div>
-        <span className="text-xs font-black uppercase tracking-widest text-slate-400">
-          {isEn ? "Calculating Analytics..." : "A calcular métricas de tráfego..."}
-        </span>
+      <div className="p-12 text-center font-black text-xs uppercase tracking-widest text-slate-400 animate-pulse">
+        {isEn
+          ? "Loading Analytics & Performance..."
+          : "A calcular estatísticas, ocupação e métricas..."}
       </div>
     );
   }
 
-  const opcoesOrdenacao = [
-    {
-      id: "views",
-      label: isEn ? "Most Viewed" : "Mais Visualizados",
-    },
-    {
-      id: "reservas",
-      label: isEn ? "Most Bookings" : "Mais Inscrições",
-    },
-    {
-      id: "receita",
-      label: isEn ? "Highest Revenue" : "Maior Faturação",
-    },
-  ];
+  const reservasConfirmadas = reservas.filter(
+    (r: any) =>
+      r.status_pagamento === "Pago" ||
+      r.status_pagamento === "Sinal Pago" ||
+      r.status_pagamento === "Externo"
+  );
+
+  const totalInscritos = reservasConfirmadas.length;
+  const totalVagasOferecidas = campos.reduce(
+    (acc, c: any) => acc + (Number(c.vagas_totais) || 0),
+    0
+  );
+  const taxaOcupacaoGlobal =
+    totalVagasOferecidas > 0
+      ? Math.min(100, Math.round((totalInscritos / totalVagasOferecidas) * 100))
+      : 0;
+
+  const receitaBrutaTotal = reservasConfirmadas.reduce(
+    (acc, r: any) =>
+      acc + (Number(r.valor_pago) || Number(r.valor_total) || 0),
+    0
+  );
+  const ticketMedio =
+    totalInscritos > 0 ? receitaBrutaTotal / totalInscritos : 0;
+
+  const totalWishlists = Object.values(wishlistsCountMap).reduce(
+    (a, b) => a + b,
+    0
+  );
+
+  const countOnline = reservasConfirmadas.filter(
+    (r: any) => r.status_pagamento !== "Externo"
+  ).length;
+  const countExterno = reservasConfirmadas.filter(
+    (r: any) => r.status_pagamento === "Externo"
+  ).length;
 
   return (
-    <div className="max-w-7xl mx-auto w-full font-sans pb-16">
+    <div className="max-w-6xl mx-auto font-sans text-[#0F172A] pb-20 space-y-8">
       {/* CABEÇALHO */}
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
-          <span className="inline-block text-[10px] font-black uppercase tracking-widest text-[#167524] bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full mb-2">
-            {isEn ? "Real-Time Intelligence" : "Métricas em Tempo Real"}
+          <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-2">
+            {isEn ? "Business Intelligence" : "Inteligência e Métricas B2B"}
           </span>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 m-0 tracking-tight">
-            {isEn ? "Performance & Analytics" : "Desempenho e Estatísticas"}
-          </h1>
-          <p className="text-slate-500 text-sm font-medium mt-1 mb-0">
+          <h1 className="text-2xl md:text-3xl font-black text-[#0F172A] m-0 tracking-tight">
             {isEn
-              ? "Track how many families are viewing, saving, and booking your camps on HelloCamp."
-              : "Acompanhe quantas famílias estão a visualizar, guardar nos favoritos e inscrever-se nos seus programas."}
+              ? "Performance, Occupancy & Analytics"
+              : "Estatísticas, Taxa de Ocupação e Desempenho"}
+          </h1>
+          <p className="text-slate-500 mt-1 mb-0 text-xs md:text-sm font-medium">
+            {isEn
+              ? "Analyze spot occupancy, average ticket size, wishlist saves, and parent reviews across your programs."
+              : "Analise a ocupação de vagas, ticket médio, favoritos das famílias e avaliações de cada campo."}
           </p>
         </div>
 
-        {/* DROPDOWN CUSTOMIZADO DE ORDENAÇÃO */}
-        <div className="relative min-w-[220px]">
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-            {isEn ? "Sort Programs By" : "Ordenar Programas Por"}
-          </label>
-          <div
-            onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
-            className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-800 cursor-pointer flex items-center justify-between shadow-sm hover:border-[#167524]"
-          >
-            <span>
-              {opcoesOrdenacao.find((o) => o.id === ordenacao)?.label}
-            </span>
-            <span className="text-[10px] text-slate-400 ml-2">▼</span>
-          </div>
-          {isSortDropdownOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setIsSortDropdownOpen(false)}
-              />
-              <div className="absolute top-[calc(100%+6px)] right-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                {opcoesOrdenacao.map((op) => (
-                  <div
-                    key={op.id}
-                    onClick={() => {
-                      setOrdenacao(op.id as any);
-                      setIsSortDropdownOpen(false);
-                    }}
-                    className={`p-3 text-xs font-bold cursor-pointer transition-colors ${
-                      ordenacao === op.id
-                        ? "bg-emerald-50 text-[#167524] font-black"
-                        : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    {op.label}
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        <Link
+          href={`/${lang}/admin/reservas`}
+          className="bg-[#16A34A] hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest px-5 py-3.5 rounded-md no-underline shrink-0 shadow-sm"
+        >
+          📋 {isEn ? "View All Bookings" : "Ver Inscrições"}
+        </Link>
       </div>
 
-      {/* CARTÕES DE RESUMO GLOBAL */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
-        {/* Visualizações */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5">
-          <div className="w-14 h-14 bg-emerald-50 text-[#167524] rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
-            👁️
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0 mb-1">
-              {isEn ? "Total Camp Views" : "Visualizações Totais"}
-            </p>
-            <h2 className="text-3xl font-black text-slate-900 m-0">
-              {totais.visualizacoes.toLocaleString("pt-PT")}
-            </h2>
-          </div>
-        </div>
-
-        {/* Favoritos */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5">
-          <div className="w-14 h-14 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
-            ❤️
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0 mb-1">
-              {isEn ? "Saved in Wishlists" : "Guardado em Favoritos"}
-            </p>
-            <h2 className="text-3xl font-black text-slate-900 m-0">
-              {totais.favoritos.toLocaleString("pt-PT")}
-            </h2>
-          </div>
-        </div>
-
-        {/* Reservas Confirmadas */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5">
-          <div className="w-14 h-14 bg-blue-50 text-[#0E3A68] rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
-            🎫
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0 mb-1">
-              {isEn ? "Confirmed Bookings" : "Inscrições Confirmadas"}
-            </p>
-            <h2 className="text-3xl font-black text-[#167524] m-0">
-              {totais.reservasConfirmadas}
-            </h2>
-          </div>
-        </div>
-
-        {/* Taxa de Conversão / Receita */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5">
-          <div className="w-14 h-14 bg-amber-50 text-[#e2a41d] rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
-            📈
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0 mb-1">
-              {isEn ? "Conversion Rate" : "Taxa de Conversão"}
-            </p>
-            <h2 className="text-3xl font-black text-slate-900 m-0">
-              {totais.taxaConversaoMedia.toFixed(1)}%
-            </h2>
-          </div>
-        </div>
-      </div>
-
-      {/* TABELA E GRÁFICO DE BARRAS DE PERFORMANCE POR CAMPO */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
-          <h3 className="text-base font-black text-slate-900 m-0">
-            {isEn
-              ? "Detailed Funnel by Program"
-              : "Funil de Desempenho por Programa"}
-          </h3>
-          <span className="text-xs font-bold text-slate-400">
-            {totais.camposAtivos} {isEn ? "Active Online" : "Ativos Online"}
+      {/* KPIs GLOBAIS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-md border border-slate-200 border-b-4 border-b-[#16A34A] shadow-sm">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
+            {isEn ? "Global Occupancy" : "Taxa de Ocupação Global"}
+          </span>
+          <span className="text-3xl font-black text-[#16A34A] block">
+            {taxaOcupacaoGlobal}%
+          </span>
+          <span className="text-[11px] font-bold text-slate-500 mt-1 block">
+            {totalInscritos} / {totalVagasOferecidas}{" "}
+            {isEn ? "spots filled" : "vagas preenchidas"}
           </span>
         </div>
 
-        {statsOrdenados.length === 0 ? (
-          <div className="p-12 text-center">
-            <span className="text-4xl block mb-3">📊</span>
-            <p className="text-slate-600 font-bold text-sm m-0 mb-4">
+        <div className="bg-white p-5 rounded-md border border-slate-200 border-b-4 border-b-[#2563EB] shadow-sm">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
+            {isEn ? "Average Ticket" : "Ticket Médio por Inscrição"}
+          </span>
+          <span className="text-3xl font-black text-[#2563EB] block">
+            {ticketMedio.toFixed(0)}€
+          </span>
+          <span className="text-[11px] font-bold text-slate-500 mt-1 block">
+            Volume total: {receitaBrutaTotal.toFixed(0)}€
+          </span>
+        </div>
+
+        <div className="bg-white p-5 rounded-md border border-slate-200 border-b-4 border-b-[#F43F5E] shadow-sm">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
+            {isEn ? "Saved in Wishlists" : "Guardado em Favoritos"}
+          </span>
+          <span className="text-3xl font-black text-[#F43F5E] block">
+            {totalWishlists}
+          </span>
+          <span className="text-[11px] font-bold text-slate-500 mt-1 block">
+            Famílias com interesse ativo
+          </span>
+        </div>
+
+        <div className="bg-white p-5 rounded-md border border-slate-200 border-b-4 border-b-[#F59E0B] shadow-sm">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
+            {isEn ? "Channel Split" : "Origem das Inscrições"}
+          </span>
+          <span className="text-2xl font-black text-[#0F172A] block">
+            {countOnline} Online • {countExterno} Ext.
+          </span>
+          <span className="text-[11px] font-bold text-slate-500 mt-1 block">
+            HelloCamp vs Registo Manual
+          </span>
+        </div>
+      </div>
+
+      {/* DESEMPENHO INDIVIDUAL POR CAMPO */}
+      <div className="bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm">
+        <h2 className="text-base font-black uppercase tracking-widest text-[#0F172A] m-0 mb-6 pb-3 border-b border-slate-100">
+          🏕️ {isEn ? "Performance Breakdown by Program" : "Desempenho e Ocupação por Campo"}
+        </h2>
+
+        {campos.length === 0 ? (
+          <p className="text-xs font-bold text-slate-400 m-0">
+            Ainda não existem campos criados.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            {campos.map((c: any) => {
+              const resCampo = reservasConfirmadas.filter(
+                (r: any) => r.campo_id === c.id
+              );
+              const inscritosCampo = resCampo.length;
+              const vagasTotais = Number(c.vagas_totais) || 50;
+              const pctOcupacao = Math.min(
+                100,
+                Math.round((inscritosCampo / vagasTotais) * 100)
+              );
+              const faturacaoCampo = resCampo.reduce(
+                (acc, r: any) =>
+                  acc + (Number(r.valor_pago) || Number(r.valor_total) || 0),
+                0
+              );
+              const favs = wishlistsCountMap[c.id] || 0;
+
+              return (
+                <div
+                  key={c.id}
+                  className="p-5 bg-[#F8FAFC] rounded-md border border-slate-200 space-y-3"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="bg-[#2563EB] text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md mr-2">
+                        {c.categoria || "Campo"}
+                      </span>
+                      <strong className="text-sm font-black text-[#0F172A]">
+                        {c.nome}
+                      </strong>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs font-black">
+                      <span className="text-[#16A34A]">
+                        💰 {faturacaoCampo.toFixed(0)}€
+                      </span>
+                      <span className="text-[#F43F5E]">❤️ {favs} favs</span>
+                      <span className="text-[#0F172A]">
+                        👥 {inscritosCampo}/{vagasTotais} vagas ({pctOcupacao}%)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Barra de Progresso de Ocupação */}
+                  <div className="w-full h-3 bg-slate-200 rounded-md overflow-hidden">
+                    <div
+                      className="h-full bg-[#16A34A] transition-all duration-500"
+                      style={{ width: `${pctOcupacao}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ÚLTIMAS AVALIAÇÕES DOS PAIS (REVIEWS) */}
+      <div className="bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm">
+        <h2 className="text-base font-black uppercase tracking-widest text-[#0F172A] m-0 mb-6 pb-3 border-b border-slate-100">
+          ⭐ {isEn ? "Parent Reviews & Feedback" : "Avaliações e Testemunhos dos Pais"} (
+          {reviews.length})
+        </h2>
+
+        {reviews.length === 0 ? (
+          <div className="p-8 text-center bg-[#F8FAFC] rounded-md border border-dashed border-slate-300">
+            <p className="text-xs font-bold text-slate-500 m-0">
               {isEn
-                ? "You do not have any camps created yet."
-                : "Ainda não tem campos criados para registar estatísticas."}
+                ? "No reviews submitted yet. Share your public camp links with past families!"
+                : "Ainda não existem avaliações publicadas. Partilhe a página dos seus campos com as famílias participantes!"}
             </p>
-            <Link
-              href={`/${lang}/admin/campos/novo`}
-              className="inline-block bg-[#167524] text-white font-black uppercase tracking-widest text-xs px-6 py-3 rounded-xl no-underline"
-            >
-              + {isEn ? "Create First Camp" : "Criar Primeiro Campo"}
-            </Link>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 text-[10px] uppercase tracking-widest text-slate-400 bg-slate-50/30">
-                  <th className="px-6 py-4 font-black">
-                    {isEn ? "Program Name" : "Nome do Programa"}
-                  </th>
-                  <th className="px-6 py-4 font-black">
-                    {isEn ? "Status" : "Estado"}
-                  </th>
-                  <th className="px-6 py-4 font-black text-center">
-                    {isEn ? "Views" : "Visualizações"}
-                  </th>
-                  <th className="px-6 py-4 font-black text-center">
-                    {isEn ? "Wishlists" : "Favoritos"}
-                  </th>
-                  <th className="px-6 py-4 font-black text-center">
-                    {isEn ? "Bookings" : "Inscrições"}
-                  </th>
-                  <th className="px-6 py-4 font-black text-right">
-                    {isEn ? "Gross Revenue" : "Volume Bruto"}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="text-sm divide-y divide-slate-100">
-                {statsOrdenados.map((campo) => {
-                  const pctBarra = Math.round(
-                    (campo.totalViews / maxViews) * 100
-                  );
-                  return (
-                    <tr
-                      key={campo.id}
-                      className="hover:bg-slate-50/70 transition-colors"
-                    >
-                      <td className="px-6 py-5 min-w-[240px]">
-                        <Link
-                          href={`/${lang}/campo/${campo.id}`}
-                          target="_blank"
-                          className="font-black text-slate-900 hover:text-[#167524] no-underline block mb-1.5"
-                        >
-                          {campo.nomeDisplay} ↗
-                        </Link>
-                        {/* Barra visual de tráfego relativo */}
-                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden max-w-[180px]">
-                          <div
-                            className="bg-[#167524] h-full rounded-full"
-                            style={{ width: `${Math.max(pctBarra, 4)}%` }}
-                          />
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-5">
-                        {campo.isOnline ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-[#167524] border border-emerald-200 text-[10px] font-black uppercase tracking-wider">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#167524]"></span>
-                            {isEn ? "Online" : "Online"}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black uppercase tracking-wider">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            {isEn ? "Paused / Review" : "Pausado / Revisão"}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-5 text-center font-black text-slate-900">
-                        <span className="bg-slate-100 px-3 py-1 rounded-lg">
-                          {campo.totalViews}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-5 text-center font-black text-red-500">
-                        {campo.totalFavs > 0 ? `❤️ ${campo.totalFavs}` : "0"}
-                      </td>
-
-                      <td className="px-6 py-5 text-center font-black text-[#167524]">
-                        {campo.totalReservas > 0 ? (
-                          <span className="bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg">
-                            {campo.totalReservas}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">0</span>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-5 text-right font-black text-slate-900">
-                        {campo.receita > 0 ? `${campo.receita.toFixed(2)}€` : "0.00€"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {reviews.map((rev: any) => {
+              const campoObj = campos.find((c: any) => c.id === rev.campo_id);
+              return (
+                <div
+                  key={rev.id}
+                  className="p-4 bg-[#F8FAFC] rounded-md border border-slate-200"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <strong className="text-xs font-black text-[#0F172A]">
+                      {rev.autor_nome || "Encarregado de Educação"}
+                    </strong>
+                    <span className="bg-[#F59E0B] text-white text-[10px] font-black px-2 py-0.5 rounded-md">
+                      ★ {rev.rating || 5} / 5
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 italic m-0 mb-2">
+                    &ldquo;{rev.comentario}&rdquo;
+                  </p>
+                  <span className="text-[10px] font-bold text-[#2563EB]">
+                    🏕️ {campoObj?.nome || "Campo"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

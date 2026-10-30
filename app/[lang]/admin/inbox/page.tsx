@@ -1,498 +1,408 @@
 "use client";
 
-import React, { useEffect, useState, use, useRef } from "react";
+import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-export default function InboxParceiro({
+export default function PartnerInboxPage({
   params,
 }: {
   params: Promise<{ lang: string }>;
 }) {
   const { lang } = use(params);
   const isEn = lang === "en";
+  const router = useRouter();
 
-  const [partnerId, setPartnerId] = useState<string | null>(null);
-  const [nomeOrganizador, setNomeOrganizador] = useState<string>("Parceiro HelloCamp");
-  const [threads, setThreads] = useState<any[]>([]);
-  const [threadAtiva, setThreadAtiva] = useState<any | null>(null);
-  const [novaMensagem, setNovaMensagem] = useState("");
-  const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState<"todas" | "nao_lidas">("todas");
+  const [userId, setUserId] = useState<string>("");
+  const [empresaNome, setEmpresaNome] = useState<string>("");
+  const [conversas, setConversas] = useState<any[]>([]);
+  const [conversaAtiva, setConversaAtiva] = useState<any>(null);
+  const [respostaTexto, setRespostaTexto] = useState("");
+  const [sending, setSending] = useState(false);
+  const [filtroAba, setFiltroAba] = useState<"todas" | "nao_lidas">("todas");
 
-  const mensagensEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetchCaixaDeEntrada();
-    const channel = supabase
-      .channel("chat_parceiro_geral")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "mensagens" },
-        () => fetchCaixaDeEntrada()
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const fetchCaixaDeEntrada = async () => {
+  const carregarMensagens = async () => {
+    setLoading(true);
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    if (!session) return;
-    const uid = session.user.id;
-    setPartnerId(uid);
-
-    // 0. Nome do parceiro para usar no envio de e-mail ao Pai
-    const { data: meuPerfil } = await supabase
-      .from("perfis")
-      .select("empresa_nome, nome_completo")
-      .eq("id", uid)
-      .single();
-    if (meuPerfil) {
-      setNomeOrganizador(
-        meuPerfil.empresa_nome || meuPerfil.nome_completo || "Organizador HelloCamp"
-      );
-    }
-
-    // 1. Campos deste organizador
-    const { data: camposData } = await supabase
-      .from("campos")
-      .select("id, nome, nome_en")
-      .eq("organizador_id", uid);
-    const camposIds = camposData?.map((c) => c.id) || [];
-
-    // 2. Reservas feitas nos campos deste organizador (para mostrar contexto na conversa)
-    let reservasData: any[] = [];
-    if (camposIds.length > 0) {
-      const { data: resData } = await supabase
-        .from("reservas")
-        .select("*, criancas(id, nome, data_nascimento, restricoes_alimentares)")
-        .in("campo_id", camposIds);
-      reservasData = resData || [];
-    }
-
-    // 3. Todas as mensagens enviadas ou recebidas por este parceiro
-    const { data: msgs } = await supabase
-      .from("mensagens")
-      .select(
-        `
-        *, 
-        campos(id, nome, nome_en), 
-        perfis_sender:perfis!mensagens_sender_id_fkey(id, nome_completo, email, telefone, contacto_emergencia), 
-        perfis_receiver:perfis!mensagens_receiver_id_fkey(id, nome_completo, email, telefone, contacto_emergencia)
-      `
-      )
-      .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`)
-      .order("created_at", { ascending: true });
-
-    if (!msgs) {
-      setLoading(false);
+    if (!session) {
+      router.push(`/${lang}/login`);
       return;
     }
 
-    // 4. Agrupamento por (Pai/Cliente + Campo)
-    const threadsMap: Record<string, any> = {};
+    const uid = session.user.id;
+    setUserId(uid);
 
-    msgs.forEach((m: any) => {
-      const campId = m.campo_id || "geral";
-      const clientId = m.sender_id === uid ? m.receiver_id : m.sender_id;
-      const clientProfile =
-        m.sender_id === uid ? m.perfis_receiver : m.perfis_sender;
-      const key = `${clientId}_${campId}`;
+    const [{ data: meuPerfil }, { data: camposData }, { data: msgsData }, { data: perfisAll }] =
+      await Promise.all([
+        supabase
+          .from("perfis")
+          .select("empresa_nome, nome_empresa, nome, nome_completo")
+          .eq("id", uid)
+          .maybeSingle(),
+        supabase.from("campos").select("id, nome").eq("organizador_id", uid),
+        supabase
+          .from("mensagens")
+          .select("*")
+          .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("perfis")
+          .select("id, nome_completo, email, telefone"),
+      ]);
 
-      if (!threadsMap[key]) {
-        const inscricoesDestePai =
-          reservasData.filter(
-            (r) =>
-              r.cliente_id === clientId &&
-              (campId === "geral" || r.campo_id === campId)
-          ) || [];
+    if (meuPerfil) {
+      setEmpresaNome(
+        meuPerfil.empresa_nome ||
+          meuPerfil.nome_empresa ||
+          meuPerfil.nome ||
+          meuPerfil.nome_completo ||
+          "Organizador"
+      );
+    }
 
-        threadsMap[key] = {
-          chave: key,
-          campo: m.campos || {
-            id: m.campo_id,
-            nome: isEn ? "General Inquiry" : "Questão Geral",
-          },
-          cliente_id: clientId,
+    const mapCampos: Record<string, string> = {};
+    (camposData || []).forEach((c: any) => {
+      mapCampos[c.id] = c.nome;
+    });
+
+    const mapPerfis: Record<string, any> = {};
+    (perfisAll || []).forEach((p: any) => {
+      mapPerfis[p.id] = p;
+    });
+
+    // Agrupar mensagens por conversa: `${clientId}_${campoId}`
+    const grupos: Record<string, any> = {};
+
+    (msgsData || []).forEach((m: any) => {
+      const outroId = m.sender_id === uid ? m.receiver_id : m.sender_id;
+      if (!outroId) return;
+
+      const cId = m.campo_id || "geral";
+      const chave = `${outroId}_${cId}`;
+      const outroPerfil = mapPerfis[outroId] || {};
+
+      if (!grupos[chave]) {
+        grupos[chave] = {
+          chave,
+          cliente_id: outroId,
           cliente_nome:
-            clientProfile?.nome_completo ||
-            clientProfile?.email?.split("@")[0] ||
-            (isEn ? "Parent / Guardian" : "Encarregado de Educação"),
-          cliente: clientProfile,
-          reservas: inscricoesDestePai,
+            outroPerfil.nome_completo ||
+            outroPerfil.email ||
+            (isEn ? "Parent / Client" : "Encarregado de Educação"),
+          cliente_email: outroPerfil.email || "",
+          cliente_telefone: outroPerfil.telefone || "",
+          campo_id: m.campo_id,
+          campo_nome: mapCampos[m.campo_id] || "Questão Geral",
           mensagens: [],
-          unread: 0,
-          lastMsg: null,
+          nao_lidas: 0,
+          ultima_data: m.created_at,
         };
       }
 
-      threadsMap[key].mensagens.push(m);
-      threadsMap[key].lastMsg = m;
-      if (!m.lida && m.receiver_id === uid) {
-        threadsMap[key].unread++;
+      grupos[chave].mensagens.push(m);
+      grupos[chave].ultima_data = m.created_at;
+
+      if (m.receiver_id === uid && m.lida === false) {
+        grupos[chave].nao_lidas += 1;
       }
     });
 
-    const threadsArray = Object.values(threadsMap).sort(
+    const listaOrdenada = Object.values(grupos).sort(
       (a: any, b: any) =>
-        new Date(b.lastMsg.created_at).getTime() -
-        new Date(a.lastMsg.created_at).getTime()
+        new Date(b.ultima_data).getTime() - new Date(a.ultima_data).getTime()
     );
 
-    setThreads(threadsArray);
-    setThreadAtiva((prev: any) =>
-      prev ? threadsMap[prev.chave] || null : threadsArray[0] || null
-    );
+    setConversas(listaOrdenada);
+    if (listaOrdenada.length > 0 && !conversaAtiva) {
+      selecionarConversa(listaOrdenada[0], uid);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
-    mensagensEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [threadAtiva?.mensagens?.length]);
+    carregarMensagens();
+  }, [lang]);
 
-  const abrirConversa = async (thread: any) => {
-    setThreadAtiva(thread);
-    if (thread.unread > 0 && partnerId) {
-      let query = supabase
-        .from("mensagens")
-        .update({ lida: true })
-        .eq("sender_id", thread.cliente_id)
-        .eq("receiver_id", partnerId)
-        .eq("lida", false);
+  const selecionarConversa = async (conv: any, uidRef?: string) => {
+    setConversaAtiva(conv);
+    const targetUid = uidRef || userId;
+    if (!targetUid || conv.nao_lidas === 0) return;
 
-      if (thread.campo?.id) {
-        query = query.eq("campo_id", thread.campo.id);
-      }
+    // Marca como lidas na BD
+    let query = supabase
+      .from("mensagens")
+      .update({ lida: true })
+      .eq("receiver_id", targetUid)
+      .eq("sender_id", conv.cliente_id)
+      .eq("lida", false);
 
-      await query;
-      fetchCaixaDeEntrada();
+    if (conv.campo_id) {
+      query = query.eq("campo_id", conv.campo_id);
     }
+
+    await query;
+
+    setConversas((prev) =>
+      prev.map((c) =>
+        c.chave === conv.chave ? { ...c, nao_lidas: 0 } : c
+      )
+    );
   };
 
-  const enviarMensagem = async (e: React.FormEvent) => {
+  const handleEnviarResposta = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!novaMensagem.trim() || !threadAtiva || !partnerId || sending) return;
+    if (!respostaTexto.trim() || !conversaAtiva || !userId) return;
 
     setSending(true);
-    const msgTexto = novaMensagem.trim();
-    setNovaMensagem("");
+    try {
+      const txt = respostaTexto.trim();
+      const { data: novaMsg, error } = await supabase
+        .from("mensagens")
+        .insert([
+          {
+            campo_id: conversaAtiva.campo_id || null,
+            sender_id: userId,
+            receiver_id: conversaAtiva.cliente_id,
+            texto: txt,
+            lida: false,
+          },
+        ])
+        .select()
+        .single();
 
-    const novaMsgVisual = {
-      id: Date.now(),
-      sender_id: partnerId,
-      texto: msgTexto,
-      created_at: new Date().toISOString(),
-    };
+      if (error) throw error;
 
-    setThreadAtiva((prev: any) => ({
-      ...prev,
-      mensagens: [...prev.mensagens, novaMsgVisual],
-    }));
+      const conversaAtualizada = {
+        ...conversaAtiva,
+        mensagens: [...conversaAtiva.mensagens, novaMsg],
+        ultima_data: novaMsg.created_at,
+      };
 
-    const { error } = await supabase.from("mensagens").insert([
-      {
-        campo_id: threadAtiva.campo?.id || null,
-        sender_id: partnerId,
-        receiver_id: threadAtiva.cliente_id,
-        texto: msgTexto,
-        lida: false,
-      },
-    ]);
-
-    if (error) {
-      alert(
-        (isEn ? "Error sending message: " : "Erro ao enviar mensagem: ") +
-          error.message
+      setConversaAtiva(conversaAtualizada);
+      setConversas((prev) =>
+        prev.map((c) =>
+          c.chave === conversaAtiva.chave ? conversaAtualizada : c
+        )
       );
+      setRespostaTexto("");
+    } catch (err: any) {
+      alert("Erro ao enviar mensagem: " + err.message);
+    } finally {
       setSending(false);
-      return;
     }
-
-    // MELHORIA CRÍTICA: Envia também um E-mail para o Pai a avisar da resposta do Parceiro!
-    const emailPai = threadAtiva.cliente?.email;
-    const nomeCampo =
-      isEn && threadAtiva.campo?.nome_en
-        ? threadAtiva.campo.nome_en
-        : threadAtiva.campo?.nome || "HelloCamp";
-
-    if (emailPai) {
-      fetch("/api/send-contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nome: nomeOrganizador,
-          emailCliente: "info@hellocamp.pt",
-          emailCampo: emailPai,
-          nomeCampo: nomeCampo,
-          mensagem: `${
-            isEn
-              ? `Reply from organizer ${nomeOrganizador} regarding "${nomeCampo}":`
-              : `Resposta do organizador ${nomeOrganizador} sobre o programa "${nomeCampo}":`
-          }\n\n"${msgTexto}"\n\n${
-            isEn
-              ? `View and reply in your Parent Portal: https://www.hellocamp.pt/${lang}/cliente/mensagens`
-              : `Consulte e responda no seu Portal de Cliente: https://www.hellocamp.pt/${lang}/cliente/mensagens`
-          }`,
-        }),
-      }).catch(() => {});
-    }
-
-    setSending(false);
-    fetchCaixaDeEntrada();
   };
 
-  const threadsFiltradas =
-    filtro === "nao_lidas" ? threads.filter((t) => t.unread > 0) : threads;
+  const conversasVisiveis = conversas.filter((c: any) =>
+    filtroAba === "nao_lidas" ? c.nao_lidas > 0 : true
+  );
 
   if (loading) {
     return (
-      <div className="p-12 text-center text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">
-        {isEn ? "Loading Inbox..." : "A preparar Caixa de Entrada..."}
+      <div className="p-12 text-center font-black text-xs uppercase tracking-widest text-slate-400 animate-pulse">
+        {isEn ? "Loading Inbox..." : "A carregar Caixa de Mensagens..."}
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto font-sans h-[calc(100vh-130px)] min-h-[600px] flex flex-col">
-      <div className="mb-4 flex items-center justify-between flex-wrap gap-4">
+    <div className="max-w-6xl mx-auto font-sans text-[#0F172A] pb-20">
+      {/* CABEÇALHO */}
+      <div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 m-0 tracking-tight">
-            {isEn ? "Parent Messages (Inbox)" : "Caixa de Entrada (Pais)"}
+          <span className="inline-block bg-[#2563EB] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-2">
+            💬 {isEn ? "Direct Communication" : "Comunicação Direta com Pais"}
+          </span>
+          <h1 className="text-2xl md:text-3xl font-black text-[#0F172A] m-0 tracking-tight">
+            {isEn ? "Partner Inbox & Inquiries" : "Caixa de Mensagens e Dúvidas"}
           </h1>
-          <p className="text-xs md:text-sm text-slate-500 font-medium m-0 mt-1">
-            {isEn
-              ? "Direct communication with parents. Your replies are also sent to their email."
-              : "Comunique diretamente com os encarregados de educação. As suas respostas seguem também por e-mail."}
-          </p>
         </div>
 
-        <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200">
+        <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setFiltro("todas")}
-            className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest cursor-pointer transition-colors ${
-              filtro === "todas"
-                ? "bg-[#167524] text-white"
-                : "text-slate-500 hover:text-slate-900"
+            onClick={() => setFiltroAba("todas")}
+            className={`px-4 py-2.5 rounded-md text-xs font-black uppercase tracking-widest cursor-pointer border-0 ${
+              filtroAba === "todas"
+                ? "bg-[#0F172A] text-white"
+                : "bg-slate-200 text-[#0F172A]"
             }`}
           >
-            {isEn ? "All" : "Todas"} ({threads.length})
+            {isEn ? "All" : "Todas"} ({conversas.length})
           </button>
           <button
             type="button"
-            onClick={() => setFiltro("nao_lidas")}
-            className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest cursor-pointer transition-colors ${
-              filtro === "nao_lidas"
-                ? "bg-[#167524] text-white"
-                : "text-slate-500 hover:text-slate-900"
+            onClick={() => setFiltroAba("nao_lidas")}
+            className={`px-4 py-2.5 rounded-md text-xs font-black uppercase tracking-widest cursor-pointer border-0 ${
+              filtroAba === "nao_lidas"
+                ? "bg-[#F43F5E] text-white"
+                : "bg-slate-200 text-[#0F172A]"
             }`}
           >
             {isEn ? "Unread" : "Não Lidas"} (
-            {threads.filter((t) => t.unread > 0).length})
+            {conversas.filter((c) => c.nao_lidas > 0).length})
           </button>
         </div>
       </div>
 
-      {threads.length === 0 ? (
-        <div className="flex-1 bg-white rounded-3xl border border-slate-200 flex flex-col items-center justify-center p-12 text-center shadow-sm">
-          <span className="text-5xl mb-4">📭</span>
-          <h3 className="text-xl font-black text-slate-900 m-0 mb-2">
-            {isEn ? "No messages yet" : "Ainda não tem mensagens"}
-          </h3>
-          <p className="text-sm text-slate-500 max-w-md m-0">
-            {isEn
-              ? "When parents ask questions on your camp pages or start a booking, their messages will appear here."
-              : "Quando os pais enviarem dúvidas na página dos seus campos ou iniciarem uma reserva, as conversas aparecerão aqui."}
-          </p>
-        </div>
-      ) : (
-        <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-0">
-          {/* LISTA DE CONVERSAS (4 Colunas) */}
-          <div className="md:col-span-4 border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto flex flex-col max-h-[240px] md:max-h-full">
-            {threadsFiltradas.map((t) => {
-              const isSelected = threadAtiva?.chave === t.chave;
-              const nomeCampo =
-                isEn && t.campo?.nome_en ? t.campo.nome_en : t.campo?.nome;
+      {/* LAYOUT DE CHAT (LISTA DE CONVERSAS + JANELA DE MENSAGENS) */}
+      <div className="bg-white rounded-md border border-slate-200 shadow-sm grid grid-cols-1 lg:grid-cols-12 min-h-[560px] overflow-hidden">
+        {/* COLUNA ESQUERDA: LISTA DE CONVERSAS */}
+        <div className="lg:col-span-4 border-r border-slate-200 bg-[#F8FAFC] overflow-y-auto max-h-[620px]">
+          {conversasVisiveis.length === 0 ? (
+            <div className="p-10 text-center text-xs font-bold text-slate-400">
+              {isEn ? "No messages found." : "Nenhuma conversa encontrada."}
+            </div>
+          ) : (
+            conversasVisiveis.map((conv: any) => {
+              const isSelected = conversaAtiva?.chave === conv.chave;
+              const ultimaMsg =
+                conv.mensagens[conv.mensagens.length - 1]?.texto || "";
 
               return (
-                <button
-                  key={t.chave}
-                  type="button"
-                  onClick={() => abrirConversa(t)}
-                  className={`w-full text-left p-4 border-b border-slate-100 transition-colors cursor-pointer flex items-start gap-3 ${
+                <div
+                  key={conv.chave}
+                  onClick={() => selecionarConversa(conv)}
+                  className={`p-4 border-b border-slate-200 cursor-pointer transition-colors ${
                     isSelected
-                      ? "bg-emerald-50/70 border-l-4 border-l-[#167524]"
-                      : "hover:bg-slate-50"
+                      ? "bg-[#2563EB] text-white"
+                      : "bg-white hover:bg-slate-50 text-[#0F172A]"
                   }`}
                 >
-                  <div className="w-10 h-10 rounded-full bg-[#167524]/10 text-[#167524] font-black text-sm flex items-center justify-center flex-shrink-0">
-                    {t.cliente_nome.charAt(0).toUpperCase()}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="font-black text-sm text-slate-900 truncate">
-                        {t.cliente_nome}
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <strong className="text-xs font-black truncate">
+                      {conv.cliente_nome}
+                    </strong>
+                    {conv.nao_lidas > 0 && (
+                      <span className="bg-[#F43F5E] text-white text-[10px] font-black px-2 py-0.5 rounded-md">
+                        {conv.nao_lidas} nova(s)
                       </span>
-                      {t.unread > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                          {t.unread}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] font-bold text-[#167524] uppercase tracking-wider truncate m-0 mb-1">
-                      🏕️ {nomeCampo}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate m-0">
-                      {t.lastMsg?.texto}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* ÁREA DE CHAT E DETALHES DO CLIENTE (8 Colunas) */}
-          <div className="md:col-span-8 flex flex-col min-h-0 bg-slate-50/50">
-            {threadAtiva ? (
-              <>
-                {/* CABEÇALHO DO CHAT COM CONTEXTO DO PAI */}
-                <div className="bg-white p-4 px-6 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-base font-black text-slate-900 m-0">
-                        {threadAtiva.cliente_nome}
-                      </h2>
-                      {threadAtiva.reservas?.length > 0 ? (
-                        <span className="bg-emerald-100 text-[#167524] text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">
-                          ✓ {threadAtiva.reservas.length}{" "}
-                          {isEn ? "Booking(s)" : "Reserva(s)"}
-                        </span>
-                      ) : (
-                        <span className="bg-amber-100 text-amber-800 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">
-                          {isEn ? "Potential Lead" : "Potencial Cliente"}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 m-0 mt-0.5">
-                      {threadAtiva.cliente?.email || ""}{" "}
-                      {threadAtiva.cliente?.telefone
-                        ? `• 📞 ${threadAtiva.cliente.telefone}`
-                        : ""}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {threadAtiva.cliente?.telefone && (
-                      <a
-                        href={`https://wa.me/${threadAtiva.cliente.telefone.replace(/[^0-9]/g, "")}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-emerald-50 hover:bg-emerald-100 text-[#167524] border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-black no-underline transition-colors"
-                      >
-                        💬 WhatsApp
-                      </a>
-                    )}
-                    {threadAtiva.reservas?.length > 0 && (
-                      <Link
-                        href={`/${lang}/admin/reservas`}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold no-underline transition-colors"
-                      >
-                        📋 {isEn ? "View Booking" : "Ver Reserva"}
-                      </Link>
                     )}
                   </div>
+                  <div
+                    className={`text-[10px] font-black uppercase tracking-wider mb-1.5 ${
+                      isSelected ? "text-amber-300" : "text-[#2563EB]"
+                    }`}
+                  >
+                    🏕️ {conv.campo_nome}
+                  </div>
+                  <p
+                    className={`text-xs m-0 truncate ${
+                      isSelected ? "text-blue-100" : "text-slate-500"
+                    }`}
+                  >
+                    {ultimaMsg}
+                  </p>
                 </div>
+              );
+            })
+          )}
+        </div>
 
-                {/* HISTÓRICO DE MENSAGENS */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                  {threadAtiva.mensagens.map((m: any) => {
-                    const souEu = m.sender_id === partnerId;
-                    return (
-                      <div
-                        key={m.id}
-                        className={`flex flex-col ${
-                          souEu ? "items-end" : "items-start"
+        {/* COLUNA DIREITA: HISTÓRICO DE MENSAGENS E RESPOSTA */}
+        <div className="lg:col-span-8 flex flex-col justify-between bg-white">
+          {!conversaAtiva ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+              <div className="text-4xl mb-3">💬</div>
+              <h3 className="text-base font-black text-[#0F172A] mb-1">
+                {isEn
+                  ? "Select a conversation"
+                  : "Selecione uma conversa à esquerda"}
+              </h3>
+              <p className="text-xs font-bold text-slate-500 m-0">
+                {isEn
+                  ? "All questions and change requests from parents appear here."
+                  : "Todas as dúvidas sobre os campos e pedidos dos pais aparecem aqui."}
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* TOPO DA CONVERSA ATIVA */}
+              <div className="p-5 bg-[#0F172A] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800">
+                <div>
+                  <span className="bg-[#F59E0B] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md inline-block mb-1">
+                    🏕️ {conversaAtiva.campo_nome}
+                  </span>
+                  <h3 className="text-base font-black m-0">
+                    {conversaAtiva.cliente_nome}
+                  </h3>
+                </div>
+                <div className="text-xs font-bold text-slate-300">
+                  {conversaAtiva.cliente_email && (
+                    <span className="mr-3">✉️ {conversaAtiva.cliente_email}</span>
+                  )}
+                  {conversaAtiva.cliente_telefone && (
+                    <span>📞 {conversaAtiva.cliente_telefone}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* LISTA DE MENSAGENS */}
+              <div className="flex-1 p-6 overflow-y-auto space-y-4 max-h-[420px] bg-[#F8FAFC]">
+                {conversaAtiva.mensagens.map((m: any) => {
+                  const souEu = m.sender_id === userId;
+                  return (
+                    <div
+                      key={m.id}
+                      className={`p-4 rounded-md max-w-[82%] shadow-sm ${
+                        souEu
+                          ? "ml-auto bg-[#2563EB] text-white"
+                          : "mr-auto bg-white border border-slate-200 text-[#0F172A]"
+                      }`}
+                    >
+                      <div className="text-[10px] font-black uppercase tracking-wider mb-1 opacity-80">
+                        {souEu ? empresaNome : conversaAtiva.cliente_nome}
+                      </div>
+                      <p className="text-xs md:text-sm font-medium whitespace-pre-wrap leading-relaxed m-0">
+                        {m.texto}
+                      </p>
+                      <span
+                        className={`block text-[9px] mt-2 ${
+                          souEu ? "text-blue-100" : "text-slate-400"
                         }`}
                       >
-                        <div
-                          className={`max-w-[80%] rounded-2xl p-4 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
-                            souEu
-                              ? "bg-[#167524] text-white rounded-br-none"
-                              : "bg-white text-slate-800 border border-slate-200 rounded-bl-none"
-                          }`}
-                        >
-                          {m.texto}
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-400 mt-1 px-1">
-                          {new Date(m.created_at).toLocaleString(
-                            isEn ? "en-GB" : "pt-PT",
-                            {
-                              day: "2-digit",
-                              month: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  <div ref={mensagensEndRef} />
-                </div>
-
-                {/* CAIXA DE RESPOSTA */}
-                <form
-                  onSubmit={enviarMensagem}
-                  className="bg-white p-4 border-t border-slate-200 flex gap-3 items-end"
-                >
-                  <textarea
-                    rows={2}
-                    value={novaMensagem}
-                    onChange={(e) => setNovaMensagem(e.target.value)}
-                    placeholder={
-                      isEn
-                        ? "Write your reply here... (the parent will also receive an email notification)"
-                        : "Escreva a sua resposta aqui... (o encarregado de educação também receberá alerta por e-mail)"
-                    }
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium text-slate-900 outline-none focus:bg-white focus:border-[#167524] resize-none"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        enviarMensagem(e);
-                      }
-                    }}
-                  />
-                  <button
-                    type="submit"
-                    disabled={sending || !novaMensagem.trim()}
-                    className="bg-[#167524] hover:bg-[#115a1b] disabled:bg-slate-300 text-white font-black uppercase tracking-widest text-xs px-6 py-4 rounded-xl cursor-pointer transition-colors shadow-sm"
-                  >
-                    {sending
-                      ? isEn
-                        ? "Sending..."
-                        : "A enviar..."
-                      : isEn
-                      ? "Send"
-                      : "Enviar"}
-                  </button>
-                </form>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-slate-400 font-bold text-sm">
-                {isEn
-                  ? "Select a conversation on the left"
-                  : "Selecione uma conversa à esquerda"}
+                        {new Date(m.created_at).toLocaleString("pt-PT")}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
+
+              {/* CAIXA DE ENVIO DE RESPOSTA */}
+              <form
+                onSubmit={handleEnviarResposta}
+                className="p-4 bg-white border-t border-slate-200 flex gap-3"
+              >
+                <input
+                  type="text"
+                  required
+                  value={respostaTexto}
+                  onChange={(e) => setRespostaTexto(e.target.value)}
+                  placeholder={
+                    isEn
+                      ? "Write your reply to the parent..."
+                      : "Escreva a sua resposta para o encarregado de educação..."
+                  }
+                  className="flex-1 py-3.5 px-4 bg-[#F8FAFC] border border-slate-300 rounded-md text-xs font-bold text-[#0F172A] outline-none focus:border-[#2563EB]"
+                />
+                <button
+                  type="submit"
+                  disabled={sending}
+                  className="bg-[#16A34A] hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest px-6 py-3.5 rounded-md cursor-pointer border-0 shrink-0 shadow-sm"
+                >
+                  {sending
+                    ? "..."
+                    : isEn
+                    ? "Send Reply →"
+                    : "Enviar Resposta →"}
+                </button>
+              </form>
+            </>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
