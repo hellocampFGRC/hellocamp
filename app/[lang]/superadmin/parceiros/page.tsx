@@ -26,13 +26,13 @@ export default function GestaoParceirosHQ({
   const { lang } = use(params);
 
   const [parceiros, setParceiros] = useState<any[]>([]);
-  const [camposCountMap, setCamposCountMap] = useState<Record<string, number>>(
-    {}
-  );
+  const [camposByParceiro, setCamposByParceiro] = useState<
+    Record<string, any[]>
+  >({});
   const [loading, setLoading] = useState(true);
   const [pesquisa, setPesquisa] = useState("");
 
-  // Modal de Criação / Edição
+  // Modal de Criação / Edição de Parceiro
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,15 +52,32 @@ export default function GestaoParceirosHQ({
     status_contrato: "Preparação HQ",
   });
 
-  // Modal de Partilha de Credenciais e Link de Onboarding
+  // Modal de Pré-Visualização e Edição de E-mail / Convite Completo
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [welcomeData, setWelcomeData] = useState({
+  const [activeEmailTab, setActiveEmailTab] = useState<"edit" | "preview">(
+    "preview"
+  );
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [welcomeData, setWelcomeData] = useState<{
+    id: string;
+    nome: string;
+    email: string;
+    password: string;
+    empresa: string;
+    taxa_comissao: number;
+    campos: any[];
+  }>({
     id: "",
     nome: "",
     email: "",
     password: "",
     empresa: "",
+    taxa_comissao: 12,
+    campos: [],
   });
+
+  const [emailAssunto, setEmailAssunto] = useState("");
+  const [emailCorpoEditavel, setEmailCorpoEditavel] = useState("");
 
   // Modal para Definir Nova Password Manualmente
   const [resetModalParceiro, setResetModalParceiro] = useState<any>(null);
@@ -73,11 +90,14 @@ export default function GestaoParceirosHQ({
       supabase
         .from("perfis")
         .select(
-          "id, empresa_nome, nome_completo, nif_empresa, email, telefone, status_contrato, taxa_comissao, base_comissao, modalidade_reserva, created_at"
+          "id, empresa_nome, nome_empresa, nome, nome_completo, nif_empresa, email, telefone, status_contrato, taxa_comissao, base_comissao, modalidade_reserva, created_at"
         )
         .eq("role", "organizador")
         .order("created_at", { ascending: false }),
-      supabase.from("campos").select("id, organizador_id"),
+      supabase
+        .from("campos")
+        .select("id, nome, categoria, local, Distrito, preco, ativo, status_aprovacao, organizador_id")
+        .order("created_at", { ascending: true }),
     ]);
 
     if (error) {
@@ -86,19 +106,111 @@ export default function GestaoParceirosHQ({
       setParceiros(data || []);
     }
 
-    const counts: Record<string, number> = {};
+    const grouped: Record<string, any[]> = {};
     (camposData || []).forEach((c: any) => {
       if (c.organizador_id) {
-        counts[c.organizador_id] = (counts[c.organizador_id] || 0) + 1;
+        if (!grouped[c.organizador_id]) grouped[c.organizador_id] = [];
+        grouped[c.organizador_id].push(c);
       }
     });
-    setCamposCountMap(counts);
+    setCamposByParceiro(grouped);
     setLoading(false);
   };
 
   useEffect(() => {
     fetchParceiros();
   }, []);
+
+  // Constrói o texto e assunto padrão sempre que abrimos o Modal de Convite/Pré-Visualização
+  const prepararModalConvite = (
+    parceiroObj: any,
+    passwordTemp?: string
+  ) => {
+    const id = parceiroObj.id || "";
+    const empresa =
+      parceiroObj.empresa_nome ||
+      parceiroObj.nome_empresa ||
+      parceiroObj.nome ||
+      parceiroObj.nome_completo ||
+      "Parceiro";
+    const nomeResp =
+      parceiroObj.nome_completo || empresa;
+    const primeiroNome = nomeResp.split(" ")[0];
+    const emailDestino = (parceiroObj.email || "").trim().toLowerCase();
+    const passVisivel =
+      passwordTemp || "HelloCamp2026! (ou defina a sua ao assinar o contrato)";
+    const listaCampos = camposByParceiro[id] || [];
+    const linkContrato = id
+      ? `https://www.hellocamp.pt/${lang}/assinatura-contrato/${id}`
+      : `https://www.hellocamp.pt/${lang}/login`;
+    const linkMontra = id
+      ? `https://www.hellocamp.pt/${lang}/parceiro/${id}?preview=admin`
+      : `https://www.hellocamp.pt/${lang}`;
+
+    const linhasCampos =
+      listaCampos.length > 0
+        ? listaCampos
+            .map(
+              (c, idx) =>
+                `   ${idx + 1}. 🏕️ ${c.nome}\n      🔗 Pré-visualizar Página (Visão Admin): https://www.hellocamp.pt/${lang}/campo/${c.id}?preview=admin`
+            )
+            .join("\n\n")
+        : `   • Os seus programas encontram-se prontos a configurar no seu Painel de Organizador.`;
+
+    const assuntoPadrao = `🎉 Bem-vindo à HelloCamp! Perfil e Programas de ${empresa} Prontos para Revisão`;
+
+    const corpoPadrao = `Olá ${primeiroNome},
+
+É com enorme gosto que informamos que o perfil oficial de organizador da ${empresa} e os respetivos campos/programas já foram criados e pré-configurados pela nossa equipa na plataforma HelloCamp!
+
+Para que tudo fique publicado e ativo para as famílias e escolas, basta concluir dois passos rápidos:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1️⃣ PRÉ-VISUALIZAR O SEU PERFIL E CAMPOS (VISÃO PRIVADA DE ADMIN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Antes mesmo de os campos ficarem visíveis ao público geral, pode rever como ficaram estruturados através destes links exclusivos de pré-visualização:
+
+🏢 Montra Pública da Organização:
+${linkMontra}
+
+🏕️ Programas Configurados (${listaCampos.length}):
+${linhasCampos}
+
+*(Nota: Caso pretenda ajustar algum detalhe, fotografia, preço ou texto, poderá fazê-lo a qualquer momento no seu Painel de Controlo).*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2️⃣ ASSINAR O CONTRATO DIGITAL E DEFINIR A SUA PASSWORD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para ativar os seus campos na plataforma, aceda ao link abaixo para rever e assinar digitalmente o Contrato Global de Parceria e definir no final a sua própria password definitiva:
+
+📄 Link Direto do Contrato & Ativação:
+${linkContrato}
+
+Em alternativa, se preferir entrar diretamente no seu Painel de Organizador agora mesmo:
+🔗 Link de Login: https://www.hellocamp.pt/${lang}/login
+✉️ E-mail de Acesso: ${emailDestino}
+🔑 Password Temporária: ${passVisivel}
+
+Estamos inteiramente ao dispor para ajudar em qualquer questão!
+
+Com os melhores cumprimentos,
+Equipa HelloCamp
+🌐 www.hellocamp.pt`;
+
+    setWelcomeData({
+      id,
+      nome: nomeResp,
+      email: emailDestino,
+      password: passVisivel,
+      empresa,
+      taxa_comissao: parceiroObj.taxa_comissao ?? 12,
+      campos: listaCampos,
+    });
+    setEmailAssunto(assuntoPadrao);
+    setEmailCorpoEditavel(corpoPadrao);
+    setActiveEmailTab("preview");
+    setShowWelcomeModal(true);
+  };
 
   const abrirModalNovo = () => {
     const randomPass = Math.random().toString(36).slice(-6) + "Hc26!";
@@ -125,7 +237,7 @@ export default function GestaoParceirosHQ({
       nome_completo: p.nome_completo || "",
       email: p.email || "",
       password: "",
-      empresa_nome: p.empresa_nome || "",
+      empresa_nome: p.empresa_nome || p.nome_empresa || p.nome || "",
       nif_empresa: p.nif_empresa || "",
       telefone: p.telefone || "",
       taxa_comissao: (p.taxa_comissao ?? 12).toString(),
@@ -153,6 +265,8 @@ export default function GestaoParceirosHQ({
           .update({
             nome_completo: form.nome_completo || null,
             empresa_nome: form.empresa_nome || null,
+            nome_empresa: form.empresa_nome || null,
+            nome: form.empresa_nome || null,
             nif_empresa: form.nif_empresa || null,
             telefone: form.telefone || null,
             taxa_comissao: parseFloat(form.taxa_comissao) || 12,
@@ -165,7 +279,6 @@ export default function GestaoParceirosHQ({
 
         if (error) throw error;
 
-        // Propaga a comissão e modalidade para os campos deste parceiro
         await supabase
           .from("campos")
           .update({
@@ -179,7 +292,6 @@ export default function GestaoParceirosHQ({
         setShowModal(false);
         fetchParceiros();
       } else {
-        // CRIAÇÃO SEGURA VIA API ADMIN (NÃO TERMINA A SESSÃO DO SUPERADMIN!)
         const res = await fetch("/api/notificar-reserva/admin/criar-parceiro", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -202,15 +314,18 @@ export default function GestaoParceirosHQ({
         if (!res.ok) throw new Error(data.error || "Erro ao criar parceiro.");
 
         setShowModal(false);
-        setWelcomeData({
-          id: data.user?.id || "",
-          nome: form.nome_completo || form.empresa_nome || "Parceiro",
-          email: form.email.trim().toLowerCase(),
-          password: form.password,
-          empresa: form.empresa_nome || form.nome_completo || "Parceiro",
-        });
-        setShowWelcomeModal(true);
-        fetchParceiros();
+        await fetchParceiros();
+
+        prepararModalConvite(
+          {
+            id: data.user?.id || "",
+            nome_completo: form.nome_completo,
+            empresa_nome: form.empresa_nome,
+            email: form.email,
+            taxa_comissao: parseFloat(form.taxa_comissao) || 12,
+          },
+          form.password
+        );
       }
     } catch (err: any) {
       alert("Erro: " + err.message);
@@ -219,12 +334,10 @@ export default function GestaoParceirosHQ({
     }
   };
 
-  // Envia E-mail de Recuperação OU Define Nova Password Diretamente
   const handleEnviarEmailRecuperacao = async (email: string) => {
     if (!window.confirm(`Enviar link de recuperação por e-mail para ${email}?`))
       return;
 
-    // CORRIGIDO: Aponta para a rota real /atualizar-password
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `https://www.hellocamp.pt/${lang}/atualizar-password`,
     });
@@ -250,23 +363,12 @@ export default function GestaoParceirosHQ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao alterar password.");
 
-      // Abre o modal de boas-vindas com a nova password pronta a copiar/enviar por WhatsApp!
-      setWelcomeData({
-        id: resetModalParceiro.id,
-        nome:
-          resetModalParceiro.nome_completo ||
-          resetModalParceiro.empresa_nome ||
-          "Parceiro",
-        email: resetModalParceiro.email,
-        password: novaPassManual,
-        empresa:
-          resetModalParceiro.empresa_nome ||
-          resetModalParceiro.nome_completo ||
-          "Parceiro",
-      });
+      const pTarget = resetModalParceiro;
+      const passEscolhida = novaPassManual;
       setResetModalParceiro(null);
       setNovaPassManual("");
-      setShowWelcomeModal(true);
+
+      prepararModalConvite(pTarget, passEscolhida);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -274,44 +376,75 @@ export default function GestaoParceirosHQ({
     }
   };
 
-  // CORRIGIDO: Links 100% válidos (/login e /assinatura-contrato/[id])
-  const linkOnboardingDireto = welcomeData.id
-    ? `https://www.hellocamp.pt/${lang}/assinatura-contrato/${welcomeData.id}`
-    : `https://www.hellocamp.pt/${lang}/login`;
+  // Disparo direto de E-mail via API Resend com confirmação
+  const handleDispararEmailAPI = async () => {
+    if (!welcomeData.email) {
+      alert("Este parceiro não tem um endereço de e-mail válido.");
+      return;
+    }
 
-  const textoMensagem = `Olá ${
-    welcomeData.nome.split(" ")[0]
-  }! 🎉\n\nA conta de Parceiro Organizador da ${
-    welcomeData.empresa
-  } na plataforma HelloCamp já está criada e pré-configurada.\n\nTem duas formas simples de aceder:\n\n1️⃣ ACESSO DIRETO AO PAINEL:\n🔗 Link de Login: https://www.hellocamp.pt/${lang}/login\n✉️ E-mail: ${
-    welcomeData.email
-  }\n🔑 Password Temporária: ${
-    welcomeData.password
-  }\n\n2️⃣ FORMALIZAR ACORDO E DEFINIR A SUA PRÓPRIA PASSWORD:\n📄 Link Direto do Contrato: ${linkOnboardingDireto}\n\nQualquer dúvida, estamos inteiramente à disposição!\nEquipa HelloCamp`;
+    setSendingEmail(true);
+    try {
+      const res = await fetch("/api/notificar-reserva/admin/criar-parceiro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send_onboarding_email",
+          email: welcomeData.email,
+          assunto: emailAssunto,
+          texto: emailCorpoEditavel,
+          empresa: welcomeData.empresa,
+          nome: welcomeData.nome,
+          parceiroId: welcomeData.id,
+          campos: welcomeData.campos,
+          lang,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          data.error ||
+            "Não foi possível disparar via API. Pode usar o botão 'Abrir no Cliente de E-mail'."
+        );
+      }
+
+      alert(
+        `✅ E-mail enviado com sucesso para ${welcomeData.email}!`
+      );
+    } catch (err: any) {
+      alert("Aviso API: " + err.message);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   const parceirosFiltrados = parceiros.filter((p) =>
-    `${p.empresa_nome || ""} ${p.nome_completo || ""} ${p.email || ""} ${
-      p.nif_empresa || ""
-    }`
+    `${p.empresa_nome || ""} ${p.nome_empresa || ""} ${p.nome || ""} ${
+      p.nome_completo || ""
+    } ${p.email || ""} ${p.nif_empresa || ""}`
       .toLowerCase()
       .includes(pesquisa.toLowerCase())
   );
 
   const labelClass =
-    "text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1 block";
+    "text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block";
   const inputClass =
-    "w-full py-3.5 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-blue-600 focus:bg-white transition-colors";
+    "w-full py-3 px-4 bg-[#F8FAFC] border border-slate-300 rounded-md text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white transition-colors";
 
   return (
-    <div className="max-w-7xl mx-auto font-sans pb-20">
-      {/* HEADER */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="max-w-7xl mx-auto font-sans text-[#0F172A] pb-20">
+      {/* HEADER EXECUTIVO HELLO CAMP */}
+      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-6 rounded-md border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight m-0">
-            Gestão de Parceiros B2B
+          <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-2">
+            SuperAdmin HQ • B2B
+          </span>
+          <h1 className="text-2xl md:text-3xl font-black text-[#0F172A] tracking-tight m-0">
+            Gestão de Parceiros & Onboarding
           </h1>
           <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1 mb-0">
-            Criação Manual de Contas, Passwords e Taxas de Comissão
+            Contas, Comissões, Pré-Visualização de Campos e Envio de Convites
           </p>
         </div>
 
@@ -320,23 +453,23 @@ export default function GestaoParceirosHQ({
             type="text"
             value={pesquisa}
             onChange={(e) => setPesquisa(e.target.value)}
-            placeholder="Pesquisar empresa, email ou NIF..."
-            className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 outline-none focus:border-slate-900 min-w-[240px]"
+            placeholder="Pesquisar empresa, responsável, email..."
+            className="bg-[#F8FAFC] border border-slate-300 rounded-md px-4 py-3 text-xs font-bold text-[#0F172A] outline-none focus:border-[#2563EB] min-w-[250px]"
           />
           <button
             type="button"
             onClick={abrirModalNovo}
-            className="bg-[#167524] hover:bg-[#115a1b] text-white px-6 py-3.5 rounded-xl text-xs uppercase tracking-widest font-black shadow-lg cursor-pointer transition-colors"
+            className="bg-[#16A34A] hover:bg-green-700 text-white px-6 py-3 rounded-md text-xs uppercase tracking-widest font-black shadow-sm cursor-pointer transition-colors border-0"
           >
             + Criar Nova Entidade
           </button>
         </div>
       </div>
 
-      {/* TABELA DE PARCEIROS */}
-      <div className="bg-white border border-slate-200 rounded-3xl overflow-x-auto shadow-sm">
-        <table className="w-full text-left min-w-[900px] border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-200">
+      {/* TABELA DE PARCEIROS (CANTOS RETOS rounded-md) */}
+      <div className="bg-white border border-slate-200 rounded-md overflow-x-auto shadow-sm">
+        <table className="w-full text-left min-w-[980px] border-collapse">
+          <thead className="bg-[#F8FAFC] border-b border-slate-200">
             <tr>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 Empresa / NIF
@@ -345,17 +478,17 @@ export default function GestaoParceirosHQ({
                 Contacto & Login
               </th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Campos
+                Campos & Preview
               </th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 Contrato / Comissão
               </th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">
-                Ações de Conta & Acesso
+                Ações de Conta & Convite
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-200">
             {loading ? (
               <tr>
                 <td
@@ -376,32 +509,33 @@ export default function GestaoParceirosHQ({
               </tr>
             ) : (
               parceirosFiltrados.map((p) => {
-                let statusLabel = p.status_contrato || "Sem Contrato";
-                let statusColor =
-                  "bg-slate-100 text-slate-600 border-slate-200";
+                const statusLabel = p.status_contrato || "Sem Contrato";
+                let statusBadgeClass = "bg-slate-600 text-white";
                 if (p.status_contrato === "Aprovado") {
-                  statusColor =
-                    "bg-emerald-100 text-emerald-800 border-emerald-200";
+                  statusBadgeClass = "bg-[#16A34A] text-white";
                 } else if (
                   p.status_contrato === "Pendente de Revisão" ||
                   p.status_contrato === "Pendente" ||
                   p.status_contrato === "Preparação HQ"
                 ) {
-                  statusColor = "bg-amber-100 text-amber-800 border-amber-200";
+                  statusBadgeClass = "bg-[#F59E0B] text-white";
                 } else if (p.status_contrato === "Rejeitado") {
-                  statusColor = "bg-red-100 text-red-800 border-red-200";
+                  statusBadgeClass = "bg-[#F43F5E] text-white";
                 }
 
-                const numCampos = camposCountMap[p.id] || 0;
+                const listaCamposParceiro = camposByParceiro[p.id] || [];
+                const numCampos = listaCamposParceiro.length;
+                const nomeEmp =
+                  p.empresa_nome || p.nome_empresa || p.nome || null;
 
                 return (
                   <tr
                     key={p.id}
-                    className="hover:bg-slate-50/80 transition-colors"
+                    className="hover:bg-[#F8FAFC] transition-colors"
                   >
                     <td className="px-6 py-4">
-                      <div className="font-black text-sm text-slate-900">
-                        {p.empresa_nome || (
+                      <div className="font-black text-sm text-[#0F172A]">
+                        {nomeEmp || (
                           <span className="text-slate-400 italic">
                             Por definir
                           </span>
@@ -413,10 +547,10 @@ export default function GestaoParceirosHQ({
                     </td>
 
                     <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-slate-800">
-                        {p.nome_completo || "Sem Nome"}
+                      <div className="text-sm font-bold text-[#0F172A]">
+                        {p.nome_completo || nomeEmp || "Sem Nome"}
                       </div>
-                      <div className="text-xs font-bold text-blue-600 mt-0.5 break-all">
+                      <div className="text-xs font-bold text-[#2563EB] mt-0.5 break-all">
                         {p.email}
                       </div>
                       {p.telefone && (
@@ -427,22 +561,33 @@ export default function GestaoParceirosHQ({
                     </td>
 
                     <td className="px-6 py-4">
-                      <Link
-                        href={`/${lang}/superadmin/campos?parceiro=${p.id}`}
-                        className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-xs px-3 py-1.5 rounded-xl no-underline transition-colors"
-                      >
-                        🏕️ {numCampos} {numCampos === 1 ? "Campo" : "Campos"}
-                      </Link>
+                      <div className="flex flex-col items-start gap-1.5">
+                        <Link
+                          href={`/${lang}/superadmin/campos?parceiro=${p.id}`}
+                          className="inline-flex items-center gap-1.5 bg-[#0F172A] hover:bg-[#2563EB] text-white font-black text-[11px] px-3 py-1.5 rounded-md no-underline transition-colors"
+                        >
+                          🏕️ {numCampos} {numCampos === 1 ? "Campo" : "Campos"}
+                        </Link>
+                        {numCampos > 0 && (
+                          <Link
+                            href={`/${lang}/campo/${listaCamposParceiro[0].id}?preview=admin`}
+                            target="_blank"
+                            className="text-[10px] font-black text-[#2563EB] hover:underline no-underline"
+                          >
+                            👁️ Ver 1.º Campo (Admin) ↗
+                          </Link>
+                        )}
+                      </div>
                     </td>
 
                     <td className="px-6 py-4">
                       <div className="flex flex-col items-start gap-1.5">
                         <span
-                          className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border ${statusColor}`}
+                          className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md ${statusBadgeClass}`}
                         >
                           {statusLabel}
                         </span>
-                        <span className="text-[10px] font-black text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                        <span className="text-[10px] font-black text-[#0F172A] bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
                           {p.taxa_comissao ?? 12}% •{" "}
                           {p.modalidade_reserva || "direta"}
                         </span>
@@ -453,11 +598,13 @@ export default function GestaoParceirosHQ({
                       <div className="flex justify-end gap-2 flex-wrap">
                         <button
                           type="button"
-                          onClick={() => abrirModalEditar(p)}
-                          className="bg-white border border-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-slate-50 cursor-pointer"
+                          onClick={() => prepararModalConvite(p)}
+                          className="bg-[#F59E0B] hover:bg-amber-600 text-white px-3.5 py-2 rounded-md text-[10px] uppercase tracking-widest font-black cursor-pointer transition-colors border-0 shadow-sm"
+                          title="Pré-visualizar, editar e enviar E-mail Completo com os Campos e Contrato"
                         >
-                          ✏️ Editar
+                          📧 Convite & Preview E-mail
                         </button>
+
                         <button
                           type="button"
                           onClick={() => {
@@ -466,18 +613,27 @@ export default function GestaoParceirosHQ({
                             setNovaPassManual(suggested);
                             setResetModalParceiro(p);
                           }}
-                          className="bg-emerald-50 border border-emerald-200 text-[#167524] px-3.5 py-2 rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-emerald-100 cursor-pointer"
-                          title="Definir uma nova password temporária e gerar mensagem de acesso"
+                          className="bg-[#16A34A] hover:bg-green-700 text-white px-3.5 py-2 rounded-md text-[10px] uppercase tracking-widest font-black cursor-pointer transition-colors border-0 shadow-sm"
+                          title="Definir uma nova password temporária e abrir pré-visualização do convite"
                         >
-                          🔑 Definir Pass / Convite
+                          🔑 Definir Pass
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => abrirModalEditar(p)}
+                          className="bg-[#2563EB] hover:bg-blue-700 text-white px-3.5 py-2 rounded-md text-[10px] uppercase tracking-widest font-black cursor-pointer transition-colors border-0 shadow-sm"
+                        >
+                          ✏️ Editar
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => handleEnviarEmailRecuperacao(p.email)}
-                          className="bg-blue-50 border border-blue-200 text-blue-700 px-3.5 py-2 rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-blue-100 cursor-pointer"
-                          title="Disparar e-mail automático de redefinição de password"
+                          className="bg-[#0F172A] hover:bg-slate-800 text-white px-3 py-2 rounded-md text-[10px] uppercase tracking-widest font-black cursor-pointer transition-colors border-0"
+                          title="Disparar link automático de redefinição de password"
                         >
-                          ✉️ Email Reset
+                          🔄 Reset Link
                         </button>
                       </div>
                     </td>
@@ -489,40 +645,42 @@ export default function GestaoParceirosHQ({
         </table>
       </div>
 
-      {/* MODAL CRIAR / EDITAR PARCEIRO (COM DROPDOWNS 100% CUSTOMIZADOS) */}
+      {/* ===================================================================== */}
+      {/* MODAL CRIAR / EDITAR PARCEIRO (CANTOS RETOS rounded-md)               */}
+      {/* ===================================================================== */}
       {showModal && (
         <div
           className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
           onClick={() => setShowModal(false)}
         >
           <div
-            className="bg-white w-full max-w-3xl max-h-[90vh] rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-slate-200"
+            className="bg-white w-full max-w-3xl max-h-[90vh] rounded-md flex flex-col overflow-hidden shadow-2xl border border-slate-300"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white">
-              <h2 className="text-xl font-black text-slate-900 m-0">
+            <div className="px-8 py-5 border-b border-slate-200 flex justify-between items-center bg-[#0F172A] text-white">
+              <h2 className="text-lg font-black m-0">
                 {isEditing
-                  ? "Editar Parceiro Organizador"
-                  : "Criar Nova Conta de Parceiro"}
+                  ? "✏️ Editar Parceiro Organizador"
+                  : "🏢 Criar Nova Conta de Parceiro"}
               </h2>
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 font-black cursor-pointer"
+                className="w-8 h-8 rounded-md bg-slate-800 text-white font-black cursor-pointer border-0"
               >
-                &times;
+                ✕
               </button>
             </div>
 
-            <div className="p-8 overflow-y-auto flex-1 bg-slate-50">
+            <div className="p-8 overflow-y-auto flex-1 bg-[#F8FAFC]">
               <form
                 id="partner-form"
                 onSubmit={handleSubmeter}
                 className="space-y-6"
               >
                 {/* 1. CREDENCIAIS */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">
+                <div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
+                  <h3 className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">
                     1. Credenciais de Acesso
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -537,7 +695,7 @@ export default function GestaoParceirosHQ({
                         onChange={(e) =>
                           setForm({ ...form, nome_completo: e.target.value })
                         }
-                        placeholder="Ex: João Silva"
+                        placeholder="Ex: Marta Cruz Machado"
                       />
                     </div>
                     <div>
@@ -572,7 +730,7 @@ export default function GestaoParceirosHQ({
                             setForm({ ...form, password: e.target.value })
                           }
                         />
-                        <p className="text-[10px] font-bold text-slate-400 mt-1.5 mb-0">
+                        <p className="text-[10px] font-bold text-slate-500 mt-1.5 mb-0">
                           O parceiro poderá entrar diretamente com esta password
                           ou definir uma nova ao assinar o contrato.
                         </p>
@@ -581,10 +739,10 @@ export default function GestaoParceirosHQ({
                   </div>
                 </div>
 
-                {/* 2. GESTÃO COMERCIAL (DROPDOWNS CUSTOMIZADOS) */}
-                <div className="bg-amber-50/60 p-6 rounded-2xl border border-amber-200 shadow-sm">
-                  <h3 className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-4 border-b border-amber-200/60 pb-2">
-                    2. Condições Comerciais Padrão
+                {/* 2. GESTÃO COMERCIAL */}
+                <div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
+                  <h3 className="text-[10px] font-black text-[#F59E0B] uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">
+                    2. Condições Comerciais Padrão (Por defeito: 12%)
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
@@ -620,7 +778,7 @@ export default function GestaoParceirosHQ({
                         <span className="text-[10px] text-slate-400">▼</span>
                       </div>
                       {openDropdown === "status" && (
-                        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-300 rounded-md shadow-xl z-50 overflow-hidden">
                           {STATUS_OPCOES.map((st) => (
                             <div
                               key={st}
@@ -628,7 +786,7 @@ export default function GestaoParceirosHQ({
                                 setForm({ ...form, status_contrato: st });
                                 setOpenDropdown(null);
                               }}
-                              className="p-3 text-xs font-bold hover:bg-amber-50 cursor-pointer border-b border-slate-50 last:border-0"
+                              className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0"
                             >
                               {st}
                             </div>
@@ -658,7 +816,7 @@ export default function GestaoParceirosHQ({
                         <span className="text-[10px] text-slate-400">▼</span>
                       </div>
                       {openDropdown === "mod" && (
-                        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-300 rounded-md shadow-xl z-50 overflow-hidden">
                           {MODALIDADES_OPCOES.map((m) => (
                             <div
                               key={m.id}
@@ -666,7 +824,7 @@ export default function GestaoParceirosHQ({
                                 setForm({ ...form, modalidade_reserva: m.id });
                                 setOpenDropdown(null);
                               }}
-                              className="p-3 text-xs font-bold hover:bg-amber-50 cursor-pointer border-b border-slate-50 last:border-0"
+                              className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0"
                             >
                               {m.label}
                             </div>
@@ -678,7 +836,7 @@ export default function GestaoParceirosHQ({
                 </div>
 
                 {/* 3. DADOS FISCAIS */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
                   <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">
                     3. Dados da Entidade
                   </h3>
@@ -693,7 +851,7 @@ export default function GestaoParceirosHQ({
                         onChange={(e) =>
                           setForm({ ...form, empresa_nome: e.target.value })
                         }
-                        placeholder="Ex: Surf Academy Lda"
+                        placeholder="Ex: Museu das Comunicações"
                       />
                     </div>
                     <div>
@@ -715,7 +873,7 @@ export default function GestaoParceirosHQ({
                         onChange={(e) =>
                           setForm({ ...form, telefone: e.target.value })
                         }
-                        placeholder="+351 910 000 000"
+                        placeholder="+351 210 000 000"
                       />
                     </div>
                   </div>
@@ -727,7 +885,7 @@ export default function GestaoParceirosHQ({
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="bg-white border border-slate-300 text-slate-700 font-bold px-6 py-3 rounded-xl text-xs uppercase tracking-widest cursor-pointer"
+                className="bg-slate-600 hover:bg-slate-700 text-white font-bold px-6 py-3 rounded-md text-xs uppercase tracking-widest cursor-pointer border-0"
               >
                 Cancelar
               </button>
@@ -735,36 +893,39 @@ export default function GestaoParceirosHQ({
                 type="submit"
                 form="partner-form"
                 disabled={saving}
-                className="bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black px-8 py-3 rounded-xl text-xs uppercase tracking-widest shadow-lg cursor-pointer"
+                className="bg-[#2563EB] hover:bg-blue-700 text-white font-black px-8 py-3 rounded-md text-xs uppercase tracking-widest shadow-sm cursor-pointer border-0"
               >
                 {saving
                   ? "A guardar..."
                   : isEditing
                   ? "Guardar Alterações"
-                  : "Criar Conta de Parceiro"}
+                  : "Criar Conta & Abrir Convite"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL DEFINIR NOVA PASSWORD MANUALMENTE */}
+      {/* ===================================================================== */}
+      {/* MODAL DEFINIR NOVA PASSWORD MANUALMENTE                               */}
+      {/* ===================================================================== */}
       {resetModalParceiro && (
         <div
           className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
           onClick={() => setResetModalParceiro(null)}
         >
           <div
-            className="bg-white w-full max-w-md rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-200"
+            className="bg-white w-full max-w-md rounded-md p-6 md:p-8 shadow-2xl border border-slate-300"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-black text-slate-900 m-0 mb-2">
-              🔑 Definir Password e Gerar Convite
+            <h3 className="text-lg font-black text-[#0F172A] m-0 mb-2">
+              🔑 Definir Password e Rever E-mail de Convite
             </h3>
-            <p className="text-xs text-slate-500 mb-5">
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
               Defina uma password temporária para{" "}
-              <strong>{resetModalParceiro.email}</strong>. No passo seguinte
-              poderá copiar a mensagem completa com os links de acesso.
+              <strong>{resetModalParceiro.email}</strong>. Ao confirmar, abrirá
+              a janela de pré-visualização e edição do e-mail com os links de
+              visão admin dos campos.
             </p>
             <form onSubmit={handleDefinirPasswordDireta} className="space-y-4">
               <div>
@@ -782,16 +943,18 @@ export default function GestaoParceirosHQ({
                 <button
                   type="button"
                   onClick={() => setResetModalParceiro(null)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold cursor-pointer"
+                  className="px-4 py-2.5 rounded-md bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer border-0"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingPass}
-                  className="bg-[#167524] text-white font-black uppercase tracking-widest text-xs px-6 py-2.5 rounded-xl cursor-pointer"
+                  className="bg-[#16A34A] hover:bg-green-700 text-white font-black uppercase tracking-widest text-xs px-6 py-2.5 rounded-md cursor-pointer border-0"
                 >
-                  {savingPass ? "A atualizar..." : "Atualizar & Gerar Convite"}
+                  {savingPass
+                    ? "A atualizar..."
+                    : "Guardar & Pré-Visualizar E-mail →"}
                 </button>
               </div>
             </form>
@@ -799,72 +962,244 @@ export default function GestaoParceirosHQ({
         </div>
       )}
 
-      {/* MODAL DE SUCESSO & PARTILHA DE CREDENCIAIS */}
+      {/* ===================================================================== */}
+      {/* MODAL DE PRÉ-VISUALIZAÇÃO, EDIÇÃO E ENVIO DE E-MAIL DE ONBOARDING     */}
+      {/* ===================================================================== */}
       {showWelcomeModal && (
-        <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-4 backdrop-blur-md">
-          <div className="bg-white w-full max-w-2xl rounded-3xl flex flex-col overflow-hidden shadow-2xl">
-            <div className="bg-[#167524] p-6 text-center text-white">
-              <span className="text-4xl block mb-2">🎉</span>
-              <h2 className="text-2xl font-black m-0">
-                Credenciais Prontas a Enviar!
-              </h2>
-              <p className="text-emerald-100 text-xs mt-1 mb-0">
-                Envie a mensagem abaixo ao parceiro{" "}
-                <strong>{welcomeData.empresa}</strong> por WhatsApp ou E-mail.
-              </p>
+        <div
+          className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-4 backdrop-blur-md"
+          onClick={() => setShowWelcomeModal(false)}
+        >
+          <div
+            className="bg-white w-full max-w-4xl max-h-[92vh] rounded-md flex flex-col overflow-hidden shadow-2xl border border-slate-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* CABEÇALHO DO MODAL */}
+            <div className="bg-[#0F172A] px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white border-b border-slate-800">
+              <div>
+                <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md mb-1.5">
+                  Onboarding B2B • {welcomeData.campos.length}{" "}
+                  {welcomeData.campos.length === 1
+                    ? "Campo Configurado"
+                    : "Campos Configurados"}
+                </span>
+                <h2 className="text-xl font-black m-0">
+                  📧 Rever & Enviar E-mail de Convite — {welcomeData.empresa}
+                </h2>
+                <p className="text-slate-300 text-xs mt-1 mb-0">
+                  Destinatário:{" "}
+                  <strong className="text-white">{welcomeData.email}</strong> •
+                  Pode editar o texto ou pré-visualizar o aspeto final antes de
+                  enviar.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveEmailTab("preview")}
+                  className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer border-0 transition-colors ${
+                    activeEmailTab === "preview"
+                      ? "bg-[#2563EB] text-white"
+                      : "bg-slate-800 text-white hover:bg-slate-700"
+                  }`}
+                >
+                  👁️ Pré-Visualizar E-mail
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveEmailTab("edit")}
+                  className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer border-0 transition-colors ${
+                    activeEmailTab === "edit"
+                      ? "bg-[#F59E0B] text-white"
+                      : "bg-slate-800 text-white hover:bg-slate-700"
+                  }`}
+                >
+                  ✏️ Editar Texto
+                </button>
+              </div>
             </div>
 
-            <div className="p-6 md:p-8">
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <textarea
-                  readOnly
-                  className="w-full h-56 bg-transparent border-none resize-none text-xs font-mono text-slate-800 outline-none leading-relaxed"
-                  value={textoMensagem}
+            {/* CORPO DO MODAL: PRÉ-VISUALIZAÇÃO OU EDIÇÃO */}
+            <div className="p-6 md:p-8 overflow-y-auto flex-1 bg-[#F8FAFC]">
+              {/* CAMPO ASSUNTO SEMPRE VISÍVEL E EDITÁVEL */}
+              <div className="mb-4">
+                <label className={labelClass}>
+                  Assunto do E-mail (Editável)
+                </label>
+                <input
+                  type="text"
+                  value={emailAssunto}
+                  onChange={(e) => setEmailAssunto(e.target.value)}
+                  className="w-full py-3 px-4 bg-white border border-slate-300 rounded-md text-sm font-black text-[#0F172A] outline-none focus:border-[#2563EB]"
                 />
               </div>
 
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {activeEmailTab === "edit" ? (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className={labelClass}>
+                      Corpo da Mensagem (100% Editável)
+                    </label>
+                    <span className="text-[10px] font-bold text-[#2563EB]">
+                      As alterações feitas aqui refletem-se imediatamente na
+                      pré-visualização e no envio!
+                    </span>
+                  </div>
+                  <textarea
+                    value={emailCorpoEditavel}
+                    onChange={(e) => setEmailCorpoEditavel(e.target.value)}
+                    rows={16}
+                    className="w-full p-4 bg-white border border-slate-300 rounded-md text-xs font-mono text-[#0F172A] outline-none focus:border-[#2563EB] leading-relaxed resize-y"
+                  />
+                </div>
+              ) : (
+                /* PRÉ-VISUALIZAÇÃO RICA DO E-MAIL + LINKS DIRETOS CLICÁVEIS */
+                <div className="bg-white border border-slate-300 rounded-md overflow-hidden shadow-sm">
+                  <div className="bg-slate-100 px-5 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div>
+                      <span className="font-black text-slate-500 uppercase text-[10px] mr-2">
+                        Para:
+                      </span>
+                      <span className="font-bold text-[#0F172A]">
+                        {welcomeData.nome} &lt;{welcomeData.email}&gt;
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveEmailTab("edit")}
+                      className="bg-[#F59E0B] hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md cursor-pointer border-0"
+                    >
+                      ✏️ Editar Texto do E-mail
+                    </button>
+                  </div>
+
+                  {/* SIMULAÇÃO DO TEMPLATE HTML EXECUTIVO HELLO CAMP */}
+                  <div className="p-6 md:p-8 space-y-6">
+                    <div className="bg-[#0F172A] text-white p-6 rounded-md flex items-center justify-between">
+                      <div>
+                        <span className="bg-[#F59E0B] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md inline-block mb-2">
+                          Portal de Parceiros HelloCamp
+                        </span>
+                        <h3 className="text-xl font-black m-0">
+                          {welcomeData.empresa}
+                        </h3>
+                      </div>
+                      <span className="text-3xl">🏕️</span>
+                    </div>
+
+                    {/* TEXTO FORMATADO (RESPEITA QUALQUER EDIÇÃO FEITA NO SEPARADOR EDITAR) */}
+                    <div className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed font-medium bg-[#F8FAFC] p-5 rounded-md border border-slate-200">
+                      {emailCorpoEditavel}
+                    </div>
+
+                    {/* CARTÕES DE TESTE RÁPIDO DOS LINKS DE VISÃO ADMIN */}
+                    <div className="border-t border-slate-200 pt-5">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 m-0 mb-3">
+                        🔍 Testar Links de Visão Admin Incluídos no E-mail (Mesmo
+                        com Campos Inativos/Pendentes):
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {welcomeData.id && (
+                          <a
+                            href={`/${lang}/parceiro/${welcomeData.id}?preview=admin`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-black text-[#2563EB] no-underline flex items-center justify-between"
+                          >
+                            <span>🏢 Ver Montra Pública do Parceiro</span>
+                            <span>↗</span>
+                          </a>
+                        )}
+                        {welcomeData.id && (
+                          <a
+                            href={`/${lang}/assinatura-contrato/${welcomeData.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md text-xs font-black text-amber-900 no-underline flex items-center justify-between"
+                          >
+                            <span>📄 Ver Página de Assinatura de Contrato</span>
+                            <span>↗</span>
+                          </a>
+                        )}
+                        {welcomeData.campos.map((c: any) => (
+                          <a
+                            key={c.id}
+                            href={`/${lang}/campo/${c.id}?preview=admin`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md text-xs font-black text-[#16A34A] no-underline flex items-center justify-between"
+                          >
+                            <span className="truncate pr-2">
+                              🏕️ {c.nome}
+                            </span>
+                            <span className="flex-shrink-0">Ver Admin ↗</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* BARRA DE AÇÕES DE CONFIRMAÇÃO E ENVIO */}
+            <div className="px-6 py-4 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setShowWelcomeModal(false)}
+                className="bg-slate-600 hover:bg-slate-700 text-white font-black uppercase tracking-widest text-[10px] px-5 py-3.5 rounded-md cursor-pointer border-0"
+              >
+                Fechar Janela
+              </button>
+
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(textoMensagem);
-                    alert("Mensagem copiada com sucesso!");
+                    navigator.clipboard.writeText(
+                      `Assunto: ${emailAssunto}\n\n${emailCorpoEditavel}`
+                    );
+                    alert("Assunto e mensagem copiados para a área de transferência!");
                   }}
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl cursor-pointer"
+                  className="bg-[#0F172A] hover:bg-slate-800 text-white font-black uppercase tracking-widest text-[10px] px-5 py-3.5 rounded-md cursor-pointer border-0"
                 >
-                  📋 Copiar Mensagem
+                  📋 Copiar Texto
                 </button>
+
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(
+                    emailCorpoEditavel
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-[#16A34A] hover:bg-green-700 text-white font-black uppercase tracking-widest text-[10px] px-5 py-3.5 rounded-md no-underline inline-flex items-center justify-center"
+                >
+                  💬 Enviar WhatsApp
+                </a>
+
                 <a
                   href={`mailto:${
                     welcomeData.email
                   }?subject=${encodeURIComponent(
-                    "Credenciais de Acesso - Portal de Parceiros HelloCamp"
-                  )}&body=${encodeURIComponent(textoMensagem)}`}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl text-center no-underline flex items-center justify-center"
+                    emailAssunto
+                  )}&body=${encodeURIComponent(emailCorpoEditavel)}`}
+                  className="bg-[#F59E0B] hover:bg-amber-600 text-white font-black uppercase tracking-widest text-[10px] px-5 py-3.5 rounded-md no-underline inline-flex items-center justify-center"
                 >
-                  ✉️ Enviar por E-mail
+                  ✉️ Abrir no App de E-mail
                 </a>
-                <a
-                  href={`https://wa.me/?text=${encodeURIComponent(
-                    textoMensagem
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-[#25D366] hover:bg-[#20bd5a] text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl text-center no-underline flex items-center justify-center"
-                >
-                  💬 Enviar WhatsApp
-                </a>
-              </div>
-            </div>
 
-            <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 text-center">
-              <button
-                type="button"
-                onClick={() => setShowWelcomeModal(false)}
-                className="text-slate-500 hover:text-slate-900 text-xs font-black uppercase tracking-widest underline cursor-pointer bg-transparent border-0"
-              >
-                Fechar
-              </button>
+                <button
+                  type="button"
+                  disabled={sendingEmail}
+                  onClick={handleDispararEmailAPI}
+                  className="bg-[#2563EB] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-[10px] px-6 py-3.5 rounded-md cursor-pointer border-0 shadow-md"
+                >
+                  {sendingEmail
+                    ? "A enviar E-mail..."
+                    : "🚀 Confirmar & Enviar E-mail Agora"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
