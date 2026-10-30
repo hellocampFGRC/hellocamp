@@ -6,6 +6,27 @@ import { useRouter } from "next/navigation";
 import jsPDF from "jspdf";
 import Link from "next/link";
 
+const FORMAS_JURIDICAS_PT = [
+  "Sociedade por Quotas (Lda)",
+  "Sociedade Unipessoal por Quotas",
+  "Sociedade Anónima (S.A.)",
+  "Associação Sem Fins Lucrativos",
+  "Clube Desportivo / Federação",
+  "Empresário em Nome Individual (ENI)",
+  "Fundação / Cooperativa",
+  "Entidade Pública / Autarquia",
+];
+
+const FORMAS_JURIDICAS_EN = [
+  "Limited Liability Company (LLC / Ltd)",
+  "Sole Proprietorship",
+  "Public Limited Company (PLC / Corp)",
+  "Non-Profit Association / NGO",
+  "Sports Club / Federation",
+  "Foundation / Cooperative",
+  "Public Entity / Municipality",
+];
+
 export default function AssinaturaContratoPage({
   params,
 }: {
@@ -26,10 +47,18 @@ export default function AssinaturaContratoPage({
   const [jaAssinado, setJaAssinado] = useState(false);
   const [pdfGeradoUrl, setPdfGeradoUrl] = useState<string | null>(null);
 
+  // Estado de Erro com Identificação do Campo em Falta
+  const [erroFormulario, setErroFormulario] = useState<{
+    campoId: string;
+    mensagem: string;
+  } | null>(null);
+
   // Estados do Formulário Contratual Completo
   const [empresaNome, setEmpresaNome] = useState("");
   const [nif, setNif] = useState("");
-  const [formaJuridica, setFormaJuridica] = useState("");
+  const [formaJuridica, setFormaJuridica] = useState(
+    "Sociedade por Quotas (Lda)"
+  );
   const [morada, setMorada] = useState("");
   const [codigoPostal, setCodigoPostal] = useState("");
   const [pessoaContacto, setPessoaContacto] = useState("");
@@ -54,21 +83,24 @@ export default function AssinaturaContratoPage({
   // Password e Assinatura Digital
   const [novaPassword, setNovaPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [mostrarPass, setMostrarPass] = useState(false);
   const [assinaturaNome, setAssinaturaNome] = useState("");
   const [assinaturaCargo, setAssinaturaCargo] = useState("");
   const [concordaTermos, setConcordaTermos] = useState(false);
 
-  // Dropdown customizado para Base de Comissão
+  // Dropdowns customizados
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   useEffect(() => {
     const carregarDadosContrato = async () => {
       setLoading(true);
       const [{ data: perfilData }, { data: camposData }] = await Promise.all([
-        supabase.from("perfis").select("*").eq("id", id).single(),
+        supabase.from("perfis").select("*").eq("id", id).maybeSingle(),
         supabase
           .from("campos")
-          .select("id, nome, nome_en, categoria, local, preco, taxa_comissao, base_comissao, contrato_parceiro_url")
+          .select(
+            "id, nome, nome_en, categoria, local, preco, taxa_comissao, base_comissao, contrato_parceiro_url"
+          )
           .eq("organizador_id", id)
           .order("created_at", { ascending: true }),
       ]);
@@ -83,16 +115,29 @@ export default function AssinaturaContratoPage({
           perfilData.nome_empresa ||
           perfilData.nome ||
           "";
-        const resp = d.pessoaContacto || perfilData.nome_completo || "";
-        const mail = d.emailContacto || perfilData.email || "";
+        const resp =
+          d.pessoaContacto || perfilData.nome_completo || emp || "";
+        const mail =
+          d.emailContacto ||
+          perfilData.email ||
+          perfilData.email_publico ||
+          "";
 
         setEmpresaNome(emp);
-        setNif(d.nif || (perfilData.nif_empresa ? String(perfilData.nif_empresa) : ""));
+        setNif(
+          d.nif ||
+            (perfilData.nif_empresa ? String(perfilData.nif_empresa) : "")
+        );
         setFormaJuridica(d.formaJuridica || "Sociedade por Quotas (Lda)");
         setMorada(d.morada || perfilData.morada_sede || "");
         setCodigoPostal(d.codigoPostal || "");
         setPessoaContacto(resp);
-        setTelefone(d.telefone || perfilData.telefone || "");
+        setTelefone(
+          d.telefone ||
+            perfilData.telefone ||
+            perfilData.telefone_publico ||
+            ""
+        );
         setEmailContacto(mail);
         setEmailReservas(d.emailReservas || perfilData.email_publico || mail);
         setWebsite(d.website || perfilData.website || "");
@@ -120,10 +165,7 @@ export default function AssinaturaContratoPage({
         );
         setAcordosComplementares(d.acordosComplementares || "");
 
-        if (
-          perfilData.status_contrato === "Aprovado" &&
-          d.assinaturaNome
-        ) {
+        if (perfilData.status_contrato === "Aprovado" && d.assinaturaNome) {
           setJaAssinado(true);
           setAssinaturaNome(d.assinaturaNome);
           setAssinaturaCargo(d.assinaturaCargo || "");
@@ -143,6 +185,32 @@ export default function AssinaturaContratoPage({
 
     carregarDadosContrato();
   }, [id]);
+
+  // Função que destaca o campo em falta e faz scroll suave diretamente para ele!
+  const focarCampoEmFalta = (campoId: string, mensagem: string) => {
+    setErroFormulario({ campoId, mensagem });
+    setTimeout(() => {
+      const el = document.getElementById(campoId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLTextAreaElement
+        ) {
+          el.focus();
+        }
+      }
+    }, 80);
+  };
+
+  // Estado em tempo real da validação das passwords
+  const passwordsPreenchidas =
+    novaPassword.length > 0 || confirmPassword.length > 0;
+  const passwordCurta = novaPassword.length > 0 && novaPassword.length < 6;
+  const passwordsDiferentes =
+    confirmPassword.length > 0 && novaPassword !== confirmPassword;
+  const passwordsCertas =
+    novaPassword.length >= 6 && novaPassword === confirmPassword;
 
   // Gerador de PDF Completo com Todas as Cláusulas e Anexos
   const gerarPdfContratoCompleto = (
@@ -186,7 +254,6 @@ export default function AssinaturaContratoPage({
       y += 2;
     };
 
-    // Cabeçalho Oficial
     doc.setFillColor(15, 23, 42);
     doc.rect(0, 0, pageW, 34, "F");
     doc.setFont("helvetica", "bold");
@@ -214,7 +281,9 @@ export default function AssinaturaContratoPage({
     writeTitle("2. PROGRAMAS ABRANGIDOS PELO ACORDO GLOBAL");
     const nomesProgramas =
       camposParceiro.length > 0
-        ? camposParceiro.map((c, idx) => `${idx + 1}. ${c.nome}`).join(" | ")
+        ? camposParceiro
+            .map((c: any, idx: number) => `${idx + 1}. ${c.nome}`)
+            .join(" | ")
         : "Todos os programas presentes e futuros registados pelo Parceiro na plataforma HelloCamp.";
     writeParagraph(
       `O presente contrato abrange todas as atividades organizadas pela Segunda Outorgante (${camposParceiro.length} programas atualmente configurados): ${nomesProgramas}`
@@ -290,41 +359,145 @@ export default function AssinaturaContratoPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!concordaTermos)
-      return alert(
+    setErroFormulario(null);
+
+    // VALIDAÇÃO CAMPO A CAMPO COM AUTO-SCROLL DIRETO PARA O CAMPO EM FALTA
+    if (!empresaNome.trim()) {
+      return focarCampoEmFalta(
+        "campo-empresaNome",
         isPt
-          ? "Por favor, confirme que leu e aceita todas as cláusulas e anexos do contrato."
-          : "Please confirm that you have read and accept all contract clauses and annexes."
+          ? "Falta preencher: Nome da Entidade / Designação Social (Secção III)."
+          : "Missing field: Legal Entity / Company Name (Section III)."
       );
-    if (!assinaturaNome.trim() || !assinaturaCargo.trim())
-      return alert(
+    }
+    if (!nif.trim()) {
+      return focarCampoEmFalta(
+        "campo-nif",
         isPt
-          ? "Por favor, preencha o seu Nome Completo e Cargo na secção de Assinatura Digital."
-          : "Please enter your Full Name and Legal Role in the Digital Signature section."
+          ? "Falta preencher: NIF / NIPC / Tax ID da entidade (Secção III)."
+          : "Missing field: Tax ID / VAT Registration Number (Section III)."
       );
-    if (!empresaNome.trim() || !nif.trim() || !morada.trim())
-      return alert(
+    }
+    if (!formaJuridica.trim()) {
+      return focarCampoEmFalta(
+        "campo-formaJuridica",
         isPt
-          ? "Por favor, complete os dados fiscais obrigatórios (Nome da Entidade, NIF e Morada)."
-          : "Please complete the mandatory billing details (Entity Name, Tax ID, and Address)."
+          ? "Falta selecionar ou preencher: Forma Jurídica (Secção III)."
+          : "Missing field: Legal Form / Entity Type (Section III)."
       );
-    if (novaPassword.length < 6)
-      return alert(
+    }
+    if (!morada.trim()) {
+      return focarCampoEmFalta(
+        "campo-morada",
         isPt
-          ? "A sua nova palavra-passe deve ter pelo menos 6 caracteres."
-          : "Your new password must be at least 6 characters long."
+          ? "Falta preencher: Morada Completa da Sede Fiscal (Secção III)."
+          : "Missing field: Full Registered Office Address (Section III)."
       );
-    if (novaPassword !== confirmPassword)
-      return alert(
+    }
+    if (!codigoPostal.trim()) {
+      return focarCampoEmFalta(
+        "campo-codigoPostal",
         isPt
-          ? "As palavras-passe introduzidas não coincidem."
-          : "The passwords entered do not match."
+          ? "Falta preencher: Código Postal e Cidade (Secção III)."
+          : "Missing field: Postal / Zip Code & City (Section III)."
       );
+    }
+    if (!pessoaContacto.trim()) {
+      return focarCampoEmFalta(
+        "campo-pessoaContacto",
+        isPt
+          ? "Falta preencher: Pessoa de Contacto / Representante (Secção III)."
+          : "Missing field: Primary Contact Person (Section III)."
+      );
+    }
+    if (!telefone.trim()) {
+      return focarCampoEmFalta(
+        "campo-telefone",
+        isPt
+          ? "Falta preencher: Telefone / Telemóvel de Contacto (Secção III)."
+          : "Missing field: Contact Phone Number (Section III)."
+      );
+    }
+    if (!emailContacto.trim()) {
+      return focarCampoEmFalta(
+        "campo-emailContacto",
+        isPt
+          ? "Falta preencher: E-mail Comercial e de Login (Secção III)."
+          : "Missing field: Commercial & Login Email (Section III)."
+      );
+    }
+    if (!emailReservas.trim()) {
+      return focarCampoEmFalta(
+        "campo-emailReservas",
+        isPt
+          ? "Falta preencher: E-mail para Receção de Reservas (Secção III)."
+          : "Missing field: Bookings Notification Email (Section III)."
+      );
+    }
+    if (!responsavelRGPD.trim()) {
+      return focarCampoEmFalta(
+        "campo-responsavelRGPD",
+        isPt
+          ? "Falta preencher: Responsável pela Proteção de Dados - RGPD (Secção III)."
+          : "Missing field: Data Protection Officer / GDPR Contact (Section III)."
+      );
+    }
+    if (
+      modalidadeReserva === "link_externo" &&
+      !linkExternoReserva.trim()
+    ) {
+      return focarCampoEmFalta(
+        "campo-linkExternoReserva",
+        isPt
+          ? "Falta preencher: URL Oficial do Seu Formulário de Inscrição (Anexo 1)."
+          : "Missing field: Official URL of Your Registration Form (Annex 1)."
+      );
+    }
+    if (!novaPassword || novaPassword.length < 6) {
+      return focarCampoEmFalta(
+        "campo-novaPassword",
+        isPt
+          ? "A sua nova palavra-passe deve ter pelo menos 6 caracteres (Secção VI)."
+          : "Your new password must be at least 6 characters long (Section VI)."
+      );
+    }
+    if (novaPassword !== confirmPassword) {
+      return focarCampoEmFalta(
+        "campo-confirmPassword",
+        isPt
+          ? "As duas palavras-passe introduzidas não coincidem. Verifique o campo de confirmação (Secção VI)."
+          : "The two passwords entered do not match. Please check the confirmation field (Section VI)."
+      );
+    }
+    if (!assinaturaNome.trim()) {
+      return focarCampoEmFalta(
+        "campo-assinaturaNome",
+        isPt
+          ? "Falta preencher: Nome Completo do Signatário na Assinatura Digital (Secção VI)."
+          : "Missing field: Full Name of Signatory in Digital Signature (Section VI)."
+      );
+    }
+    if (!assinaturaCargo.trim()) {
+      return focarCampoEmFalta(
+        "campo-assinaturaCargo",
+        isPt
+          ? "Falta preencher: Cargo / Qualidade em que Assina (Secção VI)."
+          : "Missing field: Legal Role / Title in Digital Signature (Section VI)."
+      );
+    }
+    if (!concordaTermos) {
+      return focarCampoEmFalta(
+        "campo-concordaTermos",
+        isPt
+          ? "Falta selecionar a caixa de confirmação e aceitação dos termos do Contrato Global (Secção VI)."
+          : "Please check the box confirming acceptance of the Global Agreement terms (Section VI)."
+      );
+    }
 
     setSubmitting(true);
 
     try {
-      // 1. Capturar IP para prova jurídica (Artigo 7.º)
+      // 1. Capturar IP para prova jurídica (Artigo 9.º)
       let userIP = "Registado no Servidor";
       try {
         const ipRes = await fetch("https://api.ipify.org?format=json");
@@ -337,26 +510,39 @@ export default function AssinaturaContratoPage({
       }
 
       const dataIso = new Date().toISOString();
+      const emailLimpo = (
+        emailContacto ||
+        perfil?.email ||
+        perfil?.email_publico ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
 
       const contratoDadosPayload = {
         empresaNome: empresaNome.trim(),
+        nomeEmpresa: empresaNome.trim(),
         nif: nif.trim(),
         formaJuridica: formaJuridica.trim(),
         morada: morada.trim(),
         codigoPostal: codigoPostal.trim(),
         pessoaContacto: pessoaContacto.trim(),
         telefone: telefone.trim(),
-        emailContacto: emailContacto.trim().toLowerCase(),
-        emailReservas: (emailReservas || emailContacto).trim().toLowerCase(),
+        emailContacto: emailLimpo,
+        emailReservas: (emailReservas || emailLimpo).trim().toLowerCase(),
         website: website.trim(),
         responsavelRGPD: (responsavelRGPD || pessoaContacto).trim(),
         taxaComissao,
         baseComissao,
         modalidadeReserva,
         linkExternoReserva:
-          modalidadeReserva === "link_externo" ? linkExternoReserva.trim() : "",
+          modalidadeReserva === "link_externo"
+            ? linkExternoReserva.trim()
+            : "",
         tipoPagamento,
+        tipo_pagamento: tipoPagamento,
         politicaCancelamento,
+        politica_cancelamento: politicaCancelamento,
         acordosComplementares: acordosComplementares.trim(),
         assinaturaNome: assinaturaNome.trim(),
         assinaturaCargo: assinaturaCargo.trim(),
@@ -380,10 +566,11 @@ export default function AssinaturaContratoPage({
         { type: "application/pdf" }
       );
 
-      // 3. Enviar para a API oficial /api/contratos/assinar
+      // 3. Enviar para a API oficial /api/contratos/assinar (enviamos tanto emailAcesso como email para compatibilidade total!)
       const formData = new FormData();
       formData.append("id", id);
-      formData.append("emailAcesso", emailContacto.trim().toLowerCase());
+      formData.append("emailAcesso", emailLimpo);
+      formData.append("email", emailLimpo);
       formData.append("passwordNova", novaPassword);
       formData.append("contratoDados", JSON.stringify(contratoDadosPayload));
       formData.append("lang", contractLang);
@@ -407,7 +594,7 @@ export default function AssinaturaContratoPage({
 
       // 4. Login automático no Supabase Auth com a nova password definida pelo parceiro
       await supabase.auth.signInWithPassword({
-        email: emailContacto.trim().toLowerCase(),
+        email: emailLimpo,
         password: novaPassword,
       });
 
@@ -419,7 +606,11 @@ export default function AssinaturaContratoPage({
       );
       router.push(`/${lang}/admin/dashboard`);
     } catch (err: any) {
-      alert("Erro: " + err.message);
+      setErroFormulario({
+        campoId: "topo-contrato",
+        mensagem: err.message || "Erro ao submeter o contrato.",
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSubmitting(false);
     }
@@ -427,8 +618,14 @@ export default function AssinaturaContratoPage({
 
   const labelClass =
     "block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5";
-  const inputClass =
-    "w-full py-3 px-4 bg-white border border-slate-300 rounded-md text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] transition-colors";
+  const getInputClass = (campoId: string) =>
+    `w-full py-3 px-4 bg-white border-2 rounded-md text-sm font-bold text-[#0F172A] outline-none transition-all ${
+      erroFormulario?.campoId === campoId
+        ? "border-[#F43F5E] bg-rose-50/40 ring-4 ring-rose-500/20"
+        : "border-slate-300 focus:border-[#2563EB]"
+    }`;
+
+  const listaFormas = isPt ? FORMAS_JURIDICAS_PT : FORMAS_JURIDICAS_EN;
 
   if (loading) {
     return (
@@ -446,7 +643,10 @@ export default function AssinaturaContratoPage({
   }
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] py-10 px-4 font-sans text-[#0F172A]">
+    <main
+      id="topo-contrato"
+      className="min-h-screen bg-[#F8FAFC] py-10 px-4 font-sans text-[#0F172A]"
+    >
       <div className="max-w-5xl mx-auto bg-white rounded-md shadow-xl border border-slate-200 overflow-hidden">
         {/* CABEÇALHO EXECUTIVO COM SELETOR DE IDIOMA */}
         <div className="bg-[#0F172A] p-8 md:p-12 text-center relative border-b-4 border-[#F59E0B]">
@@ -502,6 +702,30 @@ export default function AssinaturaContratoPage({
           </p>
         </div>
 
+        {/* BANNER DE ALERTA SE HOUVER ALGUM CAMPO EM FALTA OU ERRO */}
+        {erroFormulario && (
+          <div className="bg-[#F43F5E] text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-rose-700">
+            <div className="flex items-center gap-3 text-xs md:text-sm font-black">
+              <span className="text-xl">⚠️</span>
+              <span>{erroFormulario.mensagem}</span>
+            </div>
+            {erroFormulario.campoId !== "topo-contrato" && (
+              <button
+                type="button"
+                onClick={() =>
+                  focarCampoEmFalta(
+                    erroFormulario.campoId,
+                    erroFormulario.mensagem
+                  )
+                }
+                className="bg-[#0F172A] hover:bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-md cursor-pointer border-0 shrink-0"
+              >
+                Ir para o campo em falta ↓
+              </button>
+            )}
+          </div>
+        )}
+
         {jaAssinado ? (
           <div className="p-10 md:p-16 text-center">
             <div className="w-20 h-20 bg-[#16A34A] text-white rounded-md flex items-center justify-center text-4xl mx-auto mb-6 shadow-md">
@@ -532,14 +756,21 @@ export default function AssinaturaContratoPage({
                 href={`/${lang}/admin/dashboard`}
                 className="bg-[#16A34A] hover:bg-green-700 text-white font-black px-6 py-4 rounded-md text-xs uppercase tracking-widest no-underline shadow-sm"
               >
-                🚀 {isPt ? "Ir para o Painel de Gestão" : "Go to Partner Dashboard"}
+                🚀{" "}
+                {isPt
+                  ? "Ir para o Painel de Gestão"
+                  : "Go to Partner Dashboard"}
               </Link>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-6 md:p-12 space-y-12">
+          <form
+            noValidate
+            onSubmit={handleSubmit}
+            className="p-6 md:p-12 space-y-12"
+          >
             {/* ================================================================= */}
-            {/* SECÇÃO 0: ENQUADRAMENTO E AS 4 FASES OPERACIONAIS                 */}
+            {/* SECÇÃO I: ENQUADRAMENTO E OS 4 PILARES OPERACIONAIS               */}
             {/* ================================================================= */}
             <section>
               <div className="flex items-center justify-between border-b-2 border-[#0F172A] pb-3 mb-6">
@@ -658,18 +889,18 @@ export default function AssinaturaContratoPage({
                 </p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {camposParceiro.map((c, idx) => (
+                  {camposParceiro.map((c: any, idx: number) => (
                     <div
                       key={c.id}
                       className="bg-white p-3.5 rounded-md border border-slate-200 flex items-center justify-between gap-3 shadow-sm"
                     >
                       <div className="min-w-0">
                         <div className="text-xs font-black text-[#0F172A] truncate">
-                          {idx + 1}. { !isPt && c.nome_en ? c.nome_en : c.nome }
+                          {idx + 1}. {!isPt && c.nome_en ? c.nome_en : c.nome}
                         </div>
                         <div className="text-[10px] font-bold text-slate-500 mt-0.5">
-                          📍 {c.local} • 💰 {isPt ? "Desde" : "From"} {c.preco}€ •{" "}
-                          {c.taxa_comissao ?? taxaComissao}%{" "}
+                          📍 {c.local} • 💰 {isPt ? "Desde" : "From"} {c.preco}€
+                          • {c.taxa_comissao ?? taxaComissao}%{" "}
                           {isPt ? "Comissão" : "Fee"}
                         </div>
                       </div>
@@ -705,10 +936,12 @@ export default function AssinaturaContratoPage({
                       : "First Party (Platform)"}
                   </span>
                   <p className="text-base font-black m-0">
-                    HelloCamp Portugal — Plataforma Digital de Campos de Férias e Atividades Juvenis
+                    HelloCamp Portugal — Plataforma Digital de Campos de Férias e
+                    Atividades Juvenis
                   </p>
                   <p className="text-xs text-slate-300 m-0 mt-1">
-                    Website: www.hellocamp.pt • E-mail Oficial: info@hellocamp.pt • Jurisdição: Comarca de Lisboa, Portugal
+                    Website: www.hellocamp.pt • E-mail Oficial: info@hellocamp.pt
+                    • Jurisdição: Comarca de Lisboa, Portugal
                   </p>
                 </div>
                 <span className="bg-[#16A34A] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-md shrink-0">
@@ -739,10 +972,14 @@ export default function AssinaturaContratoPage({
                         : "Legal Entity / Company Name (Billing) *"}
                     </label>
                     <input
-                      required
+                      id="campo-empresaNome"
                       value={empresaNome}
-                      onChange={(e) => setEmpresaNome(e.target.value)}
-                      className={inputClass}
+                      onChange={(e) => {
+                        setEmpresaNome(e.target.value);
+                        if (erroFormulario?.campoId === "campo-empresaNome")
+                          setErroFormulario(null);
+                      }}
+                      className={getInputClass("campo-empresaNome")}
                       placeholder={
                         isPt
                           ? "Ex: Fundação Portuguesa das Comunicações"
@@ -758,29 +995,59 @@ export default function AssinaturaContratoPage({
                         : "Tax ID / VAT Registration Number *"}
                     </label>
                     <input
-                      required
+                      id="campo-nif"
                       value={nif}
-                      onChange={(e) => setNif(e.target.value)}
-                      className={inputClass}
+                      onChange={(e) => {
+                        setNif(e.target.value);
+                        if (erroFormulario?.campoId === "campo-nif")
+                          setErroFormulario(null);
+                      }}
+                      className={getInputClass("campo-nif")}
                       placeholder="Ex: 500 000 000"
                     />
                   </div>
 
-                  <div>
+                  {/* Dropdown Customizado de Forma Jurídica */}
+                  <div className="relative" id="campo-formaJuridica">
                     <label className={labelClass}>
-                      {isPt ? "Forma Jurídica *" : "Legal Form / Entity Type *"}
+                      {isPt
+                        ? "Forma Jurídica *"
+                        : "Legal Form / Entity Type *"}
                     </label>
-                    <input
-                      required
-                      value={formaJuridica}
-                      onChange={(e) => setFormaJuridica(e.target.value)}
-                      className={inputClass}
-                      placeholder={
-                        isPt
-                          ? "Ex: Sociedade por Quotas (Lda), Fundação, Associação"
-                          : "Ex: Ltd, PLC, Foundation, Association"
+                    <div
+                      onClick={() =>
+                        setOpenDropdown(
+                          openDropdown === "forma" ? null : "forma"
+                        )
                       }
-                    />
+                      className={`${getInputClass(
+                        "campo-formaJuridica"
+                      )} cursor-pointer flex justify-between items-center`}
+                    >
+                      <span className="truncate">{formaJuridica}</span>
+                      <span className="text-[10px] text-slate-400 ml-2">▼</span>
+                    </div>
+                    {openDropdown === "forma" && (
+                      <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-300 rounded-md shadow-xl z-40 max-h-60 overflow-y-auto">
+                        {listaFormas.map((fj) => (
+                          <div
+                            key={fj}
+                            onClick={() => {
+                              setFormaJuridica(fj);
+                              setOpenDropdown(null);
+                              if (
+                                erroFormulario?.campoId ===
+                                "campo-formaJuridica"
+                              )
+                                setErroFormulario(null);
+                            }}
+                            className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0"
+                          >
+                            {fj}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="md:col-span-2">
@@ -790,10 +1057,14 @@ export default function AssinaturaContratoPage({
                         : "Full Registered Office Address *"}
                     </label>
                     <input
-                      required
+                      id="campo-morada"
                       value={morada}
-                      onChange={(e) => setMorada(e.target.value)}
-                      className={inputClass}
+                      onChange={(e) => {
+                        setMorada(e.target.value);
+                        if (erroFormulario?.campoId === "campo-morada")
+                          setErroFormulario(null);
+                      }}
+                      className={getInputClass("campo-morada")}
                       placeholder={
                         isPt
                           ? "Rua, Número, Andar, Localidade"
@@ -809,22 +1080,28 @@ export default function AssinaturaContratoPage({
                         : "Postal / Zip Code & City *"}
                     </label>
                     <input
-                      required
+                      id="campo-codigoPostal"
                       value={codigoPostal}
-                      onChange={(e) => setCodigoPostal(e.target.value)}
-                      className={inputClass}
+                      onChange={(e) => {
+                        setCodigoPostal(e.target.value);
+                        if (erroFormulario?.campoId === "campo-codigoPostal")
+                          setErroFormulario(null);
+                      }}
+                      className={getInputClass("campo-codigoPostal")}
                       placeholder="Ex: 1200-225 Lisboa"
                     />
                   </div>
 
                   <div>
                     <label className={labelClass}>
-                      {isPt ? "Website Oficial" : "Official Website"}
+                      {isPt
+                        ? "Website Oficial (Opcional)"
+                        : "Official Website (Optional)"}
                     </label>
                     <input
                       value={website}
                       onChange={(e) => setWebsite(e.target.value)}
-                      className={inputClass}
+                      className={getInputClass("campo-website")}
                       placeholder="https://..."
                     />
                   </div>
@@ -836,10 +1113,14 @@ export default function AssinaturaContratoPage({
                         : "Primary Contact Person *"}
                     </label>
                     <input
-                      required
+                      id="campo-pessoaContacto"
                       value={pessoaContacto}
-                      onChange={(e) => setPessoaContacto(e.target.value)}
-                      className={inputClass}
+                      onChange={(e) => {
+                        setPessoaContacto(e.target.value);
+                        if (erroFormulario?.campoId === "campo-pessoaContacto")
+                          setErroFormulario(null);
+                      }}
+                      className={getInputClass("campo-pessoaContacto")}
                       placeholder={isPt ? "Nome Completo" : "Full Name"}
                     />
                   </div>
@@ -851,10 +1132,14 @@ export default function AssinaturaContratoPage({
                         : "Contact Phone Number *"}
                     </label>
                     <input
-                      required
+                      id="campo-telefone"
                       value={telefone}
-                      onChange={(e) => setTelefone(e.target.value)}
-                      className={inputClass}
+                      onChange={(e) => {
+                        setTelefone(e.target.value);
+                        if (erroFormulario?.campoId === "campo-telefone")
+                          setErroFormulario(null);
+                      }}
+                      className={getInputClass("campo-telefone")}
                       placeholder="+351 210 000 000"
                     />
                   </div>
@@ -866,11 +1151,15 @@ export default function AssinaturaContratoPage({
                         : "Commercial & Login Email *"}
                     </label>
                     <input
-                      required
+                      id="campo-emailContacto"
                       type="email"
                       value={emailContacto}
-                      onChange={(e) => setEmailContacto(e.target.value)}
-                      className={inputClass}
+                      onChange={(e) => {
+                        setEmailContacto(e.target.value);
+                        if (erroFormulario?.campoId === "campo-emailContacto")
+                          setErroFormulario(null);
+                      }}
+                      className={getInputClass("campo-emailContacto")}
                     />
                   </div>
 
@@ -881,11 +1170,15 @@ export default function AssinaturaContratoPage({
                         : "Bookings Notification Email *"}
                     </label>
                     <input
-                      required
+                      id="campo-emailReservas"
                       type="email"
                       value={emailReservas}
-                      onChange={(e) => setEmailReservas(e.target.value)}
-                      className={inputClass}
+                      onChange={(e) => {
+                        setEmailReservas(e.target.value);
+                        if (erroFormulario?.campoId === "campo-emailReservas")
+                          setErroFormulario(null);
+                      }}
+                      className={getInputClass("campo-emailReservas")}
                     />
                   </div>
 
@@ -896,10 +1189,14 @@ export default function AssinaturaContratoPage({
                         : "Data Protection Officer / GDPR Contact *"}
                     </label>
                     <input
-                      required
+                      id="campo-responsavelRGPD"
                       value={responsavelRGPD}
-                      onChange={(e) => setResponsavelRGPD(e.target.value)}
-                      className={inputClass}
+                      onChange={(e) => {
+                        setResponsavelRGPD(e.target.value);
+                        if (erroFormulario?.campoId === "campo-responsavelRGPD")
+                          setErroFormulario(null);
+                      }}
+                      className={getInputClass("campo-responsavelRGPD")}
                       placeholder={
                         isPt
                           ? "Nome do responsável pelo tratamento de dados dos participantes"
@@ -930,8 +1227,12 @@ export default function AssinaturaContratoPage({
                   </h4>
                   <p className="m-0">
                     {isPt
-                      ? `1. Pelo presente contrato, a Primeira Outorgante (HelloCamp Portugal) obriga-se a promover, divulgar e intermediar comercialmente, através da sua plataforma digital (www.hellocamp.pt), os campos de férias, cursos, oficinas, estadias e demais programas juvenis ou familiares organizados pela Segunda Outorgante (${empresaNome || "o Parceiro"}). 2. Este contrato tem natureza de acordo-quadro global, abrangendo todos os programas atualmente configurados na conta do Parceiro bem como quaisquer novos turnos, vagas ou programas que o Parceiro venha a adicionar futuramente na plataforma.`
-                      : `1. Under this agreement, the First Party (HelloCamp Portugal) undertakes to promote, publish, and commercially intermediate, through its digital platform (www.hellocamp.pt), the holiday camps, courses, workshops, stays, and youth or family programs organized by the Second Party (${empresaNome || "the Partner"}). 2. This agreement acts as a master global contract covering all programs currently configured in the Partner's account as well as any future sessions or camps added by the Partner.`}
+                      ? `1. Pelo presente contrato, a Primeira Outorgante (HelloCamp Portugal) obriga-se a promover, divulgar e intermediar comercialmente, através da sua plataforma digital (www.hellocamp.pt), os campos de férias, cursos, oficinas, estadias e demais programas juvenis ou familiares organizados pela Segunda Outorgante (${
+                          empresaNome || "o Parceiro"
+                        }). 2. Este contrato tem natureza de acordo-quadro global, abrangendo todos os programas atualmente configurados na conta do Parceiro bem como quaisquer novos turnos, vagas ou programas que o Parceiro venha a adicionar futuramente na plataforma.`
+                      : `1. Under this agreement, the First Party (HelloCamp Portugal) undertakes to promote, publish, and commercially intermediate, through its digital platform (www.hellocamp.pt), the holiday camps, courses, workshops, stays, and youth or family programs organized by the Second Party (${
+                          empresaNome || "the Partner"
+                        }). 2. This agreement acts as a master global contract covering all programs currently configured in the Partner's account as well as any future sessions or camps added by the Partner.`}
                   </p>
                 </div>
 
@@ -1005,8 +1306,8 @@ export default function AssinaturaContratoPage({
                   </h4>
                   <p className="m-0">
                     {isPt
-                      ? "1. O presente contrato produz efeitos imediatos a partir da data da sua assinatura digital por ambas as partes e mantém-se válido até ao final do ano civil em curso, sendo automaticamente renovado por períodos sucessivos de 1 (um) ano civil. 2. Qualquer das partes poderá denunciar ou resolver o presente contrato a todo o tempo, mediante comunicação escrita por e-mail com antecedência mínima de 15 (quinze) dias, sem prejuízo do integral cumprimento e honra de todas as reservas já confirmadas e pagas por clientes até à data de produção de efeitos da cessação."
-                      : "1. This agreement takes effect immediately upon digital signature by both parties and remains valid until the end of the current calendar year, automatically renewing for successive 1 (one) year periods. 2. Either party may terminate this agreement by written email notice with at least 15 (fifteen) days' notice, without prejudice to honoring all bookings already confirmed by customers prior to termination."}
+                      ? "1. O presente contrato produz efeitos imediatos a partir da data da sua assinatura digital por ambas as partes e mantém-se válido até ao final do ano civil em curso, sendo automaticamente renovado por períodos sucessivos de 1 (um) ano civil. 2. Qualquer das partes poderá denunciar ou resolver o presente contrato a todo o tempo, mediante comunicação escrita por e-mail com antecedência mínima de 30 (trinta) dias, sem prejuízo do integral cumprimento e honra de todas as reservas já confirmadas e pagas por clientes até à data de produção de efeitos da cessação."
+                      : "1. This agreement takes effect immediately upon digital signature by both parties and remains valid until the end of the current calendar year, automatically renewing for successive 1 (one) year periods. 2. Either party may terminate this agreement by written email notice with at least 30 (thirty) days' notice, without prejudice to honoring all bookings already confirmed by customers prior to termination."}
                   </p>
                 </div>
 
@@ -1074,7 +1375,6 @@ export default function AssinaturaContratoPage({
                   : "V. Operational Annexes & Financial Terms"}
               </h2>
 
-              {/* RESUMO DA TAXA E BASE DE COMISSÃO (DROPDOWN CUSTOMIZADO SEM SELECT NATIVO) */}
               <div className="bg-blue-50/70 p-6 rounded-md border border-blue-200 space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-md border border-blue-200 shadow-sm">
                   <div>
@@ -1107,7 +1407,9 @@ export default function AssinaturaContratoPage({
                         openDropdown === "baseComissao" ? null : "baseComissao"
                       )
                     }
-                    className={`${inputClass} cursor-pointer flex justify-between items-center`}
+                    className={`${getInputClass(
+                      "campo-baseComissao"
+                    )} cursor-pointer flex justify-between items-center`}
                   >
                     <span>
                       {baseComissao === "apenas_programa"
@@ -1256,13 +1558,20 @@ export default function AssinaturaContratoPage({
                               : "Official URL of Your Registration Form *"}
                           </label>
                           <input
+                            id="campo-linkExternoReserva"
                             type="url"
-                            required
                             value={linkExternoReserva}
-                            onChange={(e) =>
-                              setLinkExternoReserva(e.target.value)
-                            }
-                            className={inputClass}
+                            onChange={(e) => {
+                              setLinkExternoReserva(e.target.value);
+                              if (
+                                erroFormulario?.campoId ===
+                                "campo-linkExternoReserva"
+                              )
+                                setErroFormulario(null);
+                            }}
+                            className={getInputClass(
+                              "campo-linkExternoReserva"
+                            )}
                             placeholder="https://..."
                           />
                         </div>
@@ -1275,7 +1584,6 @@ export default function AssinaturaContratoPage({
               {/* ANEXOS 2 E 3 (QUANDO NÃO É LINK EXTERNO) */}
               {modalidadeReserva !== "link_externo" && (
                 <>
-                  {/* ANEXO 2: MODALIDADE DE PAGAMENTO */}
                   <div className="bg-emerald-50/60 p-6 md:p-8 rounded-md border border-emerald-200">
                     <h3 className="font-black text-sm md:text-base mb-2 text-[#0F172A] uppercase border-l-4 border-[#16A34A] pl-3">
                       {isPt
@@ -1349,7 +1657,6 @@ export default function AssinaturaContratoPage({
                     </div>
                   </div>
 
-                  {/* ANEXO 3: POLÍTICA DE CANCELAMENTO */}
                   <div className="bg-amber-50/70 p-6 md:p-8 rounded-md border border-amber-200">
                     <h3 className="font-black text-sm md:text-base mb-2 text-[#0F172A] uppercase border-l-4 border-[#F59E0B] pl-3">
                       {isPt
@@ -1366,28 +1673,34 @@ export default function AssinaturaContratoPage({
                       {[
                         {
                           val: "Flexível (Reembolso a 100% até 7 dias antes)",
-                          titlePt: "Política Flexível — Reembolso de 100% até 7 dias antes do início",
+                          titlePt:
+                            "Política Flexível — Reembolso de 100% até 7 dias antes do início",
                           descPt:
                             "Se o encarregado de educação cancelar até 7 dias antes do início do campo, recebe reembolso de 100%. Cancelamentos com menos de 7 dias não têm direito a reembolso.",
-                          titleEn: "Flexible Policy — 100% Refund up to 7 days before start",
+                          titleEn:
+                            "Flexible Policy — 100% Refund up to 7 days before start",
                           descEn:
                             "If the customer cancels up to 7 days before the camp start date, they receive a 100% refund. Cancellations within 7 days are non-refundable.",
                         },
                         {
                           val: "Moderada (Reembolso a 50% até 15 dias antes)",
-                          titlePt: "Política Moderada — Reembolso de 50% até 15 dias antes do início",
+                          titlePt:
+                            "Política Moderada — Reembolso de 50% até 15 dias antes do início",
                           descPt:
                             "Se o encarregado de educação cancelar até 15 dias antes do início do campo, recebe reembolso de 50% (o Parceiro retém 50%). Cancelamentos com menos de 15 dias não têm reembolso.",
-                          titleEn: "Moderate Policy — 50% Refund up to 15 days before start",
+                          titleEn:
+                            "Moderate Policy — 50% Refund up to 15 days before start",
                           descEn:
                             "If the customer cancels up to 15 days before the camp start date, they receive a 50% refund (Partner retains 50%). Cancellations within 15 days are non-refundable.",
                         },
                         {
                           val: "Estrita (Sem reembolso após reserva)",
-                          titlePt: "Política Estrita — Sem reembolso após confirmação da reserva",
+                          titlePt:
+                            "Política Estrita — Sem reembolso após confirmação da reserva",
                           descPt:
                             "Após a confirmação da inscrição, o valor pago não é reembolsável em caso de desistência do cliente (salvo acordo direto com o Parceiro para mudança de turno).",
-                          titleEn: "Strict Policy — Non-refundable after booking confirmation",
+                          titleEn:
+                            "Strict Policy — Non-refundable after booking confirmation",
                           descEn:
                             "Once confirmed, bookings are non-refundable in case of customer cancellation (unless directly agreed with the Partner to reschedule).",
                         },
@@ -1469,14 +1782,30 @@ export default function AssinaturaContratoPage({
                 </p>
               </div>
 
-              {/* 1. DEFINIR NOVA PASSWORD */}
+              {/* 1. DEFINIR NOVA PASSWORD COM VALIDAÇÃO EM TEMPO REAL */}
               <div className="bg-slate-800/80 p-6 rounded-md border border-slate-700">
-                <h3 className="text-xs font-black uppercase tracking-widest text-[#F59E0B] mt-0 mb-4">
-                  🔑{" "}
-                  {isPt
-                    ? "1. Definir Palavra-Passe Definitiva do Seu Painel de Parceiro"
-                    : "1. Set Permanent Password for Your Partner Dashboard"}
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-[#F59E0B] m-0">
+                    🔑{" "}
+                    {isPt
+                      ? "1. Definir Palavra-Passe Definitiva do Seu Painel de Parceiro"
+                      : "1. Set Permanent Password for Your Partner Dashboard"}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setMostrarPass(!mostrarPass)}
+                    className="bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md cursor-pointer border-0"
+                  >
+                    {mostrarPass
+                      ? isPt
+                        ? "🙈 Ocultar Passwords"
+                        : "🙈 Hide Passwords"
+                      : isPt
+                      ? "👁️ Mostrar Passwords"
+                      : "👁️ Show Passwords"}
+                  </button>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-300 mb-1.5">
@@ -1485,12 +1814,23 @@ export default function AssinaturaContratoPage({
                         : "New Password (Min. 6 characters) *"}
                     </label>
                     <input
-                      required
-                      type="password"
+                      id="campo-novaPassword"
+                      type={mostrarPass ? "text" : "password"}
                       minLength={6}
                       value={novaPassword}
-                      onChange={(e) => setNovaPassword(e.target.value)}
-                      className="w-full py-3 px-4 bg-white border border-slate-300 rounded-md text-sm font-black text-[#0F172A] outline-none"
+                      onChange={(e) => {
+                        setNovaPassword(e.target.value);
+                        if (erroFormulario?.campoId === "campo-novaPassword")
+                          setErroFormulario(null);
+                      }}
+                      className={`w-full py-3 px-4 bg-white border-2 rounded-md text-sm font-black text-[#0F172A] outline-none ${
+                        erroFormulario?.campoId === "campo-novaPassword" ||
+                        passwordCurta
+                          ? "border-[#F43F5E]"
+                          : passwordsCertas
+                          ? "border-[#16A34A]"
+                          : "border-slate-300"
+                      }`}
                       placeholder="••••••••"
                     />
                   </div>
@@ -1501,16 +1841,61 @@ export default function AssinaturaContratoPage({
                         : "Confirm Password *"}
                     </label>
                     <input
-                      required
-                      type="password"
+                      id="campo-confirmPassword"
+                      type={mostrarPass ? "text" : "password"}
                       minLength={6}
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full py-3 px-4 bg-white border border-slate-300 rounded-md text-sm font-black text-[#0F172A] outline-none"
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (erroFormulario?.campoId === "campo-confirmPassword")
+                          setErroFormulario(null);
+                      }}
+                      className={`w-full py-3 px-4 bg-white border-2 rounded-md text-sm font-black text-[#0F172A] outline-none ${
+                        erroFormulario?.campoId === "campo-confirmPassword" ||
+                        passwordsDiferentes
+                          ? "border-[#F43F5E]"
+                          : passwordsCertas
+                          ? "border-[#16A34A]"
+                          : "border-slate-300"
+                      }`}
                       placeholder="••••••••"
                     />
                   </div>
                 </div>
+
+                {/* FEEDBACK VISUAL IMEDIATO DA COMPARAÇÃO ENTRE AS 2 PASSWORDS */}
+                {passwordsPreenchidas && (
+                  <div className="mt-3">
+                    {passwordCurta ? (
+                      <div className="bg-[#F43F5E] text-white text-xs font-black px-3.5 py-2 rounded-md inline-flex items-center gap-2">
+                        <span>⚠️</span>
+                        <span>
+                          {isPt
+                            ? "A palavra-passe tem de ter pelo menos 6 caracteres."
+                            : "Password must be at least 6 characters long."}
+                        </span>
+                      </div>
+                    ) : passwordsDiferentes ? (
+                      <div className="bg-[#F43F5E] text-white text-xs font-black px-3.5 py-2 rounded-md inline-flex items-center gap-2">
+                        <span>❌</span>
+                        <span>
+                          {isPt
+                            ? "As duas palavras-passe não coincidem! Verifique o que escreveu."
+                            : "The two passwords do not match! Please check your typing."}
+                        </span>
+                      </div>
+                    ) : passwordsCertas ? (
+                      <div className="bg-[#16A34A] text-white text-xs font-black px-3.5 py-2 rounded-md inline-flex items-center gap-2">
+                        <span>✓</span>
+                        <span>
+                          {isPt
+                            ? "Perfeito! As duas palavras-passe coincidem."
+                            : "Perfect! Both passwords match."}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
 
               {/* 2. ASSINATURA DIGITAL */}
@@ -1529,12 +1914,22 @@ export default function AssinaturaContratoPage({
                         : "Full Name of Signatory *"}
                     </label>
                     <input
-                      required
+                      id="campo-assinaturaNome"
                       value={assinaturaNome}
-                      onChange={(e) => setAssinaturaNome(e.target.value)}
-                      className="w-full py-3 px-4 bg-white border border-slate-300 rounded-md text-base font-serif italic font-black text-[#0F172A] outline-none"
+                      onChange={(e) => {
+                        setAssinaturaNome(e.target.value);
+                        if (erroFormulario?.campoId === "campo-assinaturaNome")
+                          setErroFormulario(null);
+                      }}
+                      className={`w-full py-3 px-4 bg-white border-2 rounded-md text-base font-serif italic font-black text-[#0F172A] outline-none ${
+                        erroFormulario?.campoId === "campo-assinaturaNome"
+                          ? "border-[#F43F5E]"
+                          : "border-slate-300"
+                      }`}
                       placeholder={
-                        isPt ? "Escreva o seu nome completo" : "Type your full name"
+                        isPt
+                          ? "Escreva o seu nome completo"
+                          : "Type your full name"
                       }
                     />
                   </div>
@@ -1545,10 +1940,18 @@ export default function AssinaturaContratoPage({
                         : "Legal Role / Title *"}
                     </label>
                     <input
-                      required
+                      id="campo-assinaturaCargo"
                       value={assinaturaCargo}
-                      onChange={(e) => setAssinaturaCargo(e.target.value)}
-                      className="w-full py-3 px-4 bg-white border border-slate-300 rounded-md text-sm font-bold text-[#0F172A] outline-none"
+                      onChange={(e) => {
+                        setAssinaturaCargo(e.target.value);
+                        if (erroFormulario?.campoId === "campo-assinaturaCargo")
+                          setErroFormulario(null);
+                      }}
+                      className={`w-full py-3 px-4 bg-white border-2 rounded-md text-sm font-bold text-[#0F172A] outline-none ${
+                        erroFormulario?.campoId === "campo-assinaturaCargo"
+                          ? "border-[#F43F5E]"
+                          : "border-slate-300"
+                      }`}
                       placeholder={
                         isPt
                           ? "Ex: Diretora / Sócio-Gerente / Presidente"
@@ -1558,12 +1961,22 @@ export default function AssinaturaContratoPage({
                   </div>
                 </div>
 
-                <label className="flex items-start gap-3.5 cursor-pointer bg-slate-900 p-4 rounded-md border border-slate-700">
+                <label
+                  id="campo-concordaTermos"
+                  className={`flex items-start gap-3.5 cursor-pointer bg-slate-900 p-4 rounded-md border-2 transition-all ${
+                    erroFormulario?.campoId === "campo-concordaTermos"
+                      ? "border-[#F43F5E] ring-4 ring-rose-500/20"
+                      : "border-slate-700"
+                  }`}
+                >
                   <input
                     type="checkbox"
-                    required
                     checked={concordaTermos}
-                    onChange={(e) => setConcordaTermos(e.target.checked)}
+                    onChange={(e) => {
+                      setConcordaTermos(e.target.checked);
+                      if (erroFormulario?.campoId === "campo-concordaTermos")
+                        setErroFormulario(null);
+                    }}
                     className="mt-1 w-5 h-5 accent-[#16A34A] shrink-0 cursor-pointer"
                   />
                   <span className="text-xs font-bold text-slate-200 leading-relaxed">
