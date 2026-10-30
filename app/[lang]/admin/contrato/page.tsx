@@ -169,326 +169,561 @@ export default function GestaoContratoGlobalPage({
   }, []);
 
   // ============================================================================
-  // GERADOR DO PDF OFICIAL COMPLETO (IDÊNTICO AO DOCUMENTO LEGAL)
+  // GERADOR DO PDF OFICIAL 100% IGUAL AO QUE APARECE NA PÁGINA (MULTI-PÁGINA)
   // ============================================================================
   const gerarDocumentoPDF = (ipParaRegisto: string, dataIso: string) => {
     const isPt = contractLang === "pt";
-    const taxaComissao =
+    const taxaExibida =
       perfil?.taxa_comissao !== null && perfil?.taxa_comissao !== undefined
         ? perfil.taxa_comissao
         : 12;
-    const baseComissao = perfil?.base_comissao || "total";
+    const baseExibida = perfil?.base_comissao || "total";
 
     const doc = new jsPDF({ format: "a4", unit: "mm" });
-    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentW = pageW - margin * 2;
 
+    const darkNavy: [number, number, number] = [15, 23, 42]; // #0F172A
     const blueBrand: [number, number, number] = [37, 99, 235]; // #2563EB
     const goldBrand: [number, number, number] = [245, 158, 11]; // #F59E0B
     const greenBrand: [number, number, number] = [22, 163, 74]; // #16A34A
-    const slateDark: [number, number, number] = [15, 23, 42]; // #0F172A
+    const slateText: [number, number, number] = [51, 65, 85];
     const slateMuted: [number, number, number] = [100, 116, 139];
 
-    // 1. BANNER CORPORATIVO DE TOPO
-    doc.setFillColor(...slateDark);
-    doc.rect(0, 0, pageWidth, 38, "F");
+    let y = 20;
+
+    const checkSpace = (needed: number) => {
+      if (y + needed > pageH - 18) {
+        doc.addPage();
+        y = 20;
+      }
+    };
+
+    const writeSectionHeader = (
+      title: string,
+      color: [number, number, number] = darkNavy
+    ) => {
+      checkSpace(16);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(...color);
+      doc.text(title.toUpperCase(), margin, y);
+      doc.setDrawColor(...color);
+      doc.setLineWidth(0.5);
+      doc.line(margin, y + 2, pageW - margin, y + 2);
+      y += 8;
+    };
+
+    const writeSubTitle = (title: string) => {
+      checkSpace(10);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...darkNavy);
+      doc.text(title, margin, y);
+      y += 5;
+    };
+
+    const writeParagraph = (
+      text: string,
+      fontSize = 8.8,
+      color: [number, number, number] = slateText,
+      isBold = false
+    ) => {
+      doc.setFont("helvetica", isBold ? "bold" : "normal");
+      doc.setFontSize(fontSize);
+      doc.setTextColor(...color);
+      const lines = doc.splitTextToSize(text, contentW);
+      lines.forEach((line: string) => {
+        checkSpace(5.5);
+        doc.text(line, margin, y);
+        y += 4.4;
+      });
+      y += 2.5;
+    };
+
+    // 1. BANNER DE TOPO IGUAL À PÁGINA
+    doc.setFillColor(...darkNavy);
+    doc.rect(0, 0, pageW, 38, "F");
     doc.setFillColor(...goldBrand);
-    doc.rect(0, 38, pageWidth, 2, "F");
+    doc.rect(0, 38, pageW, 2, "F");
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
+    doc.setFontSize(24);
     doc.setTextColor(255, 255, 255);
-    doc.text("Hello", pageWidth / 2 - 9, 15, { align: "right" });
+    doc.text("Hello", pageW / 2 - 9, 15, { align: "right" });
     doc.setTextColor(...goldBrand);
-    doc.text("Camp", pageWidth / 2 - 9, 15, { align: "left" });
+    doc.text("Camp", pageW / 2 - 9, 15, { align: "left" });
 
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
     doc.text(
       isPt
-        ? "ACORDO GLOBAL DE INTERMEDIAÇÃO E SERVIÇOS B2B"
-        : "GLOBAL B2B INTERMEDIATION AND SERVICES AGREEMENT",
-      pageWidth / 2,
+        ? "CONTRATO GLOBAL DE INTERMEDIAÇÃO"
+        : "GLOBAL INTERMEDIATION CONTRACT",
+      pageW / 2,
       24,
       { align: "center" }
     );
 
-    doc.setFont("helvetica", "normal");
+    doc.setFont("helvetica", "italic");
     doc.setFontSize(8.5);
-    doc.setTextColor(191, 219, 254);
-    const dataEmissaoFormatada = new Date(dataIso).toLocaleDateString(
-      isPt ? "pt-PT" : "en-GB",
-      { year: "numeric", month: "long", day: "numeric" }
-    );
+    doc.setTextColor(203, 213, 225);
     doc.text(
       isPt
-        ? `Documento Jurídico Oficial • Emitido em ${dataEmissaoFormatada}`
-        : `Official Legal Document • Issued on ${dataEmissaoFormatada}`,
-      pageWidth / 2,
+        ? "Um único acordo que abrange todas as suas atividades presentes e futuras na plataforma HelloCamp."
+        : "A single agreement covering all your current and future activities on HelloCamp.",
+      pageW / 2,
       31,
       { align: "center" }
     );
 
-    let y = 48;
+    y = 48;
 
-    // 2. ENQUADRAMENTO E PRINCÍPIOS DO ACORDO
-    doc.setTextColor(...blueBrand);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(
+    // 2. OS 4 PILARES DO ENQUADRAMENTO (TEXTO 100% INTEGRAL DA PÁGINA)
+    const pilares = [
+      {
+        num: "1",
+        cor: goldBrand,
+        titulo: isPt
+          ? "1. Celebração do Contrato"
+          : "1. Conclusion of the Contract",
+        texto: isPt
+          ? "Este contrato regula a divulgação e a intermediação das suas ofertas através da plataforma HelloCamp, estabelecendo os termos da colaboração entre ambas as partes. O acordo mantém-se válido até ao final do ano civil em curso, sendo automaticamente renovado por períodos sucessivos, salvo denúncia por qualquer uma das partes nos termos previstos contratualmente."
+          : "This contract regulates the promotion and intermediation of your offers through the HelloCamp platform, establishing the terms of collaboration between both parties. The agreement remains valid until the end of the current calendar year and is automatically renewed for successive periods, unless terminated by either party under the contractual terms.",
+      },
+      {
+        num: "2",
+        cor: blueBrand,
+        titulo: isPt ? "2. Divulgação das Ofertas" : "2. Promotion of Offers",
+        texto: isPt
+          ? "Após a celebração do contrato, a HelloCamp procede à recolha e organização das informações relativas às atividades disponibilizadas pelo parceiro, criando e publicando as respetivas páginas de oferta na plataforma. Paralelamente, promove os programas através dos seus canais digitais e poderá solicitar informações adicionais sempre que tal se revele necessário para garantir a qualidade e atualização dos conteúdos. A publicação das ofertas apenas ocorrerá após o cumprimento das condições contratuais aplicáveis e da validação de toda a informação necessária."
+          : "After the contract is signed, HelloCamp collects and organizes the information regarding the activities provided by the partner, creating and publishing the respective offer pages on the platform. Concurrently, it promotes the programs through its digital channels and may request additional information whenever necessary to ensure the quality and currency of the content. Publication of offers will only occur after compliance with the applicable contractual conditions and validation of all necessary information.",
+      },
+      {
+        num: "3",
+        cor: greenBrand,
+        titulo: isPt
+          ? "3. Reservas através da HelloCamp"
+          : "3. Bookings through HelloCamp",
+        texto: isPt
+          ? "As reservas das atividades poderão ser efetuadas diretamente através da plataforma HelloCamp. Sempre que uma reserva seja realizada, a HelloCamp comunicará ao parceiro os dados do cliente, os detalhes da reserva e todas as informações necessárias à adequada gestão da inscrição. Por sua vez, o parceiro compromete-se a manter permanentemente atualizadas a disponibilidade das atividades, os preços praticados, os programas oferecidos e quaisquer outras informações relevantes relacionadas com as suas ofertas, assegurando a exatidão dos dados apresentados aos clientes."
+          : "Activity bookings can be made directly through the HelloCamp platform. Whenever a booking is made, HelloCamp will communicate the client details, booking specifics, and all necessary information to the partner for proper management. In turn, the partner commits to keeping availability, prices, programs, and other relevant information permanently updated, ensuring data accuracy for clients.",
+      },
+      {
+        num: "4",
+        cor: darkNavy,
+        titulo: isPt
+          ? "4. Pagamento da Comissão"
+          : "4. Commission & Success Model",
+        texto: isPt
+          ? `A HelloCamp cobra uma comissão acordada de ${taxaExibida}% (IVA incluído) sobre cada reserva concluída através da plataforma. O modelo de pagamento poderá assumir diferentes formas, nomeadamente através de pagamento automático via Stripe Connect, reserva sob consulta ou redirecionamento de leads, de acordo com os termos estabelecidos nos Anexos deste contrato de parceria.`
+          : `HelloCamp charges an agreed commission of ${taxaExibida}% (VAT included) on each completed booking through the platform. The payment model may take different forms, such as direct checkout payment via Stripe, upon-request booking, or external lead redirection, as established in the Annexes of this partnership contract.`,
+      },
+    ];
+
+    pilares.forEach((p) => {
+      const lines = doc.splitTextToSize(p.texto, contentW - 16);
+      const boxH = Math.max(18, lines.length * 4.2 + 10);
+      checkSpace(boxH + 4);
+
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(margin, y, contentW, boxH, 1.5, 1.5, "FD");
+
+      doc.setFillColor(...p.cor);
+      doc.roundedRect(margin + 3, y + 3, 8, 8, 1, 1, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      doc.text(p.num, margin + 7, y + 8.5, { align: "center" });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...darkNavy);
+      doc.text(p.titulo.toUpperCase(), margin + 14, y + 6.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.3);
+      doc.setTextColor(...slateText);
+      doc.text(lines, margin + 14, y + 11.5);
+
+      y += boxH + 3.5;
+    });
+
+    y += 3;
+
+    // 3. PROGRAMAS ABRANGIDOS PELO CONTRATO
+    if (camposParceiro.length > 0) {
+      writeSectionHeader(
+        isPt
+          ? `Programas e Campos Abrangidos por Este Contrato (${camposParceiro.length})`
+          : `Programs & Camps Covered by This Agreement (${camposParceiro.length})`,
+        blueBrand
+      );
+
+      camposParceiro.forEach((c: any, idx: number) => {
+        checkSpace(9);
+        doc.setFillColor(240, 249, 255);
+        doc.setDrawColor(191, 219, 254);
+        doc.roundedRect(margin, y, contentW, 7.5, 1, 1, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.3);
+        doc.setTextColor(...darkNavy);
+        const nomeProg = !isPt && c.nome_en ? c.nome_en : c.nome;
+        doc.text(
+          `${idx + 1}. ${nomeProg}  (${c.local || "Portugal"} • ${
+            c.preco || 0
+          }€ • ${c.taxa_comissao ?? taxaExibida}% ${
+            isPt ? "Comissão" : "Commission"
+          })`.substring(0, 108),
+          margin + 3,
+          y + 5
+        );
+        y += 9;
+      });
+      y += 3;
+    }
+
+    // 4. ACORDO GLOBAL DE PRESTAÇÃO DE SERVIÇOS (PARTES CONTRATANTES)
+    writeSectionHeader(
       isPt
-        ? "ENQUADRAMENTO E PRINCÍPIOS DO ACORDO"
-        : "EXECUTIVE SUMMARY & AGREEMENT PRINCIPLES",
-      15,
-      y
+        ? "Acordo Global de Prestação de Serviços"
+        : "Global Service Agreement"
     );
-    doc.setDrawColor(226, 232, 240);
-    doc.line(15, y + 2, pageWidth - 15, y + 2);
-    y += 7;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...slateDark);
-    const introPontos = isPt
-      ? "1. Objeto: Estabelece os termos aplicáveis à intermediação e promoção comercial das atividades do Parceiro na plataforma HelloCamp (válido até ao final do ano civil, com renovação automática).\n2. Divulgação: A HelloCamp disponibiliza a infraestrutura tecnológica; o Parceiro garante a veracidade e titularidade legal dos conteúdos, imagens e programas.\n3. Gestão de Reservas: A plataforma atua como canal facilitador, cabendo ao Parceiro a inteira responsabilidade pela execução do serviço e segurança perante o cliente final.\n4. Condições Financeiras: A remuneração incide exclusivamente sobre o sucesso da intermediação, conforme fixado na Secção 2 deste documento."
-      : "1. Object: Establishes the terms applicable to the intermediation and commercial promotion of the Partner's activities on the HelloCamp platform (valid until the end of the calendar year, automatically renewed).\n2. Promotion: HelloCamp provides the technological infrastructure; the Partner guarantees the accuracy and legal ownership of all shared content, images, and programs.\n3. Booking Management: The platform acts as a facilitating channel, with the Partner bearing full responsibility for service execution and safety towards the final customer.\n4. Financial Conditions: Remuneration is based exclusively on successful intermediation, as set out in Section 2 of this document.";
-    const splitIntro = doc.splitTextToSize(introPontos, pageWidth - 30);
-    doc.text(splitIntro, 15, y);
-    y += splitIntro.length * 3.8 + 6;
-
-    // 3. SECÇÃO 1: IDENTIFICAÇÃO DAS PARTES
-    doc.setTextColor(...blueBrand);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(
+    writeParagraph(
       isPt
-        ? "1. IDENTIFICAÇÃO DAS PARTES CONTRATANTES"
-        : "1. IDENTIFICATION OF THE CONTRACTING PARTIES",
-      15,
-      y
+        ? 'Entre a HelloCamp Portugal, com website oficial em www.hellocamp.pt e contacto via info@hellocamp.pt, doravante designada por "Primeiro Outorgante"; e do outro lado:'
+        : 'Between HelloCamp Portugal, with official website at www.hellocamp.pt and contact via info@hellocamp.pt, hereinafter referred to as the "First Party"; and on the other side:'
     );
-    doc.line(15, y + 2, pageWidth - 15, y + 2);
-    y += 5;
 
+    checkSpace(54);
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(15, y, 86, 36, 2, 2, "FD");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...blueBrand);
-    doc.text(
-      isPt ? "PRIMEIRA OUTORGANTE (Plataforma)" : "FIRST PARTY (Platform)",
-      19,
-      y + 6
-    );
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...slateDark);
-    doc.text("Entidade: HelloCamp Portugal", 19, y + 12);
-    doc.text("Website Oficial: www.hellocamp.pt", 19, y + 17);
-    doc.text("E-mail Oficial: info@hellocamp.pt", 19, y + 22);
-    doc.text(
+    doc.roundedRect(margin, y, contentW, 50, 1.5, 1.5, "FD");
+
+    const dadosCampos = [
+      [
+        isPt
+          ? "Nome da Empresa / Entidade (Faturação):"
+          : "Company Name (Billing):",
+        form.empresaNome || "—",
+      ],
+      [
+        isPt ? "NIF / NIPC:" : "VAT / Tax ID Number:",
+        `${form.nif || "—"}   |   ${
+          isPt ? "Forma Jurídica:" : "Legal Form:"
+        } ${form.formaJuridica || "—"}`,
+      ],
+      [
+        isPt ? "Pessoa de Contacto:" : "Contact Person:",
+        `${form.pessoaContacto || "—"}   |   ${
+          isPt ? "Telefone:" : "Phone:"
+        } ${form.telefone || "—"}`,
+      ],
+      [
+        isPt ? "Morada Fiscal:" : "Billing Address:",
+        `${form.morada || "—"}, ${form.codigoPostal || ""}`,
+      ],
+      [
+        isPt ? "E-mail Comercial:" : "Commercial E-mail:",
+        `${form.emailContacto || "—"}   |   ${
+          isPt ? "E-mail Reservas:" : "Booking E-mail:"
+        } ${form.emailReservas || "—"}`,
+      ],
+      [
+        "Website:",
+        `${form.website || "—"}   |   ${
+          isPt ? "Responsável RGPD:" : "GDPR Officer:"
+        } ${form.responsavelRGPD || "—"}`,
+      ],
+    ];
+
+    let rowY = y + 6;
+    dadosCampos.forEach(([label, val]) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.2);
+      doc.setTextColor(...slateMuted);
+      doc.text(label, margin + 4, rowY);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.6);
+      doc.setTextColor(...darkNavy);
+      doc.text(String(val).substring(0, 82), margin + 65, rowY);
+      rowY += 7.5;
+    });
+
+    y += 54;
+
+    writeParagraph(
       isPt
-        ? "Papel: Intermediária Tecnológica e Comercial"
-        : "Role: IT & Commercial Intermediary",
-      19,
-      y + 27
-    );
-    doc.text(
-      isPt
-        ? "Foro e Jurisdição: Comarca de Lisboa, Portugal"
-        : "Jurisdiction: District of Lisbon, Portugal",
-      19,
-      y + 32
+        ? '- doravante designado por "Parceiro" -'
+        : '- hereinafter referred to as the "Partner" -',
+      8.5,
+      slateMuted,
+      true
     );
 
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(109, y, 86, 36, 2, 2, "FD");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...blueBrand);
-    doc.text(
-      isPt ? "SEGUNDA OUTORGANTE (Parceiro)" : "SECOND PARTY (Partner)",
-      113,
-      y + 6
-    );
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...slateDark);
-    doc.text(
-      `${form.empresaNome || "Entidade Parceira"} (${
-        form.formaJuridica || "Entidade"
-      })`.substring(0, 42),
-      113,
-      y + 12
-    );
-    doc.text(`NIF / Tax ID: ${form.nif || "N/A"}`, 113, y + 17);
-    doc.text(
-      `${form.morada || "N/A"}, ${form.codigoPostal || ""}`.substring(0, 42),
-      113,
-      y + 22
-    );
-    doc.text(
-      `Resp: ${form.pessoaContacto || "N/A"} | Tel: ${
-        form.telefone || "N/A"
-      }`.substring(0, 42),
-      113,
-      y + 27
-    );
-    doc.text(
-      `E-mail: ${form.emailContacto || "N/A"} | RGPD: ${
-        form.responsavelRGPD || form.pessoaContacto || "N/A"
-      }`.substring(0, 44),
-      113,
-      y + 32
-    );
-
-    y += 43;
-
-    // 4. SECÇÃO 2: CONDIÇÕES OPERACIONAIS E FINANCEIRAS (ANEXOS 1, 2, 3 E 4)
-    doc.setTextColor(...blueBrand);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(
-      isPt
-        ? "2. CONDIÇÕES OPERACIONAIS E FINANCEIRAS ACORDADAS (ANEXOS 1 A 4)"
-        : "2. AGREED OPERATIONAL AND FINANCIAL TERMS (ANNEXES 1 TO 4)",
-      15,
-      y
-    );
-    doc.line(15, y + 2, pageWidth - 15, y + 2);
-    y += 5;
-
-    const boxHeight = form.acordosComplementares ? 36 : 28;
-    doc.setFillColor(240, 249, 255);
-    doc.setDrawColor(186, 230, 253);
-    doc.roundedRect(15, y, pageWidth - 30, boxHeight, 2, 2, "FD");
-
-    const baseTexto =
-      baseComissao === "apenas_programa"
-        ? isPt
-          ? "Apenas sobre Valor Base do Programa"
-          : "Only on Program Base Value"
-        : baseComissao === "sem_comissao"
-        ? isPt
-          ? "Isento (0%)"
-          : "Exempt (0%)"
-        : isPt
-        ? "Sobre Valor Total (Programa + Extras)"
-        : "On Total Value (Program + Extras)";
-
-    const modTexto =
-      form.modalidadeReserva === "direta"
-        ? isPt
-          ? "Reserva Direta no Checkout (HelloCamp)"
-          : "Direct Checkout Booking (HelloCamp)"
-        : form.modalidadeReserva === "email"
-        ? isPt
-          ? "Comunicação por E-mail (Reserva Sob Consulta - 48h)"
-          : "Email Communication (Booking Upon Request - 48h)"
-        : isPt
-        ? "Redirecionamento para Link Externo c/ Registo de Lead"
-        : "Redirection to External Link w/ Lead Tracking";
+    // Caixa Destacada de Objeto Global
+    checkSpace(26);
+    doc.setFillColor(240, 253, 244);
+    doc.setDrawColor(187, 247, 208);
+    doc.roundedRect(margin, y, contentW, 24, 1.5, 1.5, "FD");
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setTextColor(...blueBrand);
+    doc.setTextColor(...darkNavy);
     doc.text(
       isPt
-        ? `Taxa de Comissão Fixada: ${taxaComissao}% (IVA incluído)`
-        : `Fixed Commission Rate: ${taxaComissao}% (VAT included)`,
-      19,
-      y + 7
+        ? "É celebrado o presente contrato de intermediação e divulgação comercial aplicável a:"
+        : "This intermediation and commercial promotion contract applies to:",
+      pageW / 2,
+      y + 7,
+      { align: "center" }
+    );
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...greenBrand);
+    doc.text(
+      isPt
+        ? `TODAS AS ATIVIDADES ORGANIZADAS POR ${(
+            form.empresaNome || "PARCEIRO"
+          ).toUpperCase()}`
+        : `ALL ACTIVITIES ORGANIZED BY ${(
+            form.empresaNome || "PARTNER"
+          ).toUpperCase()}`,
+      pageW / 2,
+      y + 14,
+      { align: "center" }
     );
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...slateDark);
+    doc.setFontSize(8.2);
+    doc.setTextColor(...slateText);
     doc.text(
       isPt
-        ? `• Base de Incidência: ${baseTexto}`
-        : `• Commission Base: ${baseTexto}`,
-      19,
-      y + 13
-    );
-    doc.text(
-      isPt
-        ? `• Anexo 1 (Modelo de Reserva): ${modTexto}`
-        : `• Annex 1 (Booking Model): ${modTexto}`,
-      19,
-      y + 18
+        ? `Taxa de Comissão Acordada: ${taxaExibida}% (IVA incluído) • Incidência: ${
+            baseExibida === "apenas_programa"
+              ? "Apenas Programa Base"
+              : "Valor Total da Reserva"
+          }`
+        : `Agreed Commission Rate: ${taxaExibida}% (VAT included) • Base: ${
+            baseExibida === "apenas_programa"
+              ? "Base Program Only"
+              : "Total Booking Value"
+          }`,
+      pageW / 2,
+      y + 20,
+      { align: "center" }
     );
 
-    if (form.modalidadeReserva === "link_externo") {
-      doc.text(
+    y += 30;
+
+    // 5. CLÁUSULAS CONTRATUAIS INTEGRAIS (ARTIGOS 1.º AO 7.º EXATAMENTE IGUAIS À PÁGINA)
+    writeSectionHeader(
+      isPt ? "Cláusulas Contratuais" : "Contractual Clauses"
+    );
+
+    writeSubTitle(isPt ? "Artigo 1.º – Comissão" : "Article 1 – Commission");
+    writeParagraph(
+      isPt
+        ? `O Parceiro compromete-se a pagar à HelloCamp uma comissão de ${taxaExibida}% (IVA incluído) sobre cada reserva efetuada através da plataforma, cujos termos e incidência encontram-se definidos no presente contrato e seus anexos.`
+        : `The Partner commits to paying HelloCamp a commission of ${taxaExibida}% (VAT included) on each booking made through the platform, under the terms defined in this contract or a supplementary agreement.`
+    );
+    writeParagraph(
+      isPt
+        ? "A comissão é calculada sobre o valor efetivamente faturado pelo Parceiro ao cliente relativamente à atividade reservada, incluindo serviços adicionais contratados através da plataforma ou através de leads geradas."
+        : "The commission is calculated on the amount actually paid by the client for the booked activity, including additional services contracted through the platform."
+    );
+    writeParagraph(
+      isPt
+        ? "A comissão torna-se devida após a confirmação da reserva pelo Parceiro e a transmissão dos respetivos dados de reserva. O Parceiro deverá enviar ao cliente a confirmação da reserva e assegurar a prestação dos serviços contratados."
+        : "The commission becomes due after the booking is confirmed by the Partner and the respective booking data is transmitted. The Partner must send the client the booking confirmation and ensure the provision of the contracted services."
+    );
+    writeParagraph(
+      isPt
+        ? "Caso uma reserva não possa ser realizada por motivos devidamente justificados, nomeadamente indisponibilidade da atividade ou não verificação das condições mínimas de realização, o Parceiro deverá informar a HelloCamp com a maior brevidade possível. Em caso de cancelamento por iniciativa do cliente ou desistência, aplicar-se-ão as condições previstas no Anexo 3 – Cancelamento de Reservas."
+        : "If a booking cannot be fulfilled for justified reasons, the Partner must inform HelloCamp as soon as possible. In case of cancellation by the client, the conditions set out in Annex 3 – Booking Cancellation will apply."
+    );
+
+    writeSubTitle(
+      isPt
+        ? "Artigo 2.º – Condições de Pagamento"
+        : "Article 2 – Payment Conditions"
+    );
+    writeParagraph(
+      isPt
+        ? "As comissões devidas à HelloCamp serão faturadas ou deduzidas automaticamente via Stripe Connect de acordo com o modelo de pagamento acordado entre as partes. O Parceiro compromete-se a liquidar eventuais faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados incluem IVA ou outros impostos legalmente aplicáveis."
+        : "Commissions due to HelloCamp will be invoiced or automatically split via Stripe Connect according to the agreed payment model. The Partner commits to settling invoices within the stated deadlines. Agreed amounts include VAT or other applicable taxes."
+    );
+
+    writeSubTitle(
+      isPt
+        ? "Artigo 3.º – Obrigações do Parceiro"
+        : "Article 3 – Partner Obligations"
+    );
+    writeParagraph(
+      isPt
+        ? "O Parceiro compromete-se a fornecer à HelloCamp todas as informações necessárias à divulgação das suas atividades, incluindo descrições, preços, disponibilidade, fotografias e demais conteúdos relevantes. O Parceiro garante que possui todos os direitos necessários sobre os conteúdos disponibilizados à HelloCamp, incluindo direitos de autor, direitos de imagem e demais autorizações legalmente exigidas."
+        : "The Partner commits to providing HelloCamp with all necessary information to promote activities, including descriptions, prices, availability, photos, and relevant content. The Partner guarantees they hold all necessary rights for the provided content, including copyrights and image rights."
+    );
+    writeParagraph(
+      isPt
+        ? "A HelloCamp poderá utilizar os conteúdos fornecidos pelo Parceiro para efeitos de promoção, comercialização e divulgação das atividades na plataforma e nos seus canais de comunicação. Os preços divulgados na plataforma HelloCamp não poderão ser superiores aos preços praticados pelo Parceiro para reservas diretas da mesma atividade."
+        : "HelloCamp may use the content provided by the Partner for promotion and marketing on the platform and communication channels. Prices advertised on HelloCamp must not exceed prices practiced by the Partner for direct bookings."
+    );
+    writeParagraph(
+      isPt
+        ? "O Parceiro compromete-se a informar imediatamente a HelloCamp de quaisquer alterações relativas às suas atividades, incluindo preços, disponibilidade, programas, condições de participação ou alterações aos seus termos e condições gerais."
+        : "The Partner commits to immediately informing HelloCamp of any changes regarding activities, prices, or conditions, as well as any changes to their general terms and conditions."
+    );
+
+    writeSubTitle(
+      isPt
+        ? "Artigo 4.º – Duração e Renovação"
+        : "Article 4 – Duration and Renewal"
+    );
+    writeParagraph(
+      isPt
+        ? "O presente contrato produz efeitos a partir da data da sua assinatura por ambas as partes e mantém-se válido até ao final do respetivo ano civil. O contrato será automaticamente renovado por períodos sucessivos de um ano, salvo denúncia por qualquer das partes comunicada por escrito com uma antecedência mínima de 30 dias relativamente ao termo do período contratual em curso."
+        : "This contract is effective from the date of signature by both parties until the end of the calendar year. It automatically renews for successive one-year periods unless terminated in writing at least 30 days prior."
+    );
+
+    writeSubTitle(
+      isPt
+        ? "Artigo 5.º – Cláusula de Separabilidade"
+        : "Article 5 – Severability Clause"
+    );
+    writeParagraph(
+      isPt
+        ? "A eventual invalidade, nulidade ou inaplicabilidade de qualquer disposição do presente contrato não prejudica a validade das restantes cláusulas, que permanecerão plenamente em vigor."
+        : "The invalidity of any provision of this contract shall not affect the validity of the remaining clauses, which shall remain in full force."
+    );
+
+    writeSubTitle(
+      isPt
+        ? "Artigo 6.º – Limitação de Responsabilidade e Seguros"
+        : "Article 6 – Limitation of Liability and Insurance"
+    );
+    writeParagraph(
+      isPt
+        ? "A HelloCamp atua exclusivamente como plataforma intermediária e motor de busca. A HelloCamp não assume qualquer responsabilidade civil, criminal ou contratual por eventuais acidentes, danos, incidentes ou disputas que ocorram durante a realização das atividades, envolvendo os participantes, monitores ou terceiros."
+        : "HelloCamp acts exclusively as an intermediary booking platform. HelloCamp assumes no civil, criminal, or contractual liability for any accidents, damages, incidents, or disputes that may occur during the activities, involving participants, monitors, or third parties."
+    );
+    writeParagraph(
+      isPt
+        ? "O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças, alvarás e verificação de registos criminais de monitores exigidos para o exercício da sua atividade."
+        : "The Partner is solely and exclusively responsible for the provision of services and the safety of the participants, guaranteeing that they hold all legally mandatory insurance (including civil liability and personal accident), licenses, and staff criminal record checks required to carry out their activity."
+    );
+
+    writeSubTitle(
+      isPt
+        ? "Artigo 7.º – Validade da Assinatura e Convenção de Prova"
+        : "Article 7 – Digital Signature and Evidence Agreement"
+    );
+    writeParagraph(
+      isPt
+        ? "As partes reconhecem expressamente a validade e a força vinculativa da aceitação do presente contrato através de meios eletrónicos (designadamente a aposição do nome do representante legal e seleção da caixa de aceitação no portal web da HelloCamp)."
+        : "The parties expressly acknowledge the validity and binding force of the acceptance of this contract through electronic means (namely by typing the legal representative's name and checking the acceptance box on the web portal)."
+    );
+    writeParagraph(
+      isPt
+        ? "Ao abrigo da liberdade de estipulação probatória, as partes convencionam que os registos informáticos recolhidos pela HelloCamp (incluindo o endereço IP, dados de sessão, nome digitado e timestamp) constituem meio de prova plenamente válido e suficiente para atestar a autoria, a integridade e a aceitação irrevogável das presentes cláusulas operacionais e financeiras, renunciando o Parceiro a invocar a nulidade ou ineficácia do contrato com fundamento na ausência de assinatura autógrafa ou de assinatura eletrónica qualificada."
+        : "Under the freedom of probatory stipulation, the parties agree that the computer records collected by HelloCamp (including IP address, session data, typed name, and timestamp) constitute fully valid and sufficient evidence to attest to the authorship, integrity, and irrevocable acceptance of these clauses. The Partner waives the right to invoke the nullity of the contract based on the absence of a handwritten signature or qualified electronic signature."
+    );
+
+    y += 3;
+
+    // 6. ANEXOS 1, 2, 3 E 4 COMPLETOS (EXATAMENTE IGUAIS À PÁGINA)
+    writeSectionHeader(
+      isPt
+        ? "Anexos Operacionais e Financeiros"
+        : "Operational and Financial Annexes"
+    );
+
+    // Anexo 1
+    writeSubTitle(
+      isPt
+        ? "Anexo 1 – Procedimento de Reserva e Operação"
+        : "Annex 1 – Booking Procedure & Integration"
+    );
+    const textoAnexo1 =
+      form.modalidadeReserva === "direta"
+        ? isPt
+          ? "OPÇÃO SELECIONADA: [X] Reserva Direta no Checkout (Recomendado)\nAs reservas efetuadas através da plataforma HelloCamp serão registadas diretamente no painel do Parceiro. Nesta modalidade, a HelloCamp terá direito à comissão acordada sobre cada reserva concluída. O formulário de reserva recolhe todas as informações médicas e logísticas necessárias para a correta gestão das inscrições."
+          : "SELECTED OPTION: [X] Direct Booking with Automatic Payment (Recommended)\nBookings made through HelloCamp will be registered directly in the Partner's dashboard. HelloCamp is entitled to the agreed commission on each completed booking."
+        : form.modalidadeReserva === "email"
+        ? isPt
+          ? "OPÇÃO SELECIONADA: [X] Comunicação por E-mail (Reserva Sob Consulta)\nA HelloCamp enviará ao Parceiro, por correio eletrónico, todas as informações necessárias para a gestão da reserva, incluindo os dados do participante e do encarregado de educação. O Parceiro dispõe de 2 (dois) dias úteis para comunicar à HelloCamp a rejeição de uma reserva por motivo devidamente justificado. Na ausência de resposta dentro deste prazo, a reserva considerar-se-á aceite, sendo aplicável a comissão prevista no contrato."
+          : "SELECTED OPTION: [X] Email Communication (Booking Upon Request)\nHelloCamp will send the Partner an email with all necessary booking details. The Partner has 2 business days to reject a booking. Without a response, it is considered accepted."
+        : isPt
+        ? `OPÇÃO SELECIONADA: [X] Formulário ou Link Externo (${
+            form.linkExternoReserva || "URL"
+          })\nO tráfego gerado pela HelloCamp é redirecionado para um link externo. Para garantir transparência e evitar omissões, antes de reencaminhar o cliente, a HelloCamp recolhe a intenção de reserva (Lead: Nome, Email e Telefone do potencial cliente). Estes dados da Lead são enviados automaticamente para o Parceiro com conhecimento (em CC) à HelloCamp. O Parceiro compromete-se sob compromisso de honra a ser verdadeiro na comunicação mensal sobre quais destes clientes efetivamente finalizaram a inscrição do seu lado.`
+        : `SELECTED OPTION: [X] External Form or Link (${
+            form.linkExternoReserva || "URL"
+          })\nClients register their interest on HelloCamp and are redirected to the external link to complete the booking. HelloCamp records the lead and emails this data to the Partner.`;
+
+    writeParagraph(textoAnexo1, 8.6, darkNavy);
+
+    if (form.modalidadeReserva !== "link_externo") {
+      // Anexo 2
+      writeSubTitle(
         isPt
-          ? `• Link Oficial de Redirecionamento: ${form.linkExternoReserva}`
-          : `• Official Redirect URL: ${form.linkExternoReserva}`,
-        19,
-        y + 23
+          ? "Anexo 2 – Pagamento e Comissão (Stripe Connect)"
+          : "Annex 2 – Payment and Commission Split"
       );
-    } else {
-      const pagTexto =
+      const textoAnexo2 =
         form.tipoPagamento === "50_sinal"
           ? isPt
-            ? "Sinal de 50% no ato + 50% antes do início"
-            : "50% Deposit on booking + 50% before start"
+            ? "OPÇÃO SELECIONADA: [X] Sinal de 50% Agora + 50% 1 Semana Antes\nO Parceiro autoriza a HelloCamp a processar os pagamentos através da plataforma segura Stripe Connect. O encarregado de educação paga 50% no ato da inscrição e liquida os restantes 50% até 7 dias antes do início do programa."
+            : "SELECTED OPTION: [X] 50% Deposit Now + 50% One Week Before\nThe Partner authorizes HelloCamp to process payments via Stripe Connect. The client pays a 50% deposit upon booking and settles the remaining 50% up to 7 days before the camp starts."
           : isPt
-          ? "100% cobrado no ato da reserva"
-          : "100% charged upon booking";
-      doc.text(
+          ? "OPÇÃO SELECIONADA: [X] 100% Pago no Ato da Reserva (Pagamento Imediato)\nO Parceiro autoriza a HelloCamp a processar os pagamentos através da plataforma segura Stripe Connect. O cliente liquida a totalidade do valor do programa no checkout para assegurar a vaga de imediato."
+          : "SELECTED OPTION: [X] 100% Paid at Booking (Immediate Payment)\nThe Partner authorizes HelloCamp to process payments via Stripe Connect. The client pays the full program amount immediately to secure the spot.";
+
+      writeParagraph(textoAnexo2, 8.6, darkNavy);
+
+      // Anexo 3
+      writeSubTitle(
         isPt
-          ? `• Anexo 2 e 3 (Stripe): ${pagTexto}  |  Política: ${form.politicaCancelamento}`
-          : `• Annex 2 & 3 (Stripe): ${pagTexto}  |  Policy: ${form.politicaCancelamento}`,
-        19,
-        y + 23
+          ? "Anexo 3 – Política de Cancelamento e Reembolso"
+          : "Annex 3 – Cancellation and Refund Policy"
       );
+      const textoAnexo3 = isPt
+        ? `OPÇÃO SELECIONADA: [X] ${form.politicaCancelamento}\nA opção selecionada ditará as regras de reembolso para os pais na plataforma. A comissão devida à HelloCamp será sempre ajustada proporcionalmente ao montante que o Parceiro retiver do cliente em caso de desistência.`
+        : `SELECTED OPTION: [X] ${form.politicaCancelamento}\nThe selected option sets refund rules for parents. HelloCamp's commission adjusts proportionally to the amount retained.`;
+
+      writeParagraph(textoAnexo3, 8.6, darkNavy);
     }
 
-    if (form.acordosComplementares) {
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(8);
-      doc.setTextColor(146, 64, 14);
-      doc.text(
-        isPt
-          ? `• Anexo 4 (Acordos Extraordinários): "${form.acordosComplementares}"`
-          : `• Annex 4 (Extraordinary Agreements): "${form.acordosComplementares}"`,
-        19,
-        y + 31
-      );
-    }
-
-    y += boxHeight + 7;
-
-    // 5. SECÇÃO 3: CLÁUSULAS CONTRATUAIS GERAIS (ARTIGOS 1 A 7)
-    doc.setTextColor(...blueBrand);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(
+    // Anexo 4
+    writeSubTitle(
       isPt
-        ? "3. CLÁUSULAS CONTRATUAIS GERAIS, RESPONSABILIDADE E FORO (ARTIGOS 1.º A 7.º)"
-        : "3. GENERAL CONTRACTUAL CLAUSES, LIABILITY AND JURISDICTION (ARTICLES 1 TO 7)",
-      15,
-      y
+        ? "Anexo 4 – Acordos Extraordinários"
+        : "Annex 4 – Extraordinary Agreements"
     );
-    doc.line(15, y + 2, pageWidth - 15, y + 2);
-    y += 6;
+    writeParagraph(
+      form.acordosComplementares
+        ? form.acordosComplementares
+        : isPt
+        ? "Sem cláusulas de exceção adicionais (aplicam-se integralmente as condições padrão deste contrato global)."
+        : "No extraordinary exception clauses (standard global contract terms apply in full).",
+      8.6,
+      slateText
+    );
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...slateDark);
+    y += 4;
 
-    const clausulas = isPt
-      ? "A. Responsabilidade Civil e Seguros (Art. 6.º): A HelloCamp atua de forma estrita como plataforma informática de intermediação e motor de busca. A organização, gestão técnica, supervisão e segurança das atividades são da inteira e exclusiva responsabilidade da Segunda Outorgante (o Parceiro), que se obriga a manter válidos todos os seguros exigidos por lei (Responsabilidade Civil e Acidentes Pessoais) e as respetivas licenças de funcionamento (Ex: RNAAT/RNAVT ou licenças camarárias), isentando a HelloCamp de qualquer litígio com os participantes decorrente da atividade.\n\nB. Proteção de Dados - RGPD: O Parceiro assume o papel de Responsável pelo Tratamento dos dados pessoais, médicos e restrições alimentares fornecidos pela HelloCamp no estrito cumprimento do Regulamento (UE) 2016/679 (RGPD), utilizando-os apenas para a execução do serviço contratado e eliminando-os assim que deixem de ser necessários.\n\nC. Impostos, Paridade e Faturação (Art. 2.º e 3.º): Os preços divulgados na HelloCamp não poderão exceder os preços praticados pelo Parceiro na venda direta. O Parceiro é o exclusivo responsável pela faturação ao cliente final. A HelloCamp emite faturação exclusivamente referente à sua comissão de intermediação.\n\nD. Convenção de Prova e Foro Competente (Art. 7.º): As partes reconhecem plena validade jurídica e força probatória aos registos informáticos desta assinatura eletrónica (IP, timestamp e identificação). O presente acordo rege-se pela Lei Portuguesa, sendo competente o foro da Comarca de Lisboa."
-      : "A. Civil Liability & Insurance (Art. 6): HelloCamp acts strictly as an IT intermediation platform and search engine. The organization, technical management, supervision, and safety of the activities are the entire and exclusive responsibility of the Second Party (the Partner), who is obliged to keep valid all insurance required by law (Civil Liability and Personal Accidents) and operating licenses, exempting HelloCamp from any litigation with participants arising from the camp activity.\n\nB. Data Protection - GDPR: The Partner commits to processing the personal, medical, and dietary restriction data provided by HelloCamp in strict compliance with Regulation (EU) 2016/679 (GDPR), using them only for the execution of the contracted service and deleting them as soon as they are no longer necessary.\n\nC. Taxes, Price Parity & Invoicing (Art. 2 & 3): Prices listed on HelloCamp shall not exceed direct prices. The Partner is solely responsible for invoicing the final customer. HelloCamp invoices strictly its intermediation commission.\n\nD. Evidence Agreement & Jurisdiction (Art. 7): Both parties acknowledge full legal validity to the computer records of this electronic signature (IP, timestamp, and signatory). This agreement is governed by Portuguese Law under the exclusive jurisdiction of the courts of Lisbon.";
-
-    const splitClausulas = doc.splitTextToSize(clausulas, pageWidth - 30);
-    doc.text(splitClausulas, 15, y);
-    y += splitClausulas.length * 3.55 + 5;
-
-    // 6. BLOCO DE ASSINATURAS BILATERAIS
+    // 7. BLOCO DE ASSINATURAS FINAIS (EXATAMENTE IGUAL AO FINAL DA PÁGINA)
+    checkSpace(48);
     doc.setFillColor(240, 253, 244);
-    doc.setDrawColor(187, 247, 208);
-    doc.roundedRect(15, y, pageWidth - 30, 36, 2, 2, "FD");
+    doc.setDrawColor(22, 163, 74);
+    doc.setLineWidth(0.6);
+    doc.roundedRect(margin, y, contentW, 42, 2, 2, "FD");
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
@@ -496,17 +731,17 @@ export default function GestaoContratoGlobalPage({
     doc.text(
       isPt
         ? "PELA PRIMEIRA OUTORGANTE (HELLOCAMP):"
-        : "BY THE FIRST PARTY (HELLOCAMP):",
-      20,
+        : "FOR THE FIRST PARTY (HELLOCAMP):",
+      margin + 5,
       y + 7
     );
 
     doc.setFont("times", "italic");
     doc.setFontSize(13);
-    doc.setTextColor(...slateDark);
-    doc.text("Administração HelloCamp Portugal", 20, y + 15);
+    doc.setTextColor(...darkNavy);
+    doc.text("Administração HelloCamp Portugal", margin + 5, y + 15);
     doc.setDrawColor(148, 163, 184);
-    doc.line(20, y + 17, 95, y + 17);
+    doc.line(margin + 5, y + 17, margin + 80, y + 17);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
@@ -515,39 +750,44 @@ export default function GestaoContratoGlobalPage({
       isPt
         ? "Cargo: Direção Executiva & Parcerias B2B"
         : "Role: Executive Board & B2B Partnerships",
-      20,
+      margin + 5,
       y + 22
     );
     doc.text(
       isPt
-        ? "Estado: Validado e Aprovado pela Sede (HQ)"
-        : "Status: Validated & Approved by HQ",
-      20,
+        ? `Data: ${new Date(dataIso).toLocaleDateString(
+            "pt-PT"
+          )} • Validado pela Sede`
+        : `Date: ${new Date(dataIso).toLocaleDateString(
+            "en-GB"
+          )} • Validated by HQ`,
+      margin + 5,
       y + 27
     );
 
+    // Segunda Outorgante
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(...greenBrand);
     doc.text(
       isPt
-        ? "PELA SEGUNDA OUTORGANTE (PARCEIRO):"
-        : "BY THE SECOND PARTY (PARTNER):",
-      110,
+        ? "PELA SEGUNDA OUTORGANTE (O PARCEIRO):"
+        : "FOR THE SECOND PARTY (THE PARTNER):",
+      margin + 95,
       y + 7
     );
 
     doc.setFont("times", "italic");
     doc.setFontSize(13);
-    doc.setTextColor(...slateDark);
+    doc.setTextColor(...darkNavy);
     doc.text(
       `${
         form.assinaturaNome || form.pessoaContacto || "Assinado Digitalmente"
-      }`.substring(0, 32),
-      110,
+      }`.substring(0, 34),
+      margin + 95,
       y + 15
     );
-    doc.line(110, y + 17, pageWidth - 20, y + 17);
+    doc.line(margin + 95, y + 17, pageW - margin - 5, y + 17);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
@@ -556,16 +796,44 @@ export default function GestaoContratoGlobalPage({
       isPt
         ? `Cargo Legal: ${form.assinaturaCargo || "Representante Legal"}`
         : `Legal Role: ${form.assinaturaCargo || "Legal Representative"}`,
-      110,
+      margin + 95,
       y + 22
     );
     doc.text(
       isPt
         ? `Data/Hora: ${new Date(dataIso).toLocaleString("pt-PT")} • IP: ${ipParaRegisto}`
         : `Timestamp: ${new Date(dataIso).toLocaleString("en-GB")} • IP: ${ipParaRegisto}`,
-      110,
+      margin + 95,
       y + 27
     );
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.2);
+    doc.setTextColor(...greenBrand);
+    doc.text(
+      isPt
+        ? "✓ Declaro ter lido e aceite os termos do Contrato Global e a convenção de prova do Artigo 7.º."
+        : "✓ I declare that I have read and accepted the Global Agreement terms and Article 7.",
+      margin + 5,
+      y + 36
+    );
+
+    // Numeração de páginas no rodapé de todas as folhas
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(
+        `HelloCamp Portugal • www.hellocamp.pt • ${
+          isPt ? "Contrato Global de Parceria" : "Global Partnership Agreement"
+        } • ${isPt ? "Página" : "Page"} ${p} / ${totalPages}`,
+        pageW / 2,
+        pageH - 8,
+        { align: "center" }
+      );
+    }
 
     return doc;
   };
@@ -628,7 +896,6 @@ export default function GestaoContratoGlobalPage({
     setSaving(true);
 
     try {
-      // 1. Capturar IP real para validade probatória (Artigo 7.º)
       let userIP = form.ipAssinatura || "Registado no Servidor";
       try {
         const ipRes = await fetch("https://api.ipify.org?format=json");
@@ -640,7 +907,6 @@ export default function GestaoContratoGlobalPage({
 
       const agoraIso = new Date().toISOString();
 
-      // 2. Gerar o ficheiro PDF assinado
       const doc = gerarDocumentoPDF(userIP, agoraIso);
       const pdfBlob = doc.output("blob");
       const pdfFile = new File(
@@ -664,6 +930,7 @@ export default function GestaoContratoGlobalPage({
       const formData = new FormData();
       formData.append("id", perfil.id);
       formData.append("email", perfil.email || form.emailContacto);
+      formData.append("emailAcesso", perfil.email || form.emailContacto);
       formData.append("lang", contractLang);
       formData.append("contratoDados", JSON.stringify(novoContratoDados));
       formData.append("pdf", pdfFile);
@@ -731,7 +998,7 @@ export default function GestaoContratoGlobalPage({
   return (
     <div className="max-w-5xl mx-auto font-sans pb-24">
       {/* BARRA DE CONTROLO SUPERIOR DO PORTAL */}
-      <div className="bg-white p-5 md:p-6 rounded-md border border-slate-200 shadow-sm mb-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div className="bg-white p-5 md:p-6 rounded-md border border-slate-200 shadow-sm mb-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 print:hidden">
         <div>
           <div className="flex flex-wrap items-center gap-2.5 mb-1.5">
             <span
@@ -761,9 +1028,8 @@ export default function GestaoContratoGlobalPage({
           </h1>
         </div>
 
-        {/* BOTÕES DE IDIOMA DO CONTRATO, EDIÇÃO E DOWNLOAD PDF */}
+        {/* BOTÕES DE IDIOMA DO CONTRATO, EDIÇÃO E DOWNLOAD PDF COMPLETO */}
         <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-          {/* Seletor Customizado de Idioma do Contrato */}
           <div className="flex bg-slate-100 p-1 rounded-md border border-slate-200">
             <button
               type="button"
@@ -805,16 +1071,13 @@ export default function GestaoContratoGlobalPage({
             </button>
           )}
 
-          {pdfExistenteUrl && (
-            <a
-              href={pdfExistenteUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-[#2563EB] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-[11px] px-4 py-3 rounded-md no-underline shadow-sm transition-colors"
-            >
-              📥 {isEn ? "Archived PDF" : "PDF Arquivado"}
-            </a>
-          )}
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="bg-[#0F172A] hover:bg-slate-800 text-white font-black uppercase tracking-widest text-[11px] px-4 py-3 rounded-md cursor-pointer shadow-sm transition-colors border-0"
+          >
+            🖨️ {isEn ? "Print Page" : "Imprimir Página"}
+          </button>
 
           <button
             type="button"
@@ -822,12 +1085,12 @@ export default function GestaoContratoGlobalPage({
             disabled={downloadingPdf}
             className="bg-[#16A34A] hover:bg-green-700 text-white font-black uppercase tracking-widest text-[11px] px-5 py-3 rounded-md cursor-pointer shadow-sm transition-colors border-0"
           >
-            📄{" "}
+            📥{" "}
             {downloadingPdf
               ? "..."
               : isEn
-              ? "Download Official PDF"
-              : "Descarregar Contrato PDF"}
+              ? "Download Complete PDF"
+              : "Descarregar PDF Completo"}
           </button>
         </div>
       </div>
@@ -837,7 +1100,7 @@ export default function GestaoContratoGlobalPage({
       {/* ===================================================================== */}
       <form
         onSubmit={handleSubmeterContratoGlobal}
-        className="bg-white shadow-xl border border-slate-200 p-6 sm:p-10 md:p-16 text-[#0F172A] leading-relaxed rounded-md font-serif"
+        className="bg-white shadow-xl border border-slate-200 p-6 sm:p-10 md:p-16 text-[#0F172A] leading-relaxed rounded-md font-serif print:shadow-none print:border-none print:p-0"
       >
         {/* CABEÇALHO DO CONTRATO */}
         <div className="text-center mb-12 md:mb-16">
@@ -964,7 +1227,7 @@ export default function GestaoContratoGlobalPage({
                   <Link
                     href={`/${lang}/campo/${c.id}?preview=admin`}
                     target="_blank"
-                    className="bg-[#2563EB] hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-md no-underline shrink-0"
+                    className="bg-[#2563EB] hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-md no-underline shrink-0 print:hidden"
                   >
                     👁️ {isEn ? "Preview" : "Ver"} ↗
                   </Link>
@@ -1860,7 +2123,7 @@ export default function GestaoContratoGlobalPage({
 
         {/* BOTÃO DE SUBMISSÃO QUANDO EM MODO DE ASSINATURA/EDIÇÃO */}
         {modoEdicao && (
-          <div className="mt-10 pt-8 border-t border-slate-200 flex justify-end gap-4 font-sans">
+          <div className="mt-10 pt-8 border-t border-slate-200 flex justify-end gap-4 font-sans print:hidden">
             {jaAssinado && (
               <button
                 type="button"

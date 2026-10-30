@@ -363,13 +363,8 @@ export default function AdminDashboardPage({
     }
   };
 
-  // Gerar e Descarregar o Contrato Global em PDF diretamente do Dashboard!
+ // Gerar e Descarregar o Contrato Global Completo em PDF diretamente do Dashboard!
   const handleDescarregarContratoPdfDireto = () => {
-    if (contratoPdfUrl) {
-      window.open(contratoPdfUrl, "_blank");
-      return;
-    }
-
     setDownloadingContractPdf(true);
     try {
       const cd = perfilCompleto?.contrato_dados || {};
