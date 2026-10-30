@@ -4,51 +4,78 @@ import React, { useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import jsPDF from "jspdf";
 
 const DISTRITOS_PT = [
-  "Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra",
-  "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre",
-  "Porto", "Santarém", "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"
+  "Aveiro",
+  "Beja",
+  "Braga",
+  "Bragança",
+  "Castelo Branco",
+  "Coimbra",
+  "Évora",
+  "Faro",
+  "Guarda",
+  "Leiria",
+  "Lisboa",
+  "Portalegre",
+  "Porto",
+  "Santarém",
+  "Setúbal",
+  "Viana do Castelo",
+  "Vila Real",
+  "Viseu",
+  "Ilha da Madeira",
+  "Ilha dos Açores",
+];
+
+const CARGOS_OPCOES = [
+  "Monitor(a) de Campos de Férias",
+  "Coordenador(a) Pedagógico(a) (IPDJ)",
+  "Instrutor(a) Desportivo / Surf / Náutica",
+  "Monitor(a) de Oficinas / Artes / Ciência",
+  "Professor(a) de Línguas",
+  "Monitor(a) de Apoio NEE (Necessidades Especiais)",
+  "Socorrista / Nadador Salvador / Enfermagem",
+  "Monitor(a) Estagiário / 1.ª Experiência",
+];
+
+const MODALIDADES_TRABALHO = [
+  "Ambos (Diurno e Residencial c/ Dormida)",
+  "Apenas Campos Diurnos (Externato)",
+  "Apenas Campos Residenciais (Com Alojamento)",
+];
+
+const LINGUAS_OPCOES = [
+  "Português",
+  "Inglês",
+  "Espanhol",
+  "Francês",
+  "Alemão",
+  "Italiano",
+];
+
+const EPOCAS_OPCOES = [
+  { id: "Verão", labelPt: "Férias de Verão (Jun - Set)", labelEn: "Summer Holidays (Jun - Sep)" },
+  { id: "Páscoa", labelPt: "Férias da Páscoa", labelEn: "Easter Break" },
+  { id: "Carnaval", labelPt: "Férias de Carnaval", labelEn: "Carnival Break" },
+  { id: "Natal", labelPt: "Férias de Natal", labelEn: "Christmas Break" },
+  { id: "Fins de Semana", labelPt: "Fins de Semana / Eventos", labelEn: "Weekends & Events" },
 ];
 
 const LISTA_CERTIFICADOS = [
-  {
-    id: "Monitor de Campos de Férias (IPDJ)",
-    pt: "Monitor de Campos de Férias (IPDJ)",
-    en: "Camp Monitor (IPDJ)",
-  },
-  {
-    id: "Primeiros Socorros / Suporte Básico",
-    pt: "Primeiros Socorros / Suporte Básico",
-    en: "First Aid / Basic Life Support",
-  },
-  { id: "Nadador Salvador", pt: "Nadador Salvador", en: "Lifeguard" },
-  {
-    id: "Formação em Educação / Desporto",
-    pt: "Formação em Educação / Desporto",
-    en: "Education / Sports Degree",
-  },
-  {
-    id: "Animação Sociocultural",
-    pt: "Animação Sociocultural",
-    en: "Sociocultural Animation",
-  },
-  {
-    id: "Fluência em Línguas Estrangeiras",
-    pt: "Fluência em Línguas Estrangeiras",
-    en: "Foreign Languages Fluency",
-  },
-  {
-    id: "Necessidades Educativas Especiais",
-    pt: "Experiência com Necessidades Educativas Especiais",
-    en: "Special Needs Experience",
-  },
-];
-
-const LISTA_EPOCAS = [
-  { id: "Pascoa", pt: "Férias da Páscoa", en: "Easter Break" },
-  { id: "Verao", pt: "Férias de Verão (Época Alta)", en: "Summer Holidays" },
-  { id: "Natal", pt: "Férias de Natal", en: "Christmas Break" },
+  { id: "IPDJ", pt: "Monitor de Campos de Férias (IPDJ)", en: "Camp Monitor (IPDJ)" },
+  { id: "Coordenador_IPDJ", pt: "Coordenador de Campos de Férias (IPDJ)", en: "Camp Coordinator (IPDJ)" },
+  { id: "Socorrismo", pt: "Primeiros Socorros / Suporte Básico de Vida", en: "First Aid / Basic Life Support" },
+  { id: "Nadador", pt: "Nadador Salvador Certificado", en: "Certified Lifeguard" },
+  { id: "Professor", pt: "Licenciatura em Educação / Desporto", en: "Education / Sports Degree" },
+  { id: "Surf_Nautica", pt: "Treinador de Surf / Desportos Náuticos", en: "Surf / Watersports Coach" },
+  { id: "Animacao", pt: "Técnico de Animação Sociocultural", en: "Sociocultural Animation" },
+  { id: "Linguas", pt: "Certificação em Línguas Estrangeiras (C1/C2)", en: "Foreign Languages (C1/C2)" },
+  { id: "Artes", pt: "Artes Plásticas / Música / Teatro / Dança", en: "Arts / Music / Theater / Dance" },
+  { id: "NEE", pt: "Experiência com Necessidades Educativas Especiais", en: "Special Needs Experience (SEN)" },
+  { id: "Carta_Conducao", pt: "Carta de Condução (Categoria B)", en: "Driver's License (Cat B)" },
+  { id: "Registo_Criminal", pt: "Registo Criminal Limpo (Contacto c/ Menores)", en: "Clean Criminal Record (Minors)" },
 ];
 
 export default function RegistoMonitorPage({
@@ -61,199 +88,212 @@ export default function RegistoMonitorPage({
   const router = useRouter();
 
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [uploadingCv, setUploadingCv] = useState(false);
+  const [uploadingAuth, setUploadingAuth] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
-  // Foto e CV
-  const [uploadingFoto, setUploadingFoto] = useState(false);
-  const [fotoUrl, setFotoUrl] = useState<string>("");
-  const [uploadingCV, setUploadingCV] = useState(false);
-  const [cvUrl, setCvUrl] = useState<string>("");
-  const [cvFileName, setCvFileName] = useState<string>("");
-
-  const [termosAceites, setTermosAceites] = useState(false);
+  // Credenciais de Acesso
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
+  // Dados Pessoais e Profissionais Enriquecidos
   const [formData, setFormData] = useState({
     nome_completo: "",
     data_nascimento: "",
     telefone: "",
     distrito_residencia: "Lisboa",
-    experiencia_anos: "0",
+    experiencia_anos: "1",
+    cargo_preferido: "Monitor(a) de Campos de Férias",
+    modalidade_preferida: "Ambos (Diurno e Residencial c/ Dormida)",
+    tamanho_tshirt: "M",
+    carta_conducao: "Não",
     outras_competencias: "",
     bio: "",
   });
 
+  const [linguasFaladas, setLinguasFaladas] = useState<string[]>([
+    "Português",
+    "Inglês",
+  ]);
   const [certificacoes, setCertificacoes] = useState<string[]>([]);
   const [disponibilidadeEpocas, setDisponibilidadeEpocas] = useState<string[]>([
-    "Verao",
+    "Verão",
   ]);
-  const [areasAtuacao, setAreasAtuacao] = useState<string[]>([]);
+  const [areasAtuacao, setAreasAtuacao] = useState<string[]>(["Lisboa"]);
 
-  // Calendário
-  const [dataVisualizada, setDataVisualizada] = useState(new Date());
-  const [calendario, setCalendario] = useState<Record<string, string>>({});
+  // Ficheiros
+  const [fotoUrl, setFotoUrl] = useState<string>("");
+  const [cvUrl, setCvUrl] = useState<string>("");
+  const [autorizacaoParentalUrl, setAutorizacaoParentalUrl] =
+    useState<string>("");
+
+  // Calendário Interativo de Dias Disponíveis
+  const [mesAtual, setMesAtual] = useState<Date>(new Date(2026, 6, 1)); // Julho 2026 por defeito
+  const [calendario, setCalendario] = useState<string[]>([]);
+  const [termosAceites, setTermosAceites] = useState(false);
 
   const opcoesAtuacao = [
-    ...DISTRITOS_PT,
     isEn
       ? "Nationwide (With Accommodation)"
       : "Em todo o país (Com Alojamento / Deslocação)",
+    ...DISTRITOS_PT,
   ];
 
-  const mesesNomes = isEn
-    ? [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-      ]
-    : [
-        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-      ];
-  const diasDaSemana = isEn
-    ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    : ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-
-  const handleCheckboxChange = (id: string, tipo: "cert" | "disp" | "zona") => {
-    if (tipo === "cert") {
-      setCertificacoes((prev) =>
-        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-      );
-    } else if (tipo === "disp") {
-      setDisponibilidadeEpocas((prev) =>
-        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-      );
-    } else if (tipo === "zona") {
-      setAreasAtuacao((prev) =>
-        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-      );
-    }
+  // Cálculo de Idade para Verificar se tem 16 ou 17 anos (Menor de 18)
+  const calcularIdade = (dataNasc: string) => {
+    if (!dataNasc) return 20;
+    const hoje = new Date();
+    const nasc = new Date(dataNasc);
+    let idade = hoje.getFullYear() - nasc.getFullYear();
+    const m = hoje.getMonth() - nasc.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+    return idade;
   };
 
-  const handleUploadFoto = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    try {
-      setUploadingFoto(true);
-      if (!event.target.files || event.target.files.length === 0) return;
-      const file = event.target.files[0];
-      const fileExt = file.name.split(".").pop();
-      const fileName = `foto_${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+  const idadeCalculada = calcularIdade(formData.data_nascimento);
+  const isMenor = Boolean(
+    formData.data_nascimento && idadeCalculada >= 15 && idadeCalculada < 18
+  );
 
-      const { error: uploadError } = await supabase.storage
-        .from("monitores-fotos")
-        .upload(fileName, file);
-      if (uploadError) throw uploadError;
+  // Gerar PDF de Minuta de Autorização Parental para Menores de 18 anos
+  const gerarMinutaParentalPDF = () => {
+    const doc = new jsPDF({ format: "a4", unit: "mm" });
+    const pageW = doc.internal.pageSize.getWidth();
 
-      const { data: urlData } = supabase.storage
-        .from("monitores-fotos")
-        .getPublicUrl(fileName);
-      setFotoUrl(urlData.publicUrl);
-    } catch (error: any) {
-      alert(error.message);
-    } finally {
-      setUploadingFoto(false);
-    }
-  };
-
-  const handleUploadCV = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      setUploadingCV(true);
-      if (!event.target.files || event.target.files.length === 0) return;
-      const file = event.target.files[0];
-      setCvFileName(file.name);
-      const fileExt = file.name.split(".").pop();
-      const fileName = `cv_${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("monitores-cvs")
-        .upload(fileName, file);
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from("monitores-cvs")
-        .getPublicUrl(fileName);
-      setCvUrl(urlData.publicUrl);
-    } catch (error: any) {
-      setCvFileName("");
-      alert(error.message);
-    } finally {
-      setUploadingCV(false);
-    }
-  };
-
-  const mudarMes = (incremento: number) => {
-    setDataVisualizada(
-      (prev) => new Date(prev.getFullYear(), prev.getMonth() + incremento, 1)
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageW, 32, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(255, 255, 255);
+    doc.text(
+      "HELLOCAMP • DECLARACAO DE AUTORIZACAO PARENTAL",
+      pageW / 2,
+      18,
+      { align: "center" }
     );
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
+    doc.setTextColor(30, 41, 59);
+
+    const texto = `Eu, abaixo assinado(a), na qualidade de Encarregado(a) de Educacao legal do(a) jovem ${
+      formData.nome_completo || "________________________________________"
+    }, nascido(a) a ${
+      formData.data_nascimento || "____/____/______"
+    }, residente no distrito de ${
+      formData.distrito_residencia
+    }, declaro expressamente que autorizo a criacao do seu perfil na Bolsa de Monitores da plataforma HelloCamp (www.hellocamp.pt), bem como a partilha do seu perfil e curriculo com entidades organizadoras de campos de ferias certificadas para efeitos de recrutamento ou voluntariado juvenil.\n\nData: ____ / ____ / 2026\n\nNome do Encarregado de Educacao: __________________________________________________\n\nNumero de CC / BI: ________________________   Telemovel: ________________________\n\nAssinatura do Encarregado de Educacao:\n\n\n________________________________________________________________________`;
+
+    const lines = doc.splitTextToSize(texto, pageW - 32);
+    doc.text(lines, 16, 48);
+    doc.save("Minuta_Autorizacao_Parental_HelloCamp.pdf");
   };
 
-  const toggleDiaCalendario = (dataISO: string) => {
-    setCalendario((prev) => {
-      const atual = prev[dataISO];
-      if (!atual) return { ...prev, [dataISO]: "Livre" };
-      if (atual === "Livre") return { ...prev, [dataISO]: "Ocupado" };
-      const novo = { ...prev };
-      delete novo[dataISO];
-      return novo;
-    });
-  };
+  // Upload de Ficheiros para o Supabase Storage
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    tipo: "foto" | "cv" | "auth"
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const renderDiasCalendario = () => {
-    const ano = dataVisualizada.getFullYear();
-    const mes = dataVisualizada.getMonth();
-    const diasNoMes = new Date(ano, mes + 1, 0).getDate();
-    const primeiroDia = new Date(ano, mes, 1).getDay();
-    const startDayIndex = primeiroDia === 0 ? 6 : primeiroDia - 1;
+    if (tipo === "foto") setUploadingFoto(true);
+    if (tipo === "cv") setUploadingCv(true);
+    if (tipo === "auth") setUploadingAuth(true);
 
-    const dias = [];
-    for (let i = 0; i < startDayIndex; i++) {
-      dias.push(<div key={`empty-${i}`} className="p-2" />);
+    try {
+      const ext = file.name.split(".").pop();
+      const bucket = tipo === "foto" ? "campos-imagens" : "campos-documentos";
+      const fileName = `monitor_${tipo}_${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, file, { upsert: true });
+
+      if (upErr) throw upErr;
+
+      const { data: urlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(fileName);
+
+      if (urlData?.publicUrl) {
+        if (tipo === "foto") setFotoUrl(urlData.publicUrl);
+        if (tipo === "cv") setCvUrl(urlData.publicUrl);
+        if (tipo === "auth") setAutorizacaoParentalUrl(urlData.publicUrl);
+      }
+    } catch (err: any) {
+      alert("Erro ao carregar ficheiro: " + err.message);
+    } finally {
+      if (tipo === "foto") setUploadingFoto(false);
+      if (tipo === "cv") setUploadingCv(false);
+      if (tipo === "auth") setUploadingAuth(false);
     }
-
-    for (let i = 1; i <= diasNoMes; i++) {
-      const dataStr = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(
-        i
-      ).padStart(2, "0")}`;
-      const estadoDia = calendario[dataStr];
-
-      let coresClasses =
-        "bg-white border-slate-200 text-slate-700 hover:bg-slate-100";
-      if (estadoDia === "Livre")
-        coresClasses =
-          "bg-emerald-100 border-emerald-500 text-emerald-800 font-black shadow-inner";
-      if (estadoDia === "Ocupado")
-        coresClasses =
-          "bg-red-100 border-red-500 text-red-800 font-black opacity-80 line-through";
-
-      dias.push(
-        <button
-          key={dataStr}
-          type="button"
-          onClick={() => toggleDiaCalendario(dataStr)}
-          className={`h-10 md:h-11 w-full rounded-xl border text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${coresClasses}`}
-        >
-          {i}
-        </button>
-      );
-    }
-    return dias;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const toggleItem = (
+    list: string[],
+    setList: React.Dispatch<React.SetStateAction<string[]>>,
+    val: string
+  ) => {
+    if (list.includes(val)) {
+      setList(list.filter((i) => i !== val));
+    } else {
+      setList([...list, val]);
+    }
+  };
+
+  // Calendário Mensal Interativo
+  const ano = mesAtual.getFullYear();
+  const mes = mesAtual.getMonth();
+  const totalDiasMes = new Date(ano, mes + 1, 0).getDate();
+  const diasDoMes: string[] = [];
+  for (let d = 1; d <= totalDiasMes; d++) {
+    const iso = new Date(ano, mes, d).toISOString().split("T")[0];
+    diasDoMes.push(iso);
+  }
+
+  const selecionarMesInteiro = () => {
+    const todosJaSelecionados = diasDoMes.every((d) => calendario.includes(d));
+    if (todosJaSelecionados) {
+      setCalendario(calendario.filter((d) => !diasDoMes.includes(d)));
+    } else {
+      setCalendario(Array.from(new Set([...calendario, ...diasDoMes])));
+    }
+  };
+
+  const handleSubmeterRegisto = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!termosAceites) {
       alert(
         isEn
           ? "You must accept the Terms and Conditions."
-          : "Tem de aceitar os Termos e Condições para continuar."
+          : "Tem de aceitar os Termos e Condições da Bolsa de Monitores para continuar."
+      );
+      return;
+    }
+    if (authPassword.length < 6) {
+      alert(
+        isEn
+          ? "Password must be at least 6 characters."
+          : "A palavra-passe deve ter pelo menos 6 caracteres."
+      );
+      return;
+    }
+    if (authPassword !== confirmPassword) {
+      alert(
+        isEn
+          ? "Passwords do not match."
+          : "As duas palavras-passe introduzidas não coincidem."
       );
       return;
     }
     if (areasAtuacao.length === 0) {
       alert(
         isEn
-          ? "Please select at least one work area."
+          ? "Please select at least one work region."
           : "Por favor, selecione pelo menos uma zona de atuação."
       );
       return;
@@ -262,8 +302,10 @@ export default function RegistoMonitorPage({
     setSubmitting(true);
 
     try {
+      const cleanEmail = authEmail.trim().toLowerCase();
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: authEmail.trim(),
+        email: cleanEmail,
         password: authPassword,
         options: {
           data: {
@@ -285,26 +327,36 @@ export default function RegistoMonitorPage({
         nome_completo: formData.nome_completo,
         telefone: formData.telefone,
         role: "monitor",
-        email: authEmail.trim(),
+        email: cleanEmail,
       });
 
-      // Extrai array de dias livres para compatibilidade total com a página de Recrutamento do Parceiro!
-      const diasLivresArray = Object.entries(calendario)
-        .filter(([_, estado]) => estado === "Livre")
-        .map(([dt]) => dt);
+      // Compilar resumo rico das competências adicionais para ficar 100% compatível com todas as colunas da tabela `monitores`
+      const competenciasEnriquecidas = [
+        `Cargo: ${formData.cargo_preferido}`,
+        `Modalidade: ${formData.modalidade_preferida}`,
+        `Línguas: ${linguasFaladas.join(", ")}`,
+        `Carta Condução: ${formData.carta_conducao}`,
+        `T-Shirt: ${formData.tamanho_tshirt}`,
+        formData.outras_competencias
+          ? `Especialidades: ${formData.outras_competencias}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" | ");
 
-      const payload: Record<string, any> = {
+      const payload: any = {
         id: userId,
-        email: authEmail.trim(),
+        email: cleanEmail,
         nome_completo: formData.nome_completo,
         data_nascimento: formData.data_nascimento,
         telefone: formData.telefone,
         distrito_residencia: formData.distrito_residencia,
-        experiencia_anos: formData.experiencia_anos,
-        outras_competencias: formData.outras_competencias,
+        experiencia_anos: Number(formData.experiencia_anos) || 0,
+        outras_competencias: competenciasEnriquecidas,
         bio: formData.bio,
-        fotografia_url: fotoUrl,
-        cv_url: cvUrl,
+        fotografia_url: fotoUrl || null,
+        cv_url: cvUrl || null,
+        autorizacao_parental_url: autorizacaoParentalUrl || null,
         certificacoes,
         disponibilidade: disponibilidadeEpocas,
         areas_atuacao: areasAtuacao,
@@ -315,126 +367,130 @@ export default function RegistoMonitorPage({
         .from("monitores")
         .upsert([payload]);
 
-      if (monitorError) throw monitorError;
+      if (monitorError) {
+        throw new Error(monitorError.message);
+      }
 
       router.push(`/${lang}/monitores/portal/perfil`);
     } catch (err: any) {
-      alert(err.message);
+      alert("Erro: " + err.message);
       setSubmitting(false);
     }
   };
 
   const labelClass =
-    "block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-1";
+    "block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5";
   const inputClass =
-    "w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#2563eb] focus:bg-white transition-colors";
-
-  const opcoesExp = [
-    {
-      val: "0",
-      label: isEn
-        ? "First Time / No experience"
-        : "Nenhuma / Primeira experiência",
-    },
-    { val: "1-2", label: isEn ? "1-2 years" : "1 a 2 anos de experiência" },
-    { val: "3-5", label: isEn ? "3-5 years" : "3 a 5 anos de experiência" },
-    { val: "+5", label: isEn ? "+5 years (Senior)" : "+5 anos (Sénior)" },
-  ];
+    "w-full py-3 px-4 bg-[#F8FAFC] border border-slate-300 rounded-md text-xs font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white transition-colors";
 
   return (
-    <main className="min-h-screen bg-slate-50 py-12 px-4 font-sans">
+    <main className="min-h-screen bg-[#F8FAFC] py-12 px-4 font-sans text-[#0F172A] pb-24">
       <div className="max-w-4xl mx-auto">
-        <Link
-          href={`/${lang}/monitores`}
-          className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 mb-6 no-underline"
-        >
-          &larr; {isEn ? "Back" : "Voltar à Bolsa de Monitores"}
-        </Link>
-
-        <div className="mb-10">
-          <span className="inline-block bg-blue-50 text-[#2563eb] border border-blue-200 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-3">
-            100% Grátis • Sem Comissões
-          </span>
-          <h1 className="text-3xl md:text-5xl font-black text-slate-900 m-0 tracking-tight">
-            {isEn ? "Create Monitor Profile" : "Criar Perfil de Monitor"}
-          </h1>
+        {/* TOPO */}
+        <div className="bg-[#0F172A] text-white p-8 md:p-10 rounded-md border-b-4 border-[#F59E0B] mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
+          <div>
+            <span className="bg-[#16A34A] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md inline-block mb-2">
+              🎓 {isEn ? "Free Monitor Registration" : "Inscrição Gratuita • Bolsa Nacional"}
+            </span>
+            <h1 className="text-2xl md:text-3xl font-black m-0">
+              {isEn
+                ? "Create Your Monitor / Coordinator Profile"
+                : "Criar Perfil de Monitor / Coordenador"}
+            </h1>
+            <p className="text-xs text-slate-300 mt-1.5 mb-0">
+              {isEn
+                ? "Complete your profile so verified camp organizers can invite you directly."
+                : "Preenche o teu currículo digital para receberes convites diretos dos campos de férias verificados."}
+            </p>
+          </div>
+          <Link
+            href={`/${lang}/monitores`}
+            className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-black uppercase tracking-widest px-4 py-2.5 rounded-md no-underline shrink-0"
+          >
+            &larr; {isEn ? "Back" : "Voltar"}
+          </Link>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* 1. CREDENCIAIS E DADOS PESSOAIS */}
-          <div className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-            <h2 className="text-lg font-black text-slate-900 m-0 pb-4 border-b border-slate-100">
-              1. {isEn ? "Account & Personal Details" : "Conta e Dados Pessoais"}
+        <form onSubmit={handleSubmeterRegisto} className="space-y-8">
+          {/* 1. DADOS DE ACESSO E IDENTIFICAÇÃO */}
+          <section className="bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm space-y-5">
+            <h2 className="text-sm font-black uppercase tracking-widest text-[#2563EB] m-0 pb-3 border-b border-slate-100">
+              1. {isEn ? "Account & Personal Identification" : "Credenciais de Acesso e Identificação"}
             </h2>
 
-            {/* Upload Foto e CV */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <div className="w-16 h-16 rounded-full bg-white border border-slate-200 overflow-hidden flex items-center justify-center text-2xl flex-shrink-0">
-                  {fotoUrl ? (
-                    <img
-                      src={fotoUrl}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    "📸"
-                  )}
-                </div>
-                <div className="flex-1">
-                  <span className="block text-xs font-black text-slate-900 mb-1">
-                    {isEn ? "Profile Photo" : "Fotografia de Rosto"}
-                  </span>
-                  <label className="inline-block bg-white border border-slate-300 text-slate-700 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl cursor-pointer hover:border-[#2563eb]">
-                    {uploadingFoto
-                      ? "..."
-                      : isEn
-                      ? "Upload Photo"
-                      : "Escolher Foto"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleUploadFoto}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-2xl flex-shrink-0">
-                  📄
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="block text-xs font-black text-slate-900 mb-1 truncate">
-                    {cvFileName ||
-                      (isEn ? "Resume / CV (Optional)" : "Currículo PDF (Opcional)")}
-                  </span>
-                  <label className="inline-block bg-white border border-slate-300 text-slate-700 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl cursor-pointer hover:border-[#2563eb]">
-                    {uploadingCV ? "..." : isEn ? "Upload CV" : "Anexar CV"}
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      onChange={handleUploadCV}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className={labelClass}>
                   {isEn ? "Full Name *" : "Nome Completo *"}
                 </label>
                 <input
-                  type="text"
                   required
+                  type="text"
                   value={formData.nome_completo}
                   onChange={(e) =>
                     setFormData({ ...formData, nome_completo: e.target.value })
                   }
+                  placeholder="Ex: Diogo Abreu Oliveira"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  {isEn ? "Login E-mail *" : "E-mail de Login e Contacto *"}
+                </label>
+                <input
+                  required
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="teu.email@exemplo.pt"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  {isEn ? "Mobile Phone / WhatsApp *" : "Telemóvel / WhatsApp *"}
+                </label>
+                <input
+                  required
+                  type="tel"
+                  value={formData.telefone}
+                  onChange={(e) =>
+                    setFormData({ ...formData, telefone: e.target.value })
+                  }
+                  placeholder="+351 910 000 000"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  {isEn ? "Password (Min. 6 chars) *" : "Palavra-Passe (Mín. 6 caracteres) *"}
+                </label>
+                <input
+                  required
+                  type="password"
+                  minLength={6}
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  {isEn ? "Confirm Password *" : "Confirmar Palavra-Passe *"}
+                </label>
+                <input
+                  required
+                  type="password"
+                  minLength={6}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
                   className={inputClass}
                 />
               </div>
@@ -444,8 +500,8 @@ export default function RegistoMonitorPage({
                   {isEn ? "Date of Birth *" : "Data de Nascimento *"}
                 </label>
                 <input
-                  type="date"
                   required
+                  type="date"
                   value={formData.data_nascimento}
                   onChange={(e) =>
                     setFormData({
@@ -457,299 +513,537 @@ export default function RegistoMonitorPage({
                 />
               </div>
 
-              <div>
+              {/* Dropdown Customizado de Distrito de Residência */}
+              <div className="relative">
                 <label className={labelClass}>
-                  {isEn ? "Phone *" : "Telemóvel *"}
+                  {isEn ? "District of Residence *" : "Distrito de Residência *"}
                 </label>
-                <input
-                  type="tel"
-                  required
-                  value={formData.telefone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, telefone: e.target.value })
+                <div
+                  onClick={() =>
+                    setOpenDropdown(
+                      openDropdown === "distrito" ? null : "distrito"
+                    )
                   }
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label className={labelClass}>E-mail (Login) *</label>
-                <input
-                  type="email"
-                  required
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label className={labelClass}>
-                  {isEn ? "Password *" : "Palavra-Passe *"}
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* 2. ZONAS DE ATUAÇÃO (COM DROPDOWN CUSTOMIZADO) */}
-          <div className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-            <h2 className="text-lg font-black text-slate-900 m-0 pb-4 border-b border-slate-100">
-              2. {isEn ? "Location & Work Zones" : "Residência e Zonas de Atuação"}
-            </h2>
-
-            <div className="relative">
-              <label className={labelClass}>
-                {isEn ? "District of Residence *" : "Distrito de Residência *"}
-              </label>
-              <div
-                onClick={() =>
-                  setOpenDropdown(
-                    openDropdown === "distrito" ? null : "distrito"
-                  )
-                }
-                className={`${inputClass} cursor-pointer flex justify-between items-center`}
-              >
-                <span>{formData.distrito_residencia}</span>
-                <span className="text-[10px] text-slate-400">▼</span>
-              </div>
-              {openDropdown === "distrito" && (
-                <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto">
-                  {DISTRITOS_PT.map((d) => (
-                    <div
-                      key={d}
-                      onClick={() => {
-                        setFormData({ ...formData, distrito_residencia: d });
-                        setOpenDropdown(null);
-                      }}
-                      className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer"
-                    >
-                      {d}
-                    </div>
-                  ))}
+                  className={`${inputClass} cursor-pointer flex justify-between items-center`}
+                >
+                  <span>{formData.distrito_residencia}</span>
+                  <span className="text-[10px] text-slate-400">▼</span>
                 </div>
-              )}
-            </div>
-
-            <div>
-              <label className={labelClass}>
-                {isEn
-                  ? "Where are you available to work? *"
-                  : "Em que distritos estás disponível para trabalhar? *"}
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-2">
-                {opcoesAtuacao.map((zona) => (
-                  <label
-                    key={zona}
-                    className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-xs font-bold ${
-                      areasAtuacao.includes(zona)
-                        ? "border-[#2563eb] bg-blue-50 text-[#2563eb]"
-                        : "border-slate-200 bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={areasAtuacao.includes(zona)}
-                      onChange={() => handleCheckboxChange(zona, "zona")}
-                      className="accent-[#2563eb]"
-                    />
-                    <span className="truncate">{zona}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* 3. EXPERIÊNCIA, CERTIFICAÇÕES E CALENDÁRIO */}
-          <div className="bg-white p-6 md:p-10 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-            <h2 className="text-lg font-black text-slate-900 m-0 pb-4 border-b border-slate-100">
-              3.{" "}
-              {isEn
-                ? "Experience, Certificates & Calendar"
-                : "Experiência, Certificações e Calendário"}
-            </h2>
-
-            <div className="relative">
-              <label className={labelClass}>
-                {isEn ? "Years of Experience" : "Anos de Experiência"}
-              </label>
-              <div
-                onClick={() =>
-                  setOpenDropdown(openDropdown === "exp" ? null : "exp")
-                }
-                className={`${inputClass} cursor-pointer flex justify-between items-center`}
-              >
-                <span>
-                  {
-                    opcoesExp.find((o) => o.val === formData.experiencia_anos)
-                      ?.label
-                  }
-                </span>
-                <span className="text-[10px] text-slate-400">▼</span>
-              </div>
-              {openDropdown === "exp" && (
-                <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                  {opcoesExp.map((op) => (
-                    <div
-                      key={op.val}
-                      onClick={() => {
-                        setFormData({ ...formData, experiencia_anos: op.val });
-                        setOpenDropdown(null);
-                      }}
-                      className="p-3.5 text-xs font-bold hover:bg-blue-50 cursor-pointer"
-                    >
-                      {op.label}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className={labelClass}>
-                {isEn ? "Certifications" : "Certificações"}
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                {LISTA_CERTIFICADOS.map((c) => (
-                  <label
-                    key={c.id}
-                    className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer text-xs font-bold ${
-                      certificacoes.includes(c.id)
-                        ? "border-[#2563eb] bg-blue-50 text-[#2563eb]"
-                        : "border-slate-200 bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={certificacoes.includes(c.id)}
-                      onChange={() => handleCheckboxChange(c.id, "cert")}
-                      className="accent-[#2563eb]"
-                    />
-                    <span>{isEn ? c.en : c.pt}</span>
-                  </label>
-                ))}
+                {openDropdown === "distrito" && (
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-300 rounded-md shadow-xl z-30 max-h-56 overflow-y-auto">
+                    {DISTRITOS_PT.map((d) => (
+                      <div
+                        key={d}
+                        onClick={() => {
+                          setFormData({ ...formData, distrito_residencia: d });
+                          setOpenDropdown(null);
+                        }}
+                        className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0"
+                      >
+                        {d}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-              <div>
-                <label className={labelClass}>
-                  {isEn ? "Holiday Availability" : "Épocas de Férias"}
-                </label>
-                <div className="space-y-2.5">
-                  {LISTA_EPOCAS.map((ep) => (
-                    <label
-                      key={ep.id}
-                      className="flex items-center gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer text-xs font-bold"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={disponibilidadeEpocas.includes(ep.id)}
-                        onChange={() => handleCheckboxChange(ep.id, "disp")}
-                        className="accent-[#2563eb]"
-                      />
-                      <span>{isEn ? ep.en : ep.pt}</span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="mt-6">
-                  <label className={labelClass}>
-                    {isEn ? "Short Bio / Pitch *" : "Apresentação / Bio *"}
-                  </label>
-                  <textarea
-                    rows={4}
-                    required
-                    value={formData.bio}
-                    onChange={(e) =>
-                      setFormData({ ...formData, bio: e.target.value })
-                    }
-                    placeholder="Fala sobre a tua motivação e experiência com crianças e jovens..."
-                    className={`${inputClass} resize-none`}
-                  />
-                </div>
-              </div>
-
-              {/* Calendário Interativo */}
-              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                <div className="flex justify-between items-center mb-4">
-                  <button
-                    type="button"
-                    onClick={() => mudarMes(-1)}
-                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 font-black cursor-pointer"
-                  >
-                    &larr;
-                  </button>
-                  <span className="text-xs font-black uppercase tracking-widest">
-                    {mesesNomes[dataVisualizada.getMonth()]}{" "}
-                    {dataVisualizada.getFullYear()}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => mudarMes(1)}
-                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 font-black cursor-pointer"
-                  >
-                    &rarr;
-                  </button>
-                </div>
-                <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                  {diasDaSemana.map((d) => (
-                    <span
-                      key={d}
-                      className="text-[10px] font-black text-slate-400"
-                    >
-                      {d}
+            {/* ALERTA E UPLOAD DE AUTORIZAÇÃO PARENTAL SE TIVER MENOS DE 18 ANOS */}
+            {isMenor && (
+              <div className="bg-amber-50 border-2 border-[#F59E0B] p-5 rounded-md space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="bg-[#F59E0B] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md inline-block mb-1">
+                      ⚠️ Candidato Menor de 18 Anos ({idadeCalculada} anos)
                     </span>
-                  ))}
+                    <h4 className="text-sm font-black text-[#0F172A] m-0">
+                      Autorização do Encarregado de Educação Obrigatória
+                    </h4>
+                    <p className="text-xs text-slate-600 m-0 mt-1">
+                      Descarrega a minuta em PDF, pede ao teu encarregado de educação para assinar e anexa o ficheiro aqui.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={gerarMinutaParentalPDF}
+                    className="bg-[#2563EB] hover:bg-blue-700 text-white font-black text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-md cursor-pointer border-0 shrink-0"
+                  >
+                    📥 Descarregar Minuta PDF
+                  </button>
                 </div>
-                <div className="grid grid-cols-7 gap-1">
-                  {renderDiasCalendario()}
+
+                <div className="pt-2">
+                  <label className="inline-block bg-[#16A34A] hover:bg-green-700 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-md cursor-pointer">
+                    {uploadingAuth
+                      ? "A carregar..."
+                      : autorizacaoParentalUrl
+                      ? "✓ Autorização Carregada (Substituir)"
+                      : "📤 Anexar Autorização Parental Assinada (PDF/Foto)"}
+                    <input
+                      type="file"
+                      accept=".pdf,image/*"
+                      onChange={(e) => handleFileUpload(e, "auth")}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* 2. PERFIL PROFISSIONAL, FUNÇÃO, LÍNGUAS E CERTIFICAÇÕES */}
+          <section className="bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm space-y-6">
+            <h2 className="text-sm font-black uppercase tracking-widest text-[#16A34A] m-0 pb-3 border-b border-slate-100">
+              2. {isEn ? "Role, Experience, Languages & Certifications" : "Função, Experiência, Línguas e Certificações"}
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Dropdown Customizado Cargo */}
+              <div className="relative">
+                <label className={labelClass}>
+                  {isEn ? "Preferred Role *" : "Função / Cargo Principal *"}
+                </label>
+                <div
+                  onClick={() =>
+                    setOpenDropdown(openDropdown === "cargo" ? null : "cargo")
+                  }
+                  className={`${inputClass} cursor-pointer flex justify-between items-center`}
+                >
+                  <span className="truncate">{formData.cargo_preferido}</span>
+                  <span className="text-[10px] text-slate-400">▼</span>
+                </div>
+                {openDropdown === "cargo" && (
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-300 rounded-md shadow-xl z-30 max-h-56 overflow-y-auto">
+                    {CARGOS_OPCOES.map((cg) => (
+                      <div
+                        key={cg}
+                        onClick={() => {
+                          setFormData({ ...formData, cargo_preferido: cg });
+                          setOpenDropdown(null);
+                        }}
+                        className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0"
+                      >
+                        {cg}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Dropdown Customizado Modalidade */}
+              <div className="relative">
+                <label className={labelClass}>
+                  {isEn ? "Camp Regime Preference *" : "Modalidade de Campo Preferida *"}
+                </label>
+                <div
+                  onClick={() =>
+                    setOpenDropdown(openDropdown === "mod" ? null : "mod")
+                  }
+                  className={`${inputClass} cursor-pointer flex justify-between items-center`}
+                >
+                  <span className="truncate">
+                    {formData.modalidade_preferida}
+                  </span>
+                  <span className="text-[10px] text-slate-400">▼</span>
+                </div>
+                {openDropdown === "mod" && (
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-300 rounded-md shadow-xl z-30">
+                    {MODALIDADES_TRABALHO.map((m) => (
+                      <div
+                        key={m}
+                        onClick={() => {
+                          setFormData({ ...formData, modalidade_preferida: m });
+                          setOpenDropdown(null);
+                        }}
+                        className="p-3 text-xs font-bold hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0"
+                      >
+                        {m}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  {isEn ? "Years of Experience *" : "Anos de Experiência com Crianças/Jovens *"}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="40"
+                  required
+                  value={formData.experiencia_anos}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      experiencia_anos: e.target.value,
+                    })
+                  }
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Carta de Condução</label>
+                  <div className="flex gap-1.5">
+                    {["Sim", "Não"].map((op) => (
+                      <button
+                        key={op}
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, carta_conducao: op })
+                        }
+                        className={`flex-1 py-3 rounded-md text-xs font-black cursor-pointer border-0 ${
+                          formData.carta_conducao === op
+                            ? "bg-[#2563EB] text-white"
+                            : "bg-slate-200 text-[#0F172A]"
+                        }`}
+                      >
+                        {op}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelClass}>T-Shirt Staff</label>
+                  <div className="flex gap-1">
+                    {["XS", "S", "M", "L", "XL"].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, tamanho_tshirt: t })
+                        }
+                        className={`flex-1 py-3 rounded-md text-[10px] font-black cursor-pointer border-0 ${
+                          formData.tamanho_tshirt === t
+                            ? "bg-[#0F172A] text-white"
+                            : "bg-slate-200 text-[#0F172A]"
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-slate-200">
-            <label className="flex items-start gap-3 cursor-pointer">
+            {/* LÍNGUAS FALADAS */}
+            <div>
+              <label className={labelClass}>
+                🗣️ {isEn ? "Languages Spoken" : "Línguas Faladas"}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {LINGUAS_OPCOES.map((lng) => {
+                  const active = linguasFaladas.includes(lng);
+                  return (
+                    <button
+                      key={lng}
+                      type="button"
+                      onClick={() =>
+                        toggleItem(linguasFaladas, setLinguasFaladas, lng)
+                      }
+                      className={`px-3.5 py-2 rounded-md text-xs font-black cursor-pointer border-0 transition-colors ${
+                        active
+                          ? "bg-[#2563EB] text-white"
+                          : "bg-slate-200 text-[#0F172A] hover:bg-slate-300"
+                      }`}
+                    >
+                      {active ? "✓ " : "+ "}
+                      {lng}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* CERTIFICAÇÕES E CURSOS */}
+            <div>
+              <label className={labelClass}>
+                🏅 {isEn ? "Certifications & Qualifications" : "Certificações, Diplomas e Requisitos Legais"}
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {LISTA_CERTIFICADOS.map((cert) => {
+                  const active = certificacoes.includes(cert.id);
+                  return (
+                    <div
+                      key={cert.id}
+                      onClick={() =>
+                        toggleItem(certificacoes, setCertificacoes, cert.id)
+                      }
+                      className={`p-3 rounded-md border-2 cursor-pointer flex items-center gap-3 text-xs font-bold transition-all ${
+                        active
+                          ? "bg-[#16A34A] border-[#16A34A] text-white"
+                          : "bg-[#F8FAFC] border-slate-200 text-[#0F172A] hover:border-[#2563EB]"
+                      }`}
+                    >
+                      <span className="font-black">
+                        {active ? "✓" : "○"}
+                      </span>
+                      <span>{isEn ? cert.en : cert.pt}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* BIO E OUTRAS COMPETÊNCIAS */}
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className={labelClass}>
+                  {isEn
+                    ? "Sports, Instruments or Specific Skills"
+                    : "Desportos Praticados, Instrumentos ou Outras Competências"}
+                </label>
+                <input
+                  type="text"
+                  value={formData.outras_competencias}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      outras_competencias: e.target.value,
+                    })
+                  }
+                  placeholder="Ex: Surf, Guitarra, Escalada, Teatro, Robótica, Futebol..."
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  {isEn
+                    ? "About Me / Past Camp Experience *"
+                    : "Apresentação Pessoal & Experiência Anterior em Campos *"}
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={formData.bio}
+                  onChange={(e) =>
+                    setFormData({ ...formData, bio: e.target.value })
+                  }
+                  placeholder="Apresenta-te aos diretores de campo: em que campos ou atividades já participaste, que faixas etárias preferes acompanhar e o que te motiva..."
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            {/* UPLOADS DE FOTO E CURRÍCULO CV */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div className="bg-[#F8FAFC] p-4 rounded-md border border-slate-200 flex items-center justify-between gap-3">
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-500">
+                    📸 Fotografia de Perfil
+                  </span>
+                  <span className="text-xs font-bold text-[#0F172A]">
+                    {fotoUrl ? "✓ Foto Carregada" : "Recomendado para destaque"}
+                  </span>
+                </div>
+                <label className="bg-[#2563EB] hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-md cursor-pointer shrink-0">
+                  {uploadingFoto ? "..." : "Carregar Foto"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, "foto")}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <div className="bg-[#F8FAFC] p-4 rounded-md border border-slate-200 flex items-center justify-between gap-3">
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-500">
+                    📄 Currículo Vitae (PDF)
+                  </span>
+                  <span className="text-xs font-bold text-[#0F172A]">
+                    {cvUrl ? "✓ CV Anexado" : "PDF até 10MB"}
+                  </span>
+                </div>
+                <label className="bg-[#0F172A] hover:bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-md cursor-pointer shrink-0">
+                  {uploadingCv ? "..." : "Anexar CV PDF"}
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => handleFileUpload(e, "cv")}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
+          </section>
+
+          {/* 3. REGIÕES DE ATUAÇÃO E CALENDÁRIO INTERATIVO DE DISPONIBILIDADE */}
+          <section className="bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm space-y-6">
+            <h2 className="text-sm font-black uppercase tracking-widest text-[#F59E0B] m-0 pb-3 border-b border-slate-100">
+              3. {isEn ? "Regions & Availability Calendar" : "Zonas de Atuação, Épocas e Calendário de Disponibilidade"}
+            </h2>
+
+            {/* ÉPOCAS DO ANO */}
+            <div>
+              <label className={labelClass}>
+                ☀️ {isEn ? "Available School Breaks" : "Épocas de Férias Disponíveis"}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {EPOCAS_OPCOES.map((ep) => {
+                  const active = disponibilidadeEpocas.includes(ep.id);
+                  return (
+                    <button
+                      key={ep.id}
+                      type="button"
+                      onClick={() =>
+                        toggleItem(
+                          disponibilidadeEpocas,
+                          setDisponibilidadeEpocas,
+                          ep.id
+                        )
+                      }
+                      className={`px-4 py-2.5 rounded-md text-xs font-black cursor-pointer border-0 transition-colors ${
+                        active
+                          ? "bg-[#F59E0B] text-white"
+                          : "bg-slate-200 text-[#0F172A]"
+                      }`}
+                    >
+                      {active ? "✓ " : "+ "}
+                      {isEn ? ep.labelEn : ep.labelPt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ZONAS DE ATUAÇÃO */}
+            <div>
+              <label className={labelClass}>
+                📍 {isEn ? "Where can you work? *" : "Em que distritos podes trabalhar? *"}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {opcoesAtuacao.map((reg) => {
+                  const active = areasAtuacao.includes(reg);
+                  return (
+                    <button
+                      key={reg}
+                      type="button"
+                      onClick={() =>
+                        toggleItem(areasAtuacao, setAreasAtuacao, reg)
+                      }
+                      className={`px-3.5 py-2 rounded-md text-xs font-black cursor-pointer border-0 transition-colors ${
+                        active
+                          ? "bg-[#16A34A] text-white"
+                          : "bg-slate-200 text-[#0F172A] hover:bg-slate-300"
+                      }`}
+                    >
+                      {active ? "✓ " : ""}
+                      {reg}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* CALENDÁRIO MENSAL INTERATIVO */}
+            <div className="bg-[#F8FAFC] p-5 rounded-md border border-slate-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <span className="text-xs font-black uppercase text-[#0F172A] block">
+                    📅 Calendário de Dias Disponíveis ({calendario.length} dias selecionados)
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    Clica nos dias em que estás livre para trabalhar ou seleciona o mês inteiro.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={selecionarMesInteiro}
+                  className="bg-[#2563EB] hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest px-3.5 py-2 rounded-md cursor-pointer border-0"
+                >
+                  ✓ Selecionar / Limpar Mês Inteiro
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between bg-white p-2.5 rounded-md border border-slate-200 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setMesAtual(new Date(ano, mes - 1, 1))}
+                  className="bg-[#0F172A] text-white px-3 py-1.5 rounded-md text-xs font-black cursor-pointer border-0"
+                >
+                  &larr;
+                </button>
+                <span className="text-xs font-black uppercase tracking-widest text-[#0F172A]">
+                  {mesAtual.toLocaleDateString(isEn ? "en-US" : "pt-PT", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMesAtual(new Date(ano, mes + 1, 1))}
+                  className="bg-[#0F172A] text-white px-3 py-1.5 rounded-md text-xs font-black cursor-pointer border-0"
+                >
+                  &rarr;
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5">
+                {diasDoMes.map((iso) => {
+                  const isSel = calendario.includes(iso);
+                  const dNum = iso.split("-")[2];
+                  return (
+                    <button
+                      key={iso}
+                      type="button"
+                      onClick={() =>
+                        toggleItem(calendario, setCalendario, iso)
+                      }
+                      className={`py-2.5 rounded-md text-xs font-black cursor-pointer border transition-colors ${
+                        isSel
+                          ? "bg-[#16A34A] border-[#16A34A] text-white"
+                          : "bg-white border-slate-200 text-[#0F172A] hover:border-[#2563EB]"
+                      }`}
+                    >
+                      {dNum}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* 4. ACEITAÇÃO DOS TERMOS E SUBMISSÃO */}
+          <section className="bg-[#0F172A] text-white p-6 md:p-8 rounded-md border-l-4 border-[#16A34A] space-y-5">
+            <label className="flex items-start gap-3.5 cursor-pointer">
               <input
                 type="checkbox"
                 required
                 checked={termosAceites}
                 onChange={(e) => setTermosAceites(e.target.checked)}
-                className="mt-1 w-5 h-5 accent-[#2563eb]"
+                className="mt-1 w-5 h-5 accent-[#16A34A] shrink-0"
               />
-              <span className="text-xs font-bold text-slate-600">
-                Li e aceito os{" "}
+              <span className="text-xs font-bold text-slate-200 leading-relaxed">
+                Declaro que as informações e certificações indicadas são verdadeiras e autorizo a partilha do meu perfil e CV exclusivamente com entidades organizadoras de campos de férias verificadas na plataforma HelloCamp, de acordo com os{" "}
                 <Link
                   href={`/${lang}/monitores/termos`}
                   target="_blank"
-                  className="text-[#2563eb] underline"
+                  className="text-[#F59E0B] underline"
                 >
                   Termos de Utilização da Bolsa de Monitores
-                </Link>{" "}
-                e autorizo a partilha do meu perfil com organizadores verificados.
+                </Link>
+                .
               </span>
             </label>
 
             <button
               type="submit"
               disabled={submitting}
-              className="w-full mt-6 py-4 bg-[#2563eb] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-xs rounded-xl shadow-lg cursor-pointer"
+              className="w-full py-4.5 bg-[#16A34A] hover:bg-green-700 disabled:bg-slate-600 text-white font-black text-xs md:text-sm uppercase tracking-widest rounded-md cursor-pointer border-0 shadow-lg transition-colors"
             >
               {submitting
-                ? "..."
-                : isEn
-                ? "Create Monitor Account"
-                : "Concluir Registo de Monitor"}
+                ? "A Criar Perfil Profissional..."
+                : "🚀 Concluir Registo e Entrar no Portal de Monitor →"}
             </button>
-          </div>
+          </section>
         </form>
       </div>
     </main>
