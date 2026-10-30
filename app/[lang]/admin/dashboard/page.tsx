@@ -3,778 +3,1146 @@
 import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import jsPDF from "jspdf";
 
-export default function DashboardMarketing({
+export default function AdminDashboardPage({
   params,
 }: {
   params: Promise<{ lang: string }>;
 }) {
   const { lang } = use(params);
   const isEn = lang === "en";
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string>("");
-  const [nomeEmpresa, setNomeEmpresa] = useState("");
-  const [copiadoId, setCopiadoId] = useState<string | null>(null);
+  const [nomeEmpresa, setNomeEmpresa] = useState<string>("");
+  const [perfilCompleto, setPerfilCompleto] = useState<any>(null);
+  const [contratoPdfUrl, setContratoPdfUrl] = useState<string | null>(null);
+  const [downloadingContractPdf, setDownloadingContractPdf] = useState(false);
 
-  // Estado para Editar a Montra Pública do Parceiro (Logótipo, Bio, Website, Ano Fundação)
-  const [showBrandModal, setShowBrandModal] = useState(false);
-  const [savingBrand, setSavingBrand] = useState(false);
+  // Estados para Configurar Montra Pública & Logótipo
+  const [showPublicProfilePanel, setShowPublicProfilePanel] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [brandForm, setBrandForm] = useState({
+  const [profileForm, setProfileForm] = useState({
     empresa_nome: "",
     logotipo_url: "",
-    biografia_empresa: "",
-    website: "",
     ano_fundacao: "",
-    telefone: "",
+    website: "",
+    email_publico: "",
+    telefone_publico: "",
+    morada_sede: "",
+    descricao: "",
+    descricao_en: "",
   });
 
   const [metricas, setMetricas] = useState({
     totalReservas: 0,
-    receitaBruta: 0,
     vezesGuardado: 0,
     camposAtivos: 0,
     camposPendentes: 0,
     mediaEstrelas: 0,
     pedidosPendentes: 0,
-    mensagensNaoLidas: 0,
   });
 
   const [sugestoes, setSugestoes] = useState<any[]>([]);
 
-  const fetchMarketingData = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const uid = session.user.id;
-    setUserId(uid);
-
-    const { data: perfil } = await supabase
-      .from("perfis")
-      .select("*")
-      .eq("id", uid)
-      .single();
-
-    if (perfil) {
-      const empNome =
-        perfil.empresa_nome?.trim() ||
-        perfil.nome_completo?.split(" ")[0] ||
-        (isEn ? "Organizer" : "Organizador");
-      setNomeEmpresa(empNome);
-
-      setBrandForm({
-        empresa_nome: perfil.empresa_nome || "",
-        logotipo_url: perfil.logotipo_url || "",
-        biografia_empresa:
-          perfil.biografia_empresa ||
-          perfil.descricao ||
-          perfil.contrato_dados?.biografia_empresa ||
-          "",
-        website: perfil.website || perfil.contrato_dados?.website || "",
-        ano_fundacao:
-          perfil.ano_fundacao || perfil.contrato_dados?.ano_fundacao || "",
-        telefone: perfil.telefone || "",
-      });
-    }
-
-    const { data: campos } = await supabase
-      .from("campos")
-      .select(
-        "id, nome, ativo, status_aprovacao, rating_score, total_reviews, galeria, programas_pdf, modalidade_reserva"
-      )
-      .eq("organizador_id", uid);
-
-    const camposIds = campos?.map((c) => c.id) || [];
-
-    let ativos = 0;
-    let pendentes = 0;
-    let somaEstrelas = 0;
-    let totalComReviews = 0;
-    const novasSugestoes: any[] = [];
-
-    if (!perfil?.contrato_dados) {
-      novasSugestoes.push({
-        tipo: "critical",
-        icon: "📝",
-        titulo: isEn ? "Global Contract Missing" : "Contrato Global em Falta",
-        texto: isEn
-          ? "You must sign the Global Partnership Agreement to publish your camps and recruit monitors."
-          : "Precisa de assinar o Contrato Global de Parceria para publicar campos e aceder à bolsa de recrutamento.",
-        link: `/${lang}/admin/contrato`,
-        actionText: isEn ? "Sign Contract Now" : "Assinar Contrato Agora",
-      });
-    }
-
-    const usaReservaDireta =
-      (perfil?.modalidade_reserva ||
-        perfil?.contrato_dados?.modalidadeReserva ||
-        "direta") === "direta" ||
-      campos?.some((c) => (c.modalidade_reserva || "direta") === "direta");
-
-    if (!perfil?.stripe_account_id && usaReservaDireta) {
-      novasSugestoes.push({
-        tipo: "critical",
-        icon: "🚨",
-        titulo: isEn
-          ? "Bank Account Not Connected"
-          : "Conta Bancária Não Conectada",
-        texto: isEn
-          ? "Connect your Stripe account to receive automatic payouts from parents."
-          : "Configure a sua conta bancária via Stripe para receber automaticamente as inscrições pagas pelos pais.",
-        link: `/${lang}/admin/faturacao`,
-        actionText: isEn ? "Connect Now" : "Configurar Conta Agora",
-      });
-    }
-
-    // Alerta se faltar Logótipo ou Descrição Pública da Empresa
-    if (!perfil?.logotipo_url || !(perfil?.biografia_empresa || perfil?.descricao)) {
-      novasSugestoes.push({
-        tipo: "info",
-        icon: "🏢",
-        openBrandModal: true,
-        titulo: isEn
-          ? "Complete Your Public Brand Profile"
-          : "Adicione o seu Logótipo e Apresentação",
-        texto: isEn
-          ? "Add your company logo and description to build trust on your public organizer page."
-          : "Adicione o logótipo e a descrição da sua organização para transmitir máxima confiança aos pais na sua página pública.",
-        link: "#",
-        actionText: isEn
-          ? "Upload Logo & Bio"
-          : "Configurar Logótipo e Descrição",
-      });
-    }
-
-    campos?.forEach((c) => {
-      const status = (c.status_aprovacao || "").toLowerCase();
-      if (
-        status === "aprovado" ||
-        status === "validado" ||
-        status === "ativo" ||
-        status === "active"
-      ) {
-        ativos++;
-      } else {
-        pendentes++;
+  useEffect(() => {
+    const fetchMarketingData = async () => {
+      setLoading(true);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        router.push(`/${lang}/login`);
+        return;
       }
 
-      if (c.rating_score > 0) {
-        somaEstrelas += Number(c.rating_score);
-        totalComReviews++;
-      }
+      const uid = session.user.id;
+      setUserId(uid);
 
-      if (!c.galeria || c.galeria.length === 0) {
-        novasSugestoes.push({
-          tipo: "warning",
-          icon: "📸",
-          titulo: isEn ? "Missing Photo Gallery" : "Galeria de Fotos Vazia",
-          texto: isEn
-            ? `Add a photo gallery to "${c.nome}".`
-            : `Adicione mais fotografias à galeria do campo "${c.nome}".`,
-          link: `/${lang}/admin/campos/editar/${c.id}`,
-          actionText: isEn ? "Add Photos" : "Adicionar Fotos",
+      // 1. Busca Perfil Completo
+      const { data: perfil } = await supabase
+        .from("perfis")
+        .select("*")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (perfil) {
+        setPerfilCompleto(perfil);
+        const empName =
+          perfil.empresa_nome ||
+          perfil.nome_empresa ||
+          perfil.nome ||
+          perfil.nome_completo ||
+          (isEn ? "Organizer" : "Organizador");
+        setNomeEmpresa(empName);
+
+        setProfileForm({
+          empresa_nome: empName,
+          logotipo_url: perfil.logotipo_url || "",
+          ano_fundacao: perfil.ano_fundacao
+            ? String(Math.trunc(Number(perfil.ano_fundacao)))
+            : "",
+          website: perfil.website || "",
+          email_publico: perfil.email_publico || perfil.email || "",
+          telefone_publico: perfil.telefone_publico || perfil.telefone || "",
+          morada_sede: perfil.morada_sede || "",
+          descricao:
+            perfil.descricao ||
+            perfil.biografia_empresa ||
+            perfil.biografia ||
+            "",
+          descricao_en:
+            perfil.descricao_en ||
+            perfil.biografia_empresa_en ||
+            perfil.biografia_en ||
+            "",
         });
       }
-    });
 
-    const { data: reservasDados } = await supabase
-      .from("reservas")
-      .select("status_pagamento, valor_total, respostas_customizadas")
-      .eq("organizador_id", uid);
+      // 2. Busca Campos do Parceiro
+      const { data: campos } = await supabase
+        .from("campos")
+        .select(
+          "id, nome, status_aprovacao, ativo, rating_score, total_reviews, galeria, programas_pdf, contrato_parceiro_url"
+        )
+        .eq("organizador_id", uid);
 
-    let countReservas = 0;
-    let volumeBruto = 0;
-    let countPedidosUpsell = 0;
+      const camposIds = campos?.map((c: any) => c.id) || [];
 
-    reservasDados?.forEach((res) => {
-      if (
-        res.status_pagamento === "Pago" ||
-        res.status_pagamento === "Sinal Pago"
-      ) {
-        countReservas++;
-        volumeBruto += Number(res.valor_total) || 0;
+      const campoComPdf = (campos || []).find(
+        (c: any) =>
+          c.contrato_parceiro_url &&
+          String(c.contrato_parceiro_url).startsWith("http")
+      );
+      if (campoComPdf?.contrato_parceiro_url) {
+        setContratoPdfUrl(campoComPdf.contrato_parceiro_url);
       }
-      if (
-        res.respostas_customizadas &&
-        res.respostas_customizadas.pedido_pai_pendente
+
+      let ativos = 0;
+      let pendentes = 0;
+      let somaEstrelas = 0;
+      let totalComReviews = 0;
+      const novasSugestoes: any[] = [];
+
+      const temContratoAssinado = Boolean(
+        perfil?.status_contrato === "Aprovado" ||
+          perfil?.contrato_dados?.assinaturaNome
+      );
+
+      // ALERTA: CONTRATO GLOBAL EM FALTA OU PENDENTE
+      if (!temContratoAssinado) {
+        novasSugestoes.push({
+          tipo: "critical",
+          icon: "📝",
+          titulo: isEn ? "Global Contract Missing" : "Contrato Global em Falta",
+          texto: isEn
+            ? "You must sign the Global Partnership Agreement to publish your camps and receive bookings."
+            : "Precisa de assinar o Contrato Global de Parceria para ativar e publicar os seus campos na plataforma.",
+          link: `/${lang}/admin/contrato`,
+          actionText: isEn ? "Sign Contract Now" : "Assinar Contrato Agora",
+        });
+      } else if (
+        perfil?.status_contrato === "Pendente de Revisão" ||
+        perfil?.status_contrato === "Pendente"
       ) {
-        countPedidosUpsell++;
+        novasSugestoes.push({
+          tipo: "info",
+          icon: "⏳",
+          titulo: isEn ? "Contract Under Review" : "Contrato em Revisão",
+          texto: isEn
+            ? "Your Global Contract is being reviewed by our team."
+            : "O seu Contrato Global foi submetido e encontra-se em validação.",
+          link: `/${lang}/admin/contrato`,
+          actionText: isEn ? "View Contract" : "Ver Contrato",
+        });
       }
-    });
 
-    const { count: unreadCount } = await supabase
-      .from("mensagens")
-      .select("*", { count: "exact", head: true })
-      .eq("receiver_id", uid)
-      .eq("lida", false);
+      // ALERTA: STRIPE NÃO CONECTADO
+      if (!perfil?.stripe_account_id) {
+        novasSugestoes.push({
+          tipo: "critical",
+          icon: "🚨",
+          titulo: isEn
+            ? "Bank Account Not Connected"
+            : "Conta Bancária Não Conectada",
+          texto: isEn
+            ? "Connect your bank account / IBAN in Finance to receive payouts from bookings."
+            : "Configure o seu IBAN ou conta Stripe em Finanças para receber as transferências das inscrições.",
+          link: `/${lang}/admin/faturacao`,
+          actionText: isEn ? "Configure Finance" : "Configurar Conta Agora",
+        });
+      }
 
-    let vezesGuardadoTotal = 0;
-    if (camposIds.length > 0) {
-      const { count } = await supabase
-        .from("wishlist_campos")
-        .select("*", { count: "exact", head: true })
-        .in("campo_id", camposIds);
-      vezesGuardadoTotal = count || 0;
-    }
+      campos?.forEach((c: any) => {
+        const status = (c.status_aprovacao || "").toLowerCase();
+        if (
+          c.ativo === true ||
+          status === "aprovado" ||
+          status === "validado" ||
+          status === "ativo"
+        ) {
+          ativos++;
+        } else {
+          pendentes++;
+        }
 
-    setMetricas({
-      totalReservas: countReservas,
-      receitaBruta: volumeBruto,
-      vezesGuardado: vezesGuardadoTotal,
-      camposAtivos: ativos,
-      camposPendentes: pendentes,
-      mediaEstrelas: totalComReviews > 0 ? somaEstrelas / totalComReviews : 0,
-      pedidosPendentes: countPedidosUpsell,
-      mensagensNaoLidas: unreadCount || 0,
-    });
+        if (c.rating_score > 0) {
+          somaEstrelas += Number(c.rating_score);
+          totalComReviews++;
+        }
 
-    setSugestoes(novasSugestoes);
-    setLoading(false);
-  };
+        if (!c.galeria || c.galeria.length === 0) {
+          novasSugestoes.push({
+            tipo: "warning",
+            icon: "📸",
+            titulo: isEn ? "Missing Photo Gallery" : "Galeria de Fotos Vazia",
+            texto: isEn
+              ? `Parents decide based on photos! Add a gallery to "${c.nome}".`
+              : `Os pais decidem pelas imagens! Adicione fotografias à galeria do campo "${c.nome}".`,
+            link: `/${lang}/admin/campos/editar/${c.id}`,
+            actionText: isEn ? "Add Photos" : "Adicionar Fotos",
+          });
+        }
 
-  useEffect(() => {
+        if (!c.programas_pdf || c.programas_pdf.length === 0) {
+          novasSugestoes.push({
+            tipo: "info",
+            icon: "📄",
+            titulo: isEn
+              ? "No Itinerary PDF"
+              : "Falta o Programa Detalhado (PDF)",
+            texto: isEn
+              ? `Attach a PDF schedule to "${c.nome}" to increase parent trust.`
+              : `Anexe um PDF com o horário/programa no campo "${c.nome}" para aumentar a confiança dos pais.`,
+            link: `/${lang}/admin/campos/editar/${c.id}`,
+            actionText: isEn ? "Attach PDF" : "Anexar PDF",
+          });
+        }
+      });
+
+      // 3. Busca de Reservas
+      const { data: reservasDados } = await supabase
+        .from("reservas")
+        .select("status_pagamento, respostas_customizadas")
+        .eq("organizador_id", uid);
+
+      let countReservas = 0;
+      let countPedidosUpsell = 0;
+
+      reservasDados?.forEach((res: any) => {
+        if (
+          res.status_pagamento === "Pago" ||
+          res.status_pagamento === "Sinal Pago"
+        ) {
+          countReservas++;
+        }
+        if (
+          res.respostas_customizadas &&
+          res.respostas_customizadas.pedido_pai_pendente
+        ) {
+          countPedidosUpsell++;
+        }
+      });
+
+      // 4. Busca Wishlists
+      let vezesGuardadoTotal = 0;
+      if (camposIds.length > 0) {
+        const { count } = await supabase
+          .from("wishlist_campos")
+          .select("*", { count: "exact", head: true })
+          .in("campo_id", camposIds);
+        vezesGuardadoTotal = count || 0;
+      }
+
+      setMetricas({
+        totalReservas: countReservas,
+        vezesGuardado: vezesGuardadoTotal,
+        camposAtivos: ativos,
+        camposPendentes: pendentes,
+        mediaEstrelas:
+          totalComReviews > 0 ? somaEstrelas / totalComReviews : 0,
+        pedidosPendentes: countPedidosUpsell,
+      });
+
+      const prioridade: Record<string, number> = {
+        critical: 1,
+        warning: 2,
+        info: 3,
+        idea: 4,
+      };
+      novasSugestoes.sort((a, b) => prioridade[a.tipo] - prioridade[b.tipo]);
+
+      setSugestoes(novasSugestoes);
+      setLoading(false);
+    };
+
     fetchMarketingData();
-  }, [lang, isEn]);
+  }, [lang, isEn, router]);
 
-  // Upload do Logótipo Oficial do Parceiro para o Supabase Storage
-  const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !userId) return;
+  // Upload do Logótipo da Empresa
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+
     setUploadingLogo(true);
     try {
-      const file = e.target.files[0];
       const ext = file.name.split(".").pop();
       const fileName = `logo_${userId}_${Date.now()}.${ext}`;
-
       const { error: uploadError } = await supabase.storage
         .from("campos-imagens")
-        .upload(fileName, file);
+        .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("campos-imagens").getPublicUrl(fileName);
+      const { data: publicUrlData } = supabase.storage
+        .from("campos-imagens")
+        .getPublicUrl(fileName);
 
-      setBrandForm((prev) => ({ ...prev, logotipo_url: publicUrl }));
+      if (publicUrlData?.publicUrl) {
+        setProfileForm((prev) => ({
+          ...prev,
+          logotipo_url: publicUrlData.publicUrl,
+        }));
+      }
     } catch (err: any) {
-      alert("Erro ao enviar logótipo: " + err.message);
+      alert("Erro ao carregar logótipo: " + err.message);
     } finally {
       setUploadingLogo(false);
     }
   };
 
-  const handleSaveBrandProfile = async (e: React.FormEvent) => {
+  // Guardar Montra Pública
+  const handleGuardarMontraPublica = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) return;
-    setSavingBrand(true);
+    setSavingProfile(true);
 
     try {
-      // Traduz a biografia da empresa automaticamente para Inglês
-      let bioEn = brandForm.biografia_empresa;
-      if (brandForm.biografia_empresa.trim()) {
-        try {
-          const res = await fetch(
-            `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
-              brandForm.biografia_empresa.substring(0, 480)
-            )}&langpair=pt|en`
-          );
-          const d = await res.json();
-          if (d?.responseData?.translatedText) {
-            bioEn = d.responseData.translatedText;
-          }
-        } catch {}
-      }
-
-      // Guarda nas colunas de perfis (compatível com todas as páginas públicas)
       const { error } = await supabase
         .from("perfis")
         .update({
-          empresa_nome: brandForm.empresa_nome,
-          logotipo_url: brandForm.logotipo_url || null,
-          biografia_empresa: brandForm.biografia_empresa || null,
-          biografia_empresa_en: bioEn || null,
-          descricao: brandForm.biografia_empresa || null,
-          descricao_en: bioEn || null,
-          website: brandForm.website || null,
-          ano_fundacao: brandForm.ano_fundacao || null,
-          telefone: brandForm.telefone || null,
+          empresa_nome: profileForm.empresa_nome,
+          nome_empresa: profileForm.empresa_nome,
+          nome: profileForm.empresa_nome,
+          logotipo_url: profileForm.logotipo_url || null,
+          ano_fundacao: profileForm.ano_fundacao
+            ? Number(profileForm.ano_fundacao)
+            : null,
+          website: profileForm.website || null,
+          email_publico: profileForm.email_publico || null,
+          telefone_publico: profileForm.telefone_publico || null,
+          morada_sede: profileForm.morada_sede || null,
+          descricao: profileForm.descricao || null,
+          biografia_empresa: profileForm.descricao || null,
+          biografia: profileForm.descricao || null,
+          descricao_en: profileForm.descricao_en || profileForm.descricao || null,
+          biografia_empresa_en:
+            profileForm.descricao_en || profileForm.descricao || null,
+          biografia_en:
+            profileForm.descricao_en || profileForm.descricao || null,
         })
         .eq("id", userId);
 
       if (error) throw error;
 
-      setNomeEmpresa(brandForm.empresa_nome || nomeEmpresa);
-      setShowBrandModal(false);
-      fetchMarketingData();
+      setNomeEmpresa(profileForm.empresa_nome);
       alert(
         isEn
-          ? "Public Organizer Profile updated successfully!"
-          : "Montra Pública e Logótipo guardados com sucesso!"
+          ? "Public profile and logo updated successfully!"
+          : "Montra pública e logótipo atualizados com sucesso!"
       );
+      setShowPublicProfilePanel(false);
     } catch (err: any) {
-      alert("Erro ao guardar perfil: " + err.message);
+      alert("Erro: " + err.message);
     } finally {
-      setSavingBrand(false);
+      setSavingProfile(false);
     }
   };
 
+  // Gerar e Descarregar o Contrato Global em PDF diretamente do Dashboard!
+  const handleDescarregarContratoPdfDireto = () => {
+    if (contratoPdfUrl) {
+      window.open(contratoPdfUrl, "_blank");
+      return;
+    }
+
+    setDownloadingContractPdf(true);
+    try {
+      const cd = perfilCompleto?.contrato_dados || {};
+      const taxaComissao = perfilCompleto?.taxa_comissao ?? cd.taxaComissao ?? 12;
+      const baseComissao =
+        perfilCompleto?.base_comissao || cd.baseComissao || "total";
+      const dataIso =
+        cd.dataSubmissao ||
+        perfilCompleto?.created_at ||
+        new Date().toISOString();
+      const ipAssinatura = cd.ipAssinatura || "Registado no Servidor";
+
+      const doc = new jsPDF({ format: "a4", unit: "mm" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, pageWidth, 36, "F");
+      doc.setFillColor(245, 158, 11);
+      doc.rect(0, 36, pageWidth, 2, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.setTextColor(255, 255, 255);
+      doc.text("HelloCamp Portugal", 16, 16);
+      doc.setFontSize(11);
+      doc.setTextColor(245, 158, 11);
+      doc.text(
+        isEn
+          ? "GLOBAL B2B PARTNERSHIP & INTERMEDIATION AGREEMENT"
+          : "CONTRATO GLOBAL DE PARCERIA E INTERMEDIACAO B2B",
+        16,
+        25
+      );
+
+      let y = 48;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(
+        isEn ? "1. CONTRACTING PARTIES" : "1. PARTES CONTRATANTES",
+        16,
+        y
+      );
+      y += 7;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(51, 65, 85);
+      const textoPartes = [
+        `Primeira Outorgante: HelloCamp Portugal (www.hellocamp.pt | info@hellocamp.pt)`,
+        `Segunda Outorgante (Parceiro): ${
+          cd.empresaNome || nomeEmpresa
+        } (NIF: ${cd.nif || perfilCompleto?.nif_empresa || "N/A"})`,
+        `Morada Sede: ${cd.morada || perfilCompleto?.morada_sede || "N/A"} ${
+          cd.codigoPostal || ""
+        }`,
+        `Representante / Contacto: ${
+          cd.pessoaContacto || perfilCompleto?.nome_completo || nomeEmpresa
+        } | E-mail: ${cd.emailContacto || perfilCompleto?.email || ""}`,
+      ];
+      textoPartes.forEach((line) => {
+        doc.text(line, 16, y);
+        y += 5.5;
+      });
+
+      y += 4;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(
+        isEn
+          ? "2. COMMERCIAL & OPERATIONAL TERMS"
+          : "2. CONDICOES COMERCIAIS E OPERACIONAIS",
+        16,
+        y
+      );
+      y += 7;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.text(
+        `• Taxa de Comissao Acordada: ${taxaComissao}% (IVA incluido) | Base: ${baseComissao}`,
+        16,
+        y
+      );
+      y += 5.5;
+      doc.text(
+        `• Modalidade de Reserva: ${
+          cd.modalidadeReserva || perfilCompleto?.modalidade_reserva || "direta"
+        }`,
+        16,
+        y
+      );
+      y += 5.5;
+      doc.text(
+        `• Politica de Cancelamento: ${
+          cd.politicaCancelamento ||
+          "Moderada (Reembolso a 50% ate 15 dias antes)"
+        }`,
+        16,
+        y
+      );
+      y += 10;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(
+        isEn
+          ? "3. DIGITAL SIGNATURES & CERTIFICATION"
+          : "3. ASSINATURAS DIGITAIS VINCULATIVAS",
+        16,
+        y
+      );
+      y += 7;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.text(
+        `Pela HelloCamp Portugal: Administracao HelloCamp Portugal (Validado HQ)`,
+        16,
+        y
+      );
+      y += 6;
+      doc.text(
+        `Pelo Parceiro Organizador: ${
+          cd.assinaturaNome || perfilCompleto?.nome_completo || nomeEmpresa
+        } (${cd.assinaturaCargo || "Representante Legal"})`,
+        16,
+        y
+      );
+      y += 6;
+      doc.text(
+        `Data de Assinatura: ${new Date(dataIso).toLocaleString(
+          "pt-PT"
+        )} | IP: ${ipAssinatura}`,
+        16,
+        y
+      );
+
+      doc.save(
+        `Contrato_Global_HelloCamp_${(nomeEmpresa || "Parceiro").replace(
+          /\s+/g,
+          "_"
+        )}.pdf`
+      );
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDownloadingContractPdf(false);
+    }
+  };
+
+  const temContrato = Boolean(
+    perfilCompleto?.status_contrato === "Aprovado" ||
+      perfilCompleto?.contrato_dados?.assinaturaNome ||
+      contratoPdfUrl
+  );
+
   if (loading) {
     return (
-      <div className="p-12 text-center text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">
-        {isEn
-          ? "Loading your Partner Control Center..."
-          : "A carregar o seu Painel de Controlo..."}
+      <div className="p-12 text-center font-black text-xs uppercase tracking-widest text-slate-400 animate-pulse">
+        {isEn ? "Loading Partner Dashboard..." : "A carregar o seu Painel..."}
       </div>
     );
   }
 
   return (
-    <main className="max-w-7xl mx-auto font-sans pb-16">
-      {/* CABEÇALHO E BOTÕES EXECUTIVOS RETOS (rounded-md) */}
-      <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-white p-6 border border-slate-200 rounded-md shadow-sm">
-        <div className="flex items-center gap-4">
-          {/* MINIATURA DO LOGÓTIPO CLICÁVEL */}
-          <div
-            onClick={() => setShowBrandModal(true)}
-            title={
-              isEn ? "Click to change Logo" : "Clique para alterar o Logótipo"
-            }
-            className="w-16 h-16 bg-slate-50 border border-slate-300 rounded-md flex items-center justify-center overflow-hidden cursor-pointer hover:border-[#167524] flex-shrink-0 p-1.5"
-          >
-            {brandForm.logotipo_url ? (
-              <img
-                src={brandForm.logotipo_url}
-                alt={nomeEmpresa}
-                className="w-full h-full object-contain"
-              />
+    <main className="max-w-6xl mx-auto font-sans text-[#0F172A] pb-20">
+      {/* CABEÇALHO DO DASHBOARD */}
+      <div className="mb-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="bg-[#2563EB] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+              {isEn ? "Partner Portal" : "Portal do Organizador"}
+            </span>
+            {temContrato ? (
+              <span className="bg-[#16A34A] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                ✓ {isEn ? "Contract Active" : "Contrato Global Ativo"}
+              </span>
             ) : (
-              <span className="text-xs font-black text-slate-400 text-center leading-tight">
-                + LOGO
+              <span className="bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                ⏳ {isEn ? "Contract Pending" : "Contrato Pendente"}
               </span>
             )}
           </div>
 
-          <div>
-            <span className="inline-block text-[10px] font-black uppercase tracking-widest text-[#167524] bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-sm mb-1.5">
-              {isEn ? "Partner Portal B2B" : "Portal do Organizador B2B"}
-            </span>
-            <h1 className="text-2xl md:text-3xl font-black text-slate-900 m-0 tracking-tight">
-              {isEn ? `Welcome, ${nomeEmpresa}` : `Olá, ${nomeEmpresa}`}
-            </h1>
-          </div>
+          <h1 className="text-2xl md:text-4xl font-black text-[#0F172A] tracking-tight m-0">
+            {isEn ? `Welcome, ${nomeEmpresa}` : `Olá, ${nomeEmpresa}`}
+          </h1>
+          <p className="text-slate-500 mt-1.5 mb-0 text-sm font-medium">
+            {isEn
+              ? "Manage your programs, public brand profile, bookings, and global contract."
+              : "Gira os seus programas, montra pública da organização, inscrições e contrato global."}
+          </p>
         </div>
 
-        <div className="flex flex-wrap gap-2.5 w-full md:w-auto">
+        {/* BOTÕES DE AÇÃO NO TOPO (INCLUINDO VER CONTRATO / PDF QUANDO TEM CONTRATO!) */}
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() => setShowBrandModal(true)}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 px-4 py-2.5 rounded-md font-black text-xs uppercase tracking-widest cursor-pointer transition-colors"
+            onClick={() => setShowPublicProfilePanel(!showPublicProfilePanel)}
+            className="bg-[#2563EB] hover:bg-blue-700 text-white px-4 py-3 rounded-md font-black text-xs uppercase tracking-widest cursor-pointer border-0 transition-colors shadow-sm"
           >
-            🏢 {isEn ? "Edit Logo & Bio" : "Logótipo e Perfil Público"}
+            🏢 {isEn ? "Public Profile & Logo" : "Montra & Logótipo"}
           </button>
 
-          {userId && (
-            <Link
-              href={`/${lang}/parceiro/${userId}`}
-              target="_blank"
-              className="flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-4 py-2.5 rounded-md font-black text-xs uppercase tracking-widest no-underline transition-colors"
+          <Link
+            href={`/${lang}/admin/contrato`}
+            className="bg-[#F59E0B] hover:bg-amber-600 text-white px-4 py-3 rounded-md font-black text-xs uppercase tracking-widest no-underline transition-colors shadow-sm flex items-center gap-1.5"
+          >
+            <span>📝</span>
+            <span>
+              {temContrato
+                ? isEn
+                  ? "View Global Contract"
+                  : "Ver Contrato Global"
+                : isEn
+                ? "Sign Global Contract"
+                : "Assinar Contrato"}
+            </span>
+          </Link>
+
+          {temContrato && (
+            <button
+              type="button"
+              onClick={handleDescarregarContratoPdfDireto}
+              disabled={downloadingContractPdf}
+              className="bg-[#0F172A] hover:bg-slate-800 text-white px-4 py-3 rounded-md font-black text-xs uppercase tracking-widest cursor-pointer border-0 transition-colors shadow-sm flex items-center gap-1.5"
+              title={
+                isEn
+                  ? "Download Signed Global Contract PDF"
+                  : "Descarregar Contrato Global Assinado em PDF"
+              }
             >
-              🌐 {isEn ? "Public Page ↗" : "Ver Montra ↗"}
-            </Link>
+              <span>📥</span>
+              <span>
+                {downloadingContractPdf
+                  ? "..."
+                  : isEn
+                  ? "Contract PDF"
+                  : "Contrato PDF"}
+              </span>
+            </button>
           )}
 
           <Link
             href={`/${lang}/admin/campos/novo`}
-            className="flex items-center justify-center gap-1.5 bg-[#167524] hover:bg-[#115a1b] text-white px-5 py-2.5 rounded-md font-black text-xs uppercase tracking-widest no-underline transition-all shadow-sm"
+            className="bg-[#16A34A] hover:bg-green-700 text-white px-5 py-3 rounded-md font-black text-xs uppercase tracking-widest no-underline transition-colors shadow-sm flex items-center gap-1.5"
           >
-            + {isEn ? "Create Camp" : "Novo Campo"}
+            <span>+</span>
+            <span>{isEn ? "Create Camp" : "Novo Campo"}</span>
           </Link>
         </div>
       </div>
 
-      {/* BANNERS DE ALERTA */}
-      {metricas.mensagensNaoLidas > 0 && (
-        <div className="bg-blue-50 border border-blue-200 p-5 rounded-md mb-6 flex items-center justify-between flex-wrap gap-4 shadow-sm">
-          <div className="flex items-center gap-4">
-            <span className="text-2xl">💬</span>
+      {/* PAINEL EXPANSÍVEL: CONFIGURAR MONTRA PÚBLICA & LOGÓTIPO */}
+      {showPublicProfilePanel && (
+        <section className="mb-8 bg-white p-6 md:p-8 rounded-md border-2 border-[#2563EB] shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4 mb-6">
             <div>
-              <h3 className="m-0 text-sm font-black text-blue-950">
+              <span className="inline-block bg-[#2563EB] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md mb-1.5">
+                {isEn ? "Public Brand Showcase" : "Montra Pública da Marca"}
+              </span>
+              <h2 className="text-xl font-black text-[#0F172A] m-0">
                 {isEn
-                  ? `You have ${metricas.mensagensNaoLidas} unread message(s)!`
-                  : `Tem ${metricas.mensagensNaoLidas} mensagem(ns) por ler na sua Inbox!`}
+                  ? "Configure Official Logo, Biography & Public Contacts"
+                  : "Configurar Logótipo Oficial, Biografia e Contactos Públicos"}
+              </h2>
+            </div>
+
+            {userId && (
+              <Link
+                href={`/${lang}/parceiro/${userId}?preview=admin`}
+                target="_blank"
+                className="bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-black uppercase tracking-widest px-4 py-2.5 rounded-md no-underline shrink-0"
+              >
+                👁️ {isEn ? "Preview Public Page ↗" : "Ver Página Pública ↗"}
+              </Link>
+            )}
+          </div>
+
+          <form onSubmit={handleGuardarMontraPublica} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+              {/* UPLOAD DO LOGÓTIPO */}
+              <div className="md:col-span-4 bg-[#F8FAFC] p-5 rounded-md border border-slate-200 text-center">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">
+                  {isEn ? "Official Organization Logo" : "Logótipo Oficial"}
+                </label>
+                <div className="w-28 h-28 mx-auto bg-white border border-slate-300 rounded-md flex items-center justify-center p-2 mb-4 overflow-hidden">
+                  {profileForm.logotipo_url ? (
+                    <img
+                      src={profileForm.logotipo_url}
+                      alt="Logo"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-3xl">🏢</span>
+                  )}
+                </div>
+
+                <label className="inline-block bg-[#2563EB] hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-md cursor-pointer">
+                  {uploadingLogo
+                    ? isEn
+                      ? "Uploading..."
+                      : "A carregar..."
+                    : isEn
+                    ? "📤 Upload Logo"
+                    : "📤 Carregar Imagem"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+                </label>
+
+                <div className="mt-3">
+                  <input
+                    type="url"
+                    value={profileForm.logotipo_url}
+                    onChange={(e) =>
+                      setProfileForm({
+                        ...profileForm,
+                        logotipo_url: e.target.value,
+                      })
+                    }
+                    placeholder="Ou cole o URL direto do logótipo..."
+                    className="w-full py-2 px-3 bg-white border border-slate-300 rounded-md text-xs font-bold text-[#0F172A] outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* DADOS PÚBLICOS E BIOGRAFIA */}
+              <div className="md:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    {isEn ? "Organization Name *" : "Nome Público da Organização *"}
+                  </label>
+                  <input
+                    required
+                    value={profileForm.empresa_nome}
+                    onChange={(e) =>
+                      setProfileForm({
+                        ...profileForm,
+                        empresa_nome: e.target.value,
+                      })
+                    }
+                    className="w-full py-2.5 px-3.5 bg-[#F8FAFC] border border-slate-300 rounded-md text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    {isEn ? "Founded Year" : "Ano de Fundação"}
+                  </label>
+                  <input
+                    type="number"
+                    value={profileForm.ano_fundacao}
+                    onChange={(e) =>
+                      setProfileForm({
+                        ...profileForm,
+                        ano_fundacao: e.target.value,
+                      })
+                    }
+                    placeholder="Ex: 1998"
+                    className="w-full py-2.5 px-3.5 bg-[#F8FAFC] border border-slate-300 rounded-md text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    {isEn ? "Public Email" : "E-mail Público"}
+                  </label>
+                  <input
+                    type="email"
+                    value={profileForm.email_publico}
+                    onChange={(e) =>
+                      setProfileForm({
+                        ...profileForm,
+                        email_publico: e.target.value,
+                      })
+                    }
+                    className="w-full py-2.5 px-3.5 bg-[#F8FAFC] border border-slate-300 rounded-md text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    {isEn ? "Public Phone" : "Telefone Público"}
+                  </label>
+                  <input
+                    value={profileForm.telefone_publico}
+                    onChange={(e) =>
+                      setProfileForm({
+                        ...profileForm,
+                        telefone_publico: e.target.value,
+                      })
+                    }
+                    className="w-full py-2.5 px-3.5 bg-[#F8FAFC] border border-slate-300 rounded-md text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    Website
+                  </label>
+                  <input
+                    value={profileForm.website}
+                    onChange={(e) =>
+                      setProfileForm({
+                        ...profileForm,
+                        website: e.target.value,
+                      })
+                    }
+                    placeholder="https://..."
+                    className="w-full py-2.5 px-3.5 bg-[#F8FAFC] border border-slate-300 rounded-md text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    {isEn ? "Headquarters / Location" : "Localização / Sede"}
+                  </label>
+                  <input
+                    value={profileForm.morada_sede}
+                    onChange={(e) =>
+                      setProfileForm({
+                        ...profileForm,
+                        morada_sede: e.target.value,
+                      })
+                    }
+                    className="w-full py-2.5 px-3.5 bg-[#F8FAFC] border border-slate-300 rounded-md text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    {isEn
+                      ? "Biography / Description (Portuguese)"
+                      : "Biografia / Apresentação da Organização (Português)"}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={profileForm.descricao}
+                    onChange={(e) =>
+                      setProfileForm({
+                        ...profileForm,
+                        descricao: e.target.value,
+                      })
+                    }
+                    className="w-full p-3 bg-[#F8FAFC] border border-slate-300 rounded-md text-xs font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    {isEn
+                      ? "Biography / Description (English)"
+                      : "Biografia / Apresentação da Organização (Inglês)"}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={profileForm.descricao_en}
+                    onChange={(e) =>
+                      setProfileForm({
+                        ...profileForm,
+                        descricao_en: e.target.value,
+                      })
+                    }
+                    className="w-full p-3 bg-[#F8FAFC] border border-slate-300 rounded-md text-xs font-bold text-[#0F172A]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowPublicProfilePanel(false)}
+                className="bg-slate-600 hover:bg-slate-700 text-white font-black text-xs uppercase tracking-widest px-5 py-3 rounded-md cursor-pointer border-0"
+              >
+                {isEn ? "Close" : "Fechar"}
+              </button>
+              <button
+                type="submit"
+                disabled={savingProfile}
+                className="bg-[#16A34A] hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest px-6 py-3 rounded-md cursor-pointer border-0 shadow-sm"
+              >
+                {savingProfile
+                  ? isEn
+                    ? "Saving..."
+                    : "A guardar..."
+                  : isEn
+                  ? "✓ Save Public Showcase"
+                  : "✓ Guardar Montra Pública"}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+
+      {/* CARTÃO DE ACESSO DIRETO AO CONTRATO GLOBAL E PDF (QUANDO O PARCEIRO TEM CONTRATO!) */}
+      {temContrato && (
+        <div className="mb-8 bg-[#0F172A] text-white p-6 rounded-md border-l-4 border-[#16A34A] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-[#16A34A] text-white rounded-md flex items-center justify-center text-2xl font-black shrink-0">
+              📄
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="bg-[#16A34A] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md">
+                  {isEn ? "Signed & Verified" : "Assinado & Validado"}
+                </span>
+                <span className="text-xs font-bold text-slate-300">
+                  •{" "}
+                  {perfilCompleto?.taxa_comissao ?? 12}%{" "}
+                  {isEn ? "Agreed Commission" : "Comissão Acordada"}
+                </span>
+              </div>
+              <h3 className="text-base md:text-lg font-black text-white m-0">
+                {isEn
+                  ? "Global B2B Partnership Agreement"
+                  : "Contrato Global de Parceria e Intermediação B2B"}
               </h3>
+              <p className="text-xs text-slate-300 mt-1 mb-0">
+                {isEn
+                  ? "Your global agreement covers all your programs on HelloCamp. You can view the clauses or download the official PDF at any time."
+                  : "O seu acordo global abrange todos os seus campos na HelloCamp. Pode consultar o documento ou descarregar o PDF oficial a qualquer momento."}
+              </p>
             </div>
           </div>
-          <Link
-            href={`/${lang}/admin/inbox`}
-            className="bg-[#0E3A68] text-white px-5 py-2.5 rounded-md font-black text-xs uppercase tracking-widest no-underline"
-          >
-            {isEn ? "Open Inbox" : "Abrir Mensagens"} &rarr;
-          </Link>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <Link
+              href={`/${lang}/admin/contrato`}
+              className="bg-[#2563EB] hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest px-4 py-3 rounded-md no-underline transition-colors"
+            >
+              👁️ {isEn ? "View Contract" : "Ver Contrato"}
+            </Link>
+            <button
+              type="button"
+              onClick={handleDescarregarContratoPdfDireto}
+              disabled={downloadingContractPdf}
+              className="bg-[#16A34A] hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest px-5 py-3 rounded-md cursor-pointer border-0 transition-colors"
+            >
+              📥{" "}
+              {downloadingContractPdf
+                ? "..."
+                : isEn
+                ? "Download PDF"
+                : "Descarregar PDF"}
+            </button>
+          </div>
         </div>
       )}
 
+      {/* ALERTA DE PEDIDOS DE ALTERAÇÃO DE PAIS */}
       {metricas.pedidosPendentes > 0 && (
-        <div className="bg-amber-50 border border-amber-300 p-5 rounded-md mb-8 flex items-center justify-between flex-wrap gap-4 shadow-sm">
+        <div className="bg-amber-50 border-2 border-[#F59E0B] p-6 rounded-md mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
           <div className="flex items-center gap-4">
-            <span className="text-2xl">📬</span>
+            <span className="text-3xl">📬</span>
             <div>
-              <h3 className="m-0 text-sm font-black text-amber-950">
+              <h3 className="m-0 text-base font-black text-[#0F172A]">
                 {isEn
-                  ? `You have ${metricas.pedidosPendentes} pending extra request(s)!`
-                  : `Tem ${metricas.pedidosPendentes} pedido(s) de alteração/extra pendente(s)!`}
+                  ? `You have ${metricas.pedidosPendentes} pending parent change request(s)!`
+                  : `Tem ${metricas.pedidosPendentes} pedido(s) de alteração pendente(s)!`}
               </h3>
+              <p className="m-0 mt-1 text-xs font-bold text-slate-600">
+                {isEn
+                  ? "Parents are waiting for your approval to add extras or adjust bookings."
+                  : "Os encarregados de educação solicitaram alterações ou novos extras nas reservas."}
+              </p>
             </div>
           </div>
           <Link
             href={`/${lang}/admin/reservas`}
-            className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-md font-black text-xs uppercase tracking-widest no-underline"
+            className="bg-[#F59E0B] hover:bg-amber-600 text-white px-5 py-3 rounded-md font-black text-xs uppercase tracking-widest no-underline shrink-0"
           >
-            {isEn ? "Review Requests" : "Analisar Pedidos"} &rarr;
+            {isEn ? "Review Requests →" : "Analisar Pedidos →"}
           </Link>
         </div>
       )}
 
-      {/* GRELHA PRINCIPAL */}
+      {/* GRELHA PRINCIPAL: TRAÇÃO & MOTOR DE OTIMIZAÇÃO */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-7 flex flex-col gap-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        {/* COLUNA ESQUERDA: MÉTRICAS E ATALHOS */}
+        <div className="lg:col-span-7 space-y-6">
+          <h2 className="text-sm font-black uppercase tracking-widest text-[#0F172A] m-0">
+            {isEn ? "Traction & Performance" : "Tração & Desempenho"}
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-md border border-slate-200 shadow-sm">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
-                🎫 {isEn ? "Bookings" : "Inscrições"}
-              </span>
-              <span className="text-3xl font-black text-[#167524] block">
+              <div className="flex items-center justify-between mb-3">
+                <span className="w-10 h-10 bg-[#16A34A] text-white rounded-md flex items-center justify-center text-lg font-black">
+                  🎫
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {isEn ? "Bookings" : "Inscrições"}
+                </span>
+              </div>
+              <span className="text-3xl font-black text-[#16A34A] block">
                 {metricas.totalReservas}
               </span>
+              <p className="text-[11px] font-bold text-slate-500 mt-1 mb-0">
+                {isEn ? "Confirmed registrations" : "Inscrições confirmadas"}
+              </p>
             </div>
 
             <div className="bg-white p-5 rounded-md border border-slate-200 shadow-sm">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
-                💶 {isEn ? "Gross Sales" : "Volume Bruto"}
-              </span>
-              <span className="text-3xl font-black text-slate-900 block">
-                {metricas.receitaBruta.toFixed(0)}€
-              </span>
-            </div>
-
-            <div className="bg-white p-5 rounded-md border border-slate-200 shadow-sm">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
-                🏕️ {isEn ? "Programs" : "Programas Ativos"}
-              </span>
-              <span className="text-3xl font-black text-slate-900 block">
-                {metricas.camposAtivos}
-              </span>
-            </div>
-
-            <div className="bg-white p-5 rounded-md border border-slate-200 shadow-sm">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
-                ❤️ {isEn ? "Wishlists" : "Favoritos"}
-              </span>
-              <span className="text-3xl font-black text-slate-900 block">
+              <div className="flex items-center justify-between mb-3">
+                <span className="w-10 h-10 bg-[#F43F5E] text-white rounded-md flex items-center justify-center text-lg font-black">
+                  ❤️
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {isEn ? "Wishlists" : "Favoritos"}
+                </span>
+              </div>
+              <span className="text-3xl font-black text-[#0F172A] block">
                 {metricas.vezesGuardado}
               </span>
+              <p className="text-[11px] font-bold text-slate-500 mt-1 mb-0">
+                {isEn ? "Saved by families" : "Guardado por famílias"}
+              </p>
             </div>
 
             <div className="bg-white p-5 rounded-md border border-slate-200 shadow-sm">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
-                ⭐ {isEn ? "Rating" : "Avaliação"}
-              </span>
-              <span className="text-3xl font-black text-slate-900 block">
+              <div className="flex items-center justify-between mb-3">
+                <span className="w-10 h-10 bg-[#F59E0B] text-white rounded-md flex items-center justify-center text-lg font-black">
+                  ⭐
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {isEn ? "Rating" : "Avaliação"}
+                </span>
+              </div>
+              <span className="text-3xl font-black text-[#0F172A] block">
                 {metricas.mediaEstrelas > 0
                   ? metricas.mediaEstrelas.toFixed(1)
-                  : "-"}
+                  : "—"}
               </span>
-            </div>
-
-            <div className="bg-white p-5 rounded-md border border-slate-200 shadow-sm">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
-                💬 Inbox
-              </span>
-              <span className="text-3xl font-black text-slate-900 block">
-                {metricas.mensagensNaoLidas}
-              </span>
+              <p className="text-[11px] font-bold text-slate-500 mt-1 mb-0">
+                {isEn ? "Global score" : "Média global de avaliações"}
+              </p>
             </div>
           </div>
 
+          {/* ATALHOS RÁPIDOS COM BOTÕES COLORIDOS E TEXTO BRANCO */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Link
-              href={`/${lang}/admin/reservas`}
-              className="bg-white hover:border-[#167524] p-5 rounded-md border border-slate-200 shadow-sm no-underline flex items-center justify-between"
+              href={`/${lang}/admin/campos`}
+              className="bg-[#2563EB] hover:bg-blue-700 text-white p-5 rounded-md no-underline transition-colors shadow-sm flex items-center justify-between"
             >
-              <span className="text-sm font-black text-slate-900">
-                📋 {isEn ? "Bookings & Health Forms" : "Reservas e Fichas Médicas"}
-              </span>
-              <span className="text-[#167524] font-black">&rarr;</span>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-100 block mb-1">
+                  {metricas.camposAtivos}{" "}
+                  {isEn ? "Active" : "Ativos"} • {metricas.camposPendentes}{" "}
+                  {isEn ? "Pending" : "Pendentes"}
+                </span>
+                <span className="text-base font-black block">
+                  🏕️ {isEn ? "Manage My Camps" : "Gerir Os Meus Campos"}
+                </span>
+              </div>
+              <span className="text-xl font-black">&rarr;</span>
+            </Link>
+
+            <Link
+              href={`/${lang}/admin/reservas`}
+              className="bg-[#16A34A] hover:bg-green-700 text-white p-5 rounded-md no-underline transition-colors shadow-sm flex items-center justify-between"
+            >
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-100 block mb-1">
+                  {isEn ? "Attendance & Health" : "Listas & Fichas Médicas"}
+                </span>
+                <span className="text-base font-black block">
+                  📋 {isEn ? "Manage Logistics" : "Inscrições & Logística"}
+                </span>
+              </div>
+              <span className="text-xl font-black">&rarr;</span>
             </Link>
 
             <Link
               href={`/${lang}/admin/faturacao`}
-              className="bg-white hover:border-[#167524] p-5 rounded-md border border-slate-200 shadow-sm no-underline flex items-center justify-between"
+              className="bg-[#0F172A] hover:bg-slate-800 text-white p-5 rounded-md no-underline transition-colors shadow-sm flex items-center justify-between"
             >
-              <span className="text-sm font-black text-slate-900">
-                💰 {isEn ? "Billing & Stripe" : "Finanças e Faturação"}
-              </span>
-              <span className="text-[#167524] font-black">&rarr;</span>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 block mb-1">
+                  {isEn ? "Payouts & IBAN" : "Pagamentos & IBAN"}
+                </span>
+                <span className="text-base font-black block">
+                  💰 {isEn ? "Finance & Billing" : "Finanças e Faturação"}
+                </span>
+              </div>
+              <span className="text-xl font-black">&rarr;</span>
+            </Link>
+
+            <Link
+              href={`/${lang}/admin/inbox`}
+              className="bg-[#F59E0B] hover:bg-amber-600 text-white p-5 rounded-md no-underline transition-colors shadow-sm flex items-center justify-between"
+            >
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-100 block mb-1">
+                  {isEn ? "Direct Chat" : "Chat com Encarregados"}
+                </span>
+                <span className="text-base font-black block">
+                  💬 {isEn ? "Parent Messages" : "Caixa de Mensagens"}
+                </span>
+              </div>
+              <span className="text-xl font-black">&rarr;</span>
             </Link>
           </div>
         </div>
 
-        {/* MOTOR DE OTIMIZAÇÃO */}
+        {/* COLUNA DIREITA: MOTOR DE OTIMIZAÇÃO */}
         <div className="lg:col-span-5 bg-white p-6 rounded-md border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
-            <h2 className="text-sm font-black text-slate-900 m-0 uppercase tracking-widest">
+          <div className="flex items-center justify-between mb-6 pb-3 border-b border-slate-100">
+            <h2 className="text-sm font-black uppercase tracking-widest text-[#0F172A] m-0">
               {isEn ? "Optimization Engine" : "Motor de Otimização"}
             </h2>
-            <span className="px-2.5 py-0.5 rounded-sm text-xs font-black bg-slate-100 text-slate-700">
-              {sugestoes.length}
+            <span
+              className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest text-white ${
+                sugestoes.length > 0 ? "bg-[#F43F5E]" : "bg-[#16A34A]"
+              }`}
+            >
+              {sugestoes.length} {isEn ? "Tasks" : "Avisos"}
             </span>
           </div>
 
           {sugestoes.length === 0 ? (
-            <div className="text-center py-10 px-4 bg-slate-50 rounded-md border border-dashed border-slate-300">
-              <span className="text-4xl block mb-2">🏆</span>
-              <h3 className="m-0 text-sm font-black text-slate-900">
-                {isEn ? "All set!" : "Tudo 100% otimizado!"}
+            <div className="text-center py-10 px-4 bg-[#F8FAFC] rounded-md border border-dashed border-slate-300">
+              <span className="text-4xl block mb-3">🏆</span>
+              <h3 className="text-base font-black text-[#0F172A] m-0 mb-1">
+                {isEn ? "All set!" : "Tudo otimizado!"}
               </h3>
+              <p className="text-xs font-bold text-slate-500 m-0">
+                {isEn
+                  ? "Your account, contract, and camps are fully configured."
+                  : "A sua conta, contrato global e campos estão 100% configurados."}
+              </p>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
-              {sugestoes.map((sug, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-md border border-slate-200 bg-slate-50 flex gap-3 items-start"
-                >
-                  <div className="text-xl">{sug.icon}</div>
-                  <div className="flex-1">
-                    <h4 className="m-0 mb-1 text-xs font-black text-slate-900 uppercase">
-                      {sug.titulo}
-                    </h4>
-                    <p className="m-0 mb-2 text-xs text-slate-600">
-                      {sug.texto}
-                    </p>
-                    {sug.openBrandModal ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowBrandModal(true)}
-                        className="text-xs font-black text-[#167524] underline cursor-pointer bg-transparent border-0 p-0"
-                      >
-                        {sug.actionText} &rarr;
-                      </button>
-                    ) : (
+            <div className="space-y-3.5">
+              {sugestoes.map((sug, idx) => {
+                let badgeBg = "bg-[#2563EB]";
+                if (sug.tipo === "critical") badgeBg = "bg-[#F43F5E]";
+                else if (sug.tipo === "warning") badgeBg = "bg-[#F59E0B]";
+
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-md bg-[#F8FAFC] border border-slate-200 flex gap-3.5 items-start"
+                  >
+                    <div className="text-2xl shrink-0">{sug.icon}</div>
+                    <div className="flex-1">
+                      <h4 className="m-0 mb-1 text-xs font-black uppercase tracking-wider text-[#0F172A]">
+                        {sug.titulo}
+                      </h4>
+                      <p className="m-0 mb-3 text-xs text-slate-600 leading-relaxed font-medium">
+                        {sug.texto}
+                      </p>
                       <Link
                         href={sug.link}
-                        className="text-xs font-black text-[#167524] underline"
+                        className={`inline-block ${badgeBg} text-white font-black text-[10px] uppercase tracking-widest px-3.5 py-2 rounded-md no-underline`}
                       >
                         {sug.actionText} &rarr;
                       </Link>
-                    )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       </div>
-
-      {/* ===================================================================== */}
-      {/* MODAL DE CONFIGURAÇÃO DO LOGÓTIPO E DESCRIÇÃO DA PÁGINA DO PARCEIRO   */}
-      {/* ===================================================================== */}
-      {showBrandModal && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setShowBrandModal(false)}
-        >
-          <div
-            className="bg-white rounded-md max-w-2xl w-full p-6 md:p-8 border border-slate-300 shadow-2xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center pb-4 mb-6 border-b border-slate-200">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 m-0">
-                  🏢{" "}
-                  {isEn
-                    ? "Public Organizer Profile & Logo"
-                    : "Configurar Logótipo e Montra Pública"}
-                </h2>
-                <p className="text-xs text-slate-500 m-0 mt-1">
-                  {isEn
-                    ? "This information is displayed on your public organizer page and camp listings."
-                    : "Estes dados aparecem na sua página pública de organizador e junto aos seus campos."}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowBrandModal(false)}
-                className="w-8 h-8 rounded-sm bg-slate-100 font-black cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveBrandProfile} className="space-y-5">
-              {/* UPLOAD DO LOGÓTIPO */}
-              <div className="flex flex-col sm:flex-row items-center gap-5 bg-slate-50 p-4 rounded-md border border-slate-200">
-                <div className="w-24 h-24 bg-white border border-slate-300 rounded-md flex items-center justify-center overflow-hidden p-2 flex-shrink-0">
-                  {brandForm.logotipo_url ? (
-                    <img
-                      src={brandForm.logotipo_url}
-                      alt="Logo"
-                      className="w-full h-full object-contain"
-                    />
-                  ) : (
-                    <span className="text-2xl">🏢</span>
-                  )}
-                </div>
-                <div className="flex-1 text-center sm:text-left">
-                  <label className="block text-xs font-black uppercase text-slate-800 mb-1">
-                    {isEn ? "Company Logo" : "Logótipo da Organização"}
-                  </label>
-                  <p className="text-xs text-slate-500 m-0 mb-3">
-                    {isEn
-                      ? "PNG or JPG format. Displayed on your public page and camp cards."
-                      : "Formato PNG ou JPG. Exibido na sua página pública e na ficha de todos os seus campos."}
-                  </p>
-                  <label className="inline-block bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-[10px] px-4 py-2.5 rounded-md cursor-pointer">
-                    {uploadingLogo
-                      ? isEn
-                        ? "Uploading..."
-                        : "A carregar..."
-                      : isEn
-                      ? "Upload New Logo"
-                      : "Carregar Logótipo"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleUploadLogo}
-                      disabled={uploadingLogo}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
-                    {isEn
-                      ? "Public Organization Name *"
-                      : "Nome Público da Organização *"}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={brandForm.empresa_nome}
-                    onChange={(e) =>
-                      setBrandForm({
-                        ...brandForm,
-                        empresa_nome: e.target.value,
-                      })
-                    }
-                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-md text-sm font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
-                    {isEn ? "Founded Year (Optional)" : "Ano de Fundação (Opcional)"}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: 2015"
-                    value={brandForm.ano_fundacao}
-                    onChange={(e) =>
-                      setBrandForm({
-                        ...brandForm,
-                        ano_fundacao: e.target.value,
-                      })
-                    }
-                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-md text-sm font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
-                    Website (Opcional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="https://..."
-                    value={brandForm.website}
-                    onChange={(e) =>
-                      setBrandForm({ ...brandForm, website: e.target.value })
-                    }
-                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-md text-sm font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
-                    {isEn ? "Public Phone" : "Telefone de Contacto"}
-                  </label>
-                  <input
-                    type="text"
-                    value={brandForm.telefone}
-                    onChange={(e) =>
-                      setBrandForm({ ...brandForm, telefone: e.target.value })
-                    }
-                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-md text-sm font-bold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
-                  {isEn
-                    ? "About the Organization / Manifesto (Auto-translated to EN)"
-                    : "Sobre a Organização / Apresentação aos Pais (Traduzido automaticamente para Inglês)"}
-                </label>
-                <textarea
-                  rows={5}
-                  value={brandForm.biografia_empresa}
-                  onChange={(e) =>
-                    setBrandForm({
-                      ...brandForm,
-                      biografia_empresa: e.target.value,
-                    })
-                  }
-                  placeholder={
-                    isEn
-                      ? "Tell parents about your history, values, accredited monitors, and experience..."
-                      : "Apresente a história da sua organização, missão, experiência da equipa e o que torna os vossos programas especiais..."
-                  }
-                  className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-md text-sm font-medium leading-relaxed"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setShowBrandModal(false)}
-                  className="px-5 py-2.5 rounded-md border border-slate-300 bg-white text-xs font-bold cursor-pointer"
-                >
-                  {isEn ? "Cancel" : "Cancelar"}
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingBrand}
-                  className="bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-xs px-6 py-2.5 rounded-md cursor-pointer shadow-sm"
-                >
-                  {savingBrand
-                    ? isEn
-                      ? "Saving..."
-                      : "A guardar..."
-                    : isEn
-                    ? "✓ Save Brand Profile"
-                    : "✓ Guardar Logótipo e Apresentação"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
