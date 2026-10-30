@@ -43,6 +43,7 @@ export default function GestaoContratoGlobalPage({
   const [modoEdicao, setModoEdicao] = useState(false);
 
   const [perfil, setPerfil] = useState<any>(null);
+  const [camposParceiro, setCamposParceiro] = useState<any[]>([]);
   const [totalCampos, setTotalCampos] = useState(0);
   const [pdfExistenteUrl, setPdfExistenteUrl] = useState<string | null>(null);
 
@@ -87,15 +88,22 @@ export default function GestaoContratoGlobalPage({
         supabase.from("perfis").select("*").eq("id", uid).single(),
         supabase
           .from("campos")
-          .select("id, contrato_parceiro_url")
-          .eq("organizador_id", uid),
+          .select(
+            "id, nome, nome_en, categoria, local, preco, ativo, taxa_comissao, contrato_parceiro_url"
+          )
+          .eq("organizador_id", uid)
+          .order("created_at", { ascending: true }),
       ]);
 
       setPerfil(perfilData);
+      setCamposParceiro(camposData || []);
       setTotalCampos(camposData?.length || 0);
 
-      const campoComPdf = camposData?.find((c) => c.contrato_parceiro_url);
-      if (campoComPdf?.contrato_parceiro_url && campoComPdf.contrato_parceiro_url.startsWith("http")) {
+      const campoComPdf = camposData?.find((c: any) => c.contrato_parceiro_url);
+      if (
+        campoComPdf?.contrato_parceiro_url &&
+        campoComPdf.contrato_parceiro_url.startsWith("http")
+      ) {
         setPdfExistenteUrl(campoComPdf.contrato_parceiro_url);
       }
 
@@ -109,46 +117,47 @@ export default function GestaoContratoGlobalPage({
             cd.empresaNome ||
             cd.nomeEmpresa ||
             perfilData.empresa_nome ||
+            perfilData.nome_empresa ||
+            perfilData.nome ||
             "",
-          nif: cd.nif || perfilData.nif_empresa || "",
-          formaJuridica:
-            cd.formaJuridica || "Sociedade por Quotas (Lda)",
-          pessoaContacto:
-            cd.pessoaContacto || perfilData.nome_completo || "",
+          nif:
+            cd.nif ||
+            (perfilData.nif_empresa ? String(perfilData.nif_empresa) : ""),
+          formaJuridica: cd.formaJuridica || "Sociedade por Quotas (Lda)",
+          pessoaContacto: cd.pessoaContacto || perfilData.nome_completo || "",
           telefone: cd.telefone || perfilData.telefone || "",
-          morada: cd.morada || "",
+          morada: cd.morada || perfilData.morada_sede || "",
           codigoPostal: cd.codigoPostal || "",
           emailContacto: cd.emailContacto || perfilData.email || "",
           emailReservas:
-            cd.emailReservas || cd.emailContacto || perfilData.email || "",
-          website: cd.website || "",
+            cd.emailReservas ||
+            cd.emailContacto ||
+            perfilData.email_publico ||
+            perfilData.email ||
+            "",
+          website: cd.website || perfilData.website || "",
           responsavelRGPD:
             cd.responsavelRGPD ||
             cd.pessoaContacto ||
             perfilData.nome_completo ||
             "",
           modalidadeReserva:
-            cd.modalidadeReserva ||
-            perfilData.modalidade_reserva ||
-            "direta",
+            cd.modalidadeReserva || perfilData.modalidade_reserva || "direta",
           linkExternoReserva:
-            cd.linkExternoReserva ||
-            perfilData.link_externo_reserva ||
-            "",
-          tipoPagamento:
-            cd.tipoPagamento || cd.tipo_pagamento || "100_total",
+            cd.linkExternoReserva || perfilData.link_externo_reserva || "",
+          tipoPagamento: cd.tipoPagamento || cd.tipo_pagamento || "100_total",
           politicaCancelamento:
             cd.politicaCancelamento ||
             cd.politica_cancelamento ||
             "Flexível (Reembolso a 100% até 7 dias antes)",
           acordosComplementares: cd.acordosComplementares || "",
-          assinaturaNome:
-            cd.assinaturaNome || perfilData.nome_completo || "",
-          assinaturaCargo:
-            cd.assinaturaCargo || "Representante Legal",
+          assinaturaNome: cd.assinaturaNome || perfilData.nome_completo || "",
+          assinaturaCargo: cd.assinaturaCargo || "Representante Legal",
           concordaTermos: jaTemContrato,
           dataSubmissao:
-            cd.dataSubmissao || perfilData.created_at || new Date().toISOString(),
+            cd.dataSubmissao ||
+            perfilData.created_at ||
+            new Date().toISOString(),
           ipAssinatura: cd.ipAssinatura || "Registado no Servidor",
         });
       }
@@ -173,14 +182,14 @@ export default function GestaoContratoGlobalPage({
     const doc = new jsPDF({ format: "a4", unit: "mm" });
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    const blueBrand: [number, number, number] = [14, 58, 104]; // #0E3A68
-    const goldBrand: [number, number, number] = [226, 164, 29]; // #e2a41d
-    const greenBrand: [number, number, number] = [22, 117, 36]; // #167524
-    const slateDark: [number, number, number] = [30, 41, 59];
+    const blueBrand: [number, number, number] = [37, 99, 235]; // #2563EB
+    const goldBrand: [number, number, number] = [245, 158, 11]; // #F59E0B
+    const greenBrand: [number, number, number] = [22, 163, 74]; // #16A34A
+    const slateDark: [number, number, number] = [15, 23, 42]; // #0F172A
     const slateMuted: [number, number, number] = [100, 116, 139];
 
     // 1. BANNER CORPORATIVO DE TOPO
-    doc.setFillColor(...blueBrand);
+    doc.setFillColor(...slateDark);
     doc.rect(0, 0, pageWidth, 38, "F");
     doc.setFillColor(...goldBrand);
     doc.rect(0, 38, pageWidth, 2, "F");
@@ -603,7 +612,11 @@ export default function GestaoContratoGlobalPage({
       );
       return;
     }
-    if (!form.assinaturaNome.trim() || !form.assinaturaCargo.trim() || !form.concordaTermos) {
+    if (
+      !form.assinaturaNome.trim() ||
+      !form.assinaturaCargo.trim() ||
+      !form.concordaTermos
+    ) {
       alert(
         isEn
           ? "Please complete the digital signature and accept the terms at the end of the contract."
@@ -713,19 +726,17 @@ export default function GestaoContratoGlobalPage({
 
   const listaFormasJuridicas = isEn ? FORMAS_JURIDICAS_EN : FORMAS_JURIDICAS_PT;
   const inputContractClass =
-    "w-full p-3.5 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#167524] focus:ring-2 focus:ring-[#167524]/15 transition-all disabled:bg-slate-100 disabled:text-slate-600 font-sans";
+    "w-full p-3.5 bg-white border border-slate-300 rounded-md text-sm font-bold text-[#0F172A] outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all disabled:bg-slate-100 disabled:text-slate-600 font-sans";
 
   return (
     <div className="max-w-5xl mx-auto font-sans pb-24">
       {/* BARRA DE CONTROLO SUPERIOR DO PORTAL */}
-      <div className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm mb-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div className="bg-white p-5 md:p-6 rounded-md border border-slate-200 shadow-sm mb-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2.5 mb-1.5">
             <span
-              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                jaAssinado
-                  ? "bg-emerald-100 text-[#167524] border border-emerald-200"
-                  : "bg-amber-100 text-amber-900 border border-amber-200"
+              className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest text-white ${
+                jaAssinado ? "bg-[#16A34A]" : "bg-[#F59E0B]"
               }`}
             >
               {jaAssinado
@@ -736,14 +747,14 @@ export default function GestaoContratoGlobalPage({
                 ? "⚠️ Pending Digital Signature"
                 : "⚠️ Assinatura Digital Pendente"}
             </span>
-            <span className="text-xs font-bold text-slate-400">
+            <span className="text-xs font-bold text-slate-500">
               • {totalCampos}{" "}
               {isEn
                 ? "Program(s) Covered"
                 : "Programa(s) Abrangido(s)"}
             </span>
           </div>
-          <h1 className="text-xl md:text-2xl font-black text-slate-900 m-0">
+          <h1 className="text-xl md:text-2xl font-black text-[#0F172A] m-0">
             {isEn
               ? "Global B2B Partnership Agreement"
               : "Acordo Global de Parceria e Intermediação"}
@@ -753,14 +764,14 @@ export default function GestaoContratoGlobalPage({
         {/* BOTÕES DE IDIOMA DO CONTRATO, EDIÇÃO E DOWNLOAD PDF */}
         <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
           {/* Seletor Customizado de Idioma do Contrato */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+          <div className="flex bg-slate-100 p-1 rounded-md border border-slate-200">
             <button
               type="button"
               onClick={() => setContractLang("pt")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer transition-all ${
+              className={`px-3 py-1.5 rounded-md text-xs font-black cursor-pointer transition-all border-0 ${
                 contractLang === "pt"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
+                  ? "bg-[#2563EB] text-white shadow-sm"
+                  : "bg-transparent text-slate-600 hover:text-[#0F172A]"
               }`}
             >
               🇵🇹 PT
@@ -768,10 +779,10 @@ export default function GestaoContratoGlobalPage({
             <button
               type="button"
               onClick={() => setContractLang("en")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer transition-all ${
+              className={`px-3 py-1.5 rounded-md text-xs font-black cursor-pointer transition-all border-0 ${
                 contractLang === "en"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
+                  ? "bg-[#2563EB] text-white shadow-sm"
+                  : "bg-transparent text-slate-600 hover:text-[#0F172A]"
               }`}
             >
               🇬🇧 EN
@@ -782,7 +793,7 @@ export default function GestaoContratoGlobalPage({
             <button
               type="button"
               onClick={() => setModoEdicao(!modoEdicao)}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-black uppercase tracking-widest text-[11px] px-4 py-3 rounded-xl cursor-pointer transition-colors"
+              className="bg-[#F59E0B] hover:bg-amber-600 text-white font-black uppercase tracking-widest text-[11px] px-4 py-3 rounded-md cursor-pointer transition-colors border-0"
             >
               {modoEdicao
                 ? isEn
@@ -799,7 +810,7 @@ export default function GestaoContratoGlobalPage({
               href={pdfExistenteUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-[#0E3A68] hover:bg-[#0b2b4d] text-white font-black uppercase tracking-widest text-[11px] px-4 py-3 rounded-xl no-underline shadow-sm transition-colors"
+              className="bg-[#2563EB] hover:bg-blue-700 text-white font-black uppercase tracking-widest text-[11px] px-4 py-3 rounded-md no-underline shadow-sm transition-colors"
             >
               📥 {isEn ? "Archived PDF" : "PDF Arquivado"}
             </a>
@@ -809,7 +820,7 @@ export default function GestaoContratoGlobalPage({
             type="button"
             onClick={handleDownloadPdf}
             disabled={downloadingPdf}
-            className="bg-[#167524] hover:bg-[#115a1b] text-white font-black uppercase tracking-widest text-[11px] px-5 py-3 rounded-xl cursor-pointer shadow-sm transition-colors"
+            className="bg-[#16A34A] hover:bg-green-700 text-white font-black uppercase tracking-widest text-[11px] px-5 py-3 rounded-md cursor-pointer shadow-sm transition-colors border-0"
           >
             📄{" "}
             {downloadingPdf
@@ -826,15 +837,15 @@ export default function GestaoContratoGlobalPage({
       {/* ===================================================================== */}
       <form
         onSubmit={handleSubmeterContratoGlobal}
-        className="bg-white shadow-xl border border-slate-200 p-6 sm:p-10 md:p-16 text-slate-900 leading-relaxed rounded-3xl font-serif"
+        className="bg-white shadow-xl border border-slate-200 p-6 sm:p-10 md:p-16 text-[#0F172A] leading-relaxed rounded-md font-serif"
       >
         {/* CABEÇALHO DO CONTRATO */}
         <div className="text-center mb-12 md:mb-16">
           <div className="text-3xl md:text-4xl font-black tracking-tighter mb-4 font-sans">
-            <span className="text-[#0E3A68]">Hello</span>
-            <span className="text-[#EBA914]">Camp</span>
+            <span className="text-[#0F172A]">Hello</span>
+            <span className="text-[#F59E0B]">Camp</span>
           </div>
-          <h2 className="text-xl md:text-2xl font-bold uppercase mb-2 tracking-widest border-b-2 border-slate-900 inline-block pb-2">
+          <h2 className="text-xl md:text-2xl font-bold uppercase mb-2 tracking-widest border-b-2 border-[#0F172A] inline-block pb-2">
             {isEn
               ? "Global Intermediation Contract"
               : "Contrato Global de Intermediação"}
@@ -849,11 +860,11 @@ export default function GestaoContratoGlobalPage({
         {/* OS 4 PILARES DO ENQUADRAMENTO */}
         <div className="space-y-8 md:space-y-10 mb-12 font-sans">
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#F59E0B] text-white rounded-md flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm font-black">
               📝
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 mb-1.5 m-0">
+              <h3 className="text-base sm:text-lg font-black uppercase text-[#0F172A] mb-1.5 m-0">
                 {isEn
                   ? "1. Conclusion of the Contract"
                   : "1. Celebração do Contrato"}
@@ -867,11 +878,11 @@ export default function GestaoContratoGlobalPage({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-50 border border-blue-200 rounded-2xl flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#2563EB] text-white rounded-md flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm font-black">
               🏖️
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 mb-1.5 m-0">
+              <h3 className="text-base sm:text-lg font-black uppercase text-[#0F172A] mb-1.5 m-0">
                 {isEn ? "2. Promotion of Offers" : "2. Divulgação das Ofertas"}
               </h3>
               <p className="text-sm text-slate-600 text-justify leading-relaxed m-0">
@@ -883,11 +894,11 @@ export default function GestaoContratoGlobalPage({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#16A34A] text-white rounded-md flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm font-black">
               💻
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 mb-1.5 m-0">
+              <h3 className="text-base sm:text-lg font-black uppercase text-[#0F172A] mb-1.5 m-0">
                 {isEn
                   ? "3. Bookings through HelloCamp"
                   : "3. Reservas através da HelloCamp"}
@@ -901,11 +912,11 @@ export default function GestaoContratoGlobalPage({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#0E3A68] text-white rounded-2xl flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm font-black">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#0F172A] text-white rounded-md flex items-center justify-center text-xl sm:text-2xl flex-shrink-0 shadow-sm font-black">
               €
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 mb-1.5 m-0">
+              <h3 className="text-base sm:text-lg font-black uppercase text-[#0F172A] mb-1.5 m-0">
                 {isEn
                   ? "4. Commission & Success Model"
                   : "4. Pagamento da Comissão"}
@@ -919,11 +930,55 @@ export default function GestaoContratoGlobalPage({
           </div>
         </div>
 
+        {/* PROGRAMAS ABRANGIDOS PELO ACORDO */}
+        {camposParceiro.length > 0 && (
+          <div className="bg-blue-50/60 border border-blue-200 rounded-md p-6 mb-10 font-sans">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+              <div>
+                <span className="inline-block bg-[#2563EB] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md mb-1">
+                  {isEn ? "Covered Programs" : "Programas Abrangidos"}
+                </span>
+                <h3 className="text-base font-black text-[#0F172A] m-0">
+                  {isEn
+                    ? `Configured Programs Covered by This Agreement (${camposParceiro.length})`
+                    : `Programas e Campos Abrangidos por Este Contrato (${camposParceiro.length})`}
+                </h3>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {camposParceiro.map((c: any, idx: number) => (
+                <div
+                  key={c.id}
+                  className="bg-white p-3.5 rounded-md border border-slate-200 flex items-center justify-between gap-3 shadow-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-black text-[#0F172A] truncate">
+                      {idx + 1}. {isEn && c.nome_en ? c.nome_en : c.nome}
+                    </div>
+                    <div className="text-[10px] font-bold text-slate-500 mt-0.5">
+                      📍 {c.local} • 💰 {c.preco}€ •{" "}
+                      {c.taxa_comissao ?? taxaExibida}%{" "}
+                      {isEn ? "Commission" : "Comissão"}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/${lang}/campo/${c.id}?preview=admin`}
+                    target="_blank"
+                    className="bg-[#2563EB] hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-md no-underline shrink-0"
+                  >
+                    👁️ {isEn ? "Preview" : "Ver"} ↗
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="h-px bg-slate-200 w-full my-10"></div>
 
         {/* IDENTIFICAÇÃO DAS PARTES OUTORGANTES */}
         <div className="space-y-4 font-serif text-sm md:text-[15px]">
-          <h2 className="text-lg md:text-xl font-bold text-center uppercase tracking-widest mb-6 font-sans text-slate-900">
+          <h2 className="text-lg md:text-xl font-bold text-center uppercase tracking-widest mb-6 font-sans text-[#0F172A]">
             {isEn
               ? "Global Service Agreement"
               : "Acordo Global de Prestação de Serviços"}
@@ -934,7 +989,7 @@ export default function GestaoContratoGlobalPage({
               : 'Entre a HelloCamp Portugal, com website oficial em www.hellocamp.pt e contacto via info@hellocamp.pt, doravante designada por "Primeiro Outorgante"; e do outro lado:'}
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-5 gap-x-6 mt-6 bg-slate-50 p-5 md:p-8 border border-slate-200 rounded-2xl font-sans">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-5 gap-x-6 mt-6 bg-[#F8FAFC] p-5 md:p-8 border border-slate-200 rounded-md font-sans">
             <div className="flex flex-col md:col-span-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
                 {isEn
@@ -980,10 +1035,13 @@ export default function GestaoContratoGlobalPage({
               </label>
               <div
                 onClick={() => {
-                  if (modoEdicao) setIsFormaDropdownOpen(!isFormaDropdownOpen);
+                  if (modoEdicao)
+                    setIsFormaDropdownOpen(!isFormaDropdownOpen);
                 }}
                 className={`${inputContractClass} flex items-center justify-between ${
-                  modoEdicao ? "cursor-pointer" : "cursor-default bg-slate-100"
+                  modoEdicao
+                    ? "cursor-pointer"
+                    : "cursor-default bg-slate-100"
                 }`}
               >
                 <span className="truncate">{form.formaJuridica}</span>
@@ -997,7 +1055,7 @@ export default function GestaoContratoGlobalPage({
                     className="fixed inset-0 z-40"
                     onClick={() => setIsFormaDropdownOpen(false)}
                   />
-                  <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
+                  <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-slate-200 rounded-md shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
                     {listaFormasJuridicas.map((fj) => (
                       <div
                         key={fj}
@@ -1041,7 +1099,9 @@ export default function GestaoContratoGlobalPage({
                 type="text"
                 className={inputContractClass}
                 value={form.telefone}
-                onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, telefone: e.target.value })
+                }
               />
             </div>
 
@@ -1150,13 +1210,13 @@ export default function GestaoContratoGlobalPage({
               : '- doravante designado por "Parceiro" -'}
           </p>
 
-          <div className="text-center p-6 sm:p-8 mt-8 border-y-2 border-slate-200 bg-slate-50 rounded-2xl">
+          <div className="text-center p-6 sm:p-8 mt-8 border-y-2 border-slate-200 bg-[#F8FAFC] rounded-md">
             <p className="font-bold text-base sm:text-lg mb-2">
               {isEn
                 ? "This intermediation and commercial promotion contract applies to:"
                 : "É celebrado o presente contrato de intermediação e divulgação comercial aplicável a:"}
             </p>
-            <span className="block text-lg sm:text-2xl font-black text-[#167524] uppercase tracking-widest mt-3 font-sans">
+            <span className="block text-lg sm:text-2xl font-black text-[#16A34A] uppercase tracking-widest mt-3 font-sans">
               {isEn
                 ? "All activities organized by"
                 : "Todas as atividades organizadas por"}{" "}
@@ -1182,11 +1242,11 @@ export default function GestaoContratoGlobalPage({
         {/* CLÁUSULAS CONTRATUAIS INTEGRAIS (ARTIGOS 1.º AO 7.º)                */}
         {/* =================================================================== */}
         <div className="space-y-5 text-sm md:text-[15px] text-justify pt-10">
-          <h3 className="font-black text-lg md:text-xl uppercase tracking-widest border-b-2 border-slate-900 pb-2 mb-8 font-sans">
+          <h3 className="font-black text-lg md:text-xl uppercase tracking-widest border-b-2 border-[#0F172A] pb-2 mb-8 font-sans">
             {isEn ? "Contractual Clauses" : "Cláusulas Contratuais"}
           </h3>
 
-          <h4 className="font-bold text-slate-900 font-sans">
+          <h4 className="font-bold text-[#0F172A] font-sans">
             {isEn ? "Article 1 – Commission" : "Artigo 1.º – Comissão"}
           </h4>
           <p>
@@ -1210,7 +1270,7 @@ export default function GestaoContratoGlobalPage({
               : "Caso uma reserva não possa ser realizada por motivos devidamente justificados, nomeadamente indisponibilidade da atividade ou não verificação das condições mínimas de realização, o Parceiro deverá informar a HelloCamp com a maior brevidade possível. Em caso de cancelamento por iniciativa do cliente ou desistência, aplicar-se-ão as condições previstas no Anexo 3 – Cancelamento de Reservas."}
           </p>
 
-          <h4 className="font-bold text-slate-900 font-sans">
+          <h4 className="font-bold text-[#0F172A] font-sans">
             {isEn
               ? "Article 2 – Payment Conditions"
               : "Artigo 2.º – Condições de Pagamento"}
@@ -1221,7 +1281,7 @@ export default function GestaoContratoGlobalPage({
               : "As comissões devidas à HelloCamp serão faturadas ou deduzidas automaticamente via Stripe Connect de acordo com o modelo de pagamento acordado entre as partes. O Parceiro compromete-se a liquidar eventuais faturas emitidas pela HelloCamp dentro dos prazos nelas indicados. Os valores acordados incluem IVA ou outros impostos legalmente aplicáveis."}
           </p>
 
-          <h4 className="font-bold text-slate-900 font-sans">
+          <h4 className="font-bold text-[#0F172A] font-sans">
             {isEn
               ? "Article 3 – Partner Obligations"
               : "Artigo 3.º – Obrigações do Parceiro"}
@@ -1242,7 +1302,7 @@ export default function GestaoContratoGlobalPage({
               : "O Parceiro compromete-se a informar imediatamente a HelloCamp de quaisquer alterações relativas às suas atividades, incluindo preços, disponibilidade, programas, condições de participação ou alterações aos seus termos e condições gerais."}
           </p>
 
-          <h4 className="font-bold text-slate-900 font-sans">
+          <h4 className="font-bold text-[#0F172A] font-sans">
             {isEn
               ? "Article 4 – Duration and Renewal"
               : "Artigo 4.º – Duração e Renovação"}
@@ -1253,7 +1313,7 @@ export default function GestaoContratoGlobalPage({
               : "O presente contrato produz efeitos a partir da data da sua assinatura por ambas as partes e mantém-se válido até ao final do respetivo ano civil. O contrato será automaticamente renovado por períodos sucessivos de um ano, salvo denúncia por qualquer das partes comunicada por escrito com uma antecedência mínima de 30 dias relativamente ao termo do período contratual em curso."}
           </p>
 
-          <h4 className="font-bold text-slate-900 font-sans">
+          <h4 className="font-bold text-[#0F172A] font-sans">
             {isEn
               ? "Article 5 – Severability Clause"
               : "Artigo 5.º – Cláusula de Separabilidade"}
@@ -1264,7 +1324,7 @@ export default function GestaoContratoGlobalPage({
               : "A eventual invalidade, nulidade ou inaplicabilidade de qualquer disposição do presente contrato não prejudica a validade das restantes cláusulas, que permanecerão plenamente em vigor."}
           </p>
 
-          <h4 className="font-bold text-slate-900 font-sans">
+          <h4 className="font-bold text-[#0F172A] font-sans">
             {isEn
               ? "Article 6 – Limitation of Liability and Insurance"
               : "Artigo 6.º – Limitação de Responsabilidade e Seguros"}
@@ -1280,7 +1340,7 @@ export default function GestaoContratoGlobalPage({
               : "O Parceiro é o único e exclusivo responsável pela prestação dos serviços e pela segurança dos participantes, garantindo que possui todos os seguros obrigatórios por lei (incluindo responsabilidade civil e acidentes pessoais), licenças, alvarás e verificação de registos criminais de monitores exigidos para o exercício da sua atividade."}
           </p>
 
-          <h4 className="font-bold text-slate-900 font-sans">
+          <h4 className="font-bold text-[#0F172A] font-sans">
             {isEn
               ? "Article 7 – Digital Signature and Evidence Agreement"
               : "Artigo 7.º – Validade da Assinatura e Convenção de Prova"}
@@ -1304,8 +1364,8 @@ export default function GestaoContratoGlobalPage({
         {/* =================================================================== */}
         <div className="space-y-8 font-sans text-xs sm:text-sm text-slate-800">
           {/* ANEXO 1 */}
-          <div className="bg-slate-50 p-5 md:p-6 rounded-2xl border border-slate-200">
-            <h3 className="font-black text-base sm:text-lg mb-3 text-slate-900 uppercase border-l-4 border-[#EBA914] pl-3">
+          <div className="bg-[#F8FAFC] p-5 md:p-6 rounded-md border border-slate-200">
+            <h3 className="font-black text-base sm:text-lg mb-3 text-[#0F172A] uppercase border-l-4 border-[#F59E0B] pl-3">
               {isEn
                 ? "Annex 1 – Booking Procedure & Integration"
                 : "Anexo 1 – Procedimento de Reserva e Operação"}
@@ -1318,11 +1378,11 @@ export default function GestaoContratoGlobalPage({
 
             <div className="space-y-3">
               <label
-                className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
+                className={`flex items-start gap-4 p-4 rounded-md border transition-colors ${
                   modoEdicao ? "cursor-pointer" : "cursor-default"
                 } ${
                   form.modalidadeReserva === "direta"
-                    ? "bg-white border-[#167524] shadow-sm"
+                    ? "bg-white border-[#16A34A] shadow-sm"
                     : "border-transparent hover:bg-slate-100/70"
                 }`}
               >
@@ -1336,10 +1396,10 @@ export default function GestaoContratoGlobalPage({
                   onChange={(e) =>
                     setForm({ ...form, modalidadeReserva: e.target.value })
                   }
-                  className="mt-1 w-4 h-4 accent-[#167524] flex-shrink-0"
+                  className="mt-1 w-4 h-4 accent-[#16A34A] flex-shrink-0"
                 />
                 <div>
-                  <strong className="block text-slate-900 mb-1">
+                  <strong className="block text-[#0F172A] mb-1">
                     {isEn
                       ? "Direct Booking with Automatic Payment (Recommended)"
                       : "Reserva Direta no Checkout (Recomendado)"}
@@ -1353,11 +1413,11 @@ export default function GestaoContratoGlobalPage({
               </label>
 
               <label
-                className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
+                className={`flex items-start gap-4 p-4 rounded-md border transition-colors ${
                   modoEdicao ? "cursor-pointer" : "cursor-default"
                 } ${
                   form.modalidadeReserva === "email"
-                    ? "bg-white border-[#167524] shadow-sm"
+                    ? "bg-white border-[#16A34A] shadow-sm"
                     : "border-transparent hover:bg-slate-100/70"
                 }`}
               >
@@ -1371,10 +1431,10 @@ export default function GestaoContratoGlobalPage({
                   onChange={(e) =>
                     setForm({ ...form, modalidadeReserva: e.target.value })
                   }
-                  className="mt-1 w-4 h-4 accent-[#167524] flex-shrink-0"
+                  className="mt-1 w-4 h-4 accent-[#16A34A] flex-shrink-0"
                 />
                 <div>
-                  <strong className="block text-slate-900 mb-1">
+                  <strong className="block text-[#0F172A] mb-1">
                     {isEn
                       ? "Email Communication (Booking Upon Request)"
                       : "Comunicação por E-mail (Reserva Sob Consulta)"}
@@ -1388,11 +1448,11 @@ export default function GestaoContratoGlobalPage({
               </label>
 
               <label
-                className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
+                className={`flex items-start gap-4 p-4 rounded-md border transition-colors ${
                   modoEdicao ? "cursor-pointer" : "cursor-default"
                 } ${
                   form.modalidadeReserva === "link_externo"
-                    ? "bg-white border-[#167524] shadow-sm"
+                    ? "bg-white border-[#16A34A] shadow-sm"
                     : "border-transparent hover:bg-slate-100/70"
                 }`}
               >
@@ -1406,10 +1466,10 @@ export default function GestaoContratoGlobalPage({
                   onChange={(e) =>
                     setForm({ ...form, modalidadeReserva: e.target.value })
                   }
-                  className="mt-1 w-4 h-4 accent-[#167524] flex-shrink-0"
+                  className="mt-1 w-4 h-4 accent-[#16A34A] flex-shrink-0"
                 />
                 <div className="w-full">
-                  <strong className="block text-slate-900 mb-1">
+                  <strong className="block text-[#0F172A] mb-1">
                     {isEn
                       ? "External Form or Link (e.g., Google Forms / Own Website)"
                       : "Formulário ou Link Externo (ex: Google Forms / Site Próprio)"}
@@ -1421,7 +1481,7 @@ export default function GestaoContratoGlobalPage({
                   </span>
 
                   {form.modalidadeReserva === "link_externo" && (
-                    <div className="bg-slate-50 border border-slate-300 p-4 rounded-xl mt-2 w-full">
+                    <div className="bg-[#F8FAFC] border border-slate-300 p-4 rounded-md mt-2 w-full">
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 block">
                         {isEn
                           ? "Insert External Link (URL) *"
@@ -1451,8 +1511,8 @@ export default function GestaoContratoGlobalPage({
           {/* ANEXOS 2 E 3 */}
           {form.modalidadeReserva !== "link_externo" && (
             <>
-              <div className="bg-blue-50/70 p-5 md:p-6 rounded-2xl border border-blue-200">
-                <h3 className="font-black text-base sm:text-lg mb-3 text-blue-950 uppercase border-l-4 border-blue-600 pl-3">
+              <div className="bg-blue-50/70 p-5 md:p-6 rounded-md border border-blue-200">
+                <h3 className="font-black text-base sm:text-lg mb-3 text-blue-950 uppercase border-l-4 border-[#2563EB] pl-3">
                   {isEn
                     ? "Annex 2 – Payment and Commission Split"
                     : "Anexo 2 – Pagamento e Comissão"}
@@ -1465,11 +1525,11 @@ export default function GestaoContratoGlobalPage({
 
                 <div className="space-y-3">
                   <label
-                    className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
+                    className={`flex items-start gap-4 p-4 rounded-md border transition-colors ${
                       modoEdicao ? "cursor-pointer" : "cursor-default"
                     } ${
                       form.tipoPagamento === "100_total"
-                        ? "bg-white border-blue-600 shadow-sm"
+                        ? "bg-white border-[#2563EB] shadow-sm"
                         : "border-transparent hover:bg-blue-100/50"
                     }`}
                   >
@@ -1483,7 +1543,7 @@ export default function GestaoContratoGlobalPage({
                       onChange={(e) =>
                         setForm({ ...form, tipoPagamento: e.target.value })
                       }
-                      className="mt-1 w-4 h-4 accent-blue-600 flex-shrink-0"
+                      className="mt-1 w-4 h-4 accent-[#2563EB] flex-shrink-0"
                     />
                     <div>
                       <strong className="block text-blue-950 mb-1">
@@ -1500,11 +1560,11 @@ export default function GestaoContratoGlobalPage({
                   </label>
 
                   <label
-                    className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
+                    className={`flex items-start gap-4 p-4 rounded-md border transition-colors ${
                       modoEdicao ? "cursor-pointer" : "cursor-default"
                     } ${
                       form.tipoPagamento === "50_sinal"
-                        ? "bg-white border-blue-600 shadow-sm"
+                        ? "bg-white border-[#2563EB] shadow-sm"
                         : "border-transparent hover:bg-blue-100/50"
                     }`}
                   >
@@ -1518,7 +1578,7 @@ export default function GestaoContratoGlobalPage({
                       onChange={(e) =>
                         setForm({ ...form, tipoPagamento: e.target.value })
                       }
-                      className="mt-1 w-4 h-4 accent-blue-600 flex-shrink-0"
+                      className="mt-1 w-4 h-4 accent-[#2563EB] flex-shrink-0"
                     />
                     <div>
                       <strong className="block text-blue-950 mb-1">
@@ -1536,8 +1596,8 @@ export default function GestaoContratoGlobalPage({
                 </div>
               </div>
 
-              <div className="bg-amber-50/80 p-5 md:p-6 rounded-2xl border border-amber-200">
-                <h3 className="font-black text-base sm:text-lg mb-3 text-amber-950 uppercase border-l-4 border-amber-500 pl-3">
+              <div className="bg-amber-50/80 p-5 md:p-6 rounded-md border border-amber-200">
+                <h3 className="font-black text-base sm:text-lg mb-3 text-amber-950 uppercase border-l-4 border-[#F59E0B] pl-3">
                   {isEn
                     ? "Annex 3 – Cancellation and Refund Policy"
                     : "Anexo 3 – Política de Cancelamento e Reembolso"}
@@ -1550,11 +1610,11 @@ export default function GestaoContratoGlobalPage({
 
                 <div className="space-y-3">
                   <label
-                    className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
+                    className={`flex items-start gap-4 p-4 rounded-md border transition-colors ${
                       modoEdicao ? "cursor-pointer" : "cursor-default"
                     } ${
                       form.politicaCancelamento.includes("Flexível")
-                        ? "bg-white border-amber-500 shadow-sm"
+                        ? "bg-white border-[#F59E0B] shadow-sm"
                         : "border-transparent hover:bg-amber-100/50"
                     }`}
                   >
@@ -1571,7 +1631,7 @@ export default function GestaoContratoGlobalPage({
                           politicaCancelamento: e.target.value,
                         })
                       }
-                      className="mt-1 w-4 h-4 accent-amber-600 flex-shrink-0"
+                      className="mt-1 w-4 h-4 accent-[#F59E0B] flex-shrink-0"
                     />
                     <div>
                       <strong className="block text-amber-950 mb-1">
@@ -1588,11 +1648,11 @@ export default function GestaoContratoGlobalPage({
                   </label>
 
                   <label
-                    className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
+                    className={`flex items-start gap-4 p-4 rounded-md border transition-colors ${
                       modoEdicao ? "cursor-pointer" : "cursor-default"
                     } ${
                       form.politicaCancelamento.includes("Moderada")
-                        ? "bg-white border-amber-500 shadow-sm"
+                        ? "bg-white border-[#F59E0B] shadow-sm"
                         : "border-transparent hover:bg-amber-100/50"
                     }`}
                   >
@@ -1609,7 +1669,7 @@ export default function GestaoContratoGlobalPage({
                           politicaCancelamento: e.target.value,
                         })
                       }
-                      className="mt-1 w-4 h-4 accent-amber-600 flex-shrink-0"
+                      className="mt-1 w-4 h-4 accent-[#F59E0B] flex-shrink-0"
                     />
                     <div>
                       <strong className="block text-amber-950 mb-1">
@@ -1626,11 +1686,11 @@ export default function GestaoContratoGlobalPage({
                   </label>
 
                   <label
-                    className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
+                    className={`flex items-start gap-4 p-4 rounded-md border transition-colors ${
                       modoEdicao ? "cursor-pointer" : "cursor-default"
                     } ${
                       form.politicaCancelamento.includes("Estrita")
-                        ? "bg-white border-amber-500 shadow-sm"
+                        ? "bg-white border-[#F59E0B] shadow-sm"
                         : "border-transparent hover:bg-amber-100/50"
                     }`}
                   >
@@ -1647,7 +1707,7 @@ export default function GestaoContratoGlobalPage({
                           politicaCancelamento: e.target.value,
                         })
                       }
-                      className="mt-1 w-4 h-4 accent-amber-600 flex-shrink-0"
+                      className="mt-1 w-4 h-4 accent-[#F59E0B] flex-shrink-0"
                     />
                     <div>
                       <strong className="block text-amber-950 mb-1">
@@ -1668,8 +1728,8 @@ export default function GestaoContratoGlobalPage({
           )}
 
           {/* ANEXO 4 */}
-          <div className="bg-slate-50 p-5 md:p-6 rounded-2xl border border-slate-200">
-            <h3 className="font-black text-base sm:text-lg mb-2 text-slate-900 uppercase border-l-4 border-slate-400 pl-3">
+          <div className="bg-[#F8FAFC] p-5 md:p-6 rounded-md border border-slate-200">
+            <h3 className="font-black text-base sm:text-lg mb-2 text-[#0F172A] uppercase border-l-4 border-slate-400 pl-3">
               {isEn
                 ? "Annex 4 – Extraordinary Agreements"
                 : "Anexo 4 – Acordos Extraordinários"}
@@ -1699,9 +1759,9 @@ export default function GestaoContratoGlobalPage({
         {/* =================================================================== */}
         {/* BLOCO DE ASSINATURAS FINAIS                                         */}
         {/* =================================================================== */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 mt-12 pt-10 border-t-2 border-slate-900 font-sans">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 mt-12 pt-10 border-t-2 border-[#0F172A] font-sans">
           <div>
-            <h4 className="font-black mb-4 uppercase tracking-wider text-slate-900 text-xs sm:text-sm">
+            <h4 className="font-black mb-4 uppercase tracking-wider text-[#0F172A] text-xs sm:text-sm">
               {isEn
                 ? "For the First Party (HelloCamp)"
                 : "Pela Primeira Outorgante (HelloCamp)"}
@@ -1711,14 +1771,14 @@ export default function GestaoContratoGlobalPage({
             </p>
             <p className="text-xs font-bold text-slate-500 border-t border-slate-200 mt-4 pt-3">
               {isEn ? "Date:" : "Data:"} {dataFormatada} •{" "}
-              <span className="text-[#167524]">
+              <span className="text-[#16A34A]">
                 {isEn ? "Validated by HQ" : "Validado pela Sede"}
               </span>
             </p>
           </div>
 
           <div>
-            <h4 className="font-black mb-4 uppercase tracking-wider text-slate-900 text-xs sm:text-sm">
+            <h4 className="font-black mb-4 uppercase tracking-wider text-[#0F172A] text-xs sm:text-sm">
               {isEn
                 ? "For the Second Party (The Partner)"
                 : "Pela Segunda Outorgante (O Parceiro)"}
@@ -1734,7 +1794,7 @@ export default function GestaoContratoGlobalPage({
                   required
                   disabled={!modoEdicao}
                   type="text"
-                  className="border-b-2 border-slate-900 bg-transparent outline-none py-2 text-lg sm:text-xl font-serif italic font-bold text-slate-900 focus:border-[#167524] transition-colors disabled:opacity-80"
+                  className="border-b-2 border-[#0F172A] bg-transparent outline-none py-2 text-lg sm:text-xl font-serif italic font-bold text-[#0F172A] focus:border-[#16A34A] transition-colors disabled:opacity-80"
                   value={form.assinaturaNome}
                   onChange={(e) =>
                     setForm({ ...form, assinaturaNome: e.target.value })
@@ -1753,7 +1813,7 @@ export default function GestaoContratoGlobalPage({
                   required
                   disabled={!modoEdicao}
                   type="text"
-                  className="border-b border-slate-300 bg-transparent outline-none py-2 text-sm font-bold text-slate-800 focus:border-slate-900 transition-colors disabled:opacity-80"
+                  className="border-b border-slate-300 bg-transparent outline-none py-2 text-sm font-bold text-slate-800 focus:border-[#0F172A] transition-colors disabled:opacity-80"
                   value={form.assinaturaCargo}
                   onChange={(e) =>
                     setForm({ ...form, assinaturaCargo: e.target.value })
@@ -1772,7 +1832,7 @@ export default function GestaoContratoGlobalPage({
               </p>
             </div>
 
-            <div className="mt-6 bg-emerald-50/70 p-4 border border-emerald-200 rounded-xl">
+            <div className="mt-6 bg-emerald-50/70 p-4 border border-emerald-200 rounded-md">
               <label
                 className={`flex items-start gap-3 ${
                   modoEdicao ? "cursor-pointer" : "cursor-default"
@@ -1786,7 +1846,7 @@ export default function GestaoContratoGlobalPage({
                   onChange={(e) =>
                     setForm({ ...form, concordaTermos: e.target.checked })
                   }
-                  className="mt-1 w-5 h-5 accent-[#167524] flex-shrink-0"
+                  className="mt-1 w-5 h-5 accent-[#16A34A] flex-shrink-0"
                 />
                 <span className="text-xs text-slate-700 font-bold leading-relaxed">
                   {isEn
@@ -1805,7 +1865,7 @@ export default function GestaoContratoGlobalPage({
               <button
                 type="button"
                 onClick={() => setModoEdicao(false)}
-                className="px-6 py-4 rounded-xl border border-slate-300 bg-white text-slate-700 font-black uppercase tracking-widest text-xs cursor-pointer"
+                className="px-6 py-4 rounded-md bg-slate-600 hover:bg-slate-700 text-white font-black uppercase tracking-widest text-xs cursor-pointer border-0"
               >
                 {isEn ? "Cancel" : "Cancelar"}
               </button>
@@ -1813,7 +1873,7 @@ export default function GestaoContratoGlobalPage({
             <button
               type="submit"
               disabled={saving}
-              className="bg-[#167524] hover:bg-[#115a1b] disabled:bg-slate-400 text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-xl shadow-lg cursor-pointer transition-all"
+              className="bg-[#16A34A] hover:bg-green-700 disabled:bg-slate-400 text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-md shadow-lg cursor-pointer transition-all border-0"
             >
               {saving
                 ? isEn

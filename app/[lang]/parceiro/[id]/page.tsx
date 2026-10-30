@@ -4,6 +4,7 @@ import { Metadata } from "next";
 import BotaoFavorito from "../../(public)/components/BotaoFavorito";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function generateMetadata({
   params,
@@ -19,214 +20,253 @@ export async function generateMetadata({
     .eq("id", id)
     .maybeSingle();
 
-  if (!parceiro) {
-    return { title: "Organizador | HelloCamp" };
-  }
-
   const nome =
-    parceiro.empresa_nome ||
-    parceiro.nome_empresa ||
-    parceiro.nome_completo ||
+    parceiro?.empresa_nome ||
+    parceiro?.nome_empresa ||
+    parceiro?.nome ||
+    parceiro?.nome_completo ||
     "Parceiro HelloCamp";
-  const bioRaw = isEn
-    ? parceiro.descricao_en ||
-      parceiro.biografia_empresa_en ||
-      parceiro.descricao ||
-      parceiro.biografia_empresa
-    : parceiro.descricao || parceiro.biografia_empresa;
-
-  const descCurta = bioRaw
-    ? bioRaw.substring(0, 155) + "..."
-    : isEn
-    ? `Explore all verified holiday camps and youth activities organized by ${nome} on HelloCamp.`
-    : `Descubra todos os campos de férias e atividades juvenis organizados por ${nome} na HelloCamp.`;
+  const desc =
+    (isEn &&
+      (parceiro?.descricao_en ||
+        parceiro?.biografia_empresa_en ||
+        parceiro?.biografia_en)) ||
+    parceiro?.descricao ||
+    parceiro?.biografia_empresa ||
+    parceiro?.biografia ||
+    (isEn
+      ? "Official HelloCamp Organizer"
+      : "Organizador Oficial HelloCamp");
 
   return {
-    title: `${nome} | ${isEn ? "Official Organizer" : "Organizador Oficial"} | HelloCamp`,
-    description: descCurta,
+    title: `${nome} | HelloCamp`,
+    description: desc,
     openGraph: {
       title: `${nome} | HelloCamp`,
-      description: descCurta,
-      images: parceiro.logotipo_url ? [parceiro.logotipo_url] : [],
+      description: desc,
+      images: parceiro?.logotipo_url ? [parceiro.logotipo_url] : [],
     },
   };
 }
 
 export default async function PaginaParceiroPublica({
   params,
+  searchParams,
 }: {
   params: Promise<{ lang: string; id: string }>;
+  searchParams?: Promise<{ preview?: string }>;
 }) {
   const { lang, id } = await params;
+  const resolvedSearch = searchParams ? await searchParams : {};
+  const isPreviewAdmin = resolvedSearch?.preview === "admin";
   const isEn = lang === "en";
 
-  const [{ data: parceiro }, { data: camposData }] = await Promise.all([
-    supabase.from("perfis").select("*").eq("id", id).maybeSingle(),
-    supabase
-      .from("campos")
-      .select("*")
-      .eq("organizador_id", id)
-      .eq("ativo", true)
-      .order("created_at", { ascending: false }),
-  ]);
+  // 1. Buscar dados do Parceiro
+  const { data: parceiro } = await supabase
+    .from("perfis")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
 
   if (!parceiro) {
     return (
-      <div className="flex min-h-[75vh] flex-col items-center justify-center bg-[#F8FAFC] p-6 text-center font-sans">
-        <div className="w-20 h-20 bg-white rounded-md flex items-center justify-center shadow-sm border border-slate-200 mb-6 text-4xl">
+      <main className="min-h-screen bg-[#F8FAFC] font-sans flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 bg-white rounded-md flex items-center justify-center shadow-sm border border-slate-200 mb-6 text-3xl">
           🏢
         </div>
-        <h1 className="text-3xl font-black text-[#0F172A] m-0 mb-2">
+        <h1 className="text-2xl font-black text-[#0F172A] mb-2">
           {isEn ? "Partner not found" : "Organizador não encontrado"}
         </h1>
-        <p className="text-sm text-slate-500 mb-6">
+        <p className="text-slate-500 text-sm mb-6">
           {isEn
-            ? "The profile you are looking for may have been moved."
-            : "O perfil que procura pode ter sido movido ou atualizado."}
+            ? "This profile might have been removed or is unavailable."
+            : "Este perfil pode ter sido removido ou encontra-se indisponível."}
         </p>
         <Link
           href={`/${lang}/pesquisa`}
-          className="bg-[#2563EB] hover:bg-blue-700 text-white px-6 py-3.5 rounded-md font-black uppercase tracking-widest text-xs transition-colors no-underline shadow-sm"
+          className="bg-[#2563EB] hover:bg-blue-700 text-white px-6 py-3 rounded-md font-black text-xs uppercase tracking-widest no-underline shadow-sm"
         >
-          {isEn ? "Explore All Camps" : "Explorar Todos os Campos"}
+          {isEn ? "Back to Search" : "Voltar à Pesquisa"}
         </Link>
-      </div>
+      </main>
     );
   }
 
-  const campos = camposData || [];
-  const nomeEmpresa =
-    parceiro.empresa_nome ||
-    parceiro.nome_empresa ||
-    parceiro.nome_completo ||
-    "Organizador HelloCamp";
+  // 2. Buscar TODOS os campos deste parceiro (Ativos + Pendentes para garantir que aparecem sempre!)
+  const { data: todosCamposData } = await supabase
+    .from("campos")
+    .select("*")
+    .eq("organizador_id", id)
+    .order("created_at", { ascending: true });
 
-  const biografia = isEn
-    ? parceiro.descricao_en ||
-      parceiro.biografia_empresa_en ||
-      parceiro.descricao ||
-      parceiro.biografia_empresa ||
-      parceiro.contrato_dados?.biografia_empresa
-    : parceiro.descricao ||
-      parceiro.biografia_empresa ||
-      parceiro.contrato_dados?.biografia_empresa;
-
-  const websiteOficial =
-    parceiro.website || parceiro.contrato_dados?.website || null;
-  const emailPublico =
-    parceiro.email_publico ||
-    parceiro.contrato_dados?.emailContacto ||
-    parceiro.email ||
-    null;
-  const telefonePublico =
-    parceiro.telefone_publico ||
-    parceiro.telefone ||
-    parceiro.contrato_dados?.telefone ||
-    null;
-  const anoFundacao =
-    parceiro.ano_fundacao || parceiro.contrato_dados?.ano_fundacao || null;
-
-  const cidadesAtuacao = Array.from(
-    new Set(campos.map((c: any) => c.Distrito || c.local).filter(Boolean))
+  const todosCampos: any[] = todosCamposData || [];
+  const camposAtivos: any[] = todosCampos.filter(
+    (c: any) => c.ativo === true
   );
 
-  const camposComReview = campos.filter((c: any) => Number(c.rating_score) > 0);
-  const mediaGlobalParceiro =
-    camposComReview.length > 0
-      ? camposComReview.reduce(
-          (acc: number, curr: any) => acc + Number(curr.rating_score),
-          0
-        ) / camposComReview.length
-      : 0;
+  // Se estiver em modo preview=admin OU se o parceiro ainda tiver os campos em fase de ativação, mostra TODOS os campos criados!
+  const camposParaMostrar: any[] =
+    isPreviewAdmin || camposAtivos.length === 0 ? todosCampos : camposAtivos;
 
-  const orgSchema = {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    name: nomeEmpresa,
-    description:
-      biografia ||
-      "Entidade organizadora de campos de férias e atividades juvenis na HelloCamp.",
-    url: `https://www.hellocamp.pt/${lang}/parceiro/${id}`,
-    logo: parceiro.logotipo_url || "",
-  };
+  const nomeSeguro =
+    parceiro.empresa_nome ||
+    parceiro.nome_empresa ||
+    parceiro.nome ||
+    parceiro.nome_completo ||
+    "Parceiro HelloCamp";
+
+  const descricao =
+    (isEn
+      ? parceiro.descricao_en ||
+        parceiro.biografia_empresa_en ||
+        parceiro.biografia_en
+      : null) ||
+    parceiro.descricao ||
+    parceiro.biografia_empresa ||
+    parceiro.biografia ||
+    (isEn
+      ? `${nomeSeguro} is a partner organization on HelloCamp offering specialized holiday camps and educational youth programs.`
+      : `A ${nomeSeguro} é uma entidade organizadora parceira na plataforma HelloCamp, dedicada à realização de campos de férias, cursos e atividades educativas e desportivas.`);
+
+  const regioesList: string[] = Array.isArray(parceiro.regioes)
+    ? parceiro.regioes
+    : Array.from(
+        new Set(
+          todosCampos
+            .map((c: any) =>
+              isEn && c.Distrito_en
+                ? String(c.Distrito_en)
+                : String(c.Distrito || c.pais || "")
+            )
+            .filter(Boolean)
+        )
+      );
+
+  const camposComRating: any[] = todosCampos.filter(
+    (c: any) => Number(c.rating_score) > 0
+  );
+  const mediaRating =
+    camposComRating.length > 0
+      ? (
+          camposComRating.reduce(
+            (acc: number, c: any) => acc + Number(c.rating_score),
+            0
+          ) / camposComRating.length
+        ).toFixed(1)
+      : null;
+
+  const isVerificado =
+    parceiro.parceiro_verificado === true ||
+    parceiro.status_contrato === "Aprovado";
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A] pb-24">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
-      />
+      {/* BARRA DE AVISO DE PRÉ-VISUALIZAÇÃO ADMIN / ONBOARDING */}
+      {(isPreviewAdmin || !isVerificado) && (
+        <div className="bg-[#0F172A] border-b-2 border-[#F59E0B] text-white py-3 px-4">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
+                {isEn
+                  ? "Admin / Partner Preview"
+                  : "Modo Visão de Parceiro / Admin"}
+              </span>
+              <span className="font-bold text-slate-200">
+                {isEn
+                  ? `Showing all ${camposParaMostrar.length} configured programs for ${nomeSeguro}.`
+                  : `A exibir todos os ${camposParaMostrar.length} programas configurados para ${nomeSeguro}.`}
+              </span>
+            </div>
+            {!isVerificado && (
+              <Link
+                href={`/${lang}/assinatura-contrato/${id}`}
+                className="bg-[#16A34A] hover:bg-green-700 text-white font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-md no-underline shrink-0"
+              >
+                ✍️{" "}
+                {isEn
+                  ? "Review & Sign Contract to Publish"
+                  : "Rever & Assinar Contrato para Ativar"}
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
 
-      {/* CABEÇALHO DO PERFIL DO PARCEIRO */}
-      <section className="bg-[#2563EB] text-white pt-10 pb-14 px-4 md:px-6 border-b-4 border-[#F59E0B]">
-        <div className="max-w-[1150px] mx-auto">
-          <nav className="flex items-center gap-2 text-[10px] font-black text-blue-100 mb-8 tracking-widest uppercase">
-            <Link
-              href={`/${lang}`}
-              className="hover:text-white transition-colors no-underline text-blue-100"
-            >
-              {isEn ? "Home" : "Início"}
-            </Link>
-            <span>/</span>
+      {/* HERO INSTITUCIONAL DO PARCEIRO */}
+      <section className="bg-[#2563EB] text-white py-12 md:py-16 border-b-4 border-[#F59E0B] relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
+          <div className="mb-6">
             <Link
               href={`/${lang}/pesquisa`}
-              className="hover:text-white transition-colors no-underline text-blue-100"
+              className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-white bg-white/15 hover:bg-white/25 px-3.5 py-2 rounded-md no-underline transition-colors"
             >
-              {isEn ? "Organizers" : "Organizadores"}
+              &larr; {isEn ? "Explore All Camps" : "Explorar Todos os Campos"}
             </Link>
-            <span>/</span>
-            <span className="text-white">{nomeEmpresa}</span>
-          </nav>
+          </div>
 
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-8">
-            <div className="w-28 h-28 md:w-36 md:h-36 bg-white rounded-md p-3 shadow-xl border-2 border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden">
+            {/* LOGÓTIPO DO PARCEIRO */}
+            <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-md p-3 flex items-center justify-center shadow-lg border-2 border-white shrink-0 overflow-hidden">
               {parceiro.logotipo_url ? (
                 <img
                   src={parceiro.logotipo_url}
-                  alt={nomeEmpresa}
-                  className="w-full h-full object-contain"
+                  alt={nomeSeguro}
+                  className="max-w-full max-h-full object-contain"
                 />
               ) : (
-                <span className="text-5xl font-black text-[#2563EB]">
-                  {nomeEmpresa.charAt(0).toUpperCase()}
+                <span className="text-4xl font-black text-[#2563EB]">
+                  {nomeSeguro.charAt(0).toUpperCase()}
                 </span>
               )}
             </div>
 
+            {/* TÍTULO, BADGES E METADADOS */}
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-3">
-                <span className="bg-[#F59E0B] text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest">
-                  {isEn ? "Official Organizer" : "Organizador Oficial"}
+                {isVerificado ? (
+                  <span className="bg-[#16A34A] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                    ✓ {isEn ? "Verified Partner" : "Organizador Verificado"}
+                  </span>
+                ) : (
+                  <span className="bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                    ⏳ {isEn ? "Profile Configured" : "Perfil Configurado"}
+                  </span>
+                )}
+
+                {parceiro.ano_fundacao && (
+                  <span className="bg-[#0F172A]/40 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                    🏛️{" "}
+                    {isEn
+                      ? `Since ${Math.trunc(Number(parceiro.ano_fundacao))}`
+                      : `Desde ${Math.trunc(Number(parceiro.ano_fundacao))}`}
+                  </span>
+                )}
+
+                <span className="bg-white/15 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                  🏕️ {camposParaMostrar.length}{" "}
+                  {camposParaMostrar.length === 1
+                    ? isEn
+                      ? "Program"
+                      : "Programa"
+                    : isEn
+                    ? "Programs"
+                    : "Programas"}
                 </span>
 
-                {(parceiro.parceiro_verificado ||
-                  parceiro.status_contrato === "Aprovado") && (
-                  <span className="bg-[#16A34A] text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest">
-                    ✓ {isEn ? "Verified Entity" : "Entidade Verificada"}
-                  </span>
-                )}
-
-                {anoFundacao && (
-                  <span className="bg-white/15 border border-white/30 text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest">
-                    🏛️ {isEn ? `Est. ${anoFundacao}` : `Desde ${anoFundacao}`}
-                  </span>
-                )}
-
-                {mediaGlobalParceiro > 0 && (
-                  <span className="bg-[#F59E0B] text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest">
-                    ★ {mediaGlobalParceiro.toFixed(1)}
+                {mediaRating && (
+                  <span className="bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                    ⭐ {mediaRating} / 5.0
                   </span>
                 )}
               </div>
 
-              <h1 className="text-3xl md:text-5xl font-black text-white m-0 tracking-tight leading-tight">
-                {nomeEmpresa}
+              <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight m-0">
+                {nomeSeguro}
               </h1>
 
-              {cidadesAtuacao.length > 0 && (
-                <p className="text-xs font-bold text-blue-100 mt-2 mb-0">
-                  📍 {isEn ? "Active in:" : "Regiões de Atuação:"}{" "}
-                  {cidadesAtuacao.join(" • ")}
+              {parceiro.morada_sede && (
+                <p className="text-blue-100 text-xs md:text-sm font-bold mt-2 mb-0">
+                  📍 {parceiro.morada_sede}
                 </p>
               )}
             </div>
@@ -234,202 +274,255 @@ export default async function PaginaParceiroPublica({
         </div>
       </section>
 
-      {/* CORPO: DETALHES + PROGRAMAS */}
-      <section className="max-w-[1150px] mx-auto px-4 md:px-6 pt-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <aside className="lg:col-span-4 bg-white rounded-md border border-slate-200 p-6 shadow-sm space-y-6 lg:sticky lg:top-24">
-          <div>
-            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest m-0 mb-3 pb-2 border-b border-slate-100">
-              {isEn ? "About the Organization" : "Sobre a Organização"}
+      {/* CONTEÚDO PRINCIPAL: SOBRE A ORGANIZAÇÃO + GRELHA DE TODOS OS CAMPOS */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-14">
+          {/* COLUNA ESQUERDA: BIOGRAFIA / SOBRE */}
+          <div className="lg:col-span-8 bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm">
+            <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md mb-3">
+              {isEn ? "About the Organizer" : "Sobre a Entidade Organizadora"}
+            </span>
+            <h2 className="text-xl md:text-2xl font-black text-[#0F172A] mt-0 mb-4">
+              {isEn ? `Get to know ${nomeSeguro}` : `Conheça a ${nomeSeguro}`}
             </h2>
-            {biografia ? (
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-medium m-0">
-                {biografia}
-              </p>
-            ) : (
-              <p className="text-sm text-slate-500 leading-relaxed m-0">
-                {isEn
-                  ? `${nomeEmpresa} is an official youth activity and holiday camp organizer on the HelloCamp network.`
-                  : `A ${nomeEmpresa} é uma entidade organizadora de campos de férias e atividades juvenis parceira da rede HelloCamp.`}
-              </p>
-            )}
-          </div>
-
-          <div className="pt-4 border-t border-slate-100 space-y-3 text-xs">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest m-0">
-              {isEn ? "Information & Contacts" : "Informações e Contactos"}
-            </h3>
-
-            <div className="flex items-center gap-2.5 text-[#0F172A] font-bold">
-              <span>🏕️</span>
-              <span>
-                {campos.length}{" "}
-                {isEn ? "Active Program(s)" : "Programa(s) Ativo(s)"}
-              </span>
+            <div className="text-slate-700 text-sm md:text-base leading-relaxed whitespace-pre-line font-medium">
+              {descricao}
             </div>
 
-            {websiteOficial && (
-              <div className="flex items-center gap-2.5">
-                <span>🌐</span>
-                <a
-                  href={
-                    websiteOficial.startsWith("http")
-                      ? websiteOficial
-                      : `https://${websiteOficial}`
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#2563EB] font-black hover:underline truncate"
-                >
-                  {isEn ? "Official Website ↗" : "Visitar Website Oficial ↗"}
-                </a>
-              </div>
-            )}
-
-            {emailPublico && (
-              <div className="flex items-center gap-2.5">
-                <span>✉️</span>
-                <a
-                  href={`mailto:${emailPublico}`}
-                  className="text-slate-700 font-bold hover:text-[#2563EB] truncate"
-                >
-                  {emailPublico}
-                </a>
-              </div>
-            )}
-
-            {telefonePublico && (
-              <div className="flex items-center gap-2.5">
-                <span>📞</span>
-                <a
-                  href={`tel:${telefonePublico}`}
-                  className="text-slate-700 font-bold hover:text-[#2563EB]"
-                >
-                  {telefonePublico}
-                </a>
+            {regioesList.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
+                  {isEn ? "Operating Regions" : "Regiões onde atua"}
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {regioesList.map((reg: string, i: number) => (
+                    <span
+                      key={i}
+                      className="bg-[#F8FAFC] border border-slate-200 text-[#0F172A] text-xs font-bold px-3 py-1.5 rounded-md"
+                    >
+                      📍 {reg}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
-          <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-md">
-            <span className="block text-[10px] font-black uppercase tracking-widest text-[#16A34A] mb-1">
-              🛡️ {isEn ? "HelloCamp Guarantee" : "Garantia HelloCamp"}
-            </span>
-            <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
-              {isEn
-                ? "Verified organizer identity and direct communication through our platform."
-                : "Identidade de organizador validada e reservas protegidas através da nossa plataforma."}
-            </p>
-          </div>
-        </aside>
-
-        <div className="lg:col-span-8">
-          <div className="flex items-center justify-between mb-6 pb-3 border-b border-slate-200">
-            <h2 className="text-xl font-black text-[#0F172A] m-0">
-              {isEn
-                ? `Programs by ${nomeEmpresa}`
-                : `Programas e Campos de ${nomeEmpresa}`}
-            </h2>
-            <span className="text-xs font-black text-white bg-[#2563EB] px-3 py-1 rounded-md">
-              {campos.length} {isEn ? "Available" : "Disponíveis"}
-            </span>
-          </div>
-
-          {campos.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-md p-12 text-center shadow-sm">
-              <span className="text-4xl block mb-3">🏕️</span>
-              <h3 className="text-base font-black text-[#0F172A] m-0 mb-1">
-                {isEn
-                  ? "No active programs at the moment"
-                  : "Sem programas ativos de momento"}
+          {/* COLUNA DIREITA: CONTACTOS E DADOS OFICIAIS */}
+          <div className="lg:col-span-4 bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div>
+              <span className="inline-block bg-[#2563EB] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md mb-3">
+                {isEn ? "Official Information" : "Informação e Contactos"}
+              </span>
+              <h3 className="text-lg font-black text-[#0F172A] mt-0 mb-4">
+                {isEn ? "Direct Details" : "Dados da Organização"}
               </h3>
-              <p className="text-xs text-slate-500 m-0">
+
+              <div className="space-y-3.5 text-xs">
+                {(parceiro.email_publico || parceiro.email) && (
+                  <div className="p-3 bg-[#F8FAFC] rounded-md border border-slate-200">
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                      E-mail
+                    </span>
+                    <a
+                      href={`mailto:${parceiro.email_publico || parceiro.email}`}
+                      className="font-black text-[#2563EB] hover:underline break-all no-underline"
+                    >
+                      ✉️ {parceiro.email_publico || parceiro.email}
+                    </a>
+                  </div>
+                )}
+
+                {(parceiro.telefone_publico || parceiro.telefone) && (
+                  <div className="p-3 bg-[#F8FAFC] rounded-md border border-slate-200">
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                      {isEn ? "Phone" : "Telefone / WhatsApp"}
+                    </span>
+                    <a
+                      href={`tel:${
+                        parceiro.telefone_publico || parceiro.telefone
+                      }`}
+                      className="font-black text-[#0F172A] hover:text-[#2563EB] no-underline"
+                    >
+                      📞 {parceiro.telefone_publico || parceiro.telefone}
+                    </a>
+                  </div>
+                )}
+
+                {parceiro.website && (
+                  <div className="p-3 bg-[#F8FAFC] rounded-md border border-slate-200">
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                      Website Oficial
+                    </span>
+                    <a
+                      href={parceiro.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-black text-[#2563EB] hover:underline break-all no-underline"
+                    >
+                      🌐 {parceiro.website} ↗
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 pt-5 border-t border-slate-100">
+              <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-md">
+                <p className="text-[11px] font-bold text-emerald-900 m-0 leading-relaxed">
+                  🛡️{" "}
+                  {isEn
+                    ? "Bookings processed through HelloCamp benefit from direct support and verified terms."
+                    : "As inscrições realizadas na HelloCamp contam com apoio direto à família e condições verificadas."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* LISTAGEM COMPLETA DE TODOS OS CAMPOS DO PARCEIRO */}
+        <div>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+            <div>
+              <span className="inline-block bg-[#16A34A] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-2">
+                {isEn ? "Official Catalog" : "Catálogo de Programas"}
+              </span>
+              <h2 className="text-2xl md:text-3xl font-black text-[#0F172A] m-0">
                 {isEn
-                  ? "New dates and seasons will be published soon."
-                  : "As próximas datas e temporadas serão publicadas em breve."}
+                  ? `All Programs by ${nomeSeguro} (${camposParaMostrar.length})`
+                  : `Todos os Campos e Programas de ${nomeSeguro} (${camposParaMostrar.length})`}
+              </h2>
+            </div>
+          </div>
+
+          {camposParaMostrar.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-md p-12 text-center shadow-sm">
+              <div className="text-4xl mb-3">🏕️</div>
+              <h3 className="text-lg font-black text-[#0F172A] mb-1">
+                {isEn
+                  ? "No programs registered yet"
+                  : "Ainda não existem programas registados para este organizador"}
+              </h3>
+              <p className="text-xs text-slate-500 font-bold mb-6">
+                {isEn
+                  ? "New programs are being prepared and will be available soon."
+                  : "Os novos turnos e programas estão a ser preparados pela equipa."}
               </p>
+              <Link
+                href={`/${lang}/pesquisa`}
+                className="inline-block bg-[#2563EB] hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest px-6 py-3 rounded-md no-underline"
+              >
+                {isEn ? "Explore Other Camps" : "Explorar Outros Campos"}
+              </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {campos.map((campo: any) => {
-                const nomeCampo =
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {camposParaMostrar.map((campo: any) => {
+                const titulo =
                   isEn && campo.nome_en ? campo.nome_en : campo.nome;
-                const catCampo =
+                const cat =
                   isEn && campo.categoria_en
                     ? campo.categoria_en
                     : campo.categoria;
-                const localCampo =
-                  isEn && campo.local_en
-                    ? campo.local_en
-                    : campo.Distrito || campo.local;
+                const localizacao =
+                  isEn && campo.local_en ? campo.local_en : campo.local;
+                const faixaEtaria =
+                  (isEn && campo.idade_en ? campo.idade_en : campo.idade) ||
+                  `${campo.idade_min || 6} - ${campo.idade_max || 17} ${
+                    isEn ? "yrs" : "anos"
+                  }`;
 
-                let precoVisivel = Number(campo.preco) || 0;
+                let precoMin = Number(campo.preco) || 0;
                 if (
-                  !precoVisivel &&
+                  (!precoMin || precoMin <= 0) &&
                   Array.isArray(campo.pacotes) &&
                   campo.pacotes.length > 0
                 ) {
-                  const precos = campo.pacotes.flatMap((p: any) =>
+                  const precosVariantes = campo.pacotes.flatMap((p: any) =>
                     Array.isArray(p.variantes)
-                      ? p.variantes
-                          .map((v: any) => Number(v.preco) || 0)
-                          .filter((v: number) => v > 0)
+                      ? p.variantes.map((v: any) => Number(v.preco) || 0)
                       : []
                   );
-                  if (precos.length > 0) precoVisivel = Math.min(...precos);
+                  const validos = precosVariantes.filter((n: number) => n > 0);
+                  if (validos.length > 0) precoMin = Math.min(...validos);
                 }
 
-                const imgUrl = campo.imagem?.startsWith("http")
-                  ? campo.imagem
-                  : "/og-image.jpg";
+                const imgCapa =
+                  campo.imagem ||
+                  (Array.isArray(campo.galeria) && campo.galeria[0]) ||
+                  "https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&q=80&w=1000";
+
+                const hrefCampo =
+                  campo.ativo === true && !isPreviewAdmin
+                    ? `/${lang}/campo/${campo.id}`
+                    : `/${lang}/campo/${campo.id}?preview=admin`;
 
                 return (
                   <div
                     key={campo.id}
-                    className="group flex flex-col bg-white rounded-md overflow-hidden border border-slate-200 relative shadow-sm hover:border-[#2563EB] transition-all"
+                    className="bg-white rounded-md border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
                   >
-                    <Link
-                      href={`/${lang}/campo/${campo.id}`}
-                      className="absolute inset-0 z-10"
-                    >
-                      <span className="sr-only">Ver {nomeCampo}</span>
-                    </Link>
-                    <div className="absolute top-3 right-3 z-20">
-                      <BotaoFavorito campoId={campo.id} />
-                    </div>
+                    <div>
+                      <div className="relative h-52 bg-slate-100 overflow-hidden">
+                        <img
+                          src={imgCapa}
+                          alt={titulo}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                          <span className="bg-[#2563EB] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">
+                            {cat}
+                          </span>
+                          {campo.ativo !== true && (
+                            <span className="bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">
+                              👁️ {isEn ? "Preview Mode" : "Em Validação"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="absolute top-3 right-3">
+                          <BotaoFavorito campoId={campo.id} />
+                        </div>
+                      </div>
 
-                    <div className="relative h-52 w-full overflow-hidden bg-slate-100">
-                      <img
-                        src={imgUrl}
-                        alt={nomeCampo}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <div className="absolute top-3 left-3 bg-[#2563EB] text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md">
-                        {catCampo}
+                      <div className="p-5">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 mb-2">
+                          <span>📍 {localizacao}</span>
+                          <span>•</span>
+                          <span>👦 {faixaEtaria}</span>
+                        </div>
+
+                        <h3 className="text-base font-black text-[#0F172A] m-0 mb-2 line-clamp-2">
+                          {titulo}
+                        </h3>
+
+                        <p className="text-xs text-slate-600 line-clamp-3 m-0 leading-relaxed">
+                          {isEn && campo.descricao_en
+                            ? campo.descricao_en
+                            : campo.descricao}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="flex flex-col p-5 flex-1 pointer-events-none">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-                        📍 {localCampo}{" "}
-                        {campo.idade ? `• 👶 ${campo.idade}` : ""}
-                      </span>
-                      <h3 className="text-lg font-black text-[#0F172A] leading-snug mb-4 line-clamp-2">
-                        {nomeCampo}
-                      </h3>
-
-                      <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 m-0">
-                            {isEn ? "From" : "Desde"}
-                          </p>
-                          <p className="text-2xl font-black text-[#2563EB] m-0">
-                            {precoVisivel > 0 ? `${precoVisivel}€` : "--"}
-                          </p>
-                        </div>
-                        <span className="bg-[#0F172A] group-hover:bg-[#2563EB] text-white px-4 py-2.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-colors">
-                          {isEn ? "View Dates" : "Ver Datas"} &rarr;
+                    <div className="px-5 py-4 bg-[#F8FAFC] border-t border-slate-200 flex items-center justify-between">
+                      <div>
+                        <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">
+                          {isEn ? "Starting from" : "Desde"}
+                        </span>
+                        <span className="text-lg font-black text-[#0F172A]">
+                          {precoMin > 0
+                            ? `${precoMin}€`
+                            : isEn
+                            ? "On request"
+                            : "Sob consulta"}
                         </span>
                       </div>
+
+                      <Link
+                        href={hrefCampo}
+                        className="bg-[#16A34A] hover:bg-green-700 text-white font-black text-[11px] uppercase tracking-widest px-4 py-2.5 rounded-md no-underline transition-colors shadow-sm"
+                      >
+                        {isEn ? "View Program →" : "Ver Programa →"}
+                      </Link>
                     </div>
                   </div>
                 );
@@ -437,7 +530,7 @@ export default async function PaginaParceiroPublica({
             </div>
           )}
         </div>
-      </section>
+      </div>
     </main>
   );
 }
