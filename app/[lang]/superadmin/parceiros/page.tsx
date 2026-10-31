@@ -18,6 +18,16 @@ const MODALIDADES_OPCOES = [
   { id: "link_externo", label: "Redirecionamento Link Externo" },
 ];
 
+type InviteLang = "pt" | "en" | "es" | "fr";
+
+const DISTRITOS_PT = [
+  "aveiro", "beja", "braga", "bragança", "braganca", "castelo branco",
+  "coimbra", "évora", "evora", "faro", "guarda", "leiria", "lisboa",
+  "portalegre", "porto", "santarém", "santarem", "setúbal", "setubal",
+  "viana do castelo", "vila real", "viseu", "açores", "acores", "madeira",
+  "portugal", "cascais", "sintra", "oeiras", "almada", "algarve", "alentejo"
+];
+
 export default function GestaoParceirosHQ({
   params,
 }: {
@@ -57,6 +67,7 @@ export default function GestaoParceirosHQ({
   const [activeEmailTab, setActiveEmailTab] = useState<"edit" | "preview">(
     "preview"
   );
+  const [inviteLang, setInviteLang] = useState<InviteLang>("pt");
   const [sendingEmail, setSendingEmail] = useState(false);
   const [welcomeData, setWelcomeData] = useState<{
     id: string;
@@ -66,6 +77,7 @@ export default function GestaoParceirosHQ({
     empresa: string;
     taxa_comissao: number;
     campos: any[];
+    localDetetado: string;
   }>({
     id: "",
     nome: "",
@@ -74,6 +86,7 @@ export default function GestaoParceirosHQ({
     empresa: "",
     taxa_comissao: 12,
     campos: [],
+    localDetetado: "",
   });
 
   const [emailAssunto, setEmailAssunto] = useState("");
@@ -90,13 +103,13 @@ export default function GestaoParceirosHQ({
       supabase
         .from("perfis")
         .select(
-          "id, empresa_nome, nome_empresa, nome, nome_completo, nif_empresa, email, telefone, status_contrato, taxa_comissao, base_comissao, modalidade_reserva, created_at"
+          "id, empresa_nome, nome_empresa, nome, nome_completo, nif_empresa, email, telefone, morada_sede, status_contrato, taxa_comissao, base_comissao, modalidade_reserva, created_at"
         )
         .eq("role", "organizador")
         .order("created_at", { ascending: false }),
       supabase
         .from("campos")
-        .select("id, nome, categoria, local, Distrito, preco, ativo, status_aprovacao, organizador_id")
+        .select("id, nome, nome_en, categoria, local, Distrito, preco, ativo, status_aprovacao, organizador_id")
         .order("created_at", { ascending: true }),
     ]);
 
@@ -121,47 +134,273 @@ export default function GestaoParceirosHQ({
     fetchParceiros();
   }, []);
 
-  // Constrói o texto e assunto padrão sempre que abrimos o Modal de Convite/Pré-Visualização
-  const prepararModalConvite = (
-    parceiroObj: any,
-    passwordTemp?: string
-  ) => {
-    const id = parceiroObj.id || "";
-    const empresa =
-      parceiroObj.empresa_nome ||
-      parceiroObj.nome_empresa ||
-      parceiroObj.nome ||
-      parceiroObj.nome_completo ||
-      "Parceiro";
-    const nomeResp =
-      parceiroObj.nome_completo || empresa;
-    const primeiroNome = nomeResp.split(" ")[0];
-    const emailDestino = (parceiroObj.email || "").trim().toLowerCase();
-    const passVisivel =
-      passwordTemp || "HelloCamp2026! (ou defina a sua ao assinar o contrato)";
-    const listaCampos = camposByParceiro[id] || [];
-    const linkContrato = id
-      ? `https://www.hellocamp.pt/${lang}/assinatura-contrato/${id}`
-      : `https://www.hellocamp.pt/${lang}/login`;
-    const linkMontra = id
-      ? `https://www.hellocamp.pt/${lang}/parceiro/${id}?preview=admin`
-      : `https://www.hellocamp.pt/${lang}`;
+  // Deteta automaticamente o idioma com base no sítio onde está o campo ou e-mail do parceiro
+  const detetarIdiomaPorLocalizacao = (
+    listaCampos: any[],
+    parceiroObj: any
+  ): { idioma: InviteLang; resumoLocal: string } => {
+    const locaisTexto = listaCampos
+      .map((c) => `${c.local || ""} ${c.Distrito || ""}`)
+      .join(" ")
+      .toLowerCase();
+    const moradaParceiro = (parceiroObj?.morada_sede || "").toLowerCase();
+    const emailParceiro = (parceiroObj?.email || "").toLowerCase();
+    const textoGlobal = `${locaisTexto} ${moradaParceiro}`.trim();
 
+    const primeiroCampo = listaCampos[0];
+    const resumoLocal = primeiroCampo
+      ? `${primeiroCampo.local || ""}${primeiroCampo.Distrito ? ` (${primeiroCampo.Distrito})` : ""}`.trim()
+      : parceiroObj?.morada_sede || "Portugal";
+
+    // 1. Verificar Espanha / Espanhol
+    if (
+      /\b(espanha|spain|españa|madrid|barcelona|valencia|sevilla|sevilha|malaga|málaga|bilbao|galiza|galicia|vigo|salamanca|andalucia|catalunya)\b/i.test(
+        textoGlobal
+      ) ||
+      emailParceiro.endsWith(".es")
+    ) {
+      return { idioma: "es", resumoLocal: resumoLocal || "España" };
+    }
+
+    // 2. Verificar França / Francês
+    if (
+      /\b(frança|france|paris|lyon|marseille|toulouse|nice|bordeaux|geneve|genève|lausanne)\b/i.test(
+        textoGlobal
+      ) ||
+      emailParceiro.endsWith(".fr")
+    ) {
+      return { idioma: "fr", resumoLocal: resumoLocal || "France" };
+    }
+
+    // 3. Verificar Países Anglófonos ou Internacionais
+    if (
+      /\b(uk|united kingdom|england|london|usa|united states|ireland|dublin|scotland|australia|canada|international|internacional|switzerland|zurich|germany|berlin|italy|netherlands)\b/i.test(
+        textoGlobal
+      ) ||
+      emailParceiro.endsWith(".uk") ||
+      emailParceiro.endsWith(".ie")
+    ) {
+      return { idioma: "en", resumoLocal: resumoLocal || "International" };
+    }
+
+    // 4. Se tem campos e NENHUM local/distrito corresponde a Portugal, mas tem nome_en preenchido ou local estrangeiro
+    if (listaCampos.length > 0 && textoGlobal.length > 2) {
+      const parecePortugal = DISTRITOS_PT.some((d) => textoGlobal.includes(d));
+      if (!parecePortugal && !emailParceiro.endsWith(".pt")) {
+        return { idioma: "en", resumoLocal };
+      }
+    }
+
+    return { idioma: "pt", resumoLocal: resumoLocal || "Portugal" };
+  };
+
+  // Gera o Assunto e Corpo do E-mail no idioma selecionado
+  const construirTextoConvitePorIdioma = (
+    idioma: InviteLang,
+    dados: {
+      id: string;
+      nome: string;
+      email: string;
+      password: string;
+      empresa: string;
+      campos: any[];
+      localDetetado: string;
+    }
+  ) => {
+    const { id, nome, email, password, empresa, campos, localDetetado } = dados;
+    const primeiroNome = (nome || empresa || "Partner").split(" ")[0];
+    const urlLang = idioma === "pt" ? "pt" : "en"; // Rotas da plataforma suportam /pt e /en
+
+    const linkContrato = id
+      ? `https://www.hellocamp.pt/${urlLang}/assinatura-contrato/${id}`
+      : `https://www.hellocamp.pt/${urlLang}/login`;
+    const linkMontra = id
+      ? `https://www.hellocamp.pt/${urlLang}/parceiro/${id}?preview=admin`
+      : `https://www.hellocamp.pt/${urlLang}`;
+    const linkLogin = `https://www.hellocamp.pt/${urlLang}/login`;
+
+    if (idioma === "en") {
+      const passVisivel =
+        password || "HelloCamp2026! (or set your own when signing the agreement)";
+      const linhasCampos =
+        campos.length > 0
+          ? campos
+              .map(
+                (c, idx) =>
+                  `   ${idx + 1}. 🏕️ ${c.nome_en || c.nome}${c.local ? ` (${c.local})` : ""}\n      🔗 Preview Page (Admin View): https://www.hellocamp.pt/en/campo/${c.id}?preview=admin`
+              )
+              .join("\n\n")
+          : `   • Your programs are ready to be configured in your Organizer Dashboard.`;
+
+      const assunto = `🎉 Welcome to HelloCamp! ${empresa}'s Profile & Programs Ready for Review`;
+      const corpo = `Hello ${primeiroNome},
+
+We are delighted to inform you that the official organizer profile for ${empresa}${localDetetado ? ` (${localDetetado})` : ""} and your respective camps/programs have been created and pre-configured by our team on the HelloCamp platform!
+
+To publish and activate everything for families and schools, simply complete two quick steps:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1️⃣ PREVIEW YOUR PROFILE & CAMPS (PRIVATE ADMIN VIEW)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Before your camps go live to the general public, you can review how they are structured using these exclusive preview links:
+
+🏢 Public Organization Showcase:
+${linkMontra}
+
+🏕️ Configured Programs (${campos.length}):
+${linhasCampos}
+
+*(Note: If you wish to adjust any details, photos, dates, prices, or text, you can do so at any time in your Organizer Dashboard).*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2️⃣ SIGN THE DIGITAL AGREEMENT & SET YOUR PASSWORD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+To activate your camps on the platform, click the link below to review and digitally sign the Global Partnership Agreement and set your final password at the end:
+
+📄 Direct Agreement & Activation Link:
+${linkContrato}
+
+Alternatively, if you prefer to access your Organizer Dashboard right away:
+🔗 Login Link: ${linkLogin}
+✉️ Login Email: ${email}
+🔑 Temporary Password: ${passVisivel}
+
+We remain entirely at your disposal if you have any questions!
+
+Best regards,
+The HelloCamp Team
+🌐 www.hellocamp.pt`;
+
+      return { assunto, corpo };
+    }
+
+    if (idioma === "es") {
+      const passVisivel =
+        password || "HelloCamp2026! (o defina la suya al firmar el contrato)";
+      const linhasCampos =
+        campos.length > 0
+          ? campos
+              .map(
+                (c, idx) =>
+                  `   ${idx + 1}. 🏕️ ${c.nome}${c.local ? ` (${c.local})` : ""}\n      🔗 Vista Previa (Modo Admin): https://www.hellocamp.pt/en/campo/${c.id}?preview=admin`
+              )
+              .join("\n\n")
+          : `   • Sus programas están listos para configurar en su Panel de Organizador.`;
+
+      const assunto = `🎉 ¡Bienvenido a HelloCamp! Perfil y Programas de ${empresa} Listos para Revisión`;
+      const corpo = `Hola ${primeiroNome},
+
+¡Es un placer informarle que el perfil oficial de organizador de ${empresa}${localDetetado ? ` (${localDetetado})` : ""} y sus respectivos campamentos/programas ya han sido creados y preconfigurados por nuestro equipo en la plataforma HelloCamp!
+
+Para que todo quede publicado y activo para las familias y colegios, solo tiene que completar dos pasos rápidos:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1️⃣ VISTA PREVIA DE SU PERFIL Y CAMPAMENTOS (VISIÓN PRIVADA ADMIN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Antes de que los campamentos sean visibles para el público general, puede revisar cómo han quedado estructurados a través de estos enlaces exclusivos:
+
+🏢 Escaparate Público de la Organización:
+${linkMontra}
+
+🏕️ Programas Configurados (${campos.length}):
+${linhasCampos}
+
+*(Nota: Si desea ajustar algún detalle, fotografía, precio o texto, podrá hacerlo en cualquier momento desde su Panel de Control).*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2️⃣ FIRMAR EL CONTRATO DIGITAL Y DEFINIR SU CONTRASEÑA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para activar sus campamentos en la plataforma, acceda al siguiente enlace para revisar y firmar digitalmente el Acuerdo Global de Colaboración y definir su contraseña definitiva:
+
+📄 Enlace Directo del Contrato y Activación:
+${linkContrato}
+
+Alternativamente, si prefiere entrar directamente en su Panel de Organizador ahora mismo:
+🔗 Enlace de Acceso: ${linkLogin}
+✉️ Correo de Acceso: ${email}
+🔑 Contraseña Temporal: ${passVisivel}
+
+¡Estamos a su entera disposición para cualquier consulta!
+
+Atentamente,
+El Equipo de HelloCamp
+🌐 www.hellocamp.pt`;
+
+      return { assunto, corpo };
+    }
+
+    if (idioma === "fr") {
+      const passVisivel =
+        password || "HelloCamp2026! (ou définissez le vôtre lors de la signature)";
+      const linhasCampos =
+        campos.length > 0
+          ? campos
+              .map(
+                (c, idx) =>
+                  `   ${idx + 1}. 🏕️ ${c.nome_en || c.nome}${c.local ? ` (${c.local})` : ""}\n      🔗 Aperçu de la Page (Vue Admin) : https://www.hellocamp.pt/en/campo/${c.id}?preview=admin`
+              )
+              .join("\n\n")
+          : `   • Vos programmes sont prêts à être configurés dans votre Espace Organisateur.`;
+
+      const assunto = `🎉 Bienvenue sur HelloCamp ! Profil et Programmes de ${empresa} Prêts pour Validation`;
+      const corpo = `Bonjour ${primeiroNome},
+
+Nous avons le plaisir de vous informer que le profil officiel d'organisateur de ${empresa}${localDetetado ? ` (${localDetetado})` : ""} ainsi que vos séjours/programmes ont été créés et préconfigurés par notre équipe sur la plateforme HelloCamp !
+
+Pour publier et activer vos offres auprès des familles et des écoles, il vous suffit de compléter deux étapes rapides :
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1️⃣ PRÉVISUALISER VOTRE PROFIL ET VOS SÉJOURS (VUE ADMIN PRIVÉE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Avant même que vos séjours ne soient visibles par le grand public, vous pouvez vérifier leur présentation via ces liens exclusifs :
+
+🏢 Vitrine Publique de l'Organisation :
+${linkMontra}
+
+🏕️ Programmes Configurés (${campos.length}) :
+${linhasCampos}
+
+*(Note : Si vous souhaitez modifier un détail, une photo, un tarif ou un texte, vous pourrez le faire à tout moment depuis votre Tableau de Bord).*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2️⃣ SIGNER LE CONTRAT NUMÉRIQUE ET DÉFINIR VOTRE MOT DE PASSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Pour activer vos séjours sur la plateforme, cliquez sur le lien ci-dessous pour consulter et signer numériquement l'Accord Global de Partenariat et définir votre mot de passe définitif :
+
+📄 Lien Direct du Contrat & Activation :
+${linkContrato}
+
+Alternativement, si vous préférez accéder directement à votre Espace Organisateur dès maintenant :
+🔗 Lien de Connexion : ${linkLogin}
+✉️ E-mail de Connexion : ${email}
+🔑 Mot de Passe Temporaire : ${passVisivel}
+
+Nous restons à votre entière disposition pour toute question !
+
+Cordialement,
+L'Équipe HelloCamp
+🌐 www.hellocamp.pt`;
+
+      return { assunto, corpo };
+    }
+
+    // Padrão: Português (PT)
+    const passVisivel =
+      password || "HelloCamp2026! (ou defina a sua ao assinar o contrato)";
     const linhasCampos =
-      listaCampos.length > 0
-        ? listaCampos
+      campos.length > 0
+        ? campos
             .map(
               (c, idx) =>
-                `   ${idx + 1}. 🏕️ ${c.nome}\n      🔗 Pré-visualizar Página (Visão Admin): https://www.hellocamp.pt/${lang}/campo/${c.id}?preview=admin`
+                `   ${idx + 1}. 🏕️ ${c.nome}${c.local ? ` (${c.local})` : ""}\n      🔗 Pré-visualizar Página (Visão Admin): https://www.hellocamp.pt/pt/campo/${c.id}?preview=admin`
             )
             .join("\n\n")
         : `   • Os seus programas encontram-se prontos a configurar no seu Painel de Organizador.`;
 
-    const assuntoPadrao = `🎉 Bem-vindo à HelloCamp! Perfil e Programas de ${empresa} Prontos para Revisão`;
+    const assunto = `🎉 Bem-vindo à HelloCamp! Perfil e Programas de ${empresa} Prontos para Revisão`;
+    const corpo = `Olá ${primeiroNome},
 
-    const corpoPadrao = `Olá ${primeiroNome},
-
-É com enorme gosto que informamos que o perfil oficial de organizador da ${empresa} e os respetivos campos/programas já foram criados e pré-configurados pela nossa equipa na plataforma HelloCamp!
+É com enorme gosto que informamos que o perfil oficial de organizador da ${empresa}${localDetetado ? ` (${localDetetado})` : ""} e os respetivos campos/programas já foram criados e pré-configurados pela nossa equipa na plataforma HelloCamp!
 
 Para que tudo fique publicado e ativo para as famílias e escolas, basta concluir dois passos rápidos:
 
@@ -173,7 +412,7 @@ Antes mesmo de os campos ficarem visíveis ao público geral, pode rever como fi
 🏢 Montra Pública da Organização:
 ${linkMontra}
 
-🏕️ Programas Configurados (${listaCampos.length}):
+🏕️ Programas Configurados (${campos.length}):
 ${linhasCampos}
 
 *(Nota: Caso pretenda ajustar algum detalhe, fotografia, preço ou texto, poderá fazê-lo a qualquer momento no seu Painel de Controlo).*
@@ -187,8 +426,8 @@ Para ativar os seus campos na plataforma, aceda ao link abaixo para rever e assi
 ${linkContrato}
 
 Em alternativa, se preferir entrar diretamente no seu Painel de Organizador agora mesmo:
-🔗 Link de Login: https://www.hellocamp.pt/${lang}/login
-✉️ E-mail de Acesso: ${emailDestino}
+🔗 Link de Login: ${linkLogin}
+✉️ E-mail de Acesso: ${email}
 🔑 Password Temporária: ${passVisivel}
 
 Estamos inteiramente ao dispor para ajudar em qualquer questão!
@@ -197,19 +436,60 @@ Com os melhores cumprimentos,
 Equipa HelloCamp
 🌐 www.hellocamp.pt`;
 
-    setWelcomeData({
+    return { assunto, corpo };
+  };
+
+  // Constrói o texto e assunto sempre que abrimos o Modal de Convite/Pré-Visualização
+  const prepararModalConvite = (parceiroObj: any, passwordTemp?: string) => {
+    const id = parceiroObj.id || "";
+    const empresa =
+      parceiroObj.empresa_nome ||
+      parceiroObj.nome_empresa ||
+      parceiroObj.nome ||
+      parceiroObj.nome_completo ||
+      "Parceiro";
+    const nomeResp = parceiroObj.nome_completo || empresa;
+    const emailDestino = (parceiroObj.email || "").trim().toLowerCase();
+    const listaCampos = camposByParceiro[id] || [];
+
+    const { idioma, resumoLocal } = detetarIdiomaPorLocalizacao(
+      listaCampos,
+      parceiroObj
+    );
+
+    const novoWelcomeData = {
       id,
       nome: nomeResp,
       email: emailDestino,
-      password: passVisivel,
+      password: passwordTemp || "",
       empresa,
       taxa_comissao: parceiroObj.taxa_comissao ?? 12,
       campos: listaCampos,
-    });
-    setEmailAssunto(assuntoPadrao);
-    setEmailCorpoEditavel(corpoPadrao);
+      localDetetado: resumoLocal,
+    };
+
+    const { assunto, corpo } = construirTextoConvitePorIdioma(
+      idioma,
+      novoWelcomeData
+    );
+
+    setInviteLang(idioma);
+    setWelcomeData(novoWelcomeData);
+    setEmailAssunto(assunto);
+    setEmailCorpoEditavel(corpo);
     setActiveEmailTab("preview");
     setShowWelcomeModal(true);
+  };
+
+  // Permite mudar o idioma manualmente dentro do modal de convite
+  const handleMudarIdiomaConvite = (novoIdioma: InviteLang) => {
+    setInviteLang(novoIdioma);
+    const { assunto, corpo } = construirTextoConvitePorIdioma(
+      novoIdioma,
+      welcomeData
+    );
+    setEmailAssunto(assunto);
+    setEmailCorpoEditavel(corpo);
   };
 
   const abrirModalNovo = () => {
@@ -397,7 +677,7 @@ Equipa HelloCamp
           nome: welcomeData.nome,
           parceiroId: welcomeData.id,
           campos: welcomeData.campos,
-          lang,
+          lang: inviteLang === "pt" ? "pt" : "en",
         }),
       });
 
@@ -409,9 +689,7 @@ Equipa HelloCamp
         );
       }
 
-      alert(
-        `✅ E-mail enviado com sucesso para ${welcomeData.email}!`
-      );
+      alert(`✅ E-mail enviado com sucesso para ${welcomeData.email}!`);
     } catch (err: any) {
       alert("Aviso API: " + err.message);
     } finally {
@@ -432,6 +710,8 @@ Equipa HelloCamp
   const inputClass =
     "w-full py-3 px-4 bg-[#F8FAFC] border border-slate-300 rounded-md text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white transition-colors";
 
+  const previewUrlLang = inviteLang === "pt" ? "pt" : "en";
+
   return (
     <div className="max-w-7xl mx-auto font-sans text-[#0F172A] pb-20">
       {/* HEADER EXECUTIVO HELLO CAMP */}
@@ -444,7 +724,7 @@ Equipa HelloCamp
             Gestão de Parceiros & Onboarding
           </h1>
           <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1 mb-0">
-            Contas, Comissões, Pré-Visualização de Campos e Envio de Convites
+            Contas, Comissões, Pré-Visualização de Campos e Envio de Convites Multilingue
           </p>
         </div>
 
@@ -466,7 +746,7 @@ Equipa HelloCamp
         </div>
       </div>
 
-      {/* TABELA DE PARCEIROS (CANTOS RETOS rounded-md) */}
+      {/* TABELA DE PARCEIROS */}
       <div className="bg-white border border-slate-200 rounded-md overflow-x-auto shadow-sm">
         <table className="w-full text-left min-w-[980px] border-collapse">
           <thead className="bg-[#F8FAFC] border-b border-slate-200">
@@ -478,7 +758,7 @@ Equipa HelloCamp
                 Contacto & Login
               </th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Campos & Preview
+                Campos & Localização
               </th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 Contrato / Comissão
@@ -527,6 +807,8 @@ Equipa HelloCamp
                 const numCampos = listaCamposParceiro.length;
                 const nomeEmp =
                   p.empresa_nome || p.nome_empresa || p.nome || null;
+                const { idioma: idiomaDetetado, resumoLocal } =
+                  detetarIdiomaPorLocalizacao(listaCamposParceiro, p);
 
                 return (
                   <tr
@@ -562,12 +844,22 @@ Equipa HelloCamp
 
                     <td className="px-6 py-4">
                       <div className="flex flex-col items-start gap-1.5">
-                        <Link
-                          href={`/${lang}/superadmin/campos?parceiro=${p.id}`}
-                          className="inline-flex items-center gap-1.5 bg-[#0F172A] hover:bg-[#2563EB] text-white font-black text-[11px] px-3 py-1.5 rounded-md no-underline transition-colors"
-                        >
-                          🏕️ {numCampos} {numCampos === 1 ? "Campo" : "Campos"}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <Link
+                            href={`/${lang}/superadmin/campos?parceiro=${p.id}`}
+                            className="inline-flex items-center gap-1.5 bg-[#0F172A] hover:bg-[#2563EB] text-white font-black text-[11px] px-3 py-1.5 rounded-md no-underline transition-colors"
+                          >
+                            🏕️ {numCampos} {numCampos === 1 ? "Campo" : "Campos"}
+                          </Link>
+                          <span className="bg-slate-100 border border-slate-200 text-[#0F172A] text-[9px] font-black uppercase px-2 py-1 rounded-md">
+                            {idiomaDetetado.toUpperCase()}
+                          </span>
+                        </div>
+                        {resumoLocal && (
+                          <span className="text-[10px] font-bold text-slate-500">
+                            📍 {resumoLocal}
+                          </span>
+                        )}
                         {numCampos > 0 && (
                           <Link
                             href={`/${lang}/campo/${listaCamposParceiro[0].id}?preview=admin`}
@@ -600,9 +892,9 @@ Equipa HelloCamp
                           type="button"
                           onClick={() => prepararModalConvite(p)}
                           className="bg-[#F59E0B] hover:bg-amber-600 text-white px-3.5 py-2 rounded-md text-[10px] uppercase tracking-widest font-black cursor-pointer transition-colors border-0 shadow-sm"
-                          title="Pré-visualizar, editar e enviar E-mail Completo com os Campos e Contrato"
+                          title="Pré-visualizar, editar e enviar E-mail Completo no idioma do local do campo"
                         >
-                          📧 Convite & Preview E-mail
+                          📧 Convite ({idiomaDetetado.toUpperCase()})
                         </button>
 
                         <button
@@ -646,7 +938,7 @@ Equipa HelloCamp
       </div>
 
       {/* ===================================================================== */}
-      {/* MODAL CRIAR / EDITAR PARCEIRO (CANTOS RETOS rounded-md)               */}
+      {/* MODAL CRIAR / EDITAR PARCEIRO                                         */}
       {/* ===================================================================== */}
       {showModal && (
         <div
@@ -924,8 +1216,8 @@ Equipa HelloCamp
             <p className="text-xs text-slate-600 mb-5 leading-relaxed">
               Defina uma password temporária para{" "}
               <strong>{resetModalParceiro.email}</strong>. Ao confirmar, abrirá
-              a janela de pré-visualização e edição do e-mail com os links de
-              visão admin dos campos.
+              a janela de pré-visualização e edição do e-mail no idioma
+              correspondente à localização dos campos.
             </p>
             <form onSubmit={handleDefinirPasswordDireta} className="space-y-4">
               <div>
@@ -975,47 +1267,78 @@ Equipa HelloCamp
             onClick={(e) => e.stopPropagation()}
           >
             {/* CABEÇALHO DO MODAL */}
-            <div className="bg-[#0F172A] px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white border-b border-slate-800">
+            <div className="bg-[#0F172A] px-6 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-white border-b border-slate-800">
               <div>
-                <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md mb-1.5">
-                  Onboarding B2B • {welcomeData.campos.length}{" "}
-                  {welcomeData.campos.length === 1
-                    ? "Campo Configurado"
-                    : "Campos Configurados"}
-                </span>
+                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                  <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
+                    Onboarding B2B • {welcomeData.campos.length}{" "}
+                    {welcomeData.campos.length === 1
+                      ? "Campo Configurado"
+                      : "Campos Configurados"}
+                  </span>
+                  {welcomeData.localDetetado && (
+                    <span className="inline-block bg-slate-800 text-slate-200 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border border-slate-700">
+                      📍 Local detetado: {welcomeData.localDetetado}
+                    </span>
+                  )}
+                </div>
                 <h2 className="text-xl font-black m-0">
                   📧 Rever & Enviar E-mail de Convite — {welcomeData.empresa}
                 </h2>
                 <p className="text-slate-300 text-xs mt-1 mb-0">
                   Destinatário:{" "}
                   <strong className="text-white">{welcomeData.email}</strong> •
-                  Pode editar o texto ou pré-visualizar o aspeto final antes de
-                  enviar.
+                  Idioma detetado automaticamente pela localização do campo (pode alternar abaixo).
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* SELETOR DE IDIOMA DO CONVITE */}
+                <div className="flex bg-slate-800 p-1 rounded-md border border-slate-700">
+                  {(
+                    [
+                      { code: "pt", label: "🇵🇹 PT" },
+                      { code: "en", label: "🇬🇧 EN" },
+                      { code: "es", label: "🇪🇸 ES" },
+                      { code: "fr", label: "🇫🇷 FR" },
+                    ] as { code: InviteLang; label: string }[]
+                  ).map((item) => (
+                    <button
+                      key={item.code}
+                      type="button"
+                      onClick={() => handleMudarIdiomaConvite(item.code)}
+                      className={`px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase cursor-pointer border-0 transition-colors ${
+                        inviteLang === item.code
+                          ? "bg-[#16A34A] text-white"
+                          : "bg-transparent text-slate-300 hover:text-white"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setActiveEmailTab("preview")}
-                  className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer border-0 transition-colors ${
+                  className={`px-3.5 py-2 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer border-0 transition-colors ${
                     activeEmailTab === "preview"
                       ? "bg-[#2563EB] text-white"
                       : "bg-slate-800 text-white hover:bg-slate-700"
                   }`}
                 >
-                  👁️ Pré-Visualizar E-mail
+                  👁️ Preview
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveEmailTab("edit")}
-                  className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer border-0 transition-colors ${
+                  className={`px-3.5 py-2 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer border-0 transition-colors ${
                     activeEmailTab === "edit"
                       ? "bg-[#F59E0B] text-white"
                       : "bg-slate-800 text-white hover:bg-slate-700"
                   }`}
                 >
-                  ✏️ Editar Texto
+                  ✏️ Editar
                 </button>
               </div>
             </div>
@@ -1025,7 +1348,7 @@ Equipa HelloCamp
               {/* CAMPO ASSUNTO SEMPRE VISÍVEL E EDITÁVEL */}
               <div className="mb-4">
                 <label className={labelClass}>
-                  Assunto do E-mail (Editável)
+                  Assunto do E-mail (Editável • Idioma: {inviteLang.toUpperCase()})
                 </label>
                 <input
                   type="text"
@@ -1079,7 +1402,7 @@ Equipa HelloCamp
                     <div className="bg-[#0F172A] text-white p-6 rounded-md flex items-center justify-between">
                       <div>
                         <span className="bg-[#F59E0B] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md inline-block mb-2">
-                          Portal de Parceiros HelloCamp
+                          HelloCamp Partner Portal ({inviteLang.toUpperCase()})
                         </span>
                         <h3 className="text-xl font-black m-0">
                           {welcomeData.empresa}
@@ -1088,7 +1411,7 @@ Equipa HelloCamp
                       <span className="text-3xl">🏕️</span>
                     </div>
 
-                    {/* TEXTO FORMATADO (RESPEITA QUALQUER EDIÇÃO FEITA NO SEPARADOR EDITAR) */}
+                    {/* TEXTO FORMATADO */}
                     <div className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed font-medium bg-[#F8FAFC] p-5 rounded-md border border-slate-200">
                       {emailCorpoEditavel}
                     </div>
@@ -1102,36 +1425,36 @@ Equipa HelloCamp
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {welcomeData.id && (
                           <a
-                            href={`/${lang}/parceiro/${welcomeData.id}?preview=admin`}
+                            href={`/${previewUrlLang}/parceiro/${welcomeData.id}?preview=admin`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-black text-[#2563EB] no-underline flex items-center justify-between"
                           >
-                            <span>🏢 Ver Montra Pública do Parceiro</span>
+                            <span>🏢 Ver Montra Pública ({previewUrlLang.toUpperCase()})</span>
                             <span>↗</span>
                           </a>
                         )}
                         {welcomeData.id && (
                           <a
-                            href={`/${lang}/assinatura-contrato/${welcomeData.id}`}
+                            href={`/${previewUrlLang}/assinatura-contrato/${welcomeData.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md text-xs font-black text-amber-900 no-underline flex items-center justify-between"
                           >
-                            <span>📄 Ver Página de Assinatura de Contrato</span>
+                            <span>📄 Ver Assinatura de Contrato ({previewUrlLang.toUpperCase()})</span>
                             <span>↗</span>
                           </a>
                         )}
                         {welcomeData.campos.map((c: any) => (
                           <a
                             key={c.id}
-                            href={`/${lang}/campo/${c.id}?preview=admin`}
+                            href={`/${previewUrlLang}/campo/${c.id}?preview=admin`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md text-xs font-black text-[#16A34A] no-underline flex items-center justify-between"
                           >
                             <span className="truncate pr-2">
-                              🏕️ {c.nome}
+                              🏕️ {inviteLang !== "pt" && c.nome_en ? c.nome_en : c.nome}
                             </span>
                             <span className="flex-shrink-0">Ver Admin ↗</span>
                           </a>
