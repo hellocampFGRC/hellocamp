@@ -9,11 +9,13 @@ function LoginForm({ lang }: { lang: string }) {
   const isEn = lang === "en";
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "";
+  const redirectTo =
+    searchParams.get("redirect") || searchParams.get("redirectTo") || "";
 
   const [modo, setModo] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mostrarPass, setMostrarPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
   const [magicEnviado, setMagicEnviado] = useState(false);
@@ -23,37 +25,76 @@ function LoginForm({ lang }: { lang: string }) {
     setLoading(true);
     setErro("");
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const cleanEmail = email.trim().toLowerCase();
 
-    if (error || !data.user) {
-      setErro(
-        isEn
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (error || !data?.user) {
+        let msg = isEn
           ? "Invalid email or password. You can also use the Magic Link tab above."
-          : "E-mail ou palavra-passe incorretos. Também pode entrar sem password usando o Link Mágico."
+          : "E-mail ou palavra-passe incorretos. Também pode entrar sem password usando o separador 'Link por E-mail'.";
+
+        if (error?.message?.toLowerCase().includes("email not confirmed")) {
+          msg = isEn
+            ? "Your email is not confirmed yet. Please check your inbox."
+            : "O seu e-mail ainda não foi confirmado. Verifique a sua caixa de correio.";
+        }
+
+        setErro(msg);
+        setLoading(false);
+        return;
+      }
+
+      // 1. Se existir um URL de redirecionamento explícito nos query params ou sessionStorage
+      if (redirectTo) {
+        const cleanRedirect = redirectTo.startsWith("/")
+          ? redirectTo
+          : `/${lang}/${redirectTo}`;
+        router.push(cleanRedirect);
+        return;
+      }
+
+      const savedRedirect =
+        typeof window !== "undefined"
+          ? sessionStorage.getItem("redirect_after_login")
+          : null;
+      if (savedRedirect) {
+        sessionStorage.removeItem("redirect_after_login");
+        router.push(savedRedirect);
+        return;
+      }
+
+      // 2. Consultar apenas colunas reais da tabela `perfis` (role, is_superadmin)
+      const { data: perfil } = await supabase
+        .from("perfis")
+        .select("role, is_superadmin")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (perfil?.is_superadmin) {
+        router.push(`/${lang}/superadmin/parceiros`);
+        return;
+      }
+
+      const role = perfil?.role || data.user.user_metadata?.role || "cliente";
+
+      if (role === "organizador" || role === "parceiro" || role === "admin") {
+        router.push(`/${lang}/admin/dashboard`);
+      } else if (role === "monitor") {
+        router.push(`/${lang}/monitores/portal/perfil`);
+      } else {
+        router.push(`/${lang}/cliente/dashboard`);
+      }
+    } catch (err: any) {
+      setErro(
+        err?.message ||
+          (isEn ? "Error signing in." : "Ocorreu um erro ao iniciar sessão.")
       );
       setLoading(false);
-      return;
-    }
-
-    if (redirectTo) {
-      router.push(redirectTo);
-      return;
-    }
-
-    const { data: perfil } = await supabase
-      .from("perfis")
-      .select("role, tipo")
-      .eq("id", data.user.id)
-      .maybeSingle();
-
-    const role = perfil?.role || perfil?.tipo || data.user.user_metadata?.role;
-    if (role === "parceiro" || role === "admin" || role === "organizador") {
-      router.push(`/${lang}/admin/dashboard`);
-    } else {
-      router.push(`/${lang}/cliente/dashboard`);
     }
   };
 
@@ -62,8 +103,10 @@ function LoginForm({ lang }: { lang: string }) {
     setLoading(true);
     setErro("");
 
+    const cleanEmail = email.trim().toLowerCase();
+
     const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
+      email: cleanEmail,
       options: {
         emailRedirectTo: `${window.location.origin}/${lang}/cliente/dashboard`,
       },
@@ -74,7 +117,7 @@ function LoginForm({ lang }: { lang: string }) {
       setErro(
         isEn
           ? "Could not send access link. Please verify your email."
-          : "Não foi possível enviar o link de acesso. Verifique o seu e-mail."
+          : "Não foi possível enviar o link de acesso. Verifique se o e-mail está correto."
       );
     } else {
       setMagicEnviado(true);
@@ -83,6 +126,7 @@ function LoginForm({ lang }: { lang: string }) {
 
   return (
     <div className="w-full max-w-md bg-white rounded-md shadow-2xl border border-slate-200 overflow-hidden">
+      {/* BARRA DE CORES OFICIAIS HELLO CAMP */}
       <div className="w-full h-2 flex">
         <div className="w-1/4 h-full bg-[#F59E0B]" />
         <div className="w-1/4 h-full bg-[#2563EB]" />
@@ -102,10 +146,10 @@ function LoginForm({ lang }: { lang: string }) {
           <h1 className="text-2xl font-black text-[#0F172A] m-0">
             {isEn ? "Welcome back" : "Iniciar Sessão"}
           </h1>
-          <p className="text-xs font-bold text-slate-500 mt-1">
+          <p className="text-xs font-bold text-slate-500 mt-1 mb-0">
             {isEn
-              ? "Access your Family or Partner Portal"
-              : "Aceda à sua Área de Família ou Portal de Parceiro"}
+              ? "Access your Family, Partner, or Monitor Portal"
+              : "Aceda à sua Área de Família, Parceiro ou Monitor"}
           </p>
         </div>
 
@@ -120,7 +164,7 @@ function LoginForm({ lang }: { lang: string }) {
             className={`py-2.5 rounded-md text-xs font-black uppercase tracking-wider cursor-pointer border-0 transition-all ${
               modo === "password"
                 ? "bg-[#2563EB] text-white shadow-sm"
-                : "bg-transparent text-slate-600"
+                : "bg-transparent text-slate-600 hover:text-[#0F172A]"
             }`}
           >
             🔑 {isEn ? "With Password" : "Com Password"}
@@ -134,7 +178,7 @@ function LoginForm({ lang }: { lang: string }) {
             className={`py-2.5 rounded-md text-xs font-black uppercase tracking-wider cursor-pointer border-0 transition-all ${
               modo === "magic"
                 ? "bg-[#F59E0B] text-white shadow-sm"
-                : "bg-transparent text-slate-600"
+                : "bg-transparent text-slate-600 hover:text-[#0F172A]"
             }`}
           >
             ✨ {isEn ? "Magic Link" : "Link por E-mail"}
@@ -142,8 +186,8 @@ function LoginForm({ lang }: { lang: string }) {
         </div>
 
         {erro && (
-          <div className="mb-6 p-4 bg-rose-50 border border-[#F43F5E] text-[#F43F5E] rounded-md text-xs font-bold">
-            {erro}
+          <div className="mb-6 p-4 bg-rose-50 border-2 border-[#F43F5E] text-[#F43F5E] rounded-md text-xs font-black leading-relaxed">
+            ⚠️ {erro}
           </div>
         )}
 
@@ -159,7 +203,7 @@ function LoginForm({ lang }: { lang: string }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="nome@email.com"
-                className="w-full bg-[#F8FAFC] border border-slate-300 rounded-md px-4 py-3.5 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white"
+                className="w-full bg-[#F8FAFC] border border-slate-300 rounded-md px-4 py-3.5 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white transition-colors"
               />
             </div>
 
@@ -175,14 +219,29 @@ function LoginForm({ lang }: { lang: string }) {
                   {isEn ? "Forgot password?" : "Esqueceu a password?"}
                 </Link>
               </div>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-[#F8FAFC] border border-slate-300 rounded-md px-4 py-3.5 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white"
-              />
+              <div className="relative">
+                <input
+                  type={mostrarPass ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-[#F8FAFC] border border-slate-300 rounded-md pl-4 pr-16 py-3.5 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMostrarPass(!mostrarPass)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-slate-200 hover:bg-slate-300 text-[#0F172A] text-[10px] font-black uppercase px-2.5 py-1.5 rounded-md cursor-pointer border-0"
+                >
+                  {mostrarPass
+                    ? isEn
+                      ? "Hide"
+                      : "Ocultar"
+                    : isEn
+                    ? "Show"
+                    : "Ver"}
+                </button>
+              </div>
             </div>
 
             <button
@@ -200,12 +259,12 @@ function LoginForm({ lang }: { lang: string }) {
             </button>
           </form>
         ) : magicEnviado ? (
-          <div className="bg-emerald-50 border border-[#16A34A] p-6 rounded-md text-center">
+          <div className="bg-emerald-50 border-2 border-[#16A34A] p-6 rounded-md text-center">
             <span className="text-3xl block mb-2">📬</span>
             <h3 className="text-base font-black text-[#0F172A] mb-1">
               {isEn ? "Check your inbox!" : "Verifique o seu e-mail!"}
             </h3>
-            <p className="text-xs text-slate-600 font-medium">
+            <p className="text-xs text-slate-600 font-medium m-0">
               {isEn
                 ? `We sent an instant login link to ${email}. Click it to enter automatically.`
                 : `Enviámos um link de acesso direto para ${email}. Basta clicar no link para entrar sem password.`}
@@ -223,7 +282,7 @@ function LoginForm({ lang }: { lang: string }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="nome@email.com"
-                className="w-full bg-[#F8FAFC] border border-slate-300 rounded-md px-4 py-3.5 text-sm font-bold text-[#0F172A] outline-none focus:border-[#F59E0B] focus:bg-white"
+                className="w-full bg-[#F8FAFC] border border-slate-300 rounded-md px-4 py-3.5 text-sm font-bold text-[#0F172A] outline-none focus:border-[#F59E0B] focus:bg-white transition-colors"
               />
             </div>
 
@@ -256,10 +315,10 @@ function LoginForm({ lang }: { lang: string }) {
           <p className="text-[11px] font-bold text-slate-400 m-0">
             {isEn ? "Are you a camp monitor?" : "É monitor de campos de férias?"}{" "}
             <Link
-              href={`/${lang}/monitores/login`}
+              href={`/${lang}/monitores/registo`}
               className="text-[#16A34A] font-black hover:underline no-underline"
             >
-              {isEn ? "Monitor Portal →" : "Portal de Monitores →"}
+              {isEn ? "Join Monitor Pool →" : "Bolsa de Monitores →"}
             </Link>
           </p>
         </div>
