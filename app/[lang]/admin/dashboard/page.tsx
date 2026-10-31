@@ -363,7 +363,7 @@ export default function AdminDashboardPage({
     }
   };
 
- // Gerar e Descarregar o Contrato Global Completo em PDF diretamente do Dashboard!
+  // Gerar e Descarregar o Contrato Global Completo em PDF
   const handleDescarregarContratoPdfDireto = () => {
     setDownloadingContractPdf(true);
     try {
@@ -446,7 +446,7 @@ export default function AdminDashboardPage({
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9.5);
       doc.text(
-        `• Taxa de Comissao Acordada: ${taxaComissao}% (IVA incluido) | Base: ${baseComissao}`,
+        `• Taxa de Comissão Acordada: ${taxaComissao}% (IVA incluído) | Base: ${baseComissao}`,
         16,
         y
       );
@@ -460,9 +460,9 @@ export default function AdminDashboardPage({
       );
       y += 5.5;
       doc.text(
-        `• Politica de Cancelamento: ${
+        `• Política de Cancelamento: ${
           cd.politicaCancelamento ||
-          "Moderada (Reembolso a 50% ate 15 dias antes)"
+          "Moderada (Reembolso a 50% até 15 dias antes)"
         }`,
         16,
         y
@@ -483,7 +483,7 @@ export default function AdminDashboardPage({
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9.5);
       doc.text(
-        `Pela HelloCamp Portugal: Administracao HelloCamp Portugal (Validado HQ)`,
+        `Pela HelloCamp Portugal: Administração HelloCamp Portugal (Validado HQ)`,
         16,
         y
       );
@@ -533,7 +533,7 @@ export default function AdminDashboardPage({
 
   return (
     <main className="max-w-6xl mx-auto font-sans text-[#0F172A] pb-20">
-      {/* CABEÇALHO DO DASHBOARD */}
+      {/* CABEÇALHO DO DASHBOARD (SEM DUPLICAÇÕES) */}
       <div className="mb-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -561,7 +561,7 @@ export default function AdminDashboardPage({
           </p>
         </div>
 
-        {/* BOTÕES DE AÇÃO NO TOPO (INCLUINDO VER CONTRATO / PDF QUANDO TEM CONTRATO!) */}
+        {/* BOTÕES DE AÇÃO ORGANIZADOS NO TOPO */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
@@ -586,29 +586,6 @@ export default function AdminDashboardPage({
                 : "Assinar Contrato"}
             </span>
           </Link>
-
-          {temContrato && (
-            <button
-              type="button"
-              onClick={handleDescarregarContratoPdfDireto}
-              disabled={downloadingContractPdf}
-              className="bg-[#0F172A] hover:bg-slate-800 text-white px-4 py-3 rounded-md font-black text-xs uppercase tracking-widest cursor-pointer border-0 transition-colors shadow-sm flex items-center gap-1.5"
-              title={
-                isEn
-                  ? "Download Signed Global Contract PDF"
-                  : "Descarregar Contrato Global Assinado em PDF"
-              }
-            >
-              <span>📥</span>
-              <span>
-                {downloadingContractPdf
-                  ? "..."
-                  : isEn
-                  ? "Contract PDF"
-                  : "Contrato PDF"}
-              </span>
-            </button>
-          )}
 
           <Link
             href={`/${lang}/admin/campos/novo`}
@@ -866,61 +843,6 @@ export default function AdminDashboardPage({
         </section>
       )}
 
-      {/* CARTÃO DE ACESSO DIRETO AO CONTRATO GLOBAL E PDF (QUANDO O PARCEIRO TEM CONTRATO!) */}
-      {temContrato && (
-        <div className="mb-8 bg-[#0F172A] text-white p-6 rounded-md border-l-4 border-[#16A34A] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-[#16A34A] text-white rounded-md flex items-center justify-center text-2xl font-black shrink-0">
-              📄
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="bg-[#16A34A] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md">
-                  {isEn ? "Signed & Verified" : "Assinado & Validado"}
-                </span>
-                <span className="text-xs font-bold text-slate-300">
-                  •{" "}
-                  {perfilCompleto?.taxa_comissao ?? 12}%{" "}
-                  {isEn ? "Agreed Commission" : "Comissão Acordada"}
-                </span>
-              </div>
-              <h3 className="text-base md:text-lg font-black text-white m-0">
-                {isEn
-                  ? "Global B2B Partnership Agreement"
-                  : "Contrato Global de Parceria e Intermediação B2B"}
-              </h3>
-              <p className="text-xs text-slate-300 mt-1 mb-0">
-                {isEn
-                  ? "Your global agreement covers all your programs on HelloCamp. You can view the clauses or download the official PDF at any time."
-                  : "O seu acordo global abrange todos os seus campos na HelloCamp. Pode consultar o documento ou descarregar o PDF oficial a qualquer momento."}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <Link
-              href={`/${lang}/admin/contrato`}
-              className="bg-[#2563EB] hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest px-4 py-3 rounded-md no-underline transition-colors"
-            >
-              👁️ {isEn ? "View Contract" : "Ver Contrato"}
-            </Link>
-            <button
-              type="button"
-              onClick={handleDescarregarContratoPdfDireto}
-              disabled={downloadingContractPdf}
-              className="bg-[#16A34A] hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest px-5 py-3 rounded-md cursor-pointer border-0 transition-colors"
-            >
-              📥{" "}
-              {downloadingContractPdf
-                ? "..."
-                : isEn
-                ? "Download PDF"
-                : "Descarregar PDF"}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ALERTA DE PEDIDOS DE ALTERAÇÃO DE PAIS */}
       {metricas.pedidosPendentes > 0 && (
         <div className="bg-amber-50 border-2 border-[#F59E0B] p-6 rounded-md mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
@@ -1011,7 +933,7 @@ export default function AdminDashboardPage({
             </div>
           </div>
 
-          {/* ATALHOS RÁPIDOS COM BOTÕES COLORIDOS E TEXTO BRANCO */}
+          {/* ATALHOS RÁPIDOS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Link
               href={`/${lang}/admin/campos`}
@@ -1019,9 +941,8 @@ export default function AdminDashboardPage({
             >
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-blue-100 block mb-1">
-                  {metricas.camposAtivos}{" "}
-                  {isEn ? "Active" : "Ativos"} • {metricas.camposPendentes}{" "}
-                  {isEn ? "Pending" : "Pendentes"}
+                  {metricas.camposAtivos} {isEn ? "Active" : "Ativos"} •{" "}
+                  {metricas.camposPendentes} {isEn ? "Pending" : "Pendentes"}
                 </span>
                 <span className="text-base font-black block">
                   🏕️ {isEn ? "Manage My Camps" : "Gerir Os Meus Campos"}
