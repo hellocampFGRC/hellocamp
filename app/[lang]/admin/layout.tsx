@@ -77,6 +77,11 @@ export default function AdminPartnerLayout({
       icon: "📊",
     },
     {
+      href: `/${lang}/admin/perfil`,
+      label: isEn ? "Profile & Showcase" : "Perfil & Montra",
+      icon: "🏢",
+    },
+    {
       href: `/${lang}/admin/campos`,
       label: isEn ? "My Camps" : "Os Meus Campos",
       icon: "🏕️",
