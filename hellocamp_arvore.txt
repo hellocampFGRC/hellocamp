@@ -135,6 +135,9 @@
 |  |  ├── admin
 |  |  |  └── aprovar-contrato
 |  |  |     └── route.ts
+|  |  ├── auth
+|  |  |  └── acesso
+|  |  |     └── route.ts
 |  |  ├── cancelar-reserva
 |  |  |  └── route.ts
 |  |  ├── contratos
@@ -148,6 +151,8 @@
 |  |  ├── inbox
 |  |  |  └── send-change-request
 |  |  |     └── route.ts
+|  |  ├── institucional
+|  |  |  └── route.ts
 |  |  ├── notificacoes
 |  |  |  ├── boas-vindas
 |  |  |  |  └── route.ts
@@ -172,8 +177,6 @@
 |  |  ├── superadmin
 |  |  |  └── enviar-broadcast
 |  |  |     └── route.ts
-|  |  ├── test-emails
-|  |  |  └── route.ts
 |  |  ├── translate-camp
 |  |  |  └── route.ts
 |  |  └── webhooks
@@ -192,6 +195,7 @@
 ├── hellocamp_arvore.txt
 ├── hellocamp_b2b_admin.txt
 ├── hellocamp_b2c_publico.txt
+├── hellocamp_backend_core.txt
 ├── lib
 |  ├── getDictionary.ts
 |  └── supabase.ts
@@ -202,9 +206,10 @@
 ├── postcss.config.mjs
 ├── proxy.ts
 ├── robots.ts
+├── tailwind.config.ts
 └── tsconfig.json
 
-directory: 2087 file: 16965
+directory: 2089 file: 16968
 
 ignored: directory (18)
 
