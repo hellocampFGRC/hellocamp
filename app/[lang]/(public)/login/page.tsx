@@ -17,11 +17,54 @@ function LoginForm({ lang }: { lang: string }) {
   const [password, setPassword] = useState("");
   const [mostrarPass, setMostrarPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [syncingPass, setSyncingPass] = useState(false);
   const [erro, setErro] = useState("");
   const [magicEnviado, setMagicEnviado] = useState(false);
 
-  // Se o utilizador for SuperAdmin + Parceiro, permite escolher para qual painel quer ir!
+  // Escolha de painel quando a conta tem is_superadmin = true
   const [escolhaSuperAdmin, setEscolhaSuperAdmin] = useState(false);
+
+  const redirecionarAposLogin = async (userId: string, userMetaRole?: string) => {
+    if (redirectTo) {
+      const cleanRedirect = redirectTo.startsWith("/")
+        ? redirectTo
+        : `/${lang}/${redirectTo}`;
+      router.push(cleanRedirect);
+      return;
+    }
+
+    const savedRedirect =
+      typeof window !== "undefined"
+        ? sessionStorage.getItem("redirect_after_login")
+        : null;
+    if (savedRedirect) {
+      sessionStorage.removeItem("redirect_after_login");
+      router.push(savedRedirect);
+      return;
+    }
+
+    const { data: perfil } = await supabase
+      .from("perfis")
+      .select("role, is_superadmin")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (perfil?.is_superadmin) {
+      setEscolhaSuperAdmin(true);
+      setLoading(false);
+      return;
+    }
+
+    const role = perfil?.role || userMetaRole || "cliente";
+
+    if (role === "organizador" || role === "parceiro" || role === "admin") {
+      router.push(`/${lang}/admin/dashboard`);
+    } else if (role === "monitor") {
+      router.push(`/${lang}/monitores/portal/perfil`);
+    } else {
+      router.push(`/${lang}/cliente/dashboard`);
+    }
+  };
 
   const handleLoginPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,74 +75,29 @@ function LoginForm({ lang }: { lang: string }) {
     const cleanPassword = password.trim();
 
     try {
-      // Limpar eventual sessão antiga corrompida no browser antes de autenticar
-      await supabase.auth.signOut();
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPassword,
       });
 
       if (error || !data?.user) {
-        let msg = isEn
-          ? `Invalid email or password (${error?.message || "400"}).`
-          : `E-mail ou palavra-passe incorretos (${
-              error?.message || "Verifique os dados"
-            }).`;
-
-        if (error?.message?.toLowerCase().includes("email not confirmed")) {
-          msg = isEn
-            ? "Your email is not confirmed yet. Please check your inbox."
-            : "O seu e-mail ainda não foi confirmado. Verifique a sua caixa de correio.";
-        }
-
-        setErro(msg);
+        setErro(
+          isEn
+            ? `Invalid credentials (${
+                error?.message || "400"
+              }). Tip: If your password was reset during the database migration, try "HelloCamp2026!" or click the button below to set this password as your new password.`
+            : `Credenciais inválidas (${
+                error?.message || "400"
+              }). Dica: Se a sua password foi reiniciada no SQL anterior, experimente "HelloCamp2026!" ou clique no botão abaixo para gravar a password que acabou de escrever.`
+        );
         setLoading(false);
         return;
       }
 
-      // 1. Se existir um URL de redirecionamento explícito nos query params ou sessionStorage
-      if (redirectTo) {
-        const cleanRedirect = redirectTo.startsWith("/")
-          ? redirectTo
-          : `/${lang}/${redirectTo}`;
-        router.push(cleanRedirect);
-        return;
-      }
-
-      const savedRedirect =
-        typeof window !== "undefined"
-          ? sessionStorage.getItem("redirect_after_login")
-          : null;
-      if (savedRedirect) {
-        sessionStorage.removeItem("redirect_after_login");
-        router.push(savedRedirect);
-        return;
-      }
-
-      // 2. Consultar apenas colunas reais da tabela `perfis` (role, is_superadmin)
-      const { data: perfil } = await supabase
-        .from("perfis")
-        .select("role, is_superadmin")
-        .eq("id", data.user.id)
-        .maybeSingle();
-
-      // Se for SuperAdmin, mostra os 2 botões para escolher entre SuperAdmin HQ ou Portal de Parceiro!
-      if (perfil?.is_superadmin) {
-        setEscolhaSuperAdmin(true);
-        setLoading(false);
-        return;
-      }
-
-      const role = perfil?.role || data.user.user_metadata?.role || "cliente";
-
-      if (role === "organizador" || role === "parceiro" || role === "admin") {
-        router.push(`/${lang}/admin/dashboard`);
-      } else if (role === "monitor") {
-        router.push(`/${lang}/monitores/portal/perfil`);
-      } else {
-        router.push(`/${lang}/cliente/dashboard`);
-      }
+      await redirecionarAposLogin(
+        data.user.id,
+        data.user.user_metadata?.role
+      );
     } catch (err: any) {
       setErro(
         err?.message ||
@@ -109,6 +107,62 @@ function LoginForm({ lang }: { lang: string }) {
     }
   };
 
+  // Sincroniza oficialmente a password digitada usando a API Admin do Supabase (updateUserById) e faz login imediato!
+  const handleSincronizarPasswordEEntrar = async () => {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || cleanPassword.length < 6) {
+      alert(
+        isEn
+          ? "Please enter your email and a password with at least 6 characters first."
+          : "Preencha primeiro o seu e-mail e uma palavra-passe com pelo menos 6 caracteres na caixa acima."
+      );
+      return;
+    }
+
+    setSyncingPass(true);
+    setErro("");
+
+    try {
+      const res = await fetch("/api/auth/acesso", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sync_repair_account",
+          email: cleanEmail,
+          newPassword: cleanPassword,
+          lang,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || "Não foi possível sincronizar a conta.");
+      }
+
+      // Agora autentica oficialmente com a password recém-sincronizada!
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
+
+      if (error || !data?.user) {
+        throw new Error(error?.message || "Erro ao autenticar após sincronização.");
+      }
+
+      await redirecionarAposLogin(
+        data.user.id,
+        data.user.user_metadata?.role
+      );
+    } catch (err: any) {
+      setErro(err.message);
+    } finally {
+      setSyncingPass(false);
+    }
+  };
+
+  // Envia Magic Link instantaneamente via Resend (/api/auth/acesso)
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -116,22 +170,29 @@ function LoginForm({ lang }: { lang: string }) {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email: cleanEmail,
-      options: {
-        emailRedirectTo: `${window.location.origin}/${lang}/admin/dashboard`,
-      },
-    });
+    try {
+      const res = await fetch("/api/auth/acesso", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "magic_link",
+          email: cleanEmail,
+          lang,
+        }),
+      });
 
-    setLoading(false);
-    if (error) {
-      setErro(
-        isEn
-          ? `Could not send access link: ${error.message}`
-          : `Não foi possível enviar o link de acesso: ${error.message}`
-      );
-    } else {
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          data.error || "Não foi possível enviar o link mágico."
+        );
+      }
+
       setMagicEnviado(true);
+    } catch (err: any) {
+      setErro(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -252,8 +313,20 @@ function LoginForm({ lang }: { lang: string }) {
             </div>
 
             {erro && (
-              <div className="mb-6 p-4 bg-rose-50 border-2 border-[#F43F5E] text-[#F43F5E] rounded-md text-xs font-black leading-relaxed">
-                ⚠️ {erro}
+              <div className="mb-6 p-4 bg-rose-50 border-2 border-[#F43F5E] text-[#0F172A] rounded-md text-xs font-bold leading-relaxed space-y-3">
+                <div className="text-[#F43F5E] font-black">⚠️ {erro}</div>
+                {modo === "password" && (
+                  <button
+                    type="button"
+                    disabled={syncingPass}
+                    onClick={handleSincronizarPasswordEEntrar}
+                    className="w-full py-2.5 px-4 bg-[#16A34A] hover:bg-green-700 text-white font-black text-[11px] uppercase tracking-widest rounded-md cursor-pointer border-0 shadow-sm"
+                  >
+                    {syncingPass
+                      ? "A sincronizar conta..."
+                      : "🔄 Gravar esta Password na Minha Conta & Entrar Agora →"}
+                  </button>
+                )}
               </div>
             )}
 
@@ -332,8 +405,8 @@ function LoginForm({ lang }: { lang: string }) {
                 </h3>
                 <p className="text-xs text-slate-600 font-medium m-0">
                   {isEn
-                    ? `We sent an instant login link to ${email}. Click it to enter automatically.`
-                    : `Enviámos um link de acesso direto para ${email}. Basta clicar no link para entrar sem password.`}
+                    ? `We sent an instant login link via Resend to ${email}. Click it to enter automatically.`
+                    : `Enviámos um link de acesso direto (via Resend) para ${email}. Basta clicar no botão do e-mail para entrar imediatamente!`}
                 </p>
               </div>
             ) : (
