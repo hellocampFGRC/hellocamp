@@ -17,11 +17,8 @@ function LoginForm({ lang }: { lang: string }) {
   const [password, setPassword] = useState("");
   const [mostrarPass, setMostrarPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [syncingPass, setSyncingPass] = useState(false);
   const [erro, setErro] = useState("");
   const [magicEnviado, setMagicEnviado] = useState(false);
-
-  // Escolha de painel quando a conta tem is_superadmin = true
   const [escolhaSuperAdmin, setEscolhaSuperAdmin] = useState(false);
 
   const redirecionarAposLogin = async (userId: string, userMetaRole?: string) => {
@@ -83,12 +80,8 @@ function LoginForm({ lang }: { lang: string }) {
       if (error || !data?.user) {
         setErro(
           isEn
-            ? `Invalid credentials (${
-                error?.message || "400"
-              }). Tip: If your password was reset during the database migration, try "HelloCamp2026!" or click the button below to set this password as your new password.`
-            : `Credenciais inválidas (${
-                error?.message || "400"
-              }). Dica: Se a sua password foi reiniciada no SQL anterior, experimente "HelloCamp2026!" ou clique no botão abaixo para gravar a password que acabou de escrever.`
+            ? `Invalid email or password. Please check your credentials.`
+            : `E-mail ou palavra-passe incorretos. Por favor, verifique os seus dados.`
         );
         setLoading(false);
         return;
@@ -107,62 +100,6 @@ function LoginForm({ lang }: { lang: string }) {
     }
   };
 
-  // Sincroniza oficialmente a password digitada usando a API Admin do Supabase (updateUserById) e faz login imediato!
-  const handleSincronizarPasswordEEntrar = async () => {
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPassword = password.trim();
-
-    if (!cleanEmail || cleanPassword.length < 6) {
-      alert(
-        isEn
-          ? "Please enter your email and a password with at least 6 characters first."
-          : "Preencha primeiro o seu e-mail e uma palavra-passe com pelo menos 6 caracteres na caixa acima."
-      );
-      return;
-    }
-
-    setSyncingPass(true);
-    setErro("");
-
-    try {
-      const res = await fetch("/api/auth/acesso", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "sync_repair_account",
-          email: cleanEmail,
-          newPassword: cleanPassword,
-          lang,
-        }),
-      });
-
-      const resData = await res.json();
-      if (!res.ok) {
-        throw new Error(resData.error || "Não foi possível sincronizar a conta.");
-      }
-
-      // Agora autentica oficialmente com a password recém-sincronizada!
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPassword,
-      });
-
-      if (error || !data?.user) {
-        throw new Error(error?.message || "Erro ao autenticar após sincronização.");
-      }
-
-      await redirecionarAposLogin(
-        data.user.id,
-        data.user.user_metadata?.role
-      );
-    } catch (err: any) {
-      setErro(err.message);
-    } finally {
-      setSyncingPass(false);
-    }
-  };
-
-  // Envia Magic Link instantaneamente via Resend (/api/auth/acesso)
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -235,7 +172,6 @@ function LoginForm({ lang }: { lang: string }) {
           </p>
         </div>
 
-        {/* ECRÃ DE ESCOLHA RÁPIDA PARA CONTA SUPERADMIN + PARCEIRO */}
         {escolhaSuperAdmin ? (
           <div className="space-y-4">
             <Link
@@ -267,20 +203,9 @@ function LoginForm({ lang }: { lang: string }) {
               </div>
               <span className="text-xl font-black text-white">&rarr;</span>
             </Link>
-
-            <Link
-              href={`/${lang}/cliente/dashboard`}
-              className="w-full bg-[#16A34A] hover:bg-green-700 text-white p-4 rounded-md no-underline flex items-center justify-between shadow-sm transition-colors"
-            >
-              <div className="text-xs font-black text-white uppercase tracking-wider">
-                👨‍👩‍👧 Área de Encarregado de Educação (Pais)
-              </div>
-              <span className="text-lg font-black text-white">&rarr;</span>
-            </Link>
           </div>
         ) : (
           <>
-            {/* ALTERNADOR PASSWORD vs MAGIC LINK */}
             <div className="grid grid-cols-2 gap-2 p-1 bg-[#F8FAFC] rounded-md border border-slate-200 mb-6">
               <button
                 type="button"
@@ -313,20 +238,8 @@ function LoginForm({ lang }: { lang: string }) {
             </div>
 
             {erro && (
-              <div className="mb-6 p-4 bg-rose-50 border-2 border-[#F43F5E] text-[#0F172A] rounded-md text-xs font-bold leading-relaxed space-y-3">
-                <div className="text-[#F43F5E] font-black">⚠️ {erro}</div>
-                {modo === "password" && (
-                  <button
-                    type="button"
-                    disabled={syncingPass}
-                    onClick={handleSincronizarPasswordEEntrar}
-                    className="w-full py-2.5 px-4 bg-[#16A34A] hover:bg-green-700 text-white font-black text-[11px] uppercase tracking-widest rounded-md cursor-pointer border-0 shadow-sm"
-                  >
-                    {syncingPass
-                      ? "A sincronizar conta..."
-                      : "🔄 Gravar esta Password na Minha Conta & Entrar Agora →"}
-                  </button>
-                )}
+              <div className="mb-6 p-4 bg-rose-50 border-2 border-[#F43F5E] text-[#F43F5E] rounded-md text-xs font-black leading-relaxed">
+                ⚠️ {erro}
               </div>
             )}
 
@@ -449,17 +362,6 @@ function LoginForm({ lang }: { lang: string }) {
                   className="text-[#2563EB] font-black hover:underline no-underline"
                 >
                   {isEn ? "Create Free Account" : "Criar Conta Grátis"}
-                </Link>
-              </p>
-              <p className="text-[11px] font-bold text-slate-400 m-0">
-                {isEn
-                  ? "Are you a camp monitor?"
-                  : "É monitor de campos de férias?"}{" "}
-                <Link
-                  href={`/${lang}/monitores/registo`}
-                  className="text-[#16A34A] font-black hover:underline no-underline"
-                >
-                  {isEn ? "Join Monitor Pool →" : "Bolsa de Monitores →"}
                 </Link>
               </p>
             </div>
