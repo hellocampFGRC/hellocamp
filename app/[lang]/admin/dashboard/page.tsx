@@ -533,68 +533,16 @@ export default function AdminDashboardPage({
 
   return (
     <main className="max-w-6xl mx-auto font-sans text-[#0F172A] pb-20">
-      {/* CABEÇALHO DO DASHBOARD (SEM DUPLICAÇÕES) */}
-      <div className="mb-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="bg-[#2563EB] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
-              {isEn ? "Partner Portal" : "Portal do Organizador"}
-            </span>
-            {temContrato ? (
-              <span className="bg-[#16A34A] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
-                ✓ {isEn ? "Contract Active" : "Contrato Global Ativo"}
-              </span>
-            ) : (
-              <span className="bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
-                ⏳ {isEn ? "Contract Pending" : "Contrato Pendente"}
-              </span>
-            )}
-          </div>
-
-          <h1 className="text-2xl md:text-4xl font-black text-[#0F172A] tracking-tight m-0">
-            {isEn ? `Welcome, ${nomeEmpresa}` : `Olá, ${nomeEmpresa}`}
-          </h1>
-          <p className="text-slate-500 mt-1.5 mb-0 text-sm font-medium">
-            {isEn
-              ? "Manage your programs, public brand profile, bookings, and global contract."
-              : "Gira os seus programas, montra pública da organização, inscrições e contrato global."}
-          </p>
-        </div>
-
-        {/* BOTÕES DE AÇÃO ORGANIZADOS NO TOPO */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => setShowPublicProfilePanel(!showPublicProfilePanel)}
-            className="bg-[#2563EB] hover:bg-blue-700 text-white px-4 py-3 rounded-md font-black text-xs uppercase tracking-widest cursor-pointer border-0 transition-colors shadow-sm"
-          >
-            🏢 {isEn ? "Public Profile & Logo" : "Montra & Logótipo"}
-          </button>
-
-          <Link
-            href={`/${lang}/admin/contrato`}
-            className="bg-[#F59E0B] hover:bg-amber-600 text-white px-4 py-3 rounded-md font-black text-xs uppercase tracking-widest no-underline transition-colors shadow-sm flex items-center gap-1.5"
-          >
-            <span>📝</span>
-            <span>
-              {temContrato
-                ? isEn
-                  ? "View Global Contract"
-                  : "Ver Contrato Global"
-                : isEn
-                ? "Sign Global Contract"
-                : "Assinar Contrato"}
-            </span>
-          </Link>
-
-          <Link
-            href={`/${lang}/admin/campos/novo`}
-            className="bg-[#16A34A] hover:bg-green-700 text-white px-5 py-3 rounded-md font-black text-xs uppercase tracking-widest no-underline transition-colors shadow-sm flex items-center gap-1.5"
-          >
-            <span>+</span>
-            <span>{isEn ? "Create Camp" : "Novo Campo"}</span>
-          </Link>
-        </div>
+      {/* CABEÇALHO DO DASHBOARD (LIMPO E SEM BOTÕES DUPLICADOS) */}
+      <div className="mb-8 bg-white p-6 md:p-8 rounded-md border border-slate-200 shadow-sm">
+        <h1 className="text-2xl md:text-4xl font-black text-[#0F172A] tracking-tight m-0">
+          {isEn ? `Welcome, ${nomeEmpresa}` : `Olá, ${nomeEmpresa}`}
+        </h1>
+        <p className="text-slate-500 mt-1.5 mb-0 text-sm font-medium">
+          {isEn
+            ? "Manage your programs, public brand profile, bookings, and global contract."
+            : "Gira os seus programas, montra pública da organização, inscrições e contrato global."}
+        </p>
       </div>
 
       {/* PAINEL EXPANSÍVEL: CONFIGURAR MONTRA PÚBLICA & LOGÓTIPO */}
