@@ -101,6 +101,8 @@
 |  |  |  ├── inbox
 |  |  |  |  └── page.tsx
 |  |  |  ├── layout.tsx
+|  |  |  ├── perfil
+|  |  |  |  └── page.tsx
 |  |  |  ├── recrutamento
 |  |  |  |  └── page.tsx
 |  |  |  └── reservas
@@ -209,7 +211,7 @@
 ├── tailwind.config.ts
 └── tsconfig.json
 
-directory: 2089 file: 16968
+directory: 2090 file: 16969
 
 ignored: directory (18)
 
