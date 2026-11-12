@@ -14,6 +14,7 @@ const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 const SENDER_EMAIL = 'info@hellocamp.pt';
 const SENDER_NAME = 'Rodrigo | HelloCamp';
 const BASE_URL = 'https://www.hellocamp.pt';
+const CALENDLY_URL = 'https://calendly.com/hellocamp-info/new-meeting';
 
 async function enviarViaBrevo(params: {
   to: { email: string; name?: string };
@@ -32,10 +33,10 @@ async function enviarViaBrevo(params: {
       },
       body: JSON.stringify({
         sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+        replyTo: { name: SENDER_NAME, email: SENDER_EMAIL },
         to: [params.to],
         subject: params.subject,
         htmlContent: params.html,
-        headers: { 'X-Mailer': 'HelloCamp-B2B-Global' },
       }),
     });
 
@@ -49,367 +50,361 @@ async function enviarViaBrevo(params: {
 
 type Template = {
   gerarAssunto: (nome: string) => string;
-  titulo: string;
-  textoCta: string;
-  gerarMensagem: (nome: string) => string;
+  gerarMensagem: (nome: string, parceiroUrl: string) => string;
+  gerarAssinatura: (parceiroUrl: string) => string;
   gerarFooter: (unsubscribeUrl: string) => string;
 };
 
 const TEMPLATES: Record<string, Template[]> = {
   PT: [
     {
-      gerarAssunto: (nome) => `Convidamos a ${nome} a integrar o novo motor de busca de atividades juvenis`,
-      titulo: "Chegue a Milhares de Famílias o Ano Inteiro",
-      textoCta: "Ver como funciona a HelloCamp",
-      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarAssunto: (nome) => `Parceria com a ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Um abraço,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>Equipa HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Se não tiver interesse em receber mais mensagens nossas, pode <a href="${url}" style="color: #94A3B8; text-decoration: underline;">pedir para não ser contactado aqui</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Olá equipa da <strong>${nome}</strong>, tudo bem?</p>
+        <p>Sou o Rodrigo da <strong>HelloCamp</strong>. Estou a enviar este e-mail porque vi que organizam atividades e campos de férias para crianças e jovens, e queria dar-vos a conhecer a nossa plataforma.</p>
+        <p>A HelloCamp é uma nova plataforma onde as famílias procuram e reservam campos de férias, colónias desportivas e atividades juvenis em Portugal e na Europa. Gostámos muito do vosso trabalho e achamos que faz todo o sentido a ${nome} estar connosco.</p>
+        <p>O nosso modelo é muito simples e transparente: celebramos um acordo de parceria convosco para promover os vossos programas na plataforma e funcionamos exclusivamente com base numa comissão sobre as reservas que forem efetivamente realizadas através de nós.</p>
+        <p>Querem marcar uma breve reunião online connosco (10-15 minutos) para saberem mais detalhes e verem a plataforma por dentro? Se sim, basta escolherem a melhor hora no nosso calendário:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Caso não precisem de reunião e queiram logo que nós criemos o vosso perfil e insiramos a informação dos vossos campos, basta responderem a este e-mail com os dados ou brochuras das atividades e nós tratamos de deixar tudo pronto para avançarmos com a parceria.</p>
+        <p>Digam-me o que vos parece!</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Re: Parceria com a ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Um abraço,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>Equipa HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Se não tiver interesse em receber mais mensagens nossas, pode <a href="${url}" style="color: #94A3B8; text-decoration: underline;">pedir para não ser contactado aqui</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Olá novamente equipa da <strong>${nome}</strong>,</p>
+        <p>Calculo que estejam numa fase ocupada a organizar as vossas atividades, por isso volto apenas a deixar uma nota rápida no seguimento do meu e-mail anterior.</p>
+        <p>Para além de levarmos novas famílias aos vossos programas, construímos a HelloCamp para facilitar a gestão diária dos nossos parceiros: sempre que recebem uma reserva pela plataforma, as fichas de saúde, alergias e contactos de emergência dos participantes ficam logo organizados no vosso painel, e só pagam comissão pelas inscrições realmente concretizadas.</p>
+        <p>Se quiserem ver a plataforma por dentro e conversar sobre como funcionaria a nossa parceria, podem agendar diretamente aqui:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Em alternativa, se preferirem avançar já sem reunião, basta responderem a este e-mail com as informações dos vossos campos (ou indicarem se podemos recolher do vosso site) e nós preparamos o vosso perfil e o contrato de parceria.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Uma questão rápida sobre os programas da ${nome}`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Um abraço,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>Equipa HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Se não tiver interesse em receber mais mensagens nossas, pode <a href="${url}" style="color: #94A3B8; text-decoration: underline;">pedir para não ser contactado aqui</a>.`,
       gerarMensagem: (nome) => `
         <p>Olá equipa da <strong>${nome}</strong>,</p>
-        <p>O meu nome é Rodrigo e faço parte da equipa da <strong>HelloCamp</strong>, um novo motor de busca internacional dedicado a campos de férias, aulas de desporto (surf, skate, etc.) e atividades extracurriculares para jovens.</p>
-        <p>Notámos que a vossa organização tem excelentes programas que encaixam perfeitamente naquilo que as nossas famílias procuram para o tempo livre dos filhos (tanto no verão como no resto do ano), e gostaríamos muito de vos convidar a fazer parte do nosso diretório.</p>
-        <p><strong>Como funciona o nosso modelo de parceria?</strong></p>
-        <ul>
-          <li><strong>Visibilidade 100% Gratuita:</strong> Estar presente no nosso motor de busca não tem qualquer custo fixo. O vosso perfil exibirá as vossas fotografias, descrições, website oficial e contactos, permitindo que as famílias vos encontrem livremente.</li>
-          <li><strong>Reservas Diretas (Opcional):</strong> Caso pretendam automatizar as vossas inscrições, podem ativar a opção de reservas diretas através da HelloCamp. Neste modelo, fornecemos uma secretaria digital completa e cobramos uma comissão <strong>significativamente mais baixa que a média do mercado</strong>, aplicada apenas às reservas confirmadas.</li>
-        </ul>
-        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
-          <strong>O nosso serviço chave-na-mão:</strong> Se pretenderem aderir, basta responderem a este e-mail com o link do vosso website ou o PDF da vossa brochura de atividades. A nossa equipa encarrega-se de construir o vosso perfil completo em 24 horas, sem qualquer esforço da vossa parte.
-        </p>
-        <p>Gostariam de avançar com a criação gratuita do vosso perfil?</p>
+        <p>Sou o Rodrigo da HelloCamp outra vez. Queria partilhar convosco um detalhe importante sobre a forma como trabalhamos com os nossos parceiros.</p>
+        <p>Na HelloCamp, adaptamo-nos à operação de cada organizador: no nosso contrato de parceria podem escolher entre receber inscrições com pagamento direto na plataforma ou reservas sob confirmação da vossa equipa, tendo sempre total controlo sobre as vossas vagas, turnos e preços, e pagando apenas uma comissão por reserva efetivamente feita.</p>
+        <p>Gostávamos mesmo de contar convosco. Têm 10 minutos esta semana para vos mostrarmos a plataforma por dentro? Podem escolher o horário aqui:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Ou, se for mais prático para vocês, respondam apenas a este e-mail com os detalhes dos vossos campos e nós tratamos de configurar o vosso perfil completo.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `A tecnologia que vai poupar dezenas de horas à ${nome}`,
-      titulo: "Diga Adeus ao Caos Administrativo",
-      textoCta: "Descobrir o Painel de Parceiros",
-      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
-      gerarMensagem: (nome) => `
-        <p>Olá novamente,</p>
-        <p>No meu e-mail anterior falei-vos sobre a integração da <strong>${nome}</strong> na nossa plataforma, mas hoje gostava de vos mostrar o que acontece "nos bastidores" quando ativam as reservas diretas na HelloCamp.</p>
-        <p>Gerir dezenas de e-mails, pedir comprovativos de transferência e compilar fichas de alergias em folhas de Excel é exaustivo. Foi por isso que construímos um <strong>Dashboard Exclusivo para Organizadores</strong>.</p>
-        <p>Ao permitirem reservas através da nossa plataforma (com a nossa estrutura de comissões muito competitiva):</p>
-        <ul>
-          <li>Os pais pagam diretamente por Multibanco, MBWay ou Cartão, e o valor é faturado diretamente na vossa conta (via Stripe).</li>
-          <li>Os formulários de saúde, alergias e contactos de emergência ficam logo centralizados e ligados a cada participante.</li>
-          <li>As vagas dos vossos desportos ou campos são atualizadas em tempo real.</li>
-        </ul>
-        <p>Se preferirem apenas a listagem gratuita de visibilidade, essa opção continuará sempre à vossa disposição.</p>
-        <p>Podem criar o vosso espaço em menos de 5 minutos através do link abaixo, ou responder a este e-mail para agendarmos uma breve chamada.</p>
-      `
-    },
-    {
-      gerarAssunto: (nome) => `O protagonismo da ${nome} na nossa plataforma`,
-      titulo: "Transparência e Controlo Total",
-      textoCta: "Criar o meu Perfil Gratuitamente",
-      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
-      gerarMensagem: (nome) => `
-        <p>Cara equipa da <strong>${nome}</strong>,</p>
-        <p>Muitos portais no mercado optam por esconder o website ou o telefone dos organizadores, obrigando as famílias a passar por intermediários. Na HelloCamp, não acreditamos nessa abordagem.</p>
-        <p>Ao figurarem na nossa plataforma, <strong>a vossa identidade e os vossos contactos estão sempre à vista</strong>. Se os pais preferirem contactar-vos diretamente para tirar dúvidas sobre uma aula ou campo de férias, têm total liberdade para o fazer.</p>
-        <p>Como referi anteriormente, a nossa taxa de comissão só é aplicada se a família optar por fechar a inscrição diretamente pelo nosso sistema automatizado.</p>
-        <p>Recuperem o controlo da vossa presença online. Basta responderem a este e-mail a confirmar o vosso interesse e nós tratamos do resto.</p>
-      `
-    },
-    {
-      gerarAssunto: (nome) => `Última oportunidade para a ${nome} garantir presença`,
-      titulo: "A Época de Inscrições Começou",
-      textoCta: "Garantir o meu Lugar na HelloCamp",
-      gerarFooter: (url) => `Recebeu este e-mail porque a sua entidade é uma referência. <a href="${url}" style="color: #64748B; text-decoration: underline;">Clique aqui para remover o seu e-mail</a> da nossa lista.`,
+      gerarAssunto: (nome) => `Programas da ${nome} na HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Um abraço e uma excelente época,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>Equipa HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Se não tiver interesse em receber mais mensagens nossas, pode <a href="${url}" style="color: #94A3B8; text-decoration: underline;">pedir para não ser contactado aqui</a>.`,
       gerarMensagem: (nome) => `
         <p>Olá equipa da <strong>${nome}</strong>,</p>
-        <p>Prometo que este é o meu último e-mail. Neste exato momento, a nossa plataforma está a registar pesquisas diárias de famílias que procuram atividades extracurriculares e opções de férias para os filhos.</p>
-        <p>Não queremos que fiquem de fora desta montra. Volto a reforçar que ter a vossa entidade listada para gerar visibilidade é um processo gratuito.</p>
-        <p><strong>Não precisam de preencher formulários longos.</strong> Enviem-nos apenas as vossas brochuras ou o link do vosso site, e nós garantimos que ficam online ainda esta semana.</p>
-        <p>Esperamos contar com vocês.</p>
+        <p>Sei que o vosso dia a dia na gestão das atividades é corrido, por isso este será o meu último e-mail para não vos ocupar mais a caixa de correio.</p>
+        <p>Temos cada vez mais famílias à procura de programas e campos de férias na HelloCamp e teríamos todo o gosto em fechar parceria com a ${nome} (funcionando apenas à comissão sobre as reservas realizadas).</p>
+        <p>Deixo o convite em aberto: se quiserem que nós criemos o vosso perfil e deixemos os vossos programas prontos, basta responderem a este e-mail com a informação e nós tratamos de tudo. Se preferirem falar primeiro connosco para verem a plataforma por dentro, têm sempre a nossa agenda disponível em:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Fico ao vosso dispor sempre que precisarem!</p>
       `
     }
   ],
   EN: [
     {
-      gerarAssunto: (nome) => `Invitation to feature ${nome} to European families`,
-      titulo: "Reach Thousands of European Students",
-      textoCta: "Discover HelloCamp",
-      gerarFooter: (url) => `You received this email because your organization is highly rated. <a href="${url}" style="color: #64748B; text-decoration: underline;">Click here to unsubscribe</a>.`,
+      gerarAssunto: (nome) => `Partnership with ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Best regards,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>HelloCamp Team<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `If you prefer not to receive further messages from us, you can <a href="${url}" style="color: #94A3B8; text-decoration: underline;">opt out here</a>.`,
       gerarMensagem: (nome) => `
-        <p>Dear <strong>${nome}</strong> team,</p>
-        <p>My name is Rodrigo and I'm reaching out from <strong>HelloCamp</strong>, a newly launched international search engine and booking platform for summer camps, sports clinics (surf, tennis, etc.), and extracurricular youth activities.</p>
-        <p>Every year, thousands of Iberian families use our portal to plan their children's activities. We have noticed a huge surge in demand for international programs, and your offerings at <strong>${nome}</strong> perfectly match what our audience is looking for.</p>
-        <p><strong>How does our partnership work?</strong></p>
-        <ul>
-          <li><strong>Free Visibility Listing:</strong> Being listed in our directory is completely free. We will showcase your photos, descriptions, and official contact details so European parents can find you effortlessly.</li>
-          <li><strong>Direct Bookings (Optional):</strong> If you wish to streamline your enrollments, you can activate direct bookings through HelloCamp. We provide a full digital dashboard for this service and charge a <strong>highly competitive commission, significantly lower than the industry average</strong>, per confirmed booking.</li>
-        </ul>
-        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
-          <strong>Our white-glove onboarding:</strong> To get started, simply reply to this email with a link to your website or a PDF brochure. Our team will build and optimize your profile within 24 hours at no cost.
-        </p>
-        <p>Would you be open to having your organization featured on our platform?</p>
+        <p>Hi <strong>${nome}</strong> team, hope you're doing well!</p>
+        <p>I'm Rodrigo from <strong>HelloCamp</strong>. I'm reaching out because I saw that you organize youth activities and holiday camps, and I wanted to introduce our platform to you.</p>
+        <p>HelloCamp is a new platform where families across Europe discover and book summer camps, sports clinics, language courses, and youth programs. We really like what you do at ${nome} and would love to feature your programs.</p>
+        <p>Our partnership model is very straightforward: we set up a partnership agreement with you to promote your programs on the platform, and we work strictly on a commission basis for bookings that are actually completed through HelloCamp.</p>
+        <p>Would you be open to a quick 10–15 minute call to learn more and see the platform from the inside? If so, feel free to pick a time that works for you on our calendar:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>If you don't need a meeting and would like us to go ahead and create your profile and upload your camp details right away, just reply to this email with your program information or brochures and our team will take care of everything.</p>
+        <p>Let me know what you think!</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Streamline your international bookings for ${nome}`,
-      titulo: "International Growth, Zero Hassle",
-      textoCta: "Create your Partner Account",
-      gerarFooter: (url) => `You received this email because your organization is highly rated. <a href="${url}" style="color: #64748B; text-decoration: underline;">Click here to unsubscribe</a>.`,
+      gerarAssunto: (nome) => `Re: Partnership with ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Best regards,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>HelloCamp Team<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `If you prefer not to receive further messages from us, you can <a href="${url}" style="color: #94A3B8; text-decoration: underline;">opt out here</a>.`,
       gerarMensagem: (nome) => `
-        <p>Hello again,</p>
-        <p>In my previous email, I mentioned featuring <strong>${nome}</strong> on our platform. Today, I'd like to show you the operational side of HelloCamp if you choose to activate direct bookings.</p>
-        <p>Expanding to international markets often involves chasing wire transfers and managing medical forms in foreign languages. That is why we built our <strong>Partner Dashboard</strong>.</p>
-        <p>By enabling direct bookings (with our highly competitive low-commission structure):</p>
-        <ul>
-          <li>Parents pay securely online, and funds are automatically transferred to your connected Stripe account.</li>
-          <li>Medical records, dietary restrictions, and emergency contacts are standardized and accessible with one click.</li>
-          <li>Your program availability is updated in real-time.</li>
-        </ul>
-        <p>Registration takes 5 minutes. Feel free to set up your account via the link below, or reply to this email to schedule a quick introduction call.</p>
+        <p>Hi again <strong>${nome}</strong> team,</p>
+        <p>I know you're probably busy organizing your upcoming programs, so I just wanted to send a quick follow-up to my previous note.</p>
+        <p>Beyond connecting you with European families searching for camps, we built HelloCamp to make administration easier for our partners: whenever a booking is made, participant medical forms, dietary needs, and emergency contacts are collected in your partner dashboard, and a commission only applies to confirmed bookings.</p>
+        <p>If you'd like to see the platform inside and discuss how a partnership would work, you can book a short chat with us here:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Or, if you'd rather skip the call and have us build your profile right away, simply reply with your program details (or let us know if we can pull them from your website) and we'll prepare your listings and partnership agreement.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Why we put ${nome}'s brand front and center`,
-      titulo: "Your Brand is the Protagonist",
-      textoCta: "Join HelloCamp for Free",
-      gerarFooter: (url) => `You received this email because your organization is highly rated. <a href="${url}" style="color: #64748B; text-decoration: underline;">Click here to unsubscribe</a>.`,
+      gerarAssunto: (nome) => `Quick question regarding ${nome}'s programs`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Best regards,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>HelloCamp Team<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `If you prefer not to receive further messages from us, you can <a href="${url}" style="color: #94A3B8; text-decoration: underline;">opt out here</a>.`,
       gerarMensagem: (nome) => `
         <p>Hi <strong>${nome}</strong> team,</p>
-        <p>Unlike other directories that hide your contact details to force clients through their funnels, HelloCamp believes in transparent partnerships.</p>
-        <p>On our platform, <strong>your website, email, and brand logo are 100% visible</strong>. If a parent prefers to contact your admissions office directly with questions, they are free to do so.</p>
-        <p>As mentioned, our commission fee is only applied if the family decides to complete their booking using our integrated payment system.</p>
-        <p>Regain control of your international visibility. Create your free listing today or simply reply to this email to let our onboarding team do the work for you.</p>
+        <p>Rodrigo from HelloCamp here again. I wanted to quickly share one key detail about how we work with camp organizers.</p>
+        <p>Our partnership agreement adapts to your workflow: you can choose between instant online checkout or bookings upon request, while keeping full control over your sessions, availability, and pricing—paying a commission only when a booking is genuinely made.</p>
+        <p>We'd love to have ${nome} on board. Do you have 10 minutes this week for a quick walkthrough of the platform? You can pick a slot here:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Alternatively, just reply to this email with your camp information and we'll happily set up your full profile for you.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Last email (European booking season for ${nome})`,
-      titulo: "The Enrollment Season has Begun",
-      textoCta: "Start Receiving European Leads",
-      gerarFooter: (url) => `You received this email because your organization is highly rated. <a href="${url}" style="color: #64748B; text-decoration: underline;">Click here to unsubscribe</a>.`,
+      gerarAssunto: (nome) => `${nome} on HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Wishing you a great season ahead,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>HelloCamp Team<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `If you prefer not to receive further messages from us, you can <a href="${url}" style="color: #94A3B8; text-decoration: underline;">opt out here</a>.`,
       gerarMensagem: (nome) => `
         <p>Hi <strong>${nome}</strong> team,</p>
-        <p>I promise this is my last email. Families are currently actively finalizing their children's sports clinics and holiday plans.</p>
-        <p>We would hate for you to miss out on this high-value demographic. Again, listing your programs for visibility is entirely free.</p>
-        <p>If you don't have time to create an account, <strong>just reply to this email with your program dates and prices</strong>, and our team will set it up for you.</p>
-        <p>We hope to welcome you aboard HelloCamp soon!</p>
+        <p>I know running youth programs keeps you very busy, so I'll make this my last email to avoid crowding your inbox.</p>
+        <p>More and more families are using HelloCamp to book their children's holidays and activities, and we'd still love to partner with ${nome} (working strictly on a commission per completed booking).</p>
+        <p>If you'd like us to create your profile and upload your camps for you, just reply to this email anytime with your information and we'll handle the rest. And if you prefer to chat first and see the platform inside, our calendar is always open at:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Feel free to reach out whenever the timing is right for you!</p>
       `
     }
   ],
   ES: [
     {
-      gerarAssunto: (nome) => `Familias portuguesas buscando actividades en ${nome}`,
-      titulo: "Atraiga Alumnos de Toda Europa",
-      textoCta: "Unirse a HelloCamp",
-      gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
+      gerarAssunto: (nome) => `Colaboración con ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Un saludo,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>Equipo HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Si prefiere no recibir más correos nuestros, puede <a href="${url}" style="color: #94A3B8; text-decoration: underline;">indicárnoslo aquí</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hola equipo de <strong>${nome}</strong>, ¿qué tal?</p>
+        <p>Soy Rodrigo de <strong>HelloCamp</strong>. Os escribo porque he visto que organizáis actividades y campamentos para niños y jóvenes, y quería daros a conocer nuestra plataforma.</p>
+        <p>HelloCamp es una nueva plataforma internacional donde las familias buscan y reservan campamentos de vacaciones, escuelas deportivas y actividades juveniles en Europa. Nos gusta mucho lo que hacéis en ${nome} y creemos que encajáis genial con lo que buscan nuestras familias.</p>
+        <p>Nuestro modelo de colaboración es muy sencillo y transparente: firmamos un acuerdo de colaboración con vosotros para promocionar vuestros programas y trabajamos exclusivamente a comisión por cada reserva que se realice efectivamente a través de HelloCamp.</p>
+        <p>¿Os apetece agendar una breve reunión online (10-15 minutos) con nosotros para conocer más detalles y ver la plataforma por dentro? Si os parece bien, podéis elegir el horario que mejor os venga en nuestro calendario:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>En caso de que no necesitéis reunión y prefiráis que nosotros mismos creemos ya vuestro perfil y subamos la información de vuestros campamentos, basta con que respondáis a este correo con vuestros datos o folletos y nos encargamos de todo.</p>
+        <p>¡Ya me contáis qué os parece!</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Re: Colaboración con ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Un saludo,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>Equipo HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Si prefiere no recibir más correos nuestros, puede <a href="${url}" style="color: #94A3B8; text-decoration: underline;">indicárnoslo aquí</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Hola de nuevo equipo de <strong>${nome}</strong>,</p>
+        <p>Imagino que estaréis a tope organizando vuestras actividades, así que os escribo solo unas líneas rápidas en relación a mi correo anterior.</p>
+        <p>Además de acercar vuestros programas a nuevas familias en Portugal y Europa, hemos diseñado HelloCamp para ahorraros trabajo administrativo: en cada inscripción los padres completan las fichas médicas, alergias y contactos de urgencia en un único panel, aplicando nuestra comisión únicamente sobre las reservas realmente confirmadas.</p>
+        <p>Si queréis ver cómo funciona la plataforma por dentro en una llamada rápida, podéis elegir día y hora aquí:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>O si preferís avanzar ya sin reunión, responded directamente a este email con la información de vuestros programas (o confirmadnos si podemos tomarla de vuestra web) y os preparamos el perfil completo y el acuerdo de colaboración.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Una consulta rápida sobre los programas de ${nome}`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Un saludo,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>Equipo HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Si prefiere no recibir más correos nuestros, puede <a href="${url}" style="color: #94A3B8; text-decoration: underline;">indicárnoslo aquí</a>.`,
       gerarMensagem: (nome) => `
         <p>Hola equipo de <strong>${nome}</strong>,</p>
-        <p>Mi nombre es Rodrigo y les escribo desde <strong>HelloCamp</strong>, un nuevo buscador internacional y plataforma de reservas dedicado a campamentos, escuelas de deporte (surf, skate, etc.) y actividades juveniles.</p>
-        <p>España es, por excelencia, el destino internacional más solicitado por nuestras familias. Hemos evaluado sus programas y consideramos que encajan a la perfección con lo que nuestro público demanda durante todo el año.</p>
-        <p><strong>¿Cómo funciona nuestra colaboración?</strong></p>
-        <ul>
-          <li><strong>Visibilidad 100% Gratuita:</strong> Estar en nuestro buscador no tiene coste. Mostraremos sus fotos, descripciones y datos de contacto oficiales para que las familias les encuentren sin barreras.</li>
-          <li><strong>Reservas Directas (Opcional):</strong> Si desean automatizar las inscripciones internacionales, pueden activar las reservas directas. En este caso, proporcionamos un panel de control completo y cobramos una comisión <strong>muy competitiva y significativamente más baja que la media del sector</strong>, solo por cada reserva confirmada.</li>
-        </ul>
-        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
-          <strong>Servicio llave en mano:</strong> Simplemente respondan a este email con un enlace a su web o su folleto en PDF, y nuestro equipo creará su perfil en 24 horas sin esfuerzo alguno por su parte.
-        </p>
-        <p>¿Les gustaría que incluyamos su organización de forma gratuita?</p>
+        <p>Soy Rodrigo de HelloCamp otra vez. Quería comentaros un detalle rápido sobre cómo trabajamos con los organizadores.</p>
+        <p>Nuestro contrato de colaboración se adapta a vuestra operativa: podéis elegir entre reservas directas o reservas bajo confirmación de vuestro equipo, manteniendo siempre el control de vuestros turnos, plazas y precios, y abonando únicamente una comisión por cada reserva efectivamente realizada.</p>
+        <p>Nos encantaría contar con ${nome}. ¿Tenéis 10 minutos esta semana para enseñaros la plataforma por dentro? Podéis agendarlo aquí:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Y como os comentaba, si preferís que dejemos vuestro perfil creado directamente, responded a este correo con los datos de vuestros campamentos y nosotros nos ocupamos de todo.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Gestión internacional sin esfuerzo para ${nome}`,
-      titulo: "Crecimiento Internacional, Cero Estrés",
-      textoCta: "Crear Cuenta de Organizador",
-      gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
-      gerarMensagem: (nome) => `
-        <p>Hola de nuevo,</p>
-        <p>Captar y gestionar alumnos internacionales a menudo implica cruce de correos, traducciones de fichas médicas y transferencias bancarias lentas. Por eso hemos creado el <strong>Dashboard para Partners de HelloCamp</strong>.</p>
-        <p>Al activar las reservas directas con nosotros (sujetas a nuestra comisión reducida):</p>
-        <ul>
-          <li>Los padres pagan de forma segura online, y los fondos van directamente a su cuenta bancaria.</li>
-          <li>Las fichas médicas y alergias quedan centralizadas y listas para exportar.</li>
-          <li>El control de plazas se actualiza en tiempo real.</li>
-        </ul>
-        <p>Si prefieren mantener únicamente el escaparate de visibilidad gratuita, esa opción siempre estará disponible.</p>
-        <p>Pueden registrarse en 5 minutos en el siguiente enlace, o responder a este email si prefieren que organicemos una breve llamada.</p>
-      `
-    },
-    {
-      gerarAssunto: (nome) => `Por qué damos visibilidad total a la marca de ${nome}`,
-      titulo: "Su Marca es la Protagonista",
-      textoCta: "Anunciar mi Organización",
-      gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
-      gerarMensagem: (nome) => `
-        <p>Equipo de <strong>${nome}</strong>,</p>
-        <p>A diferencia de otros directorios que ocultan los datos de contacto para forzar al cliente a pasar por ellos, en HelloCamp creemos en las alianzas transparentes.</p>
-        <p>En nuestra plataforma, <strong>su sitio web, email y número de teléfono son totalmente visibles</strong>. Si una familia prefiere llamarles directamente para aclarar dudas, tiene total libertad para hacerlo.</p>
-        <p>Como mencioné antes, nuestra comisión por reserva solo se aplica cuando la familia decide completar la inscripción a través de nuestro sistema automatizado.</p>
-        <p>Recuperen el control de su exposición internacional. Respondan a este correo con sus programas y nosotros nos encargaremos del resto.</p>
-      `
-    },
-    {
-      gerarAssunto: (nome) => `Último aviso: Familias buscando actividades en ${nome}`,
-      titulo: "La Temporada de Inscripciones está Activa",
-      textoCta: "Garantizar mi espacio",
-      gerarFooter: (url) => `Recibe este email porque su entidad es una referencia. <a href="${url}" style="color: #64748B; text-decoration: underline;">Haga clic aquí para darse de baja</a>.`,
+      gerarAssunto: (nome) => `Programas de ${nome} en HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Un abrazo y muy buena temporada,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>Equipo HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Si prefiere no recibir más correos nuestros, puede <a href="${url}" style="color: #94A3B8; text-decoration: underline;">indicárnoslo aquí</a>.`,
       gerarMensagem: (nome) => `
         <p>Hola equipo de <strong>${nome}</strong>,</p>
-        <p>Les prometo que este es mi último correo. Las familias europeas están buscando activamente programas deportivos y campamentos en este preciso momento.</p>
-        <p>Sería una pena que se perdieran este mercado. Recuerden que estar listados para generar visibilidad es un proceso totalmente gratuito.</p>
-        <p>Si no tienen tiempo, <strong>basta con que nos envíen sus tarifas y fechas por aquí</strong>, y nosotros nos encargaremos de construir su perfil hoy mismo.</p>
-        <p>Esperamos colaborar con ustedes muy pronto.</p>
+        <p>Sé que el día a día organizando campamentos es muy intenso, así que este será mi último correo para no saturar vuestra bandeja de entrada.</p>
+        <p>Cada semana tenemos más familias buscando actividades en nuestra plataforma y nos encantaría formalizar la colaboración con ${nome} (funcionando solo a comisión por reserva confirmada).</p>
+        <p>Dejo la puerta totalmente abierta: si queréis que configuremos vuestro perfil y subamos vuestros programas, solo tenéis que responder a este correo con la información cuando os venga bien. Y si preferís charlar primero para ver la plataforma por dentro, tenéis nuestra agenda en:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>¡Quedo a vuestra entera disposición para lo que necesitéis!</p>
       `
     }
   ],
   FR: [
     {
-      gerarAssunto: (nome) => `Invitation à présenter ${nome} aux familles européennes`,
-      titulo: "Touchez des milliers de familles",
-      textoCta: "Découvrir HelloCamp",
-      gerarFooter: (url) => `Vous recevez cet e-mail car votre organisation est une référence. <a href="${url}" style="color: #64748B; text-decoration: underline;">Cliquez ici pour vous désabonner</a>.`,
+      gerarAssunto: (nome) => `Partenariat avec ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Bien à vous,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>L'équipe HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Si vous ne souhaitez plus recevoir nos messages, vous pouvez <a href="${url}" style="color: #94A3B8; text-decoration: underline;">le signaler ici</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Bonjour à toute l'équipe de <strong>${nome}</strong>,</p>
+        <p>Je m'appelle Rodrigo et je fais partie de <strong>HelloCamp</strong>. Je vous écris car j'ai vu que vous organisiez des activités et des séjours pour les enfants et les jeunes, et je souhaitais vous faire découvrir notre plateforme.</p>
+        <p>HelloCamp est une nouvelle plateforme internationale qui permet aux familles européennes de trouver et réserver des colonies de vacances, des stages sportifs et des activités jeunesse. Nous apprécions beaucoup ce que vous proposez chez ${nome} et aimerions vous compter parmi nos partenaires.</p>
+        <p>Notre fonctionnement est très simple : nous établissons un contrat de partenariat avec vous pour diffuser vos séjours et nous fonctionnons uniquement à la commission sur les réservations effectivement réalisées via la plateforme.</p>
+        <p>Souhaitez-vous planifier un court échange en visio (10-15 minutes) avec nous pour en savoir plus et découvrir la plateforme de l'intérieur ? Vous pouvez choisir directement le créneau qui vous convient sur notre calendrier :<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Si vous n'avez pas besoin de réunion et préférez que nous créions directement votre profil et vos séjours, il vous suffit de répondre à cet e-mail avec vos informations ou brochures, et nous nous occupons de tout.</p>
+        <p>Dites-moi ce que vous en pensez !</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Re: Partenariat avec ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Bien à vous,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>L'équipe HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Si vous ne souhaitez plus recevoir nos messages, vous pouvez <a href="${url}" style="color: #94A3B8; text-decoration: underline;">le signaler ici</a>.`,
+      gerarMensagem: (nome) => `
+        <p>Re-bonjour l'équipe de <strong>${nome}</strong>,</p>
+        <p>J'imagine que vous êtes bien occupés par la préparation de vos activités, je me permets donc un court suivi après mon précédent message.</p>
+        <p>En plus de faire connaître vos séjours auprès de nouvelles familles en Europe, HelloCamp simplifie votre gestion administrative : pour chaque inscription, les fiches sanitaires, allergies et contacts d'urgence sont centralisés dans votre espace partenaire, et la commission ne s'applique qu'aux réservations réellement confirmées.</p>
+        <p>Pour voir concrètement comment la plateforme fonctionne de l'intérieur, n'hésitez pas à réserver un créneau de 10 minutes avec nous ici :<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Ou, si vous préférez avancer directement sans réunion, répondez simplement à cet e-mail avec les informations de vos séjours (ou indiquez-nous si nous pouvons reprendre celles de votre site web) et notre équipe préparera votre profil complet et votre contrat.</p>
+      `
+    },
+    {
+      gerarAssunto: (nome) => `Une question rapide concernant les séjours de ${nome}`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Bien à vous,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>L'équipe HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Si vous ne souhaitez plus recevoir nos messages, vous pouvez <a href="${url}" style="color: #94A3B8; text-decoration: underline;">le signaler ici</a>.`,
       gerarMensagem: (nome) => `
         <p>Bonjour l'équipe de <strong>${nome}</strong>,</p>
-        <p>Je m'appelle Rodrigo et je vous contacte de la part de <strong>HelloCamp</strong>, une nouvelle plateforme internationale de réservation dédiée aux colonies de vacances, stages sportifs (surf, etc.) et activités extrascolaires pour les jeunes.</p>
-        <p>Chaque année, des milliers de familles utilisent notre portail. Nous avons remarqué que vos programmes correspondent parfaitement à ce que notre public recherche à l'international, tout au long de l'année.</p>
-        <p><strong>Comment fonctionne notre partenariat ?</strong></p>
-        <ul>
-          <li><strong>Visibilité 100% Gratuite :</strong> Être présent dans notre annuaire n'a aucun coût fixe. Votre profil affichera vos photos, descriptions et contacts officiels pour que les parents puissent vous trouver facilement.</li>
-          <li><strong>Réservations Directes (Optionnel) :</strong> Si vous souhaitez automatiser vos inscriptions, vous pouvez activer les réservations via HelloCamp. Nous facturons une commission <strong>très compétitive et nettement inférieure à la moyenne du marché</strong> par réservation confirmée.</li>
-        </ul>
-        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
-          <strong>Notre service clé en main :</strong> Répondez simplement à cet e-mail avec un lien vers votre site ou une brochure PDF. Notre équipe créera et optimisera votre profil en 24 heures sans aucun effort de votre part.
-        </p>
-        <p>Seriez-vous ouverts à l'idée d'ajouter votre organisation gratuitement ?</p>
+        <p>C'est à nouveau Rodrigo de HelloCamp. Je tenais à partager avec vous un point important sur notre façon de collaborer avec les organisateurs.</p>
+        <p>Notre accord de partenariat s'adapte à votre fonctionnement : vous gardez un contrôle total sur vos tarifs, vos dates et vos places disponibles, avec une commission appliquée uniquement lorsqu'une réservation est effectivement conclue.</p>
+        <p>Auriez-vous 10 minutes cette semaine pour que nous vous montrions la plateforme de l'intérieur ? Voici notre calendrier :<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Autrement, répondez simplement à ce message avec vos informations et nous préparerons votre profil et vos séjours pour vous.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Simplifiez vos réservations internationales pour ${nome}`,
-      titulo: "Croissance Internationale Sans Effort",
-      textoCta: "Créer votre compte Partenaire",
-      gerarFooter: (url) => `Vous recevez cet e-mail car votre organisation est une référence. <a href="${url}" style="color: #64748B; text-decoration: underline;">Cliquez ici pour vous désabonner</a>.`,
+      gerarAssunto: (nome) => `Les programmes de ${nome} sur HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Très belle saison à vous,</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>L'équipe HelloCamp<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Si vous ne souhaitez plus recevoir nos messages, vous pouvez <a href="${url}" style="color: #94A3B8; text-decoration: underline;">le signaler ici</a>.`,
       gerarMensagem: (nome) => `
-        <p>Re-bonjour,</p>
-        <p>Accueillir des étudiants internationaux implique souvent des fiches médicales complexes. C'est pourquoi nous avons développé le <strong>Tableau de Bord HelloCamp</strong>.</p>
-        <p>En activant les réservations directes (avec notre commission très réduite) :</p>
-        <ul>
-          <li>Les parents paient en ligne de manière sécurisée et les fonds vont sur votre compte.</li>
-          <li>Les dossiers médicaux et les allergies sont centralisés.</li>
-          <li>Vos disponibilités sont mises à jour en temps réel.</li>
-        </ul>
-        <p>L'inscription prend 5 minutes via le lien ci-dessous.</p>
-      `
-    },
-    {
-      gerarAssunto: (nome) => `Pourquoi nous mettons en avant la marque de ${nome}`,
-      titulo: "Votre Marque est la Protagoniste",
-      textoCta: "Créer Mon Profil Gratuit",
-      gerarFooter: (url) => `Vous recevez cet e-mail car votre organisation est une référence. <a href="${url}" style="color: #64748B; text-decoration: underline;">Cliquez ici pour vous désabonner</a>.`,
-      gerarMensagem: (nome) => `
-        <p>L'équipe de <strong>${nome}</strong>,</p>
-        <p>Contrairement à d'autres plateformes qui cachent vos coordonnées, sur HelloCamp, <strong>votre site web et votre téléphone sont 100% visibles</strong>.</p>
-        <p>Notre commission ne s'applique que si la famille décide de réserver directement via notre système de paiement.</p>
-        <p>Reprenez le contrôle de votre visibilité internationale. Répondez à cet e-mail et nous ferons le travail pour vous.</p>
-      `
-    },
-    {
-      gerarAssunto: (nome) => `Dernier message : Les réservations européennes pour ${nome}`,
-      titulo: "La Saison Bat son Plein",
-      textoCta: "Rejoindre HelloCamp",
-      gerarFooter: (url) => `Vous recevez cet e-mail car votre organisation est une référence. <a href="${url}" style="color: #64748B; text-decoration: underline;">Cliquez ici pour vous désabonner</a>.`,
-      gerarMensagem: (nome) => `
-        <p>Bonjour <strong>${nome}</strong>,</p>
-        <p>Je vous promets que c'est mon dernier e-mail. Les familles cherchent activement des programmes sportifs et séjours en ce moment même.</p>
-        <p>Nous ne voulons pas que vous manquiez cette opportunité. Je vous rappelle que l'ajout à notre annuaire est totalement gratuit.</p>
-        <p><strong>Envoyez-nous simplement vos dates et tarifs en réponse</strong>, et nous paramétrerons votre profil aujourd'hui.</p>
-        <p>Nous espérons collaborer avec vous !</p>
+        <p>Bonjour l'équipe de <strong>${nome}</strong>,</p>
+        <p>Je sais que votre quotidien est très chargé, ce message sera donc le dernier afin de ne pas encombrer votre boîte mail.</p>
+        <p>De nombreuses familles recherchent actuellement des séjours et activités sur HelloCamp, et nous serions ravis de mettre en place un partenariat avec ${nome} (rémunéré uniquement à la commission par réservation confirmée).</p>
+        <p>Si vous souhaitez que notre équipe crée votre profil et mette en ligne vos programmes, répondez simplement à cet e-mail avec vos informations quand vous le voudrez. Et si vous préférez échanger de vive voix avant, notre agenda reste disponible sur :<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Je reste à votre entière disposition !</p>
       `
     }
   ],
   DE: [
     {
-      gerarAssunto: (nome) => `Einladung zur Präsentation von ${nome} für europäische Familien`,
-      titulo: "Erreichen Sie tausende europäische Familien",
-      textoCta: "HelloCamp Entdecken",
-      gerarFooter: (url) => `Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. <a href="${url}" style="color: #64748B; text-decoration: underline;">Klicken Sie hier, um sich abzumelden</a>.`,
+      gerarAssunto: (nome) => `Partnerschaft mit ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Herzliche Grüße</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>HelloCamp Team<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Wenn Sie keine weiteren Nachrichten von uns erhalten möchten, können Sie sich <a href="${url}" style="color: #94A3B8; text-decoration: underline;">hier abmelden</a>.`,
       gerarMensagem: (nome) => `
-        <p>Hallo <strong>${nome}</strong> Team,</p>
-        <p>Mein Name ist Rodrigo und ich melde mich im Namen von <strong>HelloCamp</strong>, einer neuen internationalen Such- und Buchungsplattform für Feriencamps, Sportkurse und Freizeitaktivitäten für Jugendliche.</p>
-        <p>Tausende Familien nutzen unser Portal. Ihre Programme passen perfekt zu dem, was unser Publikum sucht.</p>
-        <p><strong>Wie funktioniert unsere Partnerschaft?</strong></p>
-        <ul>
-          <li><strong>100% Kostenlose Sichtbarkeit:</strong> Der Eintrag in unser Verzeichnis ist komplett kostenlos. Wir zeigen Ihre Fotos, Beschreibungen und Kontaktdaten.</li>
-          <li><strong>Direktbuchungen (Optional):</strong> Wenn Sie Ihre Anmeldungen automatisieren möchten, können Sie die direkte Buchung über HelloCamp aktivieren. Wir berechnen eine äußerst <strong>wettbewerbsfähige Provision, die deutlich unter dem Branchenstandard liegt</strong>, nur bei bestätigten Buchungen.</li>
-        </ul>
-        <p style="background-color: #F8FAFC; padding: 15px; border-left: 4px solid #F3A61C; margin: 25px 0;">
-          <strong>Unser Full-Service:</strong> Antworten Sie einfach auf diese E-Mail mit einem Link zu Ihrer Website. Unser Team erstellt und optimiert Ihr Profil innerhalb von 24 Stunden kostenlos für Sie.
-        </p>
-        <p>Hätten Sie Interesse an einer kostenlosen Platzierung?</p>
+        <p>Hallo liebes Team von <strong>${nome}</strong>,</p>
+        <p>ich bin Rodrigo von <strong>HelloCamp</strong>. Ich schreibe Ihnen, weil ich gesehen habe, dass Sie Feriencamps und Aktivitäten für Kinder und Jugendliche organisieren, und ich Ihnen gerne unsere Plattform vorstellen möchte.</p>
+        <p>HelloCamp ist eine neue internationale Plattform, auf der Familien aus ganz Europa Feriencamps, Sportkurse und Jugendreisen entdecken und buchen. Ihre Programme bei ${nome} haben uns sehr gut gefallen und passen hervorragend zu unserem Angebot.</p>
+        <p>Unser Partnerschaftsmodell ist ganz transparent: Wir schließen eine Kooperationsvereinbarung mit Ihnen ab, um Ihre Camps zu vermarkten, und arbeiten rein auf Provisionsbasis für Buchungen, die tatsächlich über HelloCamp zustande kommen.</p>
+        <p>Hätten Sie Lust auf ein kurzes Online-Treffen (10–15 Minuten), um mehr zu erfahren und sich die Plattform von innen anzusehen? Wählen Sie gerne direkt einen passenden Termin in unserem Kalender aus:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Falls Sie kein Vorgespräch benötigen und möchten, dass wir Ihr Profil und Ihre Camps direkt für Sie anlegen, antworten Sie einfach auf diese E-Mail mit Ihren Programminfos oder Broschüren – wir kümmern uns dann um alles Weitere.</p>
+        <p>Ich freue mich auf Ihre Rückmeldung!</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Vereinfachen Sie Ihre internationalen Buchungen für ${nome}`,
-      titulo: "Müheloses Internationales Wachstum",
-      textoCta: "Partnerkonto Erstellen",
-      gerarFooter: (url) => `Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. <a href="${url}" style="color: #64748B; text-decoration: underline;">Klicken Sie hier, um sich abzumelden</a>.`,
+      gerarAssunto: (nome) => `Re: Partnerschaft mit ${nome} / HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Herzliche Grüße</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>HelloCamp Team<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Wenn Sie keine weiteren Nachrichten von uns erhalten möchten, können Sie sich <a href="${url}" style="color: #94A3B8; text-decoration: underline;">hier abmelden</a>.`,
       gerarMensagem: (nome) => `
-        <p>Hallo nochmal,</p>
-        <p>Durch die Aktivierung von Direktbuchungen (mit unserer wettbewerbsfähigen Provision):</p>
-        <ul>
-          <li>Eltern zahlen sicher online.</li>
-          <li>Medizinische Daten und Allergien werden zentralisiert erfasst.</li>
-          <li>Ihre Verfügbarkeiten werden in Echtzeit aktualisiert.</li>
-        </ul>
-        <p>Die Registrierung dauert nur 5 Minuten.</p>
+        <p>Hallo nochmal an das Team von <strong>${nome}</strong>,</p>
+        <p>da Sie sicher mitten in der Planung Ihrer Programme stecken, melde ich mich nur ganz kurz im Anschluss an meine vorherige E-Mail.</p>
+        <p>Neben der internationalen Reichweite bei europäischen Familien haben wir HelloCamp entwickelt, um Veranstaltern den Verwaltungsaufwand zu erleichtern: Bei jeder Buchung werden Gesundheitsdaten, Allergien und Notfallkontakte zentral in Ihrem Partner-Dashboard erfasst, und eine Provision fällt nur bei tatsächlich bestätigten Buchungen an.</p>
+        <p>Wenn Sie sich die Plattform in einem kurzen Gespräch von innen ansehen möchten, können Sie hier einen Termin buchen:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Oder antworten Sie einfach kurz auf diese E-Mail mit den Infos zu Ihren Camps (oder geben Sie uns Bescheid, ob wir die Daten von Ihrer Website übernehmen dürfen), und unser Team bereitet Ihr Profil sowie den Partnerschaftsvertrag komplett für Sie vor.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Warum wir die Marke von ${nome} in den Mittelpunkt stellen`,
-      titulo: "Ihre Marke ist der Protagonist",
-      textoCta: "Kostenloses Profil Erstellen",
-      gerarFooter: (url) => `Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. <a href="${url}" style="color: #64748B; text-decoration: underline;">Klicken Sie hier, um sich abzumelden</a>.`,
+      gerarAssunto: (nome) => `Kurze Frage zu den Programmen von ${nome}`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Herzliche Grüße</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>HelloCamp Team<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Wenn Sie keine weiteren Nachrichten von uns erhalten möchten, können Sie sich <a href="${url}" style="color: #94A3B8; text-decoration: underline;">hier abmelden</a>.`,
       gerarMensagem: (nome) => `
-        <p>Team <strong>${nome}</strong>,</p>
-        <p>Im Gegensatz zu anderen Portalen, die Kontaktdaten verstecken, ist bei HelloCamp <strong>Ihre Website und E-Mail zu 100% sichtbar</strong>.</p>
-        <p>Wenn Eltern Sie lieber direkt kontaktieren möchten, können sie das tun. Unsere Provision fällt nur an, wenn die Familie direkt über unser integriertes Zahlungssystem bucht.</p>
-        <p>Erstellen Sie noch heute Ihren kostenlosen Eintrag.</p>
+        <p>Hallo Team von <strong>${nome}</strong>,</p>
+        <p>hier ist noch einmal Rodrigo von HelloCamp. Ich wollte Ihnen kurz einen wichtigen Punkt zu unserer Zusammenarbeit mit Veranstaltern mitteilen.</p>
+        <p>Unsere Vereinbarung passt sich flexibel an Ihre Abläufe an: Sie behalten jederzeit die volle Kontrolle über Ihre Termine, Kapazitäten und Preise, und zahlen lediglich eine Provision für erfolgreich vermittelte Buchungen.</p>
+        <p>Hätten Sie diese Woche 10 Minuten Zeit, damit wir Ihnen die Plattform kurz persönlich zeigen können? Hier geht es zu unserem Kalender:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Alternativ können Sie mir auch einfach auf diese E-Mail mit Ihren Programmdaten antworten, und wir richten Ihr Profil komplett für Sie ein.</p>
       `
     },
     {
-      gerarAssunto: (nome) => `Letzte E-Mail (Buchungssaison für ${nome})`,
-      titulo: "Die Buchungssaison hat Begonnen",
-      textoCta: "HelloCamp Beitreten",
-      gerarFooter: (url) => `Sie erhalten diese E-Mail, da Ihr Unternehmen eine Referenz ist. <a href="${url}" style="color: #64748B; text-decoration: underline;">Klicken Sie hier, um sich abzumelden</a>.`,
+      gerarAssunto: (nome) => `Programme von ${nome} auf HelloCamp`,
+      gerarAssinatura: (parceiroUrl) => `
+        <p style="margin-top: 24px; margin-bottom: 4px;">Herzliche Grüße und eine erfolgreiche Saison</p>
+        <p style="margin: 0;"><strong>Rodrigo</strong><br/>HelloCamp Team<br/><a href="${parceiroUrl}" style="color: #0E3A68; text-decoration: none;">www.hellocamp.pt</a></p>
+      `,
+      gerarFooter: (url) => `Wenn Sie keine weiteren Nachrichten von uns erhalten möchten, können Sie sich <a href="${url}" style="color: #94A3B8; text-decoration: underline;">hier abmelden</a>.`,
       gerarMensagem: (nome) => `
-        <p>Hallo <strong>${nome}</strong> Team,</p>
-        <p>Dies ist meine letzte E-Mail. Die Buchungssaison ist in vollem Gange.</p>
-        <p>Wir möchten nicht, dass Sie diese Zielgruppe verpassen. Denken Sie daran, dass der bloße Eintrag für mehr Sichtbarkeit völlig kostenlos ist.</p>
-        <p><strong>Antworten Sie einfach mit Ihren Preisen und Terminen</strong>, und wir kümmern uns noch heute um Ihr Profil.</p>
-        <p>Wir hoffen, Sie bald bei HelloCamp begrüßen zu dürfen!</p>
+        <p>Hallo liebes Team von <strong>${nome}</strong>,</p>
+        <p>ich weiß, wie viel bei der Organisation von Jugendprogrammen zu tun ist – daher ist dies meine letzte E-Mail, um Ihr Postfach nicht unnötig zu füllen.</p>
+        <p>Immer mehr Familien suchen auf HelloCamp nach passenden Ferien- und Freizeitangeboten, und wir würden uns sehr über eine Partnerschaft mit ${nome} freuen (rein auf Provisionsbasis bei tatsächlichen Buchungen).</p>
+        <p>Unser Angebot steht jederzeit: Wenn wir Ihr Profil und Ihre Camps für Sie einpflegen sollen, antworten Sie mir einfach mit Ihren Infos oder einer Broschüre. Und falls Sie vorher lieber kurz mit uns sprechen möchten, finden Sie unseren Kalender hier:<br/>
+        👉 <a href="${CALENDLY_URL}" style="color: #2563EB; font-weight: 600;">${CALENDLY_URL}</a></p>
+        <p>Melden Sie sich jederzeit gerne, wenn es für Sie passt!</p>
       `
     }
   ]
 };
 
-function getTemplateHTML(titulo: string, mensagem: string, ctaTexto: string, ctaLink: string, footerText: string) {
+function getTemplateHTML(mensagem: string, assinatura: string, footerText: string) {
   return `
-    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 650px; margin: 0 auto; background-color: #ffffff; border: 1px solid #E8EDF2; border-radius: 8px; overflow: hidden;">
-      <div style="height: 6px; width: 100%; display: flex;">
-        <div style="background-color: #218F4C; height: 100%; width: 33.3%;"></div>
-        <div style="background-color: #F3A61C; height: 100%; width: 33.4%;"></div>
-        <div style="background-color: #0E3A68; height: 100%; width: 33.3%;"></div>
-      </div>
-      <div style="padding: 35px;">
-        <div style="margin-bottom: 30px;">
-          <h1 style="color: #0E3A68; font-size: 22px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">Hello<span style="color: #F3A61C;">Camp</span></h1>
-        </div>
-        <h2 style="color: #0E3A68; font-size: 21px; margin-top: 0; margin-bottom: 25px; font-weight: 700; line-height: 1.4;">
-          ${titulo}
-        </h2>
-        <div style="color: #333333; font-size: 15px; line-height: 1.6;">
-          ${mensagem}
-        </div>
-        <div style="margin-top: 40px; margin-bottom: 10px;">
-          <a href="${ctaLink}" style="display: inline-block; background-color: #0E3A68; color: #ffffff; padding: 15px 30px; text-decoration: none; font-size: 14px; font-weight: bold; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
-            ${ctaTexto}
-          </a>
-        </div>
-      </div>
-      <div style="background-color: #F8FAFC; padding: 25px 35px; border-top: 1px solid #E8EDF2;">
-        <p style="color: #64748B; font-size: 11px; line-height: 1.5; margin: 0;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #1E293B; max-width: 620px;">
+      ${mensagem}
+      ${assinatura}
+      <div style="margin-top: 36px; padding-top: 14px; border-top: 1px solid #F1F5F9;">
+        <p style="color: #94A3B8; font-size: 11px; line-height: 1.4; margin: 0;">
           ${footerText}
         </p>
       </div>
@@ -504,15 +499,18 @@ export async function GET(request: Request) {
           const tpl = TEMPLATES[lang][faseAtual];
           if (!tpl) return { status: 'skipped', id: lead.id };
 
-          // CORREÇÃO CRÍTICA: O site só suporta rotas /pt e /en, e a página real é /parceiro (singular)
           const linkLang = lang === 'PT' ? 'pt' : 'en';
-          const ctaLinkTracker = `${BASE_URL}/${linkLang}/parceiro?utm_source=cold_email_b2b&utm_medium=email&utm_campaign=fase_${faseAtual}_${lang}`;
+          const parceiroUrl = `${BASE_URL}/${linkLang}/parceiro`;
           const unsubscribeUrl = `${BASE_URL}/${linkLang}/unsubscribe?id=${lead.id}`;
 
           const r = await enviarViaBrevo({
             to: { email, name: nome },
             subject: tpl.gerarAssunto(nome),
-            html: getTemplateHTML(tpl.titulo, tpl.gerarMensagem(nome), tpl.textoCta, ctaLinkTracker, tpl.gerarFooter(unsubscribeUrl)),
+            html: getTemplateHTML(
+              tpl.gerarMensagem(nome, parceiroUrl),
+              tpl.gerarAssinatura(parceiroUrl),
+              tpl.gerarFooter(unsubscribeUrl)
+            ),
           });
 
           if (r.success) {
