@@ -420,7 +420,17 @@ function getTemplateHTML(titulo: string, mensagem: string, ctaTexto: string, cta
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    const { searchParams } = new URL(request.url);
+    const urlSecret = searchParams.get('secret');
+    const cronSecret = process.env.CRON_SECRET?.replace(/['"]+/g, '').trim();
+
+    // Aceita TANTO o Header (Bearer) COMO o link direto (?secret=...)
+    const isAuthorized =
+      !cronSecret ||
+      authHeader === `Bearer ${cronSecret}` ||
+      urlSecret === cronSecret;
+
+    if (!isAuthorized) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
