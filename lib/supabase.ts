@@ -4,7 +4,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("⚠️ ERRO CRÍTICO: As variáveis NEXT_PUBLIC_SUPABASE_URL ou NEXT_PUBLIC_SUPABASE_ANON_KEY não foram encontradas pelo Next.js. Reinicie o 'npm run dev'.");
+  throw new Error("⚠️ ERRO CRÍTICO: Faltam as variáveis NEXT_PUBLIC_SUPABASE_URL ou NEXT_PUBLIC_SUPABASE_ANON_KEY no .env.local");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
