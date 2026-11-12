@@ -1,31 +1,21 @@
-import { MetadataRoute } from 'next';
+import { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://www.hellocamp.pt';
-
   return {
     rules: [
       {
-        userAgent: '*',
-        allow: '/',
+        userAgent: "*",
+        allow: "/",
         disallow: [
-          '/api/',
-          '/admin/',
-          '/checkout/',
-          '/_next/',
-          '/pt/checkout/',
-          '/en/checkout/',
-          '/pt/admin/',
-          '/en/admin/',
+          "/api/",
+          "/*/dashboard/",
+          "/*/admin/",
+          "/*/monitores/portal/",
+          "/*/favoritos",
         ],
       },
-      {
-        // Bloqueia bots de IA agressivos (opcional)
-        userAgent: ['GPTBot', 'CCBot', 'ClaudeBot', 'Google-Extended'],
-        disallow: '/',
-      },
     ],
-    sitemap: `${baseUrl}/sitemap.xml`,
-    host: baseUrl,
+    sitemap: "https://www.hellocamp.pt/sitemap.xml",
+    host: "https://www.hellocamp.pt",
   };
 }

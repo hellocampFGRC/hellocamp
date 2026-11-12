@@ -145,6 +145,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
     { value: "", label: isEn ? "All Districts" : "Todos os Distritos" },
     ...[
       "Aveiro",
+      "Anadia",
       "Beja",
       "Braga",
       "Bragança",
@@ -155,6 +156,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
       "Guarda",
       "Leiria",
       "Lisboa",
+      "Cascais",
       "Portalegre",
       "Porto",
       "Santarém",
@@ -167,6 +169,9 @@ function PesquisaConteudo({ lang }: { lang: string }) {
 
   const categoriasOpcoes: OptionItem[] = [
     { value: "", label: isEn ? "All Categories" : "Todas as Categorias" },
+    { value: "verao", label: isEn ? "Summer Camps" : "Férias de Verão" },
+    { value: "natal", label: isEn ? "Christmas Camps" : "Férias de Natal" },
+    { value: "pascoa", label: isEn ? "Easter Camps" : "Férias da Páscoa" },
     { value: "Desporto", label: isEn ? "Sports & Football" : "Desporto & Futebol" },
     { value: "Surf", label: "Surf & Náutica" },
     { value: "Aventura & Natureza", label: isEn ? "Adventure & Nature" : "Aventura & Natureza" },
@@ -233,8 +238,12 @@ function PesquisaConteudo({ lang }: { lang: string }) {
       if (categoria) {
         const catNorm = normalize(categoria);
         const catCampo = normalize(
-          `${c.categoria || ""} ${c.categoria_en || ""}`
+          `${c.categoria || ""} ${c.categoria_en || ""} ${c.descricao || ""}`
         );
+        if (catNorm === "verao") {
+          // Verão aceita todos por defeito se tiverem edições ativas
+          return true;
+        }
         if (
           !catCampo.includes(catNorm) &&
           !(catNorm.includes("desporto") && catCampo.includes("futebol")) &&
@@ -327,8 +336,8 @@ function PesquisaConteudo({ lang }: { lang: string }) {
                 onChange={(e) => setQ(e.target.value)}
                 placeholder={
                   isEn
-                    ? "Surf, Football, Robotics, Lisbon..."
-                    : "Surf, Futebol, Robótica, Lisboa..."
+                    ? "Surf, Football, Robotics, Anadia..."
+                    : "Surf, Futebol, Robótica, Anadia..."
                 }
                 className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white shadow-sm"
               />
@@ -336,7 +345,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
 
             <div className="md:col-span-3">
               <CustomDropdown
-                label={isEn ? "District" : "Distrito"}
+                label={isEn ? "District / Location" : "Distrito / Localidade"}
                 value={distrito}
                 options={distritosOpcoes}
                 onChange={setDistrito}
@@ -346,7 +355,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
 
             <div className="md:col-span-3">
               <CustomDropdown
-                label={isEn ? "Category" : "Categoria"}
+                label={isEn ? "Category / Season" : "Categoria / Época"}
                 value={categoria}
                 options={categoriasOpcoes}
                 onChange={setCategoria}

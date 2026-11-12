@@ -1,109 +1,66 @@
 import { MetadataRoute } from "next";
 import { supabase } from "@/lib/supabase";
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://www.hellocamp.pt";
-  const idiomas = ["pt", "en"];
-  const agora = new Date();
+const BASE_URL = "https://www.hellocamp.pt";
 
-  // 1. Páginas Estáticas Principais (Apenas rotas que existem!)
+function slugify(text: string): string {
+  return text
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]+/g, "")
+    .replace(/--+/g, "-");
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const { data: campos } = await supabase
+    .from("campos")
+    .select("id, updated_at, categoria, Distrito, local, Pais")
+    .eq("ativo", true);
+
+  const { data: parceiros } = await supabase
+    .from("perfis")
+    .select("id, created_at")
+    .eq("role", "organizador");
+
+  const langs = ["pt", "en"];
+  const urls: MetadataRoute.Sitemap = [];
+
+  // 1. Páginas Estáticas Principais
   const rotasEstaticas = [
     "",
     "/pesquisa",
     "/mapa",
+    "/guia-pais",
+    "/seguranca",
+    "/como_reservar",
+    "/sobre",
     "/parceiro",
     "/monitores",
     "/institucional",
-    "/guia-pais",
-    "/blog",
-    "/sobre",
-    "/seguranca",
-    "/termos",
-    "/privacidade",
-    "/cookies",
   ];
 
-  const urlsEstaticas: MetadataRoute.Sitemap = [];
-  for (const lang of idiomas) {
+  for (const lang of langs) {
     for (const rota of rotasEstaticas) {
-      urlsEstaticas.push({
-        url: `${baseUrl}/${lang}${rota}`,
-        lastModified: agora,
+      urls.push({
+        url: `${BASE_URL}/${lang}${rota}`,
+        lastModified: new Date(),
         changeFrequency: rota === "" || rota === "/pesquisa" ? "daily" : "weekly",
-        priority: rota === "" ? 1.0 : rota === "/pesquisa" || rota === "/parceiro" ? 0.9 : 0.7,
+        priority: rota === "" ? 1.0 : 0.8,
       });
     }
   }
 
-  // 2. Rotas Programáticas SEO ("Isca" Google)
-  const rotasProgramaticas = [
-    "surf/algarve",
-    "futebol/madrid",
-    "ingles/reino-unido",
-    "desporto/lisboa",
-    "tecnologia/porto",
-    "aventura/espanha",
-  ];
-
-  const urlsProgramaticas: MetadataRoute.Sitemap = [];
-  for (const lang of idiomas) {
-    for (const slug of rotasProgramaticas) {
-      urlsProgramaticas.push({
-        url: `${baseUrl}/${lang}/${slug}`,
-        lastModified: agora,
-        changeFrequency: "weekly",
-        priority: 0.85,
-      });
-    }
-  }
-
-  // 3. Distritos e Países Principais
-  const distritos = ["Lisboa", "Porto", "Faro", "Braga", "Setúbal", "Coimbra", "Aveiro", "Leiria", "Viana do Castelo"];
-  const paises = ["Portugal", "Espanha", "Reino Unido", "França"];
-
-  const urlsGeograficas: MetadataRoute.Sitemap = [];
-  for (const lang of idiomas) {
-    for (const d of distritos) {
-      urlsGeograficas.push({
-        url: `${baseUrl}/${lang}/distrito/${encodeURIComponent(d)}`,
-        lastModified: agora,
-        changeFrequency: "weekly",
-        priority: 0.8,
-      });
-    }
-    for (const p of paises) {
-      urlsGeograficas.push({
-        url: `${baseUrl}/${lang}/pesquisa/pais/${encodeURIComponent(p)}`,
-        lastModified: agora,
-        changeFrequency: "weekly",
-        priority: 0.8,
-      });
-    }
-  }
-
-  // 4. Campos Dinâmicos, Perfis de Parceiros e Artigos do Blog
-  const [{ data: campos }, { data: posts }] = await Promise.all([
-    supabase
-      .from("campos")
-      .select("id, organizador_id, created_at")
-      .eq("ativo", true)
-      .not("contrato_parceiro_url", "is", null),
-    supabase
-      .from("blog_posts")
-      .select("slug, created_at")
-      .eq("publicado", true),
-  ]);
-
-  const urlsCampos: MetadataRoute.Sitemap = [];
-  const organizadoresIds = new Set<string>();
-
-  if (campos) {
+  // 2. Páginas Individuais de cada Campo Ativo
+  if (campos && campos.length > 0) {
     for (const campo of campos) {
-      if (campo.organizador_id) organizadoresIds.add(campo.organizador_id);
-      for (const lang of idiomas) {
-        urlsCampos.push({
-          url: `${baseUrl}/${lang}/campo/${campo.id}`,
-          lastModified: campo.created_at ? new Date(campo.created_at) : agora,
+      for (const lang of langs) {
+        urls.push({
+          url: `${BASE_URL}/${lang}/campo/${campo.id}`,
+          lastModified: campo.updated_at ? new Date(campo.updated_at) : new Date(),
           changeFrequency: "weekly",
           priority: 0.9,
         });
@@ -111,26 +68,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  const urlsParceiros: MetadataRoute.Sitemap = [];
-  organizadoresIds.forEach((orgId) => {
-    for (const lang of idiomas) {
-      urlsParceiros.push({
-        url: `${baseUrl}/${lang}/parceiro/${orgId}`,
-        lastModified: agora,
-        changeFrequency: "weekly",
-        priority: 0.75,
-      });
-    }
-  });
-
-  const urlsBlog: MetadataRoute.Sitemap = [];
-  if (posts) {
-    for (const post of posts) {
-      if (!post.slug) continue;
-      for (const lang of idiomas) {
-        urlsBlog.push({
-          url: `${baseUrl}/${lang}/blog/${encodeURIComponent(post.slug)}`,
-          lastModified: post.created_at ? new Date(post.created_at) : agora,
+  // 3. Páginas de Perfil de Parceiros / Organizadores
+  if (parceiros && parceiros.length > 0) {
+    for (const p of parceiros) {
+      for (const lang of langs) {
+        urls.push({
+          url: `${BASE_URL}/${lang}/organizador/${p.id}`,
+          lastModified: p.created_at ? new Date(p.created_at) : new Date(),
           changeFrequency: "monthly",
           priority: 0.7,
         });
@@ -138,12 +82,70 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  return [
-    ...urlsEstaticas,
-    ...urlsProgramaticas,
-    ...urlsGeograficas,
-    ...urlsCampos,
-    ...urlsParceiros,
-    ...urlsBlog,
+  // 4. Páginas Programáticas de SEO (Categorias, Épocas e Localidades como Anadia, Cascais, etc.)
+  const categoriasSEO = [
+    "campos-de-ferias",
+    "verao",
+    "natal",
+    "pascoa",
+    "carnaval",
+    "aventura",
+    "surf",
+    "desporto",
+    "futebol",
+    "linguas",
+    "ingles",
+    "tecnologia",
+    "artes",
+    "natureza",
   ];
+
+  const localizacoesSet = new Set<string>([
+    "portugal",
+    "lisboa",
+    "porto",
+    "cascais",
+    "anadia",
+    "sintra",
+    "algarve",
+    "faro",
+    "coimbra",
+    "braga",
+    "setubal",
+    "aveiro",
+    "espanha",
+    "reino-unido",
+  ]);
+
+  if (campos && campos.length > 0) {
+    campos.forEach((c) => {
+      if (c.Distrito) localizacoesSet.add(slugify(c.Distrito));
+      if (c.local) {
+        // Extrai o concelho/cidade principal (ex: "Anadia, Aveiro" -> "anadia")
+        const cidadePrincipal = c.local.split(",")[0].split("-")[0].trim();
+        if (cidadePrincipal.length > 2) {
+          localizacoesSet.add(slugify(cidadePrincipal));
+        }
+      }
+      if (c.Pais) localizacoesSet.add(slugify(c.Pais));
+    });
+  }
+
+  const localizacoesSEO = Array.from(localizacoesSet);
+
+  // Gera todas as combinações de alta intenção de pesquisa: /[lang]/[categoria]/[localizacao]
+  for (const lang of langs) {
+    for (const cat of categoriasSEO) {
+      for (const loc of localizacoesSEO) {
+        urls.push({
+          url: `${BASE_URL}/${lang}/${cat}/${loc}`,
+          lastModified: new Date(),
+          changeFrequency: "weekly",
+          priority: cat === "campos-de-ferias" || cat === "verao" || cat === "aventura" ? 0.85 : 0.75,
+        });
+      }
+    }
+  }
+
+  return urls;
 }
