@@ -55,6 +55,21 @@ export default function Header({ dict, lang }: HeaderProps) {
       active: pathname?.includes("/pesquisa"),
     },
     {
+      href: `/${lang}/verao`,
+      label: isEn ? "Summer" : "Verão",
+      active: pathname?.includes("/verao"),
+    },
+    {
+      href: `/${lang}/natal`,
+      label: isEn ? "Christmas" : "Natal",
+      active: pathname?.includes("/natal"),
+    },
+    {
+      href: `/${lang}/pascoa`,
+      label: isEn ? "Easter" : "Páscoa",
+      active: pathname?.includes("/pascoa"),
+    },
+    {
       href: `/${lang}/institucional`,
       label: isEn ? "Municipalities" : "Autarquias",
       active: pathname?.includes("/institucional"),
@@ -69,31 +84,29 @@ export default function Header({ dict, lang }: HeaderProps) {
       label: isEn ? "Parents Guide" : "Guia de Pais",
       active: pathname?.includes("/guia-pais"),
     },
-    {
-      href: `/${lang}/blog`,
-      label: "Blog",
-      active: pathname?.includes("/blog"),
-    },
   ];
 
   return (
     <>
       <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 font-sans">
         <div className="max-w-[1280px] mx-auto px-4 md:px-8 h-16 md:h-[74px] flex items-center justify-between gap-4">
+          
+          {/* LOGÓTIPO */}
           <Link
             href={`/${lang}`}
             className="text-2xl md:text-[26px] font-black tracking-tight flex items-center no-underline flex-shrink-0"
           >
             <span className="text-[#0F172A]">Hello</span>
-            <span className="text-[#F59E0B]">Camp</span>
+            <span className="text-[#F59E0B]">Camp</span>[cite: 2]
           </Link>
 
+          {/* NAVEGAÇÃO DESKTOP */}
           <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
             {navLinks.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-3.5 py-2 rounded-md text-[13px] font-bold whitespace-nowrap no-underline transition-all ${
+                className={`px-3 py-2 rounded-md text-[12px] font-bold whitespace-nowrap no-underline transition-all ${
                   item.active
                     ? "bg-[#2563EB] text-white font-black shadow-sm"
                     : "text-slate-600 hover:text-[#0F172A] hover:bg-slate-100"
@@ -104,6 +117,7 @@ export default function Header({ dict, lang }: HeaderProps) {
             ))}
           </nav>
 
+          {/* AÇÕES DIREITA */}
           <div className="flex items-center gap-2.5 md:gap-3.5 flex-shrink-0">
             <button
               type="button"
@@ -128,7 +142,7 @@ export default function Header({ dict, lang }: HeaderProps) {
               href={`/${lang}/parceiro`}
               className="hidden md:inline-flex items-center text-[11px] font-black uppercase tracking-wider text-white bg-[#F59E0B] hover:bg-amber-600 px-4 py-2 rounded-md transition-all no-underline whitespace-nowrap shadow-sm"
             >
-              {isEn ? "Partners" : "Parceiros"}
+              {isEn ? "Partners" : "Parceiros"}[cite: 2]
             </Link>
 
             <div className="hidden sm:block h-4 w-px bg-slate-200" />
@@ -178,6 +192,7 @@ export default function Header({ dict, lang }: HeaderProps) {
           </div>
         </div>
 
+        {/* MENU MOBILE */}
         {menuAberto && (
           <div className="lg:hidden bg-white border-t border-slate-200 px-6 py-6 shadow-xl flex flex-col gap-3">
             <form onSubmit={handleQuickSearch} className="relative w-full mb-2">
@@ -216,7 +231,7 @@ export default function Header({ dict, lang }: HeaderProps) {
               onClick={() => setMenuAberto(false)}
               className="mt-2 w-full text-center bg-[#F59E0B] text-white font-black uppercase tracking-widest text-xs py-3.5 rounded-md no-underline shadow-md"
             >
-              {isEn ? "For Organizers (B2B)" : "Área de Parceiros (B2B)"}
+              {isEn ? "For Organizers (B2B)" : "Área de Parceiros (B2B)"}[cite: 2]
             </Link>
 
             <div className="pt-4 flex items-center justify-between border-t border-slate-100">
@@ -229,6 +244,7 @@ export default function Header({ dict, lang }: HeaderProps) {
         )}
       </header>
 
+      {/* MODAL DE PESQUISA RÁPIDA (⌘K) */}
       {searchOpen && (
         <div
           className="fixed inset-0 z-50 bg-[#0F172A]/60 backdrop-blur-sm flex items-start justify-center pt-24 px-4"
