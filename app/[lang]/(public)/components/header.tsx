@@ -97,7 +97,7 @@ export default function Header({ dict, lang }: HeaderProps) {
             className="text-2xl md:text-[26px] font-black tracking-tight flex items-center no-underline flex-shrink-0"
           >
             <span className="text-[#0F172A]">Hello</span>
-            <span className="text-[#F59E0B]">Camp</span>[cite: 2]
+            <span className="text-[#F59E0B]">Camp</span>
           </Link>
 
           {/* NAVEGAÇÃO DESKTOP */}
@@ -142,7 +142,7 @@ export default function Header({ dict, lang }: HeaderProps) {
               href={`/${lang}/parceiro`}
               className="hidden md:inline-flex items-center text-[11px] font-black uppercase tracking-wider text-white bg-[#F59E0B] hover:bg-amber-600 px-4 py-2 rounded-md transition-all no-underline whitespace-nowrap shadow-sm"
             >
-              {isEn ? "Partners" : "Parceiros"}[cite: 2]
+              {isEn ? "Partners" : "Parceiros"}
             </Link>
 
             <div className="hidden sm:block h-4 w-px bg-slate-200" />
@@ -231,7 +231,7 @@ export default function Header({ dict, lang }: HeaderProps) {
               onClick={() => setMenuAberto(false)}
               className="mt-2 w-full text-center bg-[#F59E0B] text-white font-black uppercase tracking-widest text-xs py-3.5 rounded-md no-underline shadow-md"
             >
-              {isEn ? "For Organizers (B2B)" : "Área de Parceiros (B2B)"}[cite: 2]
+              {isEn ? "For Organizers (B2B)" : "Área de Parceiros (B2B)"}
             </Link>
 
             <div className="pt-4 flex items-center justify-between border-t border-slate-100">
