@@ -61,7 +61,7 @@ export default async function HomePage({
     .eq("ativo", true);
 
   const listaAtivos = todosCamposAtivos || [];
-  const camposDeFerias = listaAtivos.slice(0, 10);
+  const camposDeFerias = listaAtivos.slice(0, 12);
 
   // Catálogo base de Distritos e Países com fotografias de alta qualidade
   const CATALOGO_DISTRITOS = [
