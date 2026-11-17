@@ -52,6 +52,22 @@ export default function Footer({ dict, lang }: FooterProps) {
             >
               info@hellocamp.pt
             </a>
+
+            {/* Contactos Telefónicos Portugueses */}
+            <div className="flex flex-col gap-1.5 mt-2.5">
+              <a
+                href="tel:+351939013403"
+                className="text-sm font-bold text-slate-600 hover:text-[#2563EB] transition-colors no-underline flex items-center gap-1.5"
+              >
+                <span>📞</span> +351 939 013 403
+              </a>
+              <a
+                href="tel:+351910907432"
+                className="text-sm font-bold text-slate-600 hover:text-[#2563EB] transition-colors no-underline flex items-center gap-1.5"
+              >
+                <span>📞</span> +351 910 907 432
+              </a>
+            </div>
           </div>
 
           {/* COLUNA 2: EXPLORAR / CATEGORIAS */}
