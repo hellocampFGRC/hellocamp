@@ -5,13 +5,20 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+type SupportedLang = "pt" | "en" | "es" | "fr" | "de";
+
 export default function MeusCamposAdminPage({
   params,
 }: {
   params: Promise<{ lang: string }>;
 }) {
   const { lang } = use(params);
-  const isEn = lang === "en";
+  const normalizedLang: SupportedLang = ["pt", "en", "es", "fr", "de"].includes(
+    lang?.toLowerCase() as any
+  )
+    ? (lang.toLowerCase() as SupportedLang)
+    : "en";
+  const isEn = normalizedLang === "en";
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -25,7 +32,7 @@ export default function MeusCamposAdminPage({
       data: { session },
     } = await supabase.auth.getSession();
     if (!session) {
-      router.push(`/${lang}/login`);
+      router.push(`/${normalizedLang}/login`);
       return;
     }
 
@@ -51,9 +58,9 @@ export default function MeusCamposAdminPage({
 
   useEffect(() => {
     fetchMeusCampos();
-  }, [lang]);
+  }, [normalizedLang]);
 
-  // Função para Duplicar Programa (poupa tempo ao parceiro para criar turnos de Páscoa/Verão)
+  // Função para Duplicar Programa
   const handleDuplicarCampo = async (campoOriginal: any) => {
     setDuplicatingId(campoOriginal.id);
     try {
@@ -105,7 +112,7 @@ export default function MeusCamposAdminPage({
         </div>
 
         <Link
-          href={`/${lang}/admin/campos/novo`}
+          href={`/${normalizedLang}/admin/campos/novo`}
           className="w-full sm:w-auto bg-[#16A34A] hover:bg-green-700 text-white px-6 py-3.5 rounded-md font-black text-xs text-center transition-colors shadow-sm no-underline uppercase tracking-widest shrink-0"
         >
           + {isEn ? "Add New Camp" : "Adicionar Novo Campo"}
@@ -126,7 +133,7 @@ export default function MeusCamposAdminPage({
               : "Ainda não tem nenhum campo registado."}
           </p>
           <Link
-            href={`/${lang}/admin/campos/novo`}
+            href={`/${normalizedLang}/admin/campos/novo`}
             className="inline-block bg-[#16A34A] hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest px-6 py-3.5 rounded-md no-underline shadow-sm"
           >
             {isEn
@@ -219,13 +226,13 @@ export default function MeusCamposAdminPage({
                   </div>
                 </div>
 
-                {/* BOTÕES DE AÇÃO DO CAMPO (SEM O BOTÃO DE CONTRATO AQUI!) */}
+                {/* BOTÕES DE AÇÃO DO CAMPO */}
                 <div className="flex flex-col sm:flex-row flex-wrap justify-end gap-2.5 mt-4 lg:mt-0 w-full lg:w-auto">
                   <Link
                     href={
                       isAtivo
-                        ? `/${lang}/campo/${campo.id}`
-                        : `/${lang}/campo/${campo.id}?preview=admin`
+                        ? `/${normalizedLang}/campo/${campo.id}`
+                        : `/${normalizedLang}/campo/${campo.id}?preview=admin`
                     }
                     target="_blank"
                     className="flex items-center justify-center gap-1.5 px-4 py-3 bg-[#2563EB] hover:bg-blue-700 text-white rounded-md font-black text-xs uppercase tracking-widest no-underline transition-colors shadow-sm"
@@ -248,7 +255,7 @@ export default function MeusCamposAdminPage({
                   </button>
 
                   <Link
-                    href={`/${lang}/admin/campos/editar/${campo.id}`}
+                    href={`/${normalizedLang}/admin/campos/editar/${campo.id}`}
                     className="flex items-center justify-center px-5 py-3 bg-[#16A34A] hover:bg-green-700 text-white rounded-md font-black text-xs uppercase tracking-widest no-underline transition-colors shadow-sm"
                   >
                     ✏️ {isEn ? "Edit Camp" : "Editar Campo"}

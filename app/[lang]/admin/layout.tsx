@@ -7,8 +7,6 @@ import { supabase } from "@/lib/supabase";
 
 type SupportedLang = "pt" | "en" | "es" | "fr" | "de";
 
-const SUPPORTED_LANGS: SupportedLang[] = ["pt", "en", "es", "fr", "de"];
-
 const TRANSLATIONS: Record<
   SupportedLang,
   {
@@ -28,7 +26,7 @@ const TRANSLATIONS: Record<
     newCampMobile: string;
     signOut: string;
     exit: string;
-    languageLabel: string;
+    menu: string;
   }
 > = {
   pt: {
@@ -48,7 +46,7 @@ const TRANSLATIONS: Record<
     newCampMobile: "Novo Campo",
     signOut: "Terminar Sessão",
     exit: "Sair",
-    languageLabel: "Idioma do Portal",
+    menu: "☰ Menu",
   },
   en: {
     partnerFallback: "Partner",
@@ -67,7 +65,7 @@ const TRANSLATIONS: Record<
     newCampMobile: "New Camp",
     signOut: "Sign Out",
     exit: "Exit",
-    languageLabel: "Portal Language",
+    menu: "☰ Menu",
   },
   es: {
     partnerFallback: "Socio",
@@ -83,10 +81,10 @@ const TRANSLATIONS: Record<
     pending: "⏳ Pendiente",
     publicPage: "Ver Página ↗",
     newCamp: "Crear Campamento",
-    newCampMobile: "Nuevo",
+    newCampMobile: "Nuevo Camp",
     signOut: "Cerrar Sesión",
     exit: "Salir",
-    languageLabel: "Idioma del Portal",
+    menu: "☰ Menú",
   },
   fr: {
     partnerFallback: "Partenaire",
@@ -101,11 +99,11 @@ const TRANSLATIONS: Record<
     verified: "✓ Vérifié",
     pending: "⏳ En attente",
     publicPage: "Page Publique ↗",
-    newCamp: "Nouveau Camp",
-    newCampMobile: "Nouveau",
+    newCamp: "Créer un Camp",
+    newCampMobile: "Nouveau Camp",
     signOut: "Déconnexion",
     exit: "Quitter",
-    languageLabel: "Langue du Portail",
+    menu: "☰ Menu",
   },
   de: {
     partnerFallback: "Partner",
@@ -120,23 +118,118 @@ const TRANSLATIONS: Record<
     verified: "✓ Verifiziert",
     pending: "⏳ Ausstehend",
     publicPage: "Öffentliche Seite ↗",
-    newCamp: "Neues Camp",
-    newCampMobile: "Neu",
+    newCamp: "Neues Camp erstellen",
+    newCampMobile: "Neues Camp",
     signOut: "Abmelden",
     exit: "Beenden",
-    languageLabel: "Portalsprache",
+    menu: "☰ Menü",
   },
 };
 
-// Mapeia o texto gravado na BD ("Português, Inglês...") para códigos suportados
-function detectLangFromCampStrings(linguasArray: string[]): SupportedLang | null {
-  const joined = linguasArray.join(" ").toLowerCase();
-  if (joined.includes("portugu")) return "pt";
-  if (joined.includes("espanh") || joined.includes("span")) return "es";
-  if (joined.includes("franc") || joined.includes("fren")) return "fr";
-  if (joined.includes("alem") || joined.includes("germ")) return "de";
-  if (joined.includes("ingl") || joined.includes("engl")) return "en";
+function mapTextToSupportedLang(raw?: string | null): SupportedLang | null {
+  if (!raw) return null;
+  const val = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  if (!val) return null;
+
+  // Códigos exatos (ex: "pt", "pt-pt", "es", "fr", "de", "en")
+  if (val === "pt" || val.startsWith("pt-") || val.startsWith("pt_")) return "pt";
+  if (val === "es" || val.startsWith("es-") || val.startsWith("es_")) return "es";
+  if (val === "fr" || val.startsWith("fr-") || val.startsWith("fr_")) return "fr";
+  if (val === "de" || val.startsWith("de-") || val.startsWith("de_")) return "de";
+  if (val === "en" || val.startsWith("en-") || val.startsWith("en_")) return "en";
+
+  // Nomes de idiomas ou países
+  if (
+    val.includes("portugu") ||
+    val.includes("portugal") ||
+    val.includes("brasil") ||
+    val.includes("brazil")
+  ) {
+    return "pt";
+  }
+  if (
+    val.includes("espanh") ||
+    val.includes("espanol") ||
+    val.includes("spanish") ||
+    val.includes("spain") ||
+    val.includes("espana") ||
+    val.includes("mexico") ||
+    val.includes("argentina") ||
+    val.includes("colombia")
+  ) {
+    return "es";
+  }
+  if (
+    val.includes("franc") ||
+    val.includes("french") ||
+    val.includes("france") ||
+    val.includes("belgica") ||
+    val.includes("belgium")
+  ) {
+    return "fr";
+  }
+  if (
+    val.includes("alem") ||
+    val.includes("deutsch") ||
+    val.includes("german") ||
+    val.includes("germany") ||
+    val.includes("austria") ||
+    val.includes("osterreich")
+  ) {
+    return "de";
+  }
+  if (
+    val.includes("ingl") ||
+    val.includes("engl") ||
+    val.includes("uk") ||
+    val.includes("united kingdom") ||
+    val.includes("reino unido") ||
+    val.includes("usa") ||
+    val.includes("estados unidos") ||
+    val.includes("united states") ||
+    val.includes("irlanda") ||
+    val.includes("ireland") ||
+    val.includes("south africa") ||
+    val.includes("africa do sul")
+  ) {
+    return "en";
+  }
+
   return null;
+}
+
+function detectPartnerLang(perfil: any, campos: any[]): SupportedLang {
+  // 1. Prioridade: campo de idioma explícito no perfil
+  const fromPerfilIdioma = mapTextToSupportedLang(
+    perfil?.idioma || perfil?.lingua || perfil?.language
+  );
+  if (fromPerfilIdioma) return fromPerfilIdioma;
+
+  // 2. País definido no perfil
+  const fromPerfilPais = mapTextToSupportedLang(
+    perfil?.pais || perfil?.pais_empresa || perfil?.country
+  );
+  if (fromPerfilPais) return fromPerfilPais;
+
+  // 3. País ou idiomas falados nos campos do parceiro
+  if (Array.isArray(campos) && campos.length > 0) {
+    for (const campo of campos) {
+      const fromCampoPais = mapTextToSupportedLang(campo?.pais);
+      if (fromCampoPais) return fromCampoPais;
+    }
+    for (const campo of campos) {
+      const fromCampoLinguas = mapTextToSupportedLang(campo?.linguas_faladas);
+      if (fromCampoLinguas) return fromCampoLinguas;
+    }
+  }
+
+  // 4. Tudo o que não for pt, es, fr ou de mostra em Inglês
+  return "en";
 }
 
 export default function AdminPartnerLayout({
@@ -150,14 +243,10 @@ export default function AdminPartnerLayout({
   const pathname = usePathname();
   const router = useRouter();
 
-  // Normaliza o idioma: se não for pt, es, fr, de ou en -> força 'en'
-  const normalizedLang: SupportedLang = SUPPORTED_LANGS.includes(
-    lang?.toLowerCase() as SupportedLang
-  )
-    ? (lang.toLowerCase() as SupportedLang)
-    : "en";
-
-  const t = TRANSLATIONS[normalizedLang] || TRANSLATIONS.en;
+  // Valor inicial temporário até o perfil carregar; depois assume automaticamente o idioma do parceiro
+  const [portalLang, setPortalLang] = useState<SupportedLang>(() => {
+    return mapTextToSupportedLang(lang) || "en";
+  });
 
   const [empresaNome, setEmpresaNome] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
@@ -165,16 +254,7 @@ export default function AdminPartnerLayout({
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Troca de idioma mantendo a rota atual
-  const handleLanguageSwitch = (targetLang: SupportedLang) => {
-    if (!pathname) {
-      router.push(`/${targetLang}/admin/dashboard`);
-      return;
-    }
-    const segments = pathname.split("/");
-    segments[1] = targetLang;
-    router.push(segments.join("/"));
-  };
+  const t = TRANSLATIONS[portalLang] || TRANSLATIONS.en;
 
   useEffect(() => {
     const loadPartnerInfo = async () => {
@@ -182,7 +262,7 @@ export default function AdminPartnerLayout({
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
-        router.push(`/${normalizedLang}/login`);
+        router.push(`/${lang}/login`);
         return;
       }
 
@@ -191,13 +271,7 @@ export default function AdminPartnerLayout({
 
       const [{ data: perfil }, { count }, { data: camposParceiro }] =
         await Promise.all([
-          supabase
-            .from("perfis")
-            .select(
-              "empresa_nome, nome_empresa, nome, nome_completo, status_contrato"
-            )
-            .eq("id", uid)
-            .maybeSingle(),
+          supabase.from("perfis").select("*").eq("id", uid).maybeSingle(),
           supabase
             .from("mensagens")
             .select("*", { count: "exact", head: true })
@@ -205,9 +279,12 @@ export default function AdminPartnerLayout({
             .eq("lida", false),
           supabase
             .from("campos")
-            .select("linguas_faladas")
+            .select("pais, linguas_faladas")
             .eq("organizador_id", uid),
         ]);
+
+      const detectedLang = detectPartnerLang(perfil, camposParceiro || []);
+      setPortalLang(detectedLang);
 
       if (perfil) {
         setEmpresaNome(
@@ -215,65 +292,55 @@ export default function AdminPartnerLayout({
             perfil.nome_empresa ||
             perfil.nome ||
             perfil.nome_completo ||
-            t.partnerFallback
+            TRANSLATIONS[detectedLang].partnerFallback
         );
         setStatusContrato(perfil.status_contrato || "Pendente");
       }
       setUnreadCount(count || 0);
-
-      // Se a URL vier num idioma não suportado (ex: /it/admin ou /nl/admin),
-      // tenta detetar pelos campos do parceiro ou redireciona para /en/
-      if (!SUPPORTED_LANGS.includes(lang?.toLowerCase() as SupportedLang)) {
-        const linguasCampos = (camposParceiro || [])
-          .map((c) => c.linguas_faladas)
-          .filter(Boolean);
-        const detected = detectLangFromCampStrings(linguasCampos) || "en";
-        handleLanguageSwitch(detected);
-      }
     };
 
     loadPartnerInfo();
-  }, [lang, normalizedLang, pathname, router, t.partnerFallback]);
+  }, [lang, pathname, router]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push(`/${normalizedLang}/login`);
+    router.push(`/${lang}/login`);
   };
 
   const navLinks = [
     {
-      href: `/${normalizedLang}/admin/dashboard`,
+      href: `/${lang}/admin/dashboard`,
       label: t.dashboard,
       icon: "📊",
     },
     {
-      href: `/${normalizedLang}/admin/perfil`,
+      href: `/${lang}/admin/perfil`,
       label: t.profile,
       icon: "🏢",
     },
     {
-      href: `/${normalizedLang}/admin/campos`,
+      href: `/${lang}/admin/campos`,
       label: t.camps,
       icon: "🏕️",
     },
     {
-      href: `/${normalizedLang}/admin/reservas`,
+      href: `/${lang}/admin/reservas`,
       label: t.bookings,
       icon: "📋",
     },
     {
-      href: `/${normalizedLang}/admin/inbox`,
+      href: `/${lang}/admin/inbox`,
       label: t.messages,
       icon: "💬",
       badge: unreadCount > 0 ? unreadCount : null,
     },
     {
-      href: `/${normalizedLang}/admin/faturacao`,
+      href: `/${lang}/admin/faturacao`,
       label: t.finance,
       icon: "💰",
     },
     {
-      href: `/${normalizedLang}/admin/contrato`,
+      href: `/${lang}/admin/contrato`,
       label: t.contract,
       icon: "📝",
     },
@@ -287,7 +354,7 @@ export default function AdminPartnerLayout({
           {/* LOGO HELLO CAMP */}
           <div className="p-6 border-b border-slate-800 flex items-center justify-between">
             <Link
-              href={`/${normalizedLang}`}
+              href={`/${lang}`}
               className="text-2xl font-black tracking-tight no-underline flex items-center"
             >
               <span className="text-white">Hello</span>
@@ -318,7 +385,7 @@ export default function AdminPartnerLayout({
               </span>
               {userId && (
                 <Link
-                  href={`/${normalizedLang}/parceiro/${userId}?preview=admin`}
+                  href={`/${lang}/parceiro/${userId}?preview=admin`}
                   target="_blank"
                   className="text-[10px] font-black text-[#F59E0B] hover:underline no-underline"
                 >
@@ -333,7 +400,7 @@ export default function AdminPartnerLayout({
             {navLinks.map((item) => {
               const isActive =
                 pathname === item.href ||
-                (item.href !== `/${normalizedLang}/admin/dashboard` &&
+                (item.href !== `/${lang}/admin/dashboard` &&
                   pathname?.startsWith(item.href));
 
               return (
@@ -362,32 +429,9 @@ export default function AdminPartnerLayout({
         </div>
 
         {/* RODAPÉ DA SIDEBAR */}
-        <div className="p-4 border-t border-slate-800 space-y-3">
-          {/* SELETOR DE IDIOMA (PT / EN / ES / FR / DE) */}
-          <div className="bg-slate-900/80 p-2.5 rounded-md border border-slate-800">
-            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 text-center">
-              🌐 {t.languageLabel}
-            </span>
-            <div className="grid grid-cols-5 gap-1">
-              {SUPPORTED_LANGS.map((code) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => handleLanguageSwitch(code)}
-                  className={`py-1.5 rounded text-[10px] font-black uppercase cursor-pointer border-0 transition-colors ${
-                    normalizedLang === code
-                      ? "bg-[#2563EB] text-white"
-                      : "bg-slate-800 text-slate-400 hover:text-white"
-                  }`}
-                >
-                  {code}
-                </button>
-              ))}
-            </div>
-          </div>
-
+        <div className="p-4 border-t border-slate-800 space-y-2">
           <Link
-            href={`/${normalizedLang}/admin/campos/novo`}
+            href={`/${lang}/admin/campos/novo`}
             className="w-full flex items-center justify-center gap-2 bg-[#16A34A] hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest py-3 px-4 rounded-md no-underline transition-colors shadow-sm"
           >
             <span>+</span>
@@ -407,7 +451,7 @@ export default function AdminPartnerLayout({
       {/* HEADER MOBILE */}
       <header className="md:hidden bg-[#0F172A] text-white px-4 py-3.5 flex items-center justify-between border-b border-slate-800 sticky top-0 z-40">
         <Link
-          href={`/${normalizedLang}/admin/dashboard`}
+          href={`/${lang}/admin/dashboard`}
           className="text-xl font-black tracking-tight no-underline flex items-center"
         >
           <span className="text-white">Hello</span>
@@ -422,7 +466,7 @@ export default function AdminPartnerLayout({
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="bg-[#2563EB] text-white px-3 py-2 rounded-md text-xs font-black uppercase tracking-widest border-0 cursor-pointer"
         >
-          {mobileMenuOpen ? "✕" : "☰ Menu"}
+          {mobileMenuOpen ? "✕" : t.menu}
         </button>
       </header>
 
@@ -454,33 +498,9 @@ export default function AdminPartnerLayout({
               </Link>
             );
           })}
-
-          {/* SELETOR DE IDIOMA MOBILE */}
-          <div className="pt-2">
-            <div className="grid grid-cols-5 gap-1.5 bg-slate-900 p-2 rounded-md">
-              {SUPPORTED_LANGS.map((code) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    handleLanguageSwitch(code);
-                  }}
-                  className={`py-2 rounded text-xs font-black uppercase cursor-pointer border-0 ${
-                    normalizedLang === code
-                      ? "bg-[#2563EB] text-white"
-                      : "bg-slate-800 text-slate-400"
-                  }`}
-                >
-                  {code}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="pt-2 flex gap-2">
             <Link
-              href={`/${normalizedLang}/admin/campos/novo`}
+              href={`/${lang}/admin/campos/novo`}
               onClick={() => setMobileMenuOpen(false)}
               className="flex-1 text-center bg-[#16A34A] text-white font-black text-xs uppercase tracking-widest py-3 rounded-md no-underline"
             >
