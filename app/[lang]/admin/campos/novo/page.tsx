@@ -67,16 +67,90 @@ const DISTRITOS_PT = [
   "Ilha da Madeira", "Ilha de São Miguel (Açores)"
 ];
 
-const PAISES = [
-  { pt: "Portugal", en: "Portugal" },
-  { pt: "Espanha", en: "Spain" },
-  { pt: "Reino Unido", en: "United Kingdom" },
-  { pt: "França", en: "France" },
-  { pt: "Alemanha", en: "Germany" },
-  { pt: "Itália", en: "Italy" },
-  { pt: "Malta", en: "Malta" },
-  { pt: "Estados Unidos", en: "United States" },
+const PAISES_POR_CONTINENTE = [
+  {
+    continente_pt: "🌍 Europa",
+    continente_en: "🌍 Europe",
+    paises: [
+      { pt: "Portugal", en: "Portugal" },
+      { pt: "Albânia", en: "Albania" },
+      { pt: "Alemanha", en: "Germany" },
+      { pt: "Andorra", en: "Andorra" },
+      { pt: "Áustria", en: "Austria" },
+      { pt: "Bélgica", en: "Belgium" },
+      { pt: "Bósnia e Herzegovina", en: "Bosnia and Herzegovina" },
+      { pt: "Bulgária", en: "Bulgaria" },
+      { pt: "Chipre", en: "Cyprus" },
+      { pt: "Croácia", en: "Croatia" },
+      { pt: "Dinamarca", en: "Denmark" },
+      { pt: "Eslováquia", en: "Slovakia" },
+      { pt: "Eslovénia", en: "Slovenia" },
+      { pt: "Espanha", en: "Spain" },
+      { pt: "Estónia", en: "Estonia" },
+      { pt: "Finlândia", en: "Finland" },
+      { pt: "França", en: "France" },
+      { pt: "Grécia", en: "Greece" },
+      { pt: "Hungria", en: "Hungary" },
+      { pt: "Irlanda", en: "Ireland" },
+      { pt: "Islândia", en: "Iceland" },
+      { pt: "Itália", en: "Italy" },
+      { pt: "Letónia", en: "Latvia" },
+      { pt: "Liechtenstein", en: "Liechtenstein" },
+      { pt: "Lituânia", en: "Lithuania" },
+      { pt: "Luxemburgo", en: "Luxembourg" },
+      { pt: "Macedónia do Norte", en: "North Macedonia" },
+      { pt: "Malta", en: "Malta" },
+      { pt: "Moldávia", en: "Moldova" },
+      { pt: "Mónaco", en: "Monaco" },
+      { pt: "Montenegro", en: "Montenegro" },
+      { pt: "Noruega", en: "Norway" },
+      { pt: "Países Baixos", en: "Netherlands" },
+      { pt: "Polónia", en: "Poland" },
+      { pt: "Reino Unido", en: "United Kingdom" },
+      { pt: "República Checa", en: "Czech Republic" },
+      { pt: "Roménia", en: "Romania" },
+      { pt: "São Marino", en: "San Marino" },
+      { pt: "Sérvia", en: "Serbia" },
+      { pt: "Suécia", en: "Sweden" },
+      { pt: "Suíça", en: "Switzerland" },
+      { pt: "Ucrânia", en: "Ukraine" },
+    ],
+  },
+  {
+    continente_pt: "🌎 América do Norte",
+    continente_en: "🌎 North America",
+    paises: [
+      { pt: "Estados Unidos", en: "United States" },
+    ],
+  },
+  {
+    continente_pt: "🌎 América do Sul",
+    continente_en: "🌎 South America",
+    paises: [
+      { pt: "Argentina", en: "Argentina" },
+      { pt: "Bolívia", en: "Bolivia" },
+      { pt: "Brasil", en: "Brazil" },
+      { pt: "Chile", en: "Chile" },
+      { pt: "Colômbia", en: "Colombia" },
+      { pt: "Equador", en: "Ecuador" },
+      { pt: "Guiana", en: "Guyana" },
+      { pt: "Paraguai", en: "Paraguay" },
+      { pt: "Peru", en: "Peru" },
+      { pt: "Suriname", en: "Suriname" },
+      { pt: "Uruguai", en: "Uruguay" },
+      { pt: "Venezuela", en: "Venezuela" },
+    ],
+  },
+  {
+    continente_pt: "🌍 África",
+    continente_en: "🌍 Africa",
+    paises: [
+      { pt: "África do Sul", en: "South Africa" },
+    ],
+  },
 ];
+
+const PAISES = PAISES_POR_CONTINENTE.flatMap((grupo) => grupo.paises);
 
 const DIAS_SEMANA = [
   { id: 1, pt: "Seg", en: "Mon" },
@@ -1191,7 +1265,7 @@ export default function NovoCampoParceiro({
                 </div>
               </div>
 
-              {/* LOCALIZAÇÃO COMPLETA (PAÍS, DISTRITO E MORADA COM GEOCODING) */}
+              {/* LOCALIZAÇÃO COMPLETA (PAÍS POR CONTINENTE, DISTRITO E MORADA COM GEOCODING) */}
               <div className="md:col-span-2 border-t border-slate-100 pt-8 mt-2">
                 <h3 className="text-base font-black text-slate-900 m-0 mb-4">
                   📍 {isEn ? "Location & Interactive Map" : "Localização e Mapa"}
@@ -1200,7 +1274,7 @@ export default function NovoCampoParceiro({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                      {isEn ? "Country *" : "País *"}
+                      {isEn ? "Country (by Continent) *" : "País (por Continente) *"}
                     </label>
                     <select
                       value={pais}
@@ -1210,10 +1284,17 @@ export default function NovoCampoParceiro({
                       }}
                       className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#167524]"
                     >
-                      {PAISES.map((p) => (
-                        <option key={p.pt} value={p.pt}>
-                          {isEn ? p.en : p.pt}
-                        </option>
+                      {PAISES_POR_CONTINENTE.map((grupo) => (
+                        <optgroup
+                          key={grupo.continente_pt}
+                          label={isEn ? grupo.continente_en : grupo.continente_pt}
+                        >
+                          {grupo.paises.map((p) => (
+                            <option key={p.pt} value={p.pt}>
+                              {isEn ? p.en : p.pt}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </div>
