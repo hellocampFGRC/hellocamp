@@ -126,109 +126,103 @@ const TRANSLATIONS: Record<
   },
 };
 
-function mapTextToSupportedLang(raw?: string | null): SupportedLang | null {
-  if (!raw) return null;
-  const val = raw
+function normalizeStr(raw?: unknown): string {
+  if (!raw) return "";
+  return String(raw)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
 
-  if (!val) return null;
+// Mapeia um país explícito para um dos 5 idiomas (tudo o resto devolve "en")
+function mapCountryToLang(rawCountry?: string | null): SupportedLang {
+  const c = normalizeStr(rawCountry);
 
-  // Códigos exatos (ex: "pt", "pt-pt", "es", "fr", "de", "en")
-  if (val === "pt" || val.startsWith("pt-") || val.startsWith("pt_")) return "pt";
-  if (val === "es" || val.startsWith("es-") || val.startsWith("es_")) return "es";
-  if (val === "fr" || val.startsWith("fr-") || val.startsWith("fr_")) return "fr";
-  if (val === "de" || val.startsWith("de-") || val.startsWith("de_")) return "de";
-  if (val === "en" || val.startsWith("en-") || val.startsWith("en_")) return "en";
+  if (/\b(portugal|brasil|brazil)\b/i.test(c)) return "pt";
+  if (/\b(espanha|espana|spain|mexico|argentina|colombia|chile|peru|uruguai|uruguay)\b/i.test(c)) {
+    return "es";
+  }
+  if (/\b(franca|france|belgica|belgium|luxemburgo|luxembourg)\b/i.test(c)) {
+    return "fr";
+  }
+  if (/\b(alemanha|germany|deutschland|austria|osterreich)\b/i.test(c)) {
+    return "de";
+  }
 
-  // Nomes de idiomas ou países
+  // Qualquer outro país (Reino Unido, EUA, África do Sul, Itália, Malta, etc.) -> Inglês
+  return "en";
+}
+
+// Mapeia morada, cidade, distrito ou domínio de e-mail caso o país não esteja preenchido
+function mapLocationOrEmailToLang(texto: string, email: string): SupportedLang | null {
+  const t = normalizeStr(texto);
+  const e = normalizeStr(email);
+
   if (
-    val.includes("portugu") ||
-    val.includes("portugal") ||
-    val.includes("brasil") ||
-    val.includes("brazil")
+    /\b(portugal|lisboa|lisbon|porto|faro|algarve|coimbra|braga|santarem|setubal|aveiro|leiria|evora|beja|viseu|guarda|vila real|viana do castelo|braganca|castelo branco|portalegre|madeira|acores|cascais|sintra|oeiras|almada|amadora|matosinhos|anadia|brasil|brazil)\b/i.test(
+      t
+    ) ||
+    e.endsWith(".pt") ||
+    e.endsWith(".br")
   ) {
     return "pt";
   }
+
   if (
-    val.includes("espanh") ||
-    val.includes("espanol") ||
-    val.includes("spanish") ||
-    val.includes("spain") ||
-    val.includes("espana") ||
-    val.includes("mexico") ||
-    val.includes("argentina") ||
-    val.includes("colombia")
+    /\b(espanha|espana|spain|madrid|barcelona|valencia|sevilla|sevilha|malaga|bilbao|alicante|galiza|galicia|vigo|salamanca|andalucia|catalunya|lanzarote|tenerife|canarias|ibiza|mallorca|marbella)\b/i.test(
+      t
+    ) ||
+    e.endsWith(".es")
   ) {
     return "es";
   }
+
   if (
-    val.includes("franc") ||
-    val.includes("french") ||
-    val.includes("france") ||
-    val.includes("belgica") ||
-    val.includes("belgium")
+    /\b(franca|france|paris|lyon|marseille|toulouse|nice|bordeaux|lille|nantes|strasbourg|geneve|lausanne|bruxelas|brussels|bruxelles)\b/i.test(
+      t
+    ) ||
+    e.endsWith(".fr")
   ) {
     return "fr";
   }
+
   if (
-    val.includes("alem") ||
-    val.includes("deutsch") ||
-    val.includes("german") ||
-    val.includes("germany") ||
-    val.includes("austria") ||
-    val.includes("osterreich")
+    /\b(alemanha|germany|deutschland|berlin|munich|munchen|hamburg|frankfurt|koln|cologne|stuttgart|dusseldorf|austria|osterreich|vienna|wien|zurich|basel|bern)\b/i.test(
+      t
+    ) ||
+    e.endsWith(".de") ||
+    e.endsWith(".at")
   ) {
     return "de";
-  }
-  if (
-    val.includes("ingl") ||
-    val.includes("engl") ||
-    val.includes("uk") ||
-    val.includes("united kingdom") ||
-    val.includes("reino unido") ||
-    val.includes("usa") ||
-    val.includes("estados unidos") ||
-    val.includes("united states") ||
-    val.includes("irlanda") ||
-    val.includes("ireland") ||
-    val.includes("south africa") ||
-    val.includes("africa do sul")
-  ) {
-    return "en";
   }
 
   return null;
 }
 
 function detectPartnerLang(perfil: any, campos: any[]): SupportedLang {
-  // 1. Prioridade: campo de idioma explícito no perfil
-  const fromPerfilIdioma = mapTextToSupportedLang(
-    perfil?.idioma || perfil?.lingua || perfil?.language
-  );
-  if (fromPerfilIdioma) return fromPerfilIdioma;
-
-  // 2. País definido no perfil
-  const fromPerfilPais = mapTextToSupportedLang(
-    perfil?.pais || perfil?.pais_empresa || perfil?.country
-  );
-  if (fromPerfilPais) return fromPerfilPais;
-
-  // 3. País ou idiomas falados nos campos do parceiro
+  // 1. Prioridade máxima: coluna `pais` / `pais_en` dos campos do parceiro
   if (Array.isArray(campos) && campos.length > 0) {
-    for (const campo of campos) {
-      const fromCampoPais = mapTextToSupportedLang(campo?.pais);
-      if (fromCampoPais) return fromCampoPais;
+    const campoComPais = campos.find((c) => c?.pais || c?.pais_en);
+    if (campoComPais) {
+      return mapCountryToLang(campoComPais.pais || campoComPais.pais_en);
     }
-    for (const campo of campos) {
-      const fromCampoLinguas = mapTextToSupportedLang(campo?.linguas_faladas);
-      if (fromCampoLinguas) return fromCampoLinguas;
-    }
+
+    // Se os campos não tiverem país preenchido, tenta pelo Distrito / local
+    const locaisTexto = campos
+      .map((c) => `${c?.local || ""} ${c?.Distrito || ""}`)
+      .join(" ");
+    const fromLocais = mapLocationOrEmailToLang(locaisTexto, "");
+    if (fromLocais) return fromLocais;
   }
 
-  // 4. Tudo o que não for pt, es, fr ou de mostra em Inglês
+  // 2. Fallback pelo perfil do parceiro (morada_sede e extensão de email)
+  const moradaPerfil = perfil?.morada_sede || "";
+  const emailPerfil = perfil?.email_publico || perfil?.email || "";
+  const fromPerfil = mapLocationOrEmailToLang(moradaPerfil, emailPerfil);
+  if (fromPerfil) return fromPerfil;
+
+  // 3. Tudo o resto (outros países ou sem localização definida) -> Inglês
   return "en";
 }
 
@@ -243,9 +237,19 @@ export default function AdminPartnerLayout({
   const pathname = usePathname();
   const router = useRouter();
 
-  // Valor inicial temporário até o perfil carregar; depois assume automaticamente o idioma do parceiro
+  // Estado inicial provisório até o perfil/campos carregarem
   const [portalLang, setPortalLang] = useState<SupportedLang>(() => {
-    return mapTextToSupportedLang(lang) || "en";
+    const urlLang = normalizeStr(lang);
+    if (
+      urlLang === "pt" ||
+      urlLang === "es" ||
+      urlLang === "fr" ||
+      urlLang === "de" ||
+      urlLang === "en"
+    ) {
+      return urlLang;
+    }
+    return "en";
   });
 
   const [empresaNome, setEmpresaNome] = useState<string>("");
@@ -279,7 +283,7 @@ export default function AdminPartnerLayout({
             .eq("lida", false),
           supabase
             .from("campos")
-            .select("pais, linguas_faladas")
+            .select('pais, pais_en, local, "Distrito"')
             .eq("organizador_id", uid),
         ]);
 
