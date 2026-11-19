@@ -60,6 +60,21 @@ const CATEGORIAS = [
   { id: "Línguas", pt: "Línguas", en: "Languages", icon: "🗣️" },
 ];
 
+const POLITICAS_CANCELAMENTO = [
+  {
+    pt: "Flexível (Reembolso a 100% até 7 dias antes)",
+    en: "Flexible (100% refund up to 7 days before)",
+  },
+  {
+    pt: "Moderada (Reembolso a 50% até 15 dias antes)",
+    en: "Moderate (50% refund up to 15 days before)",
+  },
+  {
+    pt: "Estrita (Sem reembolso após reserva)",
+    en: "Strict (No refund after booking)",
+  },
+];
+
 const DISTRITOS_PT = [
   "Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra",
   "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre",
@@ -203,8 +218,6 @@ export default function EditarCampoParceiro({
   // Dropdowns Customizados
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
   const [isPolDropdownOpen, setIsPolDropdownOpen] = useState(false);
-  const [isSegDropdownOpen, setIsSegDropdownOpen] = useState(false);
-  const [isTraDropdownOpen, setIsTraDropdownOpen] = useState(false);
 
   // Media (Fotos e Documentos PDF)
   const [galeria, setGaleria] = useState<GaleriaItem[]>([]);
@@ -214,7 +227,7 @@ export default function EditarCampoParceiro({
   const [documentos, setDocumentos] = useState<File[]>([]);
   const [novoDiaFechado, setNovoDiaFechado] = useState("");
 
-  // Estado Principal do Formulário
+  // Estado Principal do Formulário (mostra colunas EN se isEn, ou PT se !isEn)
   const [formData, setFormData] = useState({
     nome: "",
     categoria: "Desporto",
@@ -223,7 +236,9 @@ export default function EditarCampoParceiro({
     idade_min: 6,
     idade_max: 16,
     vagas_totais: 30,
-    politica_cancelamento: "Flexível (Reembolso a 100% até 7 dias antes)",
+    politica_cancelamento: isEn
+      ? POLITICAS_CANCELAMENTO[0].en
+      : POLITICAS_CANCELAMENTO[0].pt,
     tipo_pagamento: "100_total",
     descricao: "",
     regras_termos: "",
@@ -264,7 +279,9 @@ export default function EditarCampoParceiro({
     titulo: "",
     tipo: "semana",
     quantidade: 1,
-    variantes: [{ nome: "Preço Base", preco: 150, taxa_comissao: null }],
+    variantes: [
+      { nome: isEn ? "Base Price" : "Preço Base", preco: 150, taxa_comissao: null },
+    ],
   });
 
   const [isAlojamentoModalOpen, setIsAlojamentoModalOpen] = useState(false);
@@ -296,7 +313,10 @@ export default function EditarCampoParceiro({
         .single();
 
       if (error || !data) {
-        alert("Erro ao carregar campo: " + (error?.message || "Não encontrado"));
+        alert(
+          (isEn ? "Error loading camp: " : "Erro ao carregar campo: ") +
+            (error?.message || (isEn ? "Not found" : "Não encontrado"))
+        );
         router.push(`/${lang}/admin/campos`);
         return;
       }
@@ -323,7 +343,7 @@ export default function EditarCampoParceiro({
       }
 
       // Reconstruir País (Normalizando se vier em inglês da BD) e Coordenadas
-      const paisRaw = data.pais || "Portugal";
+      const paisRaw = data.pais || data.pais_en || "Portugal";
       const paisMatch = PAISES.find(
         (p) =>
           p.pt.toLowerCase() === paisRaw.toLowerCase() ||
@@ -338,8 +358,10 @@ export default function EditarCampoParceiro({
         });
       }
 
-      // Reconstruir Línguas Faladas
-      const strLing = String(data.linguas_faladas || "Português").toLowerCase();
+      // Reconstruir Línguas Faladas (lê tanto a coluna PT como a EN)
+      const strLing = `${data.linguas_faladas || ""} ${
+        data.linguas_faladas_en || ""
+      }`.toLowerCase();
       setLinguas({
         pt: strLing.includes("portugu"),
         en: strLing.includes("ingl") || strLing.includes("engl"),
@@ -380,10 +402,17 @@ export default function EditarCampoParceiro({
         setDocumentosExistentes(data.programas_pdf);
       }
 
-      // Reconstruir Perguntas Customizadas
+      // Reconstruir Perguntas Customizadas (usa perguntas_customizadas_en quando isEn)
+      const fontePerguntas =
+        isEn &&
+        Array.isArray(data.perguntas_customizadas_en) &&
+        data.perguntas_customizadas_en.length > 0
+          ? data.perguntas_customizadas_en
+          : data.perguntas_customizadas;
+
       const perguntasReconstruidas: PerguntaUI[] = [];
-      if (Array.isArray(data.perguntas_customizadas)) {
-        data.perguntas_customizadas.forEach((raw: string, i: number) => {
+      if (Array.isArray(fontePerguntas)) {
+        fontePerguntas.forEach((raw: string, i: number) => {
           if (raw.startsWith("ESCOLHA|")) {
             const partes = raw.split("|");
             perguntasReconstruidas.push({
@@ -410,24 +439,78 @@ export default function EditarCampoParceiro({
         });
       }
 
+      // Normalizar Política de Cancelamento no idioma ativo
+      let politicaVisivel = isEn
+        ? data.politica_cancelamento_en || data.politica_cancelamento || POLITICAS_CANCELAMENTO[0].en
+        : data.politica_cancelamento || POLITICAS_CANCELAMENTO[0].pt;
+
+      const polMatch = POLITICAS_CANCELAMENTO.find(
+        (p) =>
+          p.pt.toLowerCase() === String(data.politica_cancelamento || "").toLowerCase() ||
+          p.en.toLowerCase() === String(data.politica_cancelamento_en || "").toLowerCase()
+      );
+      if (polMatch) {
+        politicaVisivel = isEn ? polMatch.en : polMatch.pt;
+      }
+
+      // Pacotes, Alojamento e Descontos com valores no idioma ativo
+      const pacotesCarregados: Pacote[] = Array.isArray(data.pacotes)
+        ? data.pacotes.map((pac: Pacote) => ({
+            ...pac,
+            titulo: isEn ? pac.titulo_en || pac.titulo : pac.titulo,
+            variantes: Array.isArray(pac.variantes)
+              ? pac.variantes.map((v: Variante) => ({
+                  ...v,
+                  nome: isEn ? v.nome_en || v.nome : v.nome,
+                }))
+              : [],
+          }))
+        : [];
+
+      const alojamentosCarregados: OpcaoAlojamento[] = Array.isArray(
+        data.opcoes_alojamento
+      )
+        ? data.opcoes_alojamento.map((aloj: OpcaoAlojamento) => ({
+            ...aloj,
+            nome: isEn ? aloj.nome_en || aloj.nome : aloj.nome,
+          }))
+        : [];
+
+      const descontosCarregados: Desconto[] = Array.isArray(data.descontos)
+        ? data.descontos.map((desc: Desconto) => ({
+            ...desc,
+            nome: isEn ? desc.nome_en || desc.nome : desc.nome,
+          }))
+        : [];
+
       setFormData({
-        nome: data.nome || "",
+        nome: isEn ? data.nome_en || data.nome || "" : data.nome || "",
         categoria: data.categoria || "Desporto",
         Distrito: data.Distrito || "Lisboa",
-        local: data.local || "",
+        local: isEn ? data.local_en || data.local || "" : data.local || "",
         idade_min: Number(data.idade_min) || 6,
         idade_max: Number(data.idade_max) || 16,
         vagas_totais: Number(data.vagas_totais) || 30,
-        politica_cancelamento:
-          data.politica_cancelamento ||
-          "Flexível (Reembolso a 100% até 7 dias antes)",
+        politica_cancelamento: politicaVisivel,
         tipo_pagamento: data.tipo_pagamento || "100_total",
-        descricao: data.descricao || "",
-        regras_termos: data.regras_termos || "",
-        racio_monitores: data.racio_monitores || "",
-        alimentacao: data.alimentacao || "",
-        alojamento: data.alojamento || "",
-        seguro: data.seguro || "",
+        descricao: isEn
+          ? data.descricao_en || data.descricao || ""
+          : data.descricao || "",
+        regras_termos: isEn
+          ? data.regras_termos_en || data.regras_termos || ""
+          : data.regras_termos || "",
+        racio_monitores: isEn
+          ? data.racio_monitores_en || data.racio_monitores || ""
+          : data.racio_monitores || "",
+        alimentacao: isEn
+          ? data.alimentacao_en || data.alimentacao || ""
+          : data.alimentacao || "",
+        alojamento: isEn
+          ? data.alojamento_en || data.alojamento || ""
+          : data.alojamento || "",
+        seguro: isEn
+          ? data.seguro_en || data.seguro || ""
+          : data.seguro || "",
         extra_seguro: Number(data.extra_seguro) || 0,
         tipo_extra_seguro: data.tipo_extra_seguro || "fixo",
         extra_transporte: Number(data.extra_transporte) || 0,
@@ -450,11 +533,9 @@ export default function EditarCampoParceiro({
             ? data.calendario_funcionamento.dias_fechados
             : [],
         },
-        pacotes: Array.isArray(data.pacotes) ? data.pacotes : [],
-        opcoes_alojamento: Array.isArray(data.opcoes_alojamento)
-          ? data.opcoes_alojamento
-          : [],
-        descontos: Array.isArray(data.descontos) ? data.descontos : [],
+        pacotes: pacotesCarregados,
+        opcoes_alojamento: alojamentosCarregados,
+        descontos: descontosCarregados,
         perguntasUI: perguntasReconstruidas,
         regras_comissao: data.regras_comissao || {
           modo: "padrao",
@@ -468,13 +549,18 @@ export default function EditarCampoParceiro({
     };
 
     fetchCampo();
-  }, [id, lang, router]);
+  }, [id, lang, isEn, router]);
 
   // Geocodificação Manual
   const buscarNoMapaManual = async () => {
     if (!formData.local.trim()) return;
     try {
-      const query = `${formData.local}, ${pais === "Portugal" && formData.Distrito ? formData.Distrito + ", " : ""}${pais}`;
+      const paisConsulta = isEn
+        ? PAISES.find((p) => p.pt === pais)?.en || pais
+        : pais;
+      const query = `${formData.local}, ${
+        pais === "Portugal" && formData.Distrito ? formData.Distrito + ", " : ""
+      }${paisConsulta}`;
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4`
       );
@@ -487,7 +573,7 @@ export default function EditarCampoParceiro({
         });
       }
     } catch (e) {
-      console.error("Erro na geocodificação:", e);
+      console.error("Geocoding error:", e);
     }
   };
 
@@ -495,18 +581,22 @@ export default function EditarCampoParceiro({
     setLinguas((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const getLinguasString = () => {
-    const mapNomes: Record<string, string> = {
-      pt: "Português",
-      en: "Inglês",
-      es: "Espanhol",
-      fr: "Francês",
-      de: "Alemão",
+  const getLinguasString = (target: "pt" | "en") => {
+    const mapNomes: Record<string, { pt: string; en: string }> = {
+      pt: { pt: "Português", en: "Portuguese" },
+      en: { pt: "Inglês", en: "English" },
+      es: { pt: "Espanhol", en: "Spanish" },
+      fr: { pt: "Francês", en: "French" },
+      de: { pt: "Alemão", en: "German" },
     };
     const ativas = Object.entries(linguas)
       .filter(([_, val]) => val)
-      .map(([k]) => mapNomes[k]);
-    return ativas.length > 0 ? ativas.join(", ") : "Português";
+      .map(([k]) => mapNomes[k][target]);
+    return ativas.length > 0
+      ? ativas.join(", ")
+      : target === "en"
+      ? "English"
+      : "Português";
   };
 
   const getCatName = (catId: string) => {
@@ -518,6 +608,17 @@ export default function EditarCampoParceiro({
   const handleSelectCategoria = (catId: string) => {
     setFormData((prev) => ({ ...prev, categoria: catId }));
     setIsCatDropdownOpen(false);
+  };
+
+  const formatAlojamentoTipo = (tipo: "semana" | "dia" | "fixo") => {
+    if (isEn) {
+      if (tipo === "semana") return "week";
+      if (tipo === "dia") return "day";
+      return "fixed";
+    }
+    if (tipo === "semana") return "semana";
+    if (tipo === "dia") return "dia";
+    return "fixo";
   };
 
   // Calendário
@@ -611,7 +712,7 @@ export default function EditarCampoParceiro({
     if (variantesLimpas.length === 0) {
       alert(
         isEn
-          ? "Add at least one price option."
+          ? "Add at least one valid price option."
           : "Adicione pelo menos uma opção de preço válida."
       );
       return;
@@ -638,7 +739,9 @@ export default function EditarCampoParceiro({
       titulo: "",
       tipo: "semana",
       quantidade: 1,
-      variantes: [{ nome: "Preço Base", preco: 150, taxa_comissao: null }],
+      variantes: [
+        { nome: isEn ? "Base Price" : "Preço Base", preco: 150, taxa_comissao: null },
+      ],
     });
     setIsPacoteModalOpen(false);
   };
@@ -777,7 +880,7 @@ export default function EditarCampoParceiro({
   const handleApagarCampo = async () => {
     const confirmacao = window.confirm(
       isEn
-        ? "ATTENTION: Are you sure you want to permanently delete this camp?"
+        ? "ATTENTION: Are you sure you want to permanently delete this camp? This action cannot be undone."
         : "ATENÇÃO: Tem a certeza absoluta que pretende eliminar este campo? Esta ação é irreversível."
     );
     if (!confirmacao) return;
@@ -793,18 +896,32 @@ export default function EditarCampoParceiro({
     }
   };
 
-  const traduzirParaIngles = async (texto: string) => {
+  // Tradução bidirecional (PT->EN ou EN->PT consoante o idioma em que o parceiro está a editar)
+  const traduzirTexto = async (texto: string, pair: "pt|en" | "en|pt") => {
     if (!texto || !texto.trim()) return "";
     try {
       const res = await fetch(
         `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
           texto.substring(0, 480)
-        )}&langpair=pt|en`
+        )}&langpair=${pair}`
       );
       const data = await res.json();
       return data?.responseData?.translatedText || texto;
     } catch {
       return texto;
+    }
+  };
+
+  const gerarParBilingue = async (textoAtual: string) => {
+    if (!textoAtual || !textoAtual.trim()) {
+      return { pt: "", en: "" };
+    }
+    if (isEn) {
+      const pt = await traduzirTexto(textoAtual, "en|pt");
+      return { pt, en: textoAtual };
+    } else {
+      const en = await traduzirTexto(textoAtual, "pt|en");
+      return { pt: textoAtual, en };
     }
   };
 
@@ -836,13 +953,15 @@ export default function EditarCampoParceiro({
     }
 
     setSaving(true);
-    setStatusText(isEn ? "Processing media..." : "A processar fotografias e PDFs...");
+    setStatusText(
+      isEn ? "Processing media..." : "A processar fotografias e PDFs..."
+    );
 
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sessão expirada");
+      if (!session) throw new Error(isEn ? "Session expired" : "Sessão expirada");
 
       // 1. Upload de Fotos Novas e Separação da Capa
       const uploadedUrls: string[] = [];
@@ -857,7 +976,11 @@ export default function EditarCampoParceiro({
             .from("campos-imagens")
             .upload(fileName, img.file);
           if (uploadError)
-            throw new Error(`Erro ao enviar foto: ${uploadError.message}`);
+            throw new Error(
+              `${isEn ? "Error uploading photo: " : "Erro ao enviar foto: "}${
+                uploadError.message
+              }`
+            );
           const {
             data: { publicUrl },
           } = supabase.storage.from("campos-imagens").getPublicUrl(fileName);
@@ -882,7 +1005,12 @@ export default function EditarCampoParceiro({
         const { error: docErr } = await supabase.storage
           .from("campos-documentos")
           .upload(fileName, doc);
-        if (docErr) throw new Error(`Erro ao carregar PDF: ${docErr.message}`);
+        if (docErr)
+          throw new Error(
+            `${isEn ? "Error uploading PDF: " : "Erro ao carregar PDF: "}${
+              docErr.message
+            }`
+          );
         const {
           data: { publicUrl },
         } = supabase.storage.from("campos-documentos").getPublicUrl(fileName);
@@ -906,86 +1034,103 @@ export default function EditarCampoParceiro({
       }
 
       setStatusText(
-        isEn ? "Translating texts (AI)..." : "A sincronizar traduções (IA)..."
+        isEn ? "Syncing translations..." : "A sincronizar traduções (IA)..."
       );
 
       const paisEn = PAISES.find((p) => p.pt === pais)?.en || pais;
-      const linguasFinais = getLinguasString();
+      const categoriaObj = CATEGORIAS.find((c) => c.id === formData.categoria);
+      const categoriaEn = categoriaObj ? categoriaObj.en : formData.categoria;
+
+      const linguasPt = getLinguasString("pt");
+      const linguasEn = getLinguasString("en");
+
+      // Política de cancelamento bilingue (evita tradução externa para opções padrão)
+      const polPadrao = POLITICAS_CANCELAMENTO.find(
+        (p) =>
+          p.pt === formData.politica_cancelamento ||
+          p.en === formData.politica_cancelamento
+      );
+      const politicaPar = polPadrao
+        ? { pt: polPadrao.pt, en: polPadrao.en }
+        : await gerarParBilingue(formData.politica_cancelamento);
 
       const [
-        nome_en,
-        categoria_en,
-        local_en,
-        descricao_en,
-        alimentacao_en,
-        alojamento_en,
-        seguro_en,
-        regras_termos_en,
-        politica_cancelamento_en,
+        nomePar,
+        localPar,
+        descricaoPar,
+        alimentacaoPar,
+        alojamentoPar,
+        seguroPar,
+        regrasPar,
+        racioPar,
       ] = await Promise.all([
-        traduzirParaIngles(formData.nome),
-        traduzirParaIngles(formData.categoria),
-        traduzirParaIngles(formData.local),
-        traduzirParaIngles(formData.descricao),
-        traduzirParaIngles(formData.alimentacao),
-        traduzirParaIngles(formData.alojamento),
-        traduzirParaIngles(formData.seguro),
-        traduzirParaIngles(formData.regras_termos),
-        traduzirParaIngles(formData.politica_cancelamento),
+        gerarParBilingue(formData.nome),
+        gerarParBilingue(formData.local),
+        gerarParBilingue(formData.descricao),
+        gerarParBilingue(formData.alimentacao),
+        gerarParBilingue(formData.alojamento),
+        gerarParBilingue(formData.seguro),
+        gerarParBilingue(formData.regras_termos),
+        gerarParBilingue(formData.racio_monitores),
       ]);
 
-      const perguntasPtLimpas = formData.perguntasUI.filter(
+      const perguntasLimpas = formData.perguntasUI.filter(
         (p) => p.titulo.trim() !== ""
       );
       const perguntasFormatadasPT: string[] = [];
       const perguntasFormatadasEN: string[] = [];
 
-      for (const p of perguntasPtLimpas) {
-        const titulo_en = await traduzirParaIngles(p.titulo.trim());
+      for (const p of perguntasLimpas) {
+        const tituloPar = await gerarParBilingue(p.titulo.trim());
         if (p.tipo === "escolha") {
           const opcoesArray = p.opcoes
             .split(",")
             .map((o) => o.trim())
             .filter(Boolean);
-          const opcoesArray_en = await Promise.all(
-            opcoesArray.map((o) => traduzirParaIngles(o))
+          const opcoesPares = await Promise.all(
+            opcoesArray.map((o) => gerarParBilingue(o))
           );
           perguntasFormatadasPT.push(
-            `ESCOLHA|${p.titulo.trim()}|${opcoesArray.join(", ")}`
+            `ESCOLHA|${tituloPar.pt}|${opcoesPares.map((x) => x.pt).join(", ")}`
           );
           perguntasFormatadasEN.push(
-            `ESCOLHA|${titulo_en}|${opcoesArray_en.join(", ")}`
+            `ESCOLHA|${tituloPar.en}|${opcoesPares.map((x) => x.en).join(", ")}`
           );
         } else {
-          perguntasFormatadasPT.push(`TEXTO|${p.titulo.trim()}`);
-          perguntasFormatadasEN.push(`TEXTO|${titulo_en}`);
+          perguntasFormatadasPT.push(`TEXTO|${tituloPar.pt}`);
+          perguntasFormatadasEN.push(`TEXTO|${tituloPar.en}`);
         }
       }
 
       const pacotesFormatados = await Promise.all(
         formData.pacotes.map(async (pac) => {
-          const titulo_en = await traduzirParaIngles(pac.titulo);
-          const variantes_en = await Promise.all(
+          const tituloPar = await gerarParBilingue(pac.titulo);
+          const variantesFormatadas = await Promise.all(
             pac.variantes.map(async (varis) => {
-              const var_nome_en = await traduzirParaIngles(varis.nome);
-              return { ...varis, nome_en: var_nome_en };
+              const varPar = await gerarParBilingue(varis.nome);
+              return { ...varis, nome: varPar.pt, nome_en: varPar.en };
             })
           );
-          return { ...pac, titulo_en, variantes: variantes_en };
+          return {
+            ...pac,
+            titulo: tituloPar.pt,
+            titulo_en: tituloPar.en,
+            variantes: variantesFormatadas,
+          };
         })
       );
 
       const alojamentosFormatados = await Promise.all(
         formData.opcoes_alojamento.map(async (aloj) => {
-          const nome_en = await traduzirParaIngles(aloj.nome);
-          return { ...aloj, nome_en };
+          const nomeParAloj = await gerarParBilingue(aloj.nome);
+          return { ...aloj, nome: nomeParAloj.pt, nome_en: nomeParAloj.en };
         })
       );
 
       const descontosFormatados = await Promise.all(
         formData.descontos.map(async (desc) => {
-          const nome_en = await traduzirParaIngles(desc.nome);
-          return { ...desc, nome_en };
+          const nomeParDesc = await gerarParBilingue(desc.nome);
+          return { ...desc, nome: nomeParDesc.pt, nome_en: nomeParDesc.en };
         })
       );
 
@@ -1018,18 +1163,18 @@ export default function EditarCampoParceiro({
       const { error } = await supabase
         .from("campos")
         .update({
-          nome: formData.nome,
-          nome_en,
+          nome: nomePar.pt,
+          nome_en: nomePar.en,
           pais,
           pais_en: paisEn,
           Distrito: pais === "Portugal" ? formData.Distrito : null,
           Distrito_en: pais === "Portugal" ? formData.Distrito : null,
-          local: formData.local,
-          local_en,
+          local: localPar.pt,
+          local_en: localPar.en,
           latitude: coordsFinais ? coordsFinais.lat : null,
           longitude: coordsFinais ? coordsFinais.lon : null,
-          linguas_faladas: linguasFinais,
-          linguas_faladas_en: linguasFinais,
+          linguas_faladas: linguasPt,
+          linguas_faladas_en: linguasEn,
           idade_min: formData.idade_min,
           idade_max: formData.idade_max,
           idade: `${formData.idade_min} aos ${formData.idade_max} anos`,
@@ -1037,14 +1182,14 @@ export default function EditarCampoParceiro({
           preco: precoMinimo,
           vagas_totais: formData.vagas_totais,
           categoria: formData.categoria,
-          categoria_en,
-          politica_cancelamento: formData.politica_cancelamento,
-          politica_cancelamento_en,
+          categoria_en: categoriaEn,
+          politica_cancelamento: politicaPar.pt,
+          politica_cancelamento_en: politicaPar.en,
           tipo_pagamento: formData.tipo_pagamento,
-          descricao: formData.descricao,
-          descricao_en,
-          regras_termos: formData.regras_termos,
-          regras_termos_en,
+          descricao: descricaoPar.pt,
+          descricao_en: descricaoPar.en,
+          regras_termos: regrasPar.pt,
+          regras_termos_en: regrasPar.en,
           imagem: capaUrl,
           galeria: uploadedUrls,
           programas_pdf: programasDocsFinais,
@@ -1059,14 +1204,14 @@ export default function EditarCampoParceiro({
           modalidade_reserva: perfilParceiro.modalidade_reserva,
           descontos: descontosFormatados,
           status_aprovacao: statusFinal,
-          racio_monitores: formData.racio_monitores,
-          racio_monitores_en: formData.racio_monitores,
-          alimentacao: formData.alimentacao,
-          alimentacao_en,
-          alojamento: formData.alojamento,
-          alojamento_en,
-          seguro: formData.seguro,
-          seguro_en,
+          racio_monitores: racioPar.pt,
+          racio_monitores_en: racioPar.en,
+          alimentacao: alimentacaoPar.pt,
+          alimentacao_en: alimentacaoPar.en,
+          alojamento: alojamentoPar.pt,
+          alojamento_en: alojamentoPar.en,
+          seguro: seguroPar.pt,
+          seguro_en: seguroPar.en,
           extra_seguro: formData.extra_seguro,
           tipo_extra_seguro: formData.tipo_extra_seguro,
           extra_transporte: formData.extra_transporte,
@@ -1103,6 +1248,10 @@ export default function EditarCampoParceiro({
     );
   }
 
+  const paisParaMapa = isEn
+    ? PAISES.find((p) => p.pt === pais)?.en || pais
+    : pais;
+
   const mapIframeUrl = mapPreview
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${
         mapPreview.lon - 0.01
@@ -1110,12 +1259,12 @@ export default function EditarCampoParceiro({
         mapPreview.lat + 0.01
       }&layer=mapnik&marker=${mapPreview.lat},${mapPreview.lon}`
     : `https://maps.google.com/maps?q=${encodeURIComponent(
-        `${formData.local}, ${pais}`
+        `${formData.local}, ${paisParaMapa}`
       )}&z=14&output=embed`;
 
   return (
     <div className="max-w-5xl mx-auto font-sans pb-20">
-      {/* HEADER COM ACÇÃO DE GUARDAR DIRETO E APAGAR */}
+      {/* HEADER COM AÇÃO DE GUARDAR DIRETO E APAGAR */}
       <div className="mb-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <Link
@@ -1262,25 +1411,24 @@ export default function EditarCampoParceiro({
                 </div>
                 {isPolDropdownOpen && (
                   <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                    {[
-                      "Flexível (Reembolso a 100% até 7 dias antes)",
-                      "Moderada (Reembolso a 50% até 15 dias antes)",
-                      "Estrita (Sem reembolso após reserva)",
-                    ].map((pol, i) => (
-                      <div
-                        key={i}
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            politica_cancelamento: pol,
-                          });
-                          setIsPolDropdownOpen(false);
-                        }}
-                        className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer"
-                      >
-                        {pol}
-                      </div>
-                    ))}
+                    {POLITICAS_CANCELAMENTO.map((pol, i) => {
+                      const label = isEn ? pol.en : pol.pt;
+                      return (
+                        <div
+                          key={i}
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              politica_cancelamento: label,
+                            });
+                            setIsPolDropdownOpen(false);
+                          }}
+                          className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer"
+                        >
+                          {label}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1345,11 +1493,11 @@ export default function EditarCampoParceiro({
                 </label>
                 <div className="flex flex-wrap gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
                   {[
-                    { k: "pt", label: "🇵🇹 Português" },
-                    { k: "en", label: "🇬🇧 Inglês" },
-                    { k: "es", label: "🇪🇸 Espanhol" },
-                    { k: "fr", label: "🇫🇷 Francês" },
-                    { k: "de", label: "🇩🇪 Alemão" },
+                    { k: "pt", label: isEn ? "🇵🇹 Portuguese" : "🇵🇹 Português" },
+                    { k: "en", label: isEn ? "🇬🇧 English" : "🇬🇧 Inglês" },
+                    { k: "es", label: isEn ? "🇪🇸 Spanish" : "🇪🇸 Espanhol" },
+                    { k: "fr", label: isEn ? "🇫🇷 French" : "🇫🇷 Francês" },
+                    { k: "de", label: isEn ? "🇩🇪 German" : "🇩🇪 Alemão" },
                   ].map((item) => (
                     <label
                       key={item.k}
@@ -1374,7 +1522,9 @@ export default function EditarCampoParceiro({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                      {isEn ? "Country (by Continent) *" : "País (por Continente) *"}
+                      {isEn
+                        ? "Country (by Continent) *"
+                        : "País (por Continente) *"}
                     </label>
                     <select
                       value={pais}
@@ -1402,7 +1552,7 @@ export default function EditarCampoParceiro({
                   {pais === "Portugal" && (
                     <div>
                       <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                        Distrito *
+                        {isEn ? "District *" : "Distrito *"}
                       </label>
                       <select
                         value={formData.Distrito}
@@ -1573,7 +1723,7 @@ export default function EditarCampoParceiro({
               <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
                 <label className="block text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">
                   {isEn
-                    ? "Closed Days (Exceptions)"
+                    ? "Closed Days (Exceptions / Sold Out)"
                     : "Dias de Encerramento (Exceções / Esgotado)"}
                 </label>
                 <div className="flex gap-2 mb-3">
@@ -1588,7 +1738,7 @@ export default function EditarCampoParceiro({
                     onClick={adicionarDiaFechado}
                     className="bg-amber-600 text-white font-bold px-4 rounded-lg text-xs cursor-pointer"
                   >
-                    Bloquear Data
+                    {isEn ? "Block Date" : "Bloquear Data"}
                   </button>
                 </div>
                 {formData.calendario_funcionamento.dias_fechados?.length > 0 && (
@@ -1600,7 +1750,9 @@ export default function EditarCampoParceiro({
                           className="flex items-center gap-2 bg-white border border-amber-300 text-amber-900 px-3 py-1.5 rounded-lg text-xs font-bold"
                         >
                           <span className="line-through">
-                            {new Date(dia).toLocaleDateString("pt-PT")}
+                            {new Date(dia).toLocaleDateString(
+                              isEn ? "en-GB" : "pt-PT"
+                            )}
                           </span>
                           <button
                             type="button"
@@ -1629,7 +1781,7 @@ export default function EditarCampoParceiro({
                   </h2>
                   <p className="text-xs text-slate-500 m-0">
                     {isEn
-                      ? "Manage your packages and price options."
+                      ? "Manage your registration packages and pricing options."
                       : "Gira os seus pacotes de inscrição e opções de preço."}
                   </p>
                 </div>
@@ -1642,7 +1794,11 @@ export default function EditarCampoParceiro({
                       tipo: "semana",
                       quantidade: 1,
                       variantes: [
-                        { nome: "Preço Base", preco: 150, taxa_comissao: null },
+                        {
+                          nome: isEn ? "Base Price" : "Preço Base",
+                          preco: 150,
+                          taxa_comissao: null,
+                        },
                       ],
                     });
                     setIsPacoteModalOpen(true);
@@ -1680,7 +1836,11 @@ export default function EditarCampoParceiro({
                     </div>
                     <div className="inline-block px-2 py-1 bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded mb-2">
                       {pacote.tipo === "semana"
-                        ? `${pacote.quantidade} Semana(s)`
+                        ? isEn
+                          ? `${pacote.quantidade} Week(s)`
+                          : `${pacote.quantidade} Semana(s)`
+                        : isEn
+                        ? `${pacote.quantidade} Day(s)`
                         : `${pacote.quantidade} Dia(s)`}
                     </div>
                     <h3 className="text-base font-black text-slate-900 mb-3 pr-16">
@@ -1713,7 +1873,7 @@ export default function EditarCampoParceiro({
                   <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2">
                     <span>🛏️</span>{" "}
                     {isEn
-                      ? "3. Accommodation Options"
+                      ? "3. Accommodation Options (Checkout Extras)"
                       : "3. Opções de Alojamento (Extras no Checkout)"}
                   </h2>
                 </div>
@@ -1747,7 +1907,7 @@ export default function EditarCampoParceiro({
                           {aloj.nome}
                         </p>
                         <span className="text-xs font-black text-[#167524]">
-                          {aloj.preco}€ / {aloj.tipo}
+                          {aloj.preco}€ / {formatAlojamentoTipo(aloj.tipo)}
                         </span>
                       </div>
                       <div className="flex gap-1.5">
@@ -1779,7 +1939,9 @@ export default function EditarCampoParceiro({
             <div className="pt-8 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Preço Seguro Opcional (€)
+                  {isEn
+                    ? "Optional Insurance Price (€)"
+                    : "Preço Seguro Opcional (€)"}
                 </label>
                 <input
                   type="number"
@@ -1803,14 +1965,20 @@ export default function EditarCampoParceiro({
                   }
                   className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-sm"
                 >
-                  <option value="fixo">Taxa Fixa Única</option>
-                  <option value="diario">Por Semana / Dia</option>
+                  <option value="fixo">
+                    {isEn ? "One-time Fixed Fee" : "Taxa Fixa Única"}
+                  </option>
+                  <option value="diario">
+                    {isEn ? "Per Week / Day" : "Por Semana / Dia"}
+                  </option>
                 </select>
               </div>
 
               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Preço Transporte / Transfer (€)
+                  {isEn
+                    ? "Transport / Transfer Price (€)"
+                    : "Preço Transporte / Transfer (€)"}
                 </label>
                 <input
                   type="number"
@@ -1834,8 +2002,12 @@ export default function EditarCampoParceiro({
                   }
                   className="w-full p-3.5 bg-white border border-slate-200 rounded-xl font-bold text-sm"
                 >
-                  <option value="diario">Por Semana / Dia</option>
-                  <option value="fixo">Taxa Fixa Ida/Volta</option>
+                  <option value="diario">
+                    {isEn ? "Per Week / Day" : "Por Semana / Dia"}
+                  </option>
+                  <option value="fixo">
+                    {isEn ? "Fixed Round-Trip Fee" : "Taxa Fixa Ida/Volta"}
+                  </option>
                 </select>
               </div>
             </div>
@@ -1843,7 +2015,7 @@ export default function EditarCampoParceiro({
             <div className="pt-8 border-t border-slate-100">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-black text-slate-900 m-0">
-                  ✨ {isEn ? "Discounts" : "Regras de Desconto"}
+                  ✨ {isEn ? "Discount Rules" : "Regras de Desconto"}
                 </h3>
                 <button
                   type="button"
@@ -1865,7 +2037,13 @@ export default function EditarCampoParceiro({
                       </p>
                       <p className="text-[10px] font-bold text-slate-500 uppercase m-0 mt-1">
                         {desc.percentagem}% •{" "}
-                        {desc.acumulavel ? "Acumulável" : "Único"}
+                        {desc.acumulavel
+                          ? isEn
+                            ? "Stackable"
+                            : "Acumulável"
+                          : isEn
+                          ? "Single"
+                          : "Único"}
                       </p>
                     </div>
                     <button
@@ -1910,7 +2088,7 @@ export default function EditarCampoParceiro({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200 mt-6">
                 <div>
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-                    Rácio de Monitores
+                    {isEn ? "Staff-to-Camper Ratio" : "Rácio de Monitores"}
                   </label>
                   <input
                     type="text"
@@ -1926,7 +2104,7 @@ export default function EditarCampoParceiro({
                 </div>
                 <div>
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-                    Alimentação
+                    {isEn ? "Meals & Nutrition" : "Alimentação"}
                   </label>
                   <input
                     type="text"
@@ -1939,7 +2117,7 @@ export default function EditarCampoParceiro({
                 </div>
                 <div>
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-                    Alojamento
+                    {isEn ? "Accommodation" : "Alojamento"}
                   </label>
                   <input
                     type="text"
@@ -1952,7 +2130,7 @@ export default function EditarCampoParceiro({
                 </div>
                 <div>
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-                    Seguros
+                    {isEn ? "Insurance" : "Seguros"}
                   </label>
                   <input
                     type="text"
@@ -1967,7 +2145,9 @@ export default function EditarCampoParceiro({
 
               <div className="mt-6">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Regras e Termos Específicos
+                  {isEn
+                    ? "Specific Rules & Terms"
+                    : "Regras e Termos Específicos"}
                 </label>
                 <textarea
                   rows={3}
@@ -1984,14 +2164,16 @@ export default function EditarCampoParceiro({
                 <div className="flex justify-between items-center mb-4">
                   <div>
                     <label className="block text-xs font-black text-slate-800 uppercase tracking-widest m-0">
-                      Galeria de Fotografias *
+                      {isEn ? "Photo Gallery *" : "Galeria de Fotografias *"}
                     </label>
                     <p className="text-[11px] text-slate-500 m-0 mt-1">
-                      Clique numa foto para a definir como Capa (⭐) ou remover.
+                      {isEn
+                        ? "Hover over a photo to set it as Cover (⭐) or remove it."
+                        : "Clique numa foto para a definir como Capa (⭐) ou remover."}
                     </p>
                   </div>
                   <label className="bg-[#167524] text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer">
-                    + Adicionar Fotos
+                    + {isEn ? "Add Photos" : "Adicionar Fotos"}
                     <input
                       type="file"
                       multiple
@@ -2024,7 +2206,7 @@ export default function EditarCampoParceiro({
                             onClick={() => setComoCapa(img.id)}
                             className="bg-white text-slate-900 text-[10px] font-black px-3 py-1.5 rounded-lg cursor-pointer"
                           >
-                            Definir Capa ⭐
+                            {isEn ? "Set as Cover ⭐" : "Definir Capa ⭐"}
                           </button>
                         )}
                         <button
@@ -2032,12 +2214,12 @@ export default function EditarCampoParceiro({
                           onClick={() => removerImagem(img.id)}
                           className="bg-red-500 text-white text-[10px] font-black px-3 py-1.5 rounded-lg cursor-pointer"
                         >
-                          Apagar 🗑️
+                          {isEn ? "Delete 🗑️" : "Apagar 🗑️"}
                         </button>
                       </div>
                       {img.isCapa && (
                         <div className="absolute top-2 left-2 bg-[#167524] text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md">
-                          Capa ⭐
+                          {isEn ? "Cover ⭐" : "Capa ⭐"}
                         </div>
                       )}
                     </div>
@@ -2102,7 +2284,7 @@ export default function EditarCampoParceiro({
                       className="flex justify-between items-center bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-200"
                     >
                       <span className="text-xs font-bold text-emerald-900 truncate">
-                        📄 {doc.name} (Novo)
+                        📄 {doc.name} {isEn ? "(New)" : "(Novo)"}
                       </span>
                       <button
                         type="button"
@@ -2134,14 +2316,14 @@ export default function EditarCampoParceiro({
                     onClick={() => adicionarPergunta("texto")}
                     className="text-[10px] font-black uppercase tracking-widest text-[#167524] bg-[#167524]/10 px-3 py-2.5 rounded-xl cursor-pointer"
                   >
-                    + Pergunta Aberta
+                    + {isEn ? "Open Question" : "Pergunta Aberta"}
                   </button>
                   <button
                     type="button"
                     onClick={() => adicionarPergunta("escolha")}
                     className="text-[10px] font-black uppercase tracking-widest text-white bg-[#167524] px-3 py-2.5 rounded-xl cursor-pointer"
                   >
-                    + Opção Múltipla
+                    + {isEn ? "Multiple Choice" : "Opção Múltipla"}
                   </button>
                 </div>
               </div>
@@ -2170,7 +2352,11 @@ export default function EditarCampoParceiro({
                         onChange={(e) =>
                           atualizarPergunta(p.id, "titulo", e.target.value)
                         }
-                        placeholder="Título da pergunta ou opção..."
+                        placeholder={
+                          isEn
+                            ? "Question or option title..."
+                            : "Título da pergunta ou opção..."
+                        }
                         className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"
                       />
                     </div>
@@ -2181,7 +2367,11 @@ export default function EditarCampoParceiro({
                         onChange={(e) =>
                           atualizarPergunta(p.id, "opcoes", e.target.value)
                         }
-                        placeholder="Opções separadas por vírgula..."
+                        placeholder={
+                          isEn
+                            ? "Comma-separated options..."
+                            : "Opções separadas por vírgula..."
+                        }
                         className="w-full p-3 bg-white border border-emerald-200 rounded-xl text-sm font-bold"
                       />
                     )}
@@ -2239,7 +2429,11 @@ export default function EditarCampoParceiro({
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-black text-slate-900 text-lg m-0">
                 {novoPacote.id
-                  ? "Editar Pacote de Preços"
+                  ? isEn
+                    ? "Edit Pricing Package"
+                    : "Editar Pacote de Preços"
+                  : isEn
+                  ? "New Pricing Package"
                   : "Novo Pacote de Preços"}
               </h3>
               <button
@@ -2264,7 +2458,7 @@ export default function EditarCampoParceiro({
                       : "text-slate-500"
                   }`}
                 >
-                  Semanas Completas
+                  {isEn ? "Full Weeks" : "Semanas Completas"}
                 </button>
                 <button
                   type="button"
@@ -2275,14 +2469,18 @@ export default function EditarCampoParceiro({
                       : "text-slate-500"
                   }`}
                 >
-                  Dias Avulso / Pack de Dias
+                  {isEn
+                    ? "Single Days / Day Pack"
+                    : "Dias Avulso / Pack de Dias"}
                 </button>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                    Nome do Pacote / Inscrição *
+                    {isEn
+                      ? "Package / Registration Name *"
+                      : "Nome do Pacote / Inscrição *"}
                   </label>
                   <input
                     type="text"
@@ -2295,7 +2493,9 @@ export default function EditarCampoParceiro({
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                    Duração ({novoPacote.tipo === "semana" ? "Sem" : "Dias"})
+                    {isEn
+                      ? `Duration (${novoPacote.tipo === "semana" ? "Wks" : "Days"})`
+                      : `Duração (${novoPacote.tipo === "semana" ? "Sem" : "Dias"})`}
                   </label>
                   <input
                     type="number"
@@ -2315,14 +2515,14 @@ export default function EditarCampoParceiro({
               <div className="border-t border-slate-200 pt-5">
                 <div className="flex justify-between items-center mb-3">
                   <label className="text-sm font-black text-slate-900 m-0">
-                    Opções de Preço (€)
+                    {isEn ? "Pricing Options (€)" : "Opções de Preço (€)"}
                   </label>
                   <button
                     type="button"
                     onClick={adicionarVariante}
                     className="text-[10px] font-black uppercase tracking-widest text-[#167524] bg-[#167524]/10 px-3 py-1.5 rounded-lg cursor-pointer"
                   >
-                    + Adicionar Opção de Preço
+                    + {isEn ? "Add Price Option" : "Adicionar Opção de Preço"}
                   </button>
                 </div>
 
@@ -2334,7 +2534,11 @@ export default function EditarCampoParceiro({
                     >
                       <input
                         type="text"
-                        placeholder="Ex: Preço Base / Com Almoço"
+                        placeholder={
+                          isEn
+                            ? "e.g. Base Price / With Lunch"
+                            : "Ex: Preço Base / Com Almoço"
+                        }
                         value={v.nome}
                         onChange={(e) =>
                           atualizarVariante(i, "nome", e.target.value)
@@ -2380,14 +2584,14 @@ export default function EditarCampoParceiro({
                 onClick={() => setIsPacoteModalOpen(false)}
                 className="px-5 py-2.5 font-bold text-slate-600 bg-white border border-slate-200 rounded-xl text-sm cursor-pointer"
               >
-                Cancelar
+                {isEn ? "Cancel" : "Cancelar"}
               </button>
               <button
                 type="button"
                 onClick={guardarPacote}
                 className="px-6 py-2.5 font-black text-white bg-[#167524] rounded-xl text-sm cursor-pointer"
               >
-                ✓ Guardar Preço
+                {isEn ? "✓ Save Price" : "✓ Guardar Preço"}
               </button>
             </div>
           </div>
@@ -2400,7 +2604,7 @@ export default function EditarCampoParceiro({
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-black text-slate-900 text-lg m-0">
-                Opção de Alojamento
+                {isEn ? "Accommodation Option" : "Opção de Alojamento"}
               </h3>
               <button
                 type="button"
@@ -2413,7 +2617,11 @@ export default function EditarCampoParceiro({
             <div className="p-6 flex flex-col gap-4">
               <input
                 type="text"
-                placeholder="Nome da opção de alojamento..."
+                placeholder={
+                  isEn
+                    ? "Accommodation option name..."
+                    : "Nome da opção de alojamento..."
+                }
                 value={novoAlojamento.nome}
                 onChange={(e) =>
                   setNovoAlojamento({ ...novoAlojamento, nome: e.target.value })
@@ -2443,9 +2651,15 @@ export default function EditarCampoParceiro({
                   }
                   className="w-full p-3.5 border border-slate-200 rounded-xl text-sm font-bold bg-slate-50"
                 >
-                  <option value="semana">Por Semana</option>
-                  <option value="dia">Por Noite / Dia</option>
-                  <option value="fixo">Valor Fixo</option>
+                  <option value="semana">
+                    {isEn ? "Per Week" : "Por Semana"}
+                  </option>
+                  <option value="dia">
+                    {isEn ? "Per Night / Day" : "Por Noite / Dia"}
+                  </option>
+                  <option value="fixo">
+                    {isEn ? "Fixed Fee" : "Valor Fixo"}
+                  </option>
                 </select>
               </div>
             </div>
@@ -2455,14 +2669,14 @@ export default function EditarCampoParceiro({
                 onClick={() => setIsAlojamentoModalOpen(false)}
                 className="px-5 py-2.5 rounded-xl font-bold border border-slate-200 bg-white text-sm cursor-pointer"
               >
-                Cancelar
+                {isEn ? "Cancel" : "Cancelar"}
               </button>
               <button
                 type="button"
                 onClick={guardarAlojamento}
                 className="px-6 py-2.5 rounded-xl font-black bg-[#0E3A68] text-white text-sm cursor-pointer"
               >
-                ✓ Guardar
+                {isEn ? "✓ Save" : "✓ Guardar"}
               </button>
             </div>
           </div>
@@ -2475,7 +2689,7 @@ export default function EditarCampoParceiro({
           <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-black text-slate-900 text-lg m-0">
-                Regra de Desconto
+                {isEn ? "Discount Rule" : "Regra de Desconto"}
               </h3>
               <button
                 type="button"
@@ -2488,7 +2702,9 @@ export default function EditarCampoParceiro({
             <div className="p-6 flex flex-col gap-4 bg-slate-50">
               <input
                 type="text"
-                placeholder="Ex: Desconto Irmãos"
+                placeholder={
+                  isEn ? "e.g. Sibling Discount" : "Ex: Desconto Irmãos"
+                }
                 value={novoDesconto.nome}
                 onChange={(e) =>
                   setNovoDesconto({ ...novoDesconto, nome: e.target.value })
@@ -2510,7 +2726,7 @@ export default function EditarCampoParceiro({
               />
               <label className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 cursor-pointer">
                 <span className="text-sm font-black text-slate-900">
-                  É Acumulável?
+                  {isEn ? "Stackable?" : "É Acumulável?"}
                 </span>
                 <input
                   type="checkbox"
@@ -2531,14 +2747,14 @@ export default function EditarCampoParceiro({
                 onClick={() => setIsDescontoModalOpen(false)}
                 className="px-5 py-2.5 rounded-xl font-bold border border-slate-200 bg-white text-sm cursor-pointer"
               >
-                Cancelar
+                {isEn ? "Cancel" : "Cancelar"}
               </button>
               <button
                 type="button"
                 onClick={guardarDesconto}
                 className="px-6 py-2.5 rounded-xl font-black bg-[#167524] text-white text-sm cursor-pointer"
               >
-                ✓ Guardar
+                {isEn ? "✓ Save" : "✓ Guardar"}
               </button>
             </div>
           </div>
