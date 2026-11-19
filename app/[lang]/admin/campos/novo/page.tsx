@@ -60,6 +60,21 @@ const CATEGORIAS = [
   { id: "Línguas", pt: "Línguas", en: "Languages", icon: "🗣️" },
 ];
 
+const POLITICAS_CANCELAMENTO = [
+  {
+    pt: "Flexível (Reembolso a 100% até 7 dias antes)",
+    en: "Flexible (100% refund up to 7 days before)",
+  },
+  {
+    pt: "Moderada (Reembolso a 50% até 15 dias antes)",
+    en: "Moderate (50% refund up to 15 days before)",
+  },
+  {
+    pt: "Estrita (Sem reembolso após reserva)",
+    en: "Strict (No refund after booking)",
+  },
+];
+
 const DISTRITOS_PT = [
   "Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra",
   "Évora", "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre",
@@ -195,10 +210,10 @@ export default function NovoCampoParceiro({
   });
 
   // Estados de Localização e Línguas
-  const [pais, setPais] = useState("Portugal");
+  const [pais, setPais] = useState(isEn ? "Reino Unido" : "Portugal");
   const [linguas, setLinguas] = useState({
-    pt: true,
-    en: false,
+    pt: !isEn,
+    en: isEn,
     es: false,
     fr: false,
     de: false,
@@ -226,14 +241,24 @@ export default function NovoCampoParceiro({
     idade_min: 6,
     idade_max: 16,
     vagas_totais: 30,
-    politica_cancelamento: "Flexível (Reembolso a 100% até 7 dias antes)",
+    politica_cancelamento: isEn
+      ? POLITICAS_CANCELAMENTO[0].en
+      : POLITICAS_CANCELAMENTO[0].pt,
     tipo_pagamento: "100_total",
     descricao: "",
     regras_termos: "",
-    racio_monitores: "1 monitor para cada 10 participantes",
-    alimentacao: "Almoço e lanches incluídos",
-    alojamento: "Atividades diurnas (Sem dormida)",
-    seguro: "Seguro de Acidentes Pessoais e Responsabilidade Civil incluído",
+    racio_monitores: isEn
+      ? "1 monitor per 10 participants"
+      : "1 monitor para cada 10 participantes",
+    alimentacao: isEn
+      ? "Lunch and snacks included"
+      : "Almoço e lanches incluídos",
+    alojamento: isEn
+      ? "Day camp activities (No overnight stay)"
+      : "Atividades diurnas (Sem dormida)",
+    seguro: isEn
+      ? "Personal Accident and Civil Liability Insurance included"
+      : "Seguro de Acidentes Pessoais e Responsabilidade Civil incluído",
     extra_seguro: 0,
     tipo_extra_seguro: "fixo",
     extra_transporte: 0,
@@ -265,7 +290,9 @@ export default function NovoCampoParceiro({
     titulo: "",
     tipo: "semana",
     quantidade: 1,
-    variantes: [{ nome: "Preço Base", preco: 150, taxa_comissao: null }],
+    variantes: [
+      { nome: isEn ? "Base Price" : "Preço Base", preco: 150, taxa_comissao: null },
+    ],
   });
 
   const [isAlojamentoModalOpen, setIsAlojamentoModalOpen] = useState(false);
@@ -303,14 +330,25 @@ export default function NovoCampoParceiro({
           .single(),
         supabase
           .from("campos")
-          .select("contrato_parceiro_url")
+          .select("contrato_parceiro_url, pais")
           .eq("organizador_id", session.user.id)
-          .not("contrato_parceiro_url", "is", null)
-          .limit(1),
+          .limit(5),
       ]);
 
       const urlContratoGlobal =
-        camposExistentes?.[0]?.contrato_parceiro_url || null;
+        camposExistentes?.find((c) => c.contrato_parceiro_url)
+          ?.contrato_parceiro_url || null;
+
+      // Herdar país de um campo já existente do parceiro, se houver
+      const paisExistente = camposExistentes?.find((c) => c.pais)?.pais;
+      if (paisExistente) {
+        const matchPais = PAISES.find(
+          (p) =>
+            p.pt.toLowerCase() === paisExistente.toLowerCase() ||
+            p.en.toLowerCase() === paisExistente.toLowerCase()
+        );
+        if (matchPais) setPais(matchPais.pt);
+      }
 
       if (perfil) {
         const taxa = Number(perfil.taxa_comissao) || 12;
@@ -330,12 +368,29 @@ export default function NovoCampoParceiro({
           contrato_global_url: urlContratoGlobal,
         });
 
+        const polRaw =
+          perfil.contrato_dados?.politicaCancelamento ||
+          perfil.contrato_dados?.politica_cancelamento;
+        let polNormalizada = isEn
+          ? POLITICAS_CANCELAMENTO[0].en
+          : POLITICAS_CANCELAMENTO[0].pt;
+
+        if (polRaw) {
+          const polMatch = POLITICAS_CANCELAMENTO.find(
+            (p) =>
+              p.pt.toLowerCase() === String(polRaw).toLowerCase() ||
+              p.en.toLowerCase() === String(polRaw).toLowerCase()
+          );
+          polNormalizada = polMatch
+            ? isEn
+              ? polMatch.en
+              : polMatch.pt
+            : polRaw;
+        }
+
         setFormData((prev) => ({
           ...prev,
-          politica_cancelamento:
-            perfil.contrato_dados?.politicaCancelamento ||
-            perfil.contrato_dados?.politica_cancelamento ||
-            prev.politica_cancelamento,
+          politica_cancelamento: polNormalizada,
           tipo_pagamento:
             perfil.contrato_dados?.tipoPagamento ||
             perfil.contrato_dados?.tipo_pagamento ||
@@ -348,13 +403,18 @@ export default function NovoCampoParceiro({
       }
     };
     carregarPerfil();
-  }, []);
+  }, [isEn]);
 
   // Geocodificação da morada (OpenStreetMap Nominatim) para colocar o pino no Mapa Interativo
   const buscarNoMapaManual = async () => {
     if (!formData.local.trim()) return;
     try {
-      const query = `${formData.local}, ${pais === "Portugal" && formData.Distrito ? formData.Distrito + ", " : ""}${pais}`;
+      const paisConsulta = isEn
+        ? PAISES.find((p) => p.pt === pais)?.en || pais
+        : pais;
+      const query = `${formData.local}, ${
+        pais === "Portugal" && formData.Distrito ? formData.Distrito + ", " : ""
+      }${paisConsulta}`;
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4`
       );
@@ -367,7 +427,7 @@ export default function NovoCampoParceiro({
         });
       }
     } catch (e) {
-      console.error("Erro na geocodificação:", e);
+      console.error("Geocoding error:", e);
     }
   };
 
@@ -375,18 +435,22 @@ export default function NovoCampoParceiro({
     setLinguas((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const getLinguasString = () => {
-    const mapNomes: Record<string, string> = {
-      pt: "Português",
-      en: "Inglês",
-      es: "Espanhol",
-      fr: "Francês",
-      de: "Alemão",
+  const getLinguasString = (target: "pt" | "en") => {
+    const mapNomes: Record<string, { pt: string; en: string }> = {
+      pt: { pt: "Português", en: "Portuguese" },
+      en: { pt: "Inglês", en: "English" },
+      es: { pt: "Espanhol", en: "Spanish" },
+      fr: { pt: "Francês", en: "French" },
+      de: { pt: "Alemão", en: "German" },
     };
     const ativas = Object.entries(linguas)
       .filter(([_, val]) => val)
-      .map(([k]) => mapNomes[k]);
-    return ativas.length > 0 ? ativas.join(", ") : "Português";
+      .map(([k]) => mapNomes[k][target]);
+    return ativas.length > 0
+      ? ativas.join(", ")
+      : target === "en"
+      ? "English"
+      : "Português";
   };
 
   const getCatName = (catId: string) => {
@@ -491,7 +555,7 @@ export default function NovoCampoParceiro({
     if (variantesLimpas.length === 0) {
       alert(
         isEn
-          ? "Add at least one price option."
+          ? "Add at least one valid price option."
           : "Adicione pelo menos uma opção de preço válida."
       );
       return;
@@ -518,7 +582,9 @@ export default function NovoCampoParceiro({
       titulo: "",
       tipo: "semana",
       quantidade: 1,
-      variantes: [{ nome: "Preço Base", preco: 150, taxa_comissao: null }],
+      variantes: [
+        { nome: isEn ? "Base Price" : "Preço Base", preco: 150, taxa_comissao: null },
+      ],
     });
     setIsPacoteModalOpen(false);
   };
@@ -681,19 +747,32 @@ export default function NovoCampoParceiro({
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Tradução Automática Segura
-  const traduzirParaIngles = async (texto: string) => {
+  // Tradução Bidirecional Segura (PT <-> EN)
+  const traduzirTexto = async (texto: string, pair: "pt|en" | "en|pt") => {
     if (!texto || !texto.trim()) return "";
     try {
       const res = await fetch(
         `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
           texto.substring(0, 480)
-        )}&langpair=pt|en`
+        )}&langpair=${pair}`
       );
       const data = await res.json();
       return data?.responseData?.translatedText || texto;
     } catch {
       return texto;
+    }
+  };
+
+  const gerarParBilingue = async (textoAtual: string) => {
+    if (!textoAtual || !textoAtual.trim()) {
+      return { pt: "", en: "" };
+    }
+    if (isEn) {
+      const pt = await traduzirTexto(textoAtual, "en|pt");
+      return { pt, en: textoAtual };
+    } else {
+      const en = await traduzirTexto(textoAtual, "pt|en");
+      return { pt: textoAtual, en };
     }
   };
 
@@ -725,13 +804,23 @@ export default function NovoCampoParceiro({
     }
 
     setSaving(true);
-    setStatusText(isEn ? "Uploading photos & brochures..." : "A carregar fotografias e documentos...");
+    setStatusText(
+      isEn
+        ? "Uploading photos & brochures..."
+        : "A carregar fotografias e documentos..."
+    );
 
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+      if (!session) {
+        throw new Error(
+          isEn
+            ? "Session expired. Please log in again."
+            : "Sessão expirada. Faça login novamente."
+        );
+      }
 
       // 1. Upload de Fotografias
       const uploadedUrls: string[] = [];
@@ -744,8 +833,13 @@ export default function NovoCampoParceiro({
           const { error: uploadError } = await supabase.storage
             .from("campos-imagens")
             .upload(fileName, img.file);
-          if (uploadError)
-            throw new Error(`Erro ao enviar fotografia: ${uploadError.message}`);
+          if (uploadError) {
+            throw new Error(
+              `${isEn ? "Error uploading photo: " : "Erro ao enviar fotografia: "}${
+                uploadError.message
+              }`
+            );
+          }
 
           const {
             data: { publicUrl },
@@ -770,7 +864,13 @@ export default function NovoCampoParceiro({
         const { error: docErr } = await supabase.storage
           .from("campos-documentos")
           .upload(fileName, doc);
-        if (docErr) throw new Error(`Erro ao carregar PDF: ${docErr.message}`);
+        if (docErr) {
+          throw new Error(
+            `${isEn ? "Error uploading PDF: " : "Erro ao carregar PDF: "}${
+              docErr.message
+            }`
+          );
+        }
         const {
           data: { publicUrl },
         } = supabase.storage.from("campos-documentos").getPublicUrl(fileName);
@@ -794,33 +894,46 @@ export default function NovoCampoParceiro({
 
       setStatusText(
         isEn
-          ? "Translating content to English (AI)..."
-          : "A traduzir automaticamente para Inglês (IA)..."
+          ? "Syncing bilingual translations (AI)..."
+          : "A sincronizar traduções bilingues (IA)..."
       );
 
       const paisEn = PAISES.find((p) => p.pt === pais)?.en || pais;
-      const linguasFinais = getLinguasString();
+      const categoriaObj = CATEGORIAS.find((c) => c.id === formData.categoria);
+      const categoriaEn = categoriaObj ? categoriaObj.en : formData.categoria;
 
+      const linguasPt = getLinguasString("pt");
+      const linguasEn = getLinguasString("en");
+
+      // Política de cancelamento bilingue
+      const polPadrao = POLITICAS_CANCELAMENTO.find(
+        (p) =>
+          p.pt === formData.politica_cancelamento ||
+          p.en === formData.politica_cancelamento
+      );
+      const politicaPar = polPadrao
+        ? { pt: polPadrao.pt, en: polPadrao.en }
+        : await gerarParBilingue(formData.politica_cancelamento);
+
+      // Todas as colunas textuais traduzidas bidirecionalmente (incluindo racio_monitores!)
       const [
-        nome_en,
-        categoria_en,
-        local_en,
-        descricao_en,
-        alimentacao_en,
-        alojamento_en,
-        seguro_en,
-        regras_termos_en,
-        politica_cancelamento_en,
+        nomePar,
+        localPar,
+        descricaoPar,
+        racioPar,
+        alimentacaoPar,
+        alojamentoPar,
+        seguroPar,
+        regrasPar,
       ] = await Promise.all([
-        traduzirParaIngles(formData.nome),
-        traduzirParaIngles(formData.categoria),
-        traduzirParaIngles(formData.local),
-        traduzirParaIngles(formData.descricao),
-        traduzirParaIngles(formData.alimentacao),
-        traduzirParaIngles(formData.alojamento),
-        traduzirParaIngles(formData.seguro),
-        traduzirParaIngles(formData.regras_termos),
-        traduzirParaIngles(formData.politica_cancelamento),
+        gerarParBilingue(formData.nome),
+        gerarParBilingue(formData.local),
+        gerarParBilingue(formData.descricao),
+        gerarParBilingue(formData.racio_monitores),
+        gerarParBilingue(formData.alimentacao),
+        gerarParBilingue(formData.alojamento),
+        gerarParBilingue(formData.seguro),
+        gerarParBilingue(formData.regras_termos),
       ]);
 
       setStatusText(
@@ -830,60 +943,65 @@ export default function NovoCampoParceiro({
       );
 
       // 4. Traduzir Perguntas e Opções Múltiplas
-      const perguntasPtLimpas = formData.perguntasUI.filter(
+      const perguntasLimpas = formData.perguntasUI.filter(
         (p) => p.titulo.trim() !== ""
       );
       const perguntasFormatadasPT: string[] = [];
       const perguntasFormatadasEN: string[] = [];
 
-      for (const p of perguntasPtLimpas) {
-        const titulo_en = await traduzirParaIngles(p.titulo.trim());
+      for (const p of perguntasLimpas) {
+        const tituloPar = await gerarParBilingue(p.titulo.trim());
         if (p.tipo === "escolha") {
           const opcoesArray = p.opcoes
             .split(",")
             .map((o) => o.trim())
             .filter(Boolean);
-          const opcoesArray_en = await Promise.all(
-            opcoesArray.map((o) => traduzirParaIngles(o))
+          const opcoesPares = await Promise.all(
+            opcoesArray.map((o) => gerarParBilingue(o))
           );
           perguntasFormatadasPT.push(
-            `ESCOLHA|${p.titulo.trim()}|${opcoesArray.join(", ")}`
+            `ESCOLHA|${tituloPar.pt}|${opcoesPares.map((x) => x.pt).join(", ")}`
           );
           perguntasFormatadasEN.push(
-            `ESCOLHA|${titulo_en}|${opcoesArray_en.join(", ")}`
+            `ESCOLHA|${tituloPar.en}|${opcoesPares.map((x) => x.en).join(", ")}`
           );
         } else {
-          perguntasFormatadasPT.push(`TEXTO|${p.titulo.trim()}`);
-          perguntasFormatadasEN.push(`TEXTO|${titulo_en}`);
+          perguntasFormatadasPT.push(`TEXTO|${tituloPar.pt}`);
+          perguntasFormatadasEN.push(`TEXTO|${tituloPar.en}`);
         }
       }
 
       // 5. Traduzir Pacotes e Variantes de Preço
       const pacotesFormatados = await Promise.all(
         formData.pacotes.map(async (pac) => {
-          const titulo_en = await traduzirParaIngles(pac.titulo);
-          const variantes_en = await Promise.all(
+          const tituloPar = await gerarParBilingue(pac.titulo);
+          const variantesFormatadas = await Promise.all(
             pac.variantes.map(async (varis) => {
-              const var_nome_en = await traduzirParaIngles(varis.nome);
-              return { ...varis, nome_en: var_nome_en };
+              const varPar = await gerarParBilingue(varis.nome);
+              return { ...varis, nome: varPar.pt, nome_en: varPar.en };
             })
           );
-          return { ...pac, titulo_en, variantes: variantes_en };
+          return {
+            ...pac,
+            titulo: tituloPar.pt,
+            titulo_en: tituloPar.en,
+            variantes: variantesFormatadas,
+          };
         })
       );
 
       // 6. Traduzir Alojamento e Descontos
       const alojamentosFormatados = await Promise.all(
         formData.opcoes_alojamento.map(async (aloj) => {
-          const nome_en = await traduzirParaIngles(aloj.nome);
-          return { ...aloj, nome_en };
+          const nomeParAloj = await gerarParBilingue(aloj.nome);
+          return { ...aloj, nome: nomeParAloj.pt, nome_en: nomeParAloj.en };
         })
       );
 
       const descontosFormatados = await Promise.all(
         formData.descontos.map(async (desc) => {
-          const nome_en = await traduzirParaIngles(desc.nome);
-          return { ...desc, nome_en };
+          const nomeParDesc = await gerarParBilingue(desc.nome);
+          return { ...desc, nome: nomeParDesc.pt, nome_en: nomeParDesc.en };
         })
       );
 
@@ -916,18 +1034,18 @@ export default function NovoCampoParceiro({
 
       const { error } = await supabase.from("campos").insert({
         organizador_id: session.user.id,
-        nome: formData.nome,
-        nome_en,
+        nome: nomePar.pt,
+        nome_en: nomePar.en,
         pais,
         pais_en: paisEn,
         Distrito: pais === "Portugal" ? formData.Distrito : null,
         Distrito_en: pais === "Portugal" ? formData.Distrito : null,
-        local: formData.local,
-        local_en,
+        local: localPar.pt,
+        local_en: localPar.en,
         latitude: coordsFinais ? coordsFinais.lat : null,
         longitude: coordsFinais ? coordsFinais.lon : null,
-        linguas_faladas: linguasFinais,
-        linguas_faladas_en: linguasFinais,
+        linguas_faladas: linguasPt,
+        linguas_faladas_en: linguasEn,
         idade_min: formData.idade_min,
         idade_max: formData.idade_max,
         idade: `${formData.idade_min} aos ${formData.idade_max} anos`,
@@ -935,14 +1053,14 @@ export default function NovoCampoParceiro({
         preco: precoMinimo,
         vagas_totais: formData.vagas_totais,
         categoria: formData.categoria,
-        categoria_en,
-        politica_cancelamento: formData.politica_cancelamento,
-        politica_cancelamento_en,
+        categoria_en: categoriaEn,
+        politica_cancelamento: politicaPar.pt,
+        politica_cancelamento_en: politicaPar.en,
         tipo_pagamento: formData.tipo_pagamento,
-        descricao: formData.descricao,
-        descricao_en,
-        regras_termos: formData.regras_termos,
-        regras_termos_en,
+        descricao: descricaoPar.pt,
+        descricao_en: descricaoPar.en,
+        regras_termos: regrasPar.pt,
+        regras_termos_en: regrasPar.en,
         imagem: capaUrl,
         galeria: uploadedUrls,
         programas_pdf: programasDocsFinais,
@@ -961,14 +1079,14 @@ export default function NovoCampoParceiro({
         descontos: descontosFormatados,
         status_aprovacao: parceiroJaValidado ? "Aprovado" : "Pendente",
         ativo: true,
-        racio_monitores: formData.racio_monitores,
-        racio_monitores_en: formData.racio_monitores,
-        alimentacao: formData.alimentacao,
-        alimentacao_en,
-        alojamento: formData.alojamento,
-        alojamento_en,
-        seguro: formData.seguro,
-        seguro_en,
+        racio_monitores: racioPar.pt,
+        racio_monitores_en: racioPar.en,
+        alimentacao: alimentacaoPar.pt,
+        alimentacao_en: alimentacaoPar.en,
+        alojamento: alojamentoPar.pt,
+        alojamento_en: alojamentoPar.en,
+        seguro: seguroPar.pt,
+        seguro_en: seguroPar.en,
         extra_seguro: formData.extra_seguro,
         tipo_extra_seguro: formData.tipo_extra_seguro,
         extra_transporte: formData.extra_transporte,
@@ -999,6 +1117,10 @@ export default function NovoCampoParceiro({
     }
   };
 
+  const paisParaMapa = isEn
+    ? PAISES.find((p) => p.pt === pais)?.en || pais
+    : pais;
+
   const mapIframeUrl = mapPreview
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${
         mapPreview.lon - 0.01
@@ -1006,7 +1128,7 @@ export default function NovoCampoParceiro({
         mapPreview.lat + 0.01
       }&layer=mapnik&marker=${mapPreview.lat},${mapPreview.lon}`
     : `https://maps.google.com/maps?q=${encodeURIComponent(
-        `${formData.local}, ${pais}`
+        `${formData.local}, ${paisParaMapa}`
       )}&z=14&output=embed`;
 
   return (
@@ -1148,25 +1270,24 @@ export default function NovoCampoParceiro({
                       onClick={() => setIsPolDropdownOpen(false)}
                     />
                     <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                      {[
-                        "Flexível (Reembolso a 100% até 7 dias antes)",
-                        "Moderada (Reembolso a 50% até 15 dias antes)",
-                        "Estrita (Sem reembolso após reserva)",
-                      ].map((pol, i) => (
-                        <div
-                          key={i}
-                          onClick={() => {
-                            setFormData({
-                              ...formData,
-                              politica_cancelamento: pol,
-                            });
-                            setIsPolDropdownOpen(false);
-                          }}
-                          className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer transition-colors"
-                        >
-                          {pol}
-                        </div>
-                      ))}
+                      {POLITICAS_CANCELAMENTO.map((pol, i) => {
+                        const label = isEn ? pol.en : pol.pt;
+                        return (
+                          <div
+                            key={i}
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                politica_cancelamento: label,
+                              });
+                              setIsPolDropdownOpen(false);
+                            }}
+                            className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer transition-colors"
+                          >
+                            {label}
+                          </div>
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -1241,11 +1362,11 @@ export default function NovoCampoParceiro({
                 </label>
                 <div className="flex flex-wrap gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
                   {[
-                    { k: "pt", label: "🇵🇹 Português" },
-                    { k: "en", label: "🇬🇧 Inglês" },
-                    { k: "es", label: "🇪🇸 Espanhol" },
-                    { k: "fr", label: "🇫🇷 Francês" },
-                    { k: "de", label: "🇩🇪 Alemão" },
+                    { k: "pt", label: isEn ? "🇵🇹 Portuguese" : "🇵🇹 Português" },
+                    { k: "en", label: isEn ? "🇬🇧 English" : "🇬🇧 Inglês" },
+                    { k: "es", label: isEn ? "🇪🇸 Spanish" : "🇪🇸 Espanhol" },
+                    { k: "fr", label: isEn ? "🇫🇷 French" : "🇫🇷 Francês" },
+                    { k: "de", label: isEn ? "🇩🇪 German" : "🇩🇪 Alemão" },
                   ].map((item) => (
                     <label
                       key={item.k}
@@ -1274,7 +1395,9 @@ export default function NovoCampoParceiro({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                      {isEn ? "Country (by Continent) *" : "País (por Continente) *"}
+                      {isEn
+                        ? "Country (by Continent) *"
+                        : "País (por Continente) *"}
                     </label>
                     <select
                       value={pais}
@@ -1302,7 +1425,7 @@ export default function NovoCampoParceiro({
                   {pais === "Portugal" && (
                     <div>
                       <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                        Distrito *
+                        {isEn ? "District *" : "Distrito *"}
                       </label>
                       <select
                         value={formData.Distrito}
@@ -1409,7 +1532,7 @@ export default function NovoCampoParceiro({
         )}
 
         {/* ========================================== */}
-        {/* PASSO 2: PREÇOS, ALOJAMENTO EXTRA & REGRAS DE COMISSÃO */}
+        {/* PASSO 2: PREÇOS, ALOJAMENTO EXTRA & SUPLEMENTOS */}
         {/* ========================================== */}
         {step === 2 && (
           <div className="space-y-10">
@@ -1534,7 +1657,9 @@ export default function NovoCampoParceiro({
                           className="flex items-center gap-2 bg-white border border-amber-300 text-amber-900 px-3 py-1.5 rounded-lg text-xs font-bold"
                         >
                           <span className="line-through opacity-80">
-                            {new Date(dia).toLocaleDateString("pt-PT")}
+                            {new Date(dia).toLocaleDateString(
+                              isEn ? "en-GB" : "pt-PT"
+                            )}
                           </span>
                           <button
                             type="button"
@@ -1576,7 +1701,11 @@ export default function NovoCampoParceiro({
                       tipo: "semana",
                       quantidade: 1,
                       variantes: [
-                        { nome: "Preço Base", preco: 150, taxa_comissao: null },
+                        {
+                          nome: isEn ? "Base Price" : "Preço Base",
+                          preco: 150,
+                          taxa_comissao: null,
+                        },
                       ],
                     });
                     setIsPacoteModalOpen(true);
@@ -1624,7 +1753,11 @@ export default function NovoCampoParceiro({
                       </div>
                       <div className="inline-block px-2 py-1 bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded mb-2">
                         {pacote.tipo === "semana"
-                          ? `${pacote.quantidade} Semana(s)`
+                          ? isEn
+                            ? `${pacote.quantidade} Week(s)`
+                            : `${pacote.quantidade} Semana(s)`
+                          : isEn
+                          ? `${pacote.quantidade} Day(s)`
                           : `${pacote.quantidade} Dia(s)`}
                       </div>
                       <h3 className="text-base font-black text-slate-900 leading-tight mb-3 pr-16">
@@ -1643,7 +1776,7 @@ export default function NovoCampoParceiro({
                               {v.taxa_comissao !== null &&
                                 v.taxa_comissao !== undefined && (
                                   <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
-                                    {v.taxa_comissao}% Com.
+                                    {v.taxa_comissao}% {isEn ? "Comm." : "Com."}
                                   </span>
                                 )}
                               <span className="text-sm font-black text-[#167524]">
@@ -1696,7 +1829,7 @@ export default function NovoCampoParceiro({
               {formData.opcoes_alojamento.length === 0 ? (
                 <div className="p-5 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-xs font-bold text-slate-400">
                   {isEn
-                    ? "No extra accommodation options configured."
+                    ? "No extra accommodation options configured (applicable to day camps or programs with accommodation already included)."
                     : "Sem opções de alojamento extra configuradas (aplicável a campos diurnos ou programas com alojamento já incluído no preço)."}
                 </div>
               ) : (
@@ -1714,13 +1847,19 @@ export default function NovoCampoParceiro({
                           <span className="text-xs font-black text-[#167524]">
                             {aloj.preco}€ /{" "}
                             {aloj.tipo === "semana"
-                              ? "semana"
+                              ? isEn
+                                ? "week"
+                                : "semana"
                               : aloj.tipo === "dia"
-                              ? "noite"
+                              ? isEn
+                                ? "night"
+                                : "noite"
+                              : isEn
+                              ? "fixed"
                               : "fixo"}
                           </span>
                           <span className="text-[9px] font-black uppercase tracking-widest bg-blue-100 text-[#0E3A68] px-2 py-0.5 rounded">
-                            Comissão: {aloj.taxa_comissao}%
+                            {isEn ? "Commission:" : "Comissão:"} {aloj.taxa_comissao}%
                           </span>
                         </div>
                       </div>
@@ -1759,7 +1898,7 @@ export default function NovoCampoParceiro({
               </h2>
               <p className="text-xs text-slate-500 mb-6">
                 {isEn
-                  ? "Set optional insurance, transport/transfer prices, and registration fees."
+                  ? "Set optional insurance, transport/transfer prices, and registration fees (leave 0€ if already included)."
                   : "Configure suplementos opcionais de seguro, transporte/transfer e taxas de inscrição (deixe 0€ se já estiver incluído)."}
               </p>
 
@@ -1790,7 +1929,11 @@ export default function NovoCampoParceiro({
                   >
                     <span>
                       {formData.tipo_extra_seguro === "fixo"
-                        ? "Taxa Fixa (Cobra 1x no total)"
+                        ? isEn
+                          ? "Fixed Fee (Charged once in total)"
+                          : "Taxa Fixa (Cobra 1x no total)"
+                        : isEn
+                        ? "Per Week/Day (Multiplied by duration)"
                         : "Por Semana/Dia (Multiplica pela duração)"}
                     </span>
                     <span className="text-[10px] text-slate-400">▼</span>
@@ -1804,7 +1947,9 @@ export default function NovoCampoParceiro({
                         }}
                         className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer"
                       >
-                        Taxa Fixa (Cobra 1x no total)
+                        {isEn
+                          ? "Fixed Fee (Charged once in total)"
+                          : "Taxa Fixa (Cobra 1x no total)"}
                       </div>
                       <div
                         onClick={() => {
@@ -1816,7 +1961,9 @@ export default function NovoCampoParceiro({
                         }}
                         className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer"
                       >
-                        Por Semana/Dia (Multiplica pela duração)
+                        {isEn
+                          ? "Per Week/Day (Multiplied by duration)"
+                          : "Por Semana/Dia (Multiplica pela duração)"}
                       </div>
                     </div>
                   )}
@@ -1850,7 +1997,11 @@ export default function NovoCampoParceiro({
                   >
                     <span>
                       {formData.tipo_extra_transporte === "diario"
-                        ? "Por Semana/Dia (Multiplica pela duração)"
+                        ? isEn
+                          ? "Per Week/Day (Multiplied by duration)"
+                          : "Por Semana/Dia (Multiplica pela duração)"
+                        : isEn
+                        ? "Fixed Round-Trip Fee (Charged once)"
                         : "Taxa Fixa Ida/Volta (Cobra 1x no total)"}
                     </span>
                     <span className="text-[10px] text-slate-400">▼</span>
@@ -1867,7 +2018,9 @@ export default function NovoCampoParceiro({
                         }}
                         className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer"
                       >
-                        Por Semana/Dia (Multiplica pela duração)
+                        {isEn
+                          ? "Per Week/Day (Multiplied by duration)"
+                          : "Por Semana/Dia (Multiplica pela duração)"}
                       </div>
                       <div
                         onClick={() => {
@@ -1879,7 +2032,9 @@ export default function NovoCampoParceiro({
                         }}
                         className="p-3.5 hover:bg-[#167524]/5 text-sm font-bold text-slate-700 cursor-pointer"
                       >
-                        Taxa Fixa Ida/Volta (Cobra 1x no total)
+                        {isEn
+                          ? "Fixed Round-Trip Fee (Charged once)"
+                          : "Taxa Fixa Ida/Volta (Cobra 1x no total)"}
                       </div>
                     </div>
                   )}
@@ -1933,7 +2088,9 @@ export default function NovoCampoParceiro({
                 <div>
                   <h2 className="text-xl font-black text-slate-900 mb-1 flex items-center gap-2">
                     <span>✨</span>{" "}
-                    {isEn ? "5. Automatic Discounts" : "5. Descontos (Irmãos / Semanas Extra)"}
+                    {isEn
+                      ? "5. Automatic Discounts (Siblings / Extra Weeks)"
+                      : "5. Descontos (Irmãos / Semanas Extra)"}
                   </h2>
                   <p className="text-xs text-slate-500 m-0">
                     {isEn
@@ -1967,7 +2124,13 @@ export default function NovoCampoParceiro({
                         </p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 m-0">
                           {desc.percentagem}% •{" "}
-                          {desc.acumulavel ? "Acumulável ✅" : "Não Acumulável 🚫"}
+                          {desc.acumulavel
+                            ? isEn
+                              ? "Combinable ✅"
+                              : "Acumulável ✅"
+                            : isEn
+                            ? "Not Combinable 🚫"
+                            : "Não Acumulável 🚫"}
                         </p>
                       </div>
                       <button
@@ -2030,7 +2193,7 @@ export default function NovoCampoParceiro({
                 </div>
                 <div>
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-                    {isEn ? "Monitor Ratio" : "Rácio de Monitores"}
+                    {isEn ? "Staff-to-Camper Ratio" : "Rácio de Monitores"}
                   </label>
                   <input
                     type="text"
@@ -2163,7 +2326,7 @@ export default function NovoCampoParceiro({
                               onClick={() => setComoCapa(img.id)}
                               className="bg-white text-slate-900 text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm cursor-pointer"
                             >
-                              Definir Capa ⭐
+                              {isEn ? "Set as Cover ⭐" : "Definir Capa ⭐"}
                             </button>
                           )}
                           <button
@@ -2171,12 +2334,12 @@ export default function NovoCampoParceiro({
                             onClick={() => removerImagem(img.id)}
                             className="bg-red-500 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm cursor-pointer"
                           >
-                            Apagar 🗑️
+                            {isEn ? "Delete 🗑️" : "Apagar 🗑️"}
                           </button>
                         </div>
                         {img.isCapa && (
                           <div className="absolute top-2 left-2 bg-[#167524] text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">
-                            Capa ⭐
+                            {isEn ? "Cover ⭐" : "Capa ⭐"}
                           </div>
                         )}
                       </div>
@@ -2298,14 +2461,22 @@ export default function NovoCampoParceiro({
                         }`}
                       >
                         {p.tipo === "escolha"
-                          ? "▼ Escolha Múltipla (Selecionada pelo Pai)"
+                          ? isEn
+                            ? "▼ Multiple Choice (Selected by Parent)"
+                            : "▼ Escolha Múltipla (Selecionada pelo Pai)"
+                          : isEn
+                          ? "📝 Open Question (Answered at Checkout)"
                           : "📝 Pergunta Aberta (Respondida no Checkout)"}
                       </span>
                       <input
                         type="text"
                         placeholder={
                           p.tipo === "escolha"
-                            ? "Ex: Qual o nível de experiência no desporto?"
+                            ? isEn
+                              ? "e.g., What is the participant's skill level?"
+                              : "Ex: Qual o nível de experiência no desporto?"
+                            : isEn
+                            ? "e.g., Any notes regarding pick-up or transport?"
                             : "Ex: Alguma observação sobre o transporte?"
                         }
                         value={p.titulo}
@@ -2319,11 +2490,17 @@ export default function NovoCampoParceiro({
                     {p.tipo === "escolha" && (
                       <div className="bg-white p-4 rounded-xl border border-emerald-100">
                         <label className="block text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1.5">
-                          Opções Disponíveis (Separadas por vírgula)
+                          {isEn
+                            ? "Available Options (Comma-separated)"
+                            : "Opções Disponíveis (Separadas por vírgula)"}
                         </label>
                         <input
                           type="text"
-                          placeholder="Ex: Iniciado, Intermédio, Avançado"
+                          placeholder={
+                            isEn
+                              ? "e.g., Beginner, Intermediate, Advanced"
+                              : "Ex: Iniciado, Intermédio, Avançado"
+                          }
                           value={p.opcoes}
                           onChange={(e) =>
                             atualizarPergunta(p.id, "opcoes", e.target.value)
@@ -2431,7 +2608,9 @@ export default function NovoCampoParceiro({
                         : "text-slate-500"
                     }`}
                   >
-                    {isEn ? "Single Days / Pack of Days" : "Dias Avulso / Pack de Dias"}
+                    {isEn
+                      ? "Single Days / Pack of Days"
+                      : "Dias Avulso / Pack de Dias"}
                   </button>
                 </div>
               </div>
@@ -2455,8 +2634,9 @@ export default function NovoCampoParceiro({
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                    {isEn ? "Quantity" : "Duração"} (
-                    {novoPacote.tipo === "semana" ? "Sem" : "Dias"})
+                    {isEn
+                      ? `Quantity (${novoPacote.tipo === "semana" ? "Wks" : "Days"})`
+                      : `Duração (${novoPacote.tipo === "semana" ? "Sem" : "Dias"})`}
                   </label>
                   <input
                     type="number"
@@ -2500,7 +2680,11 @@ export default function NovoCampoParceiro({
                     >
                       <input
                         type="text"
-                        placeholder="Ex: Preço Base / Dia Inteiro"
+                        placeholder={
+                          isEn
+                            ? "e.g., Base Price / Full Day"
+                            : "Ex: Preço Base / Dia Inteiro"
+                        }
                         value={v.nome}
                         onChange={(e) =>
                           atualizarVariante(i, "nome", e.target.value)
@@ -2584,7 +2768,11 @@ export default function NovoCampoParceiro({
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: Residência Quarto Duplo (Pensão Completa)"
+                  placeholder={
+                    isEn
+                      ? "e.g., Residence Twin Room (Full Board)"
+                      : "Ex: Residência Quarto Duplo (Pensão Completa)"
+                  }
                   value={novoAlojamento.nome}
                   onChange={(e) =>
                     setNovoAlojamento({
@@ -2628,9 +2816,15 @@ export default function NovoCampoParceiro({
                     }
                     className="w-full p-3.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none bg-slate-50"
                   >
-                    <option value="semana">Por Semana</option>
-                    <option value="dia">Por Noite / Dia</option>
-                    <option value="fixo">Valor Fixo Único</option>
+                    <option value="semana">
+                      {isEn ? "Per Week" : "Por Semana"}
+                    </option>
+                    <option value="dia">
+                      {isEn ? "Per Night / Day" : "Por Noite / Dia"}
+                    </option>
+                    <option value="fixo">
+                      {isEn ? "One-time Fixed Fee" : "Valor Fixo Único"}
+                    </option>
                   </select>
                 </div>
               </div>
@@ -2642,14 +2836,14 @@ export default function NovoCampoParceiro({
                 onClick={() => setIsAlojamentoModalOpen(false)}
                 className="px-5 py-2.5 rounded-xl font-bold border border-slate-200 bg-white text-slate-600 text-sm cursor-pointer"
               >
-                Cancelar
+                {isEn ? "Cancel" : "Cancelar"}
               </button>
               <button
                 type="button"
                 onClick={guardarAlojamento}
                 className="px-6 py-2.5 rounded-xl font-black bg-[#0E3A68] text-white text-sm shadow-md cursor-pointer"
               >
-                ✓ Guardar Alojamento
+                {isEn ? "✓ Save Accommodation" : "✓ Guardar Alojamento"}
               </button>
             </div>
           </div>
@@ -2685,7 +2879,9 @@ export default function NovoCampoParceiro({
                     setNovoDesconto({ ...novoDesconto, nome: e.target.value })
                   }
                   className="w-full p-3.5 border border-slate-200 rounded-xl text-sm font-bold outline-none bg-white"
-                  placeholder="Ex: Desconto Irmãos (10%)"
+                  placeholder={
+                    isEn ? "e.g., Sibling Discount (10%)" : "Ex: Desconto Irmãos (10%)"
+                  }
                 />
               </div>
               <div>
@@ -2740,14 +2936,14 @@ export default function NovoCampoParceiro({
                 onClick={() => setIsDescontoModalOpen(false)}
                 className="px-5 py-2.5 rounded-xl font-bold border border-slate-200 bg-white text-slate-600 text-sm cursor-pointer"
               >
-                Cancelar
+                {isEn ? "Cancel" : "Cancelar"}
               </button>
               <button
                 type="button"
                 onClick={guardarDesconto}
                 className="px-6 py-2.5 rounded-xl font-black bg-[#167524] text-white text-sm shadow-md cursor-pointer"
               >
-                ✓ Guardar Desconto
+                {isEn ? "✓ Save Discount" : "✓ Guardar Desconto"}
               </button>
             </div>
           </div>
