@@ -27,6 +27,51 @@ async function getCampoLive(id: string) {
   return data;
 }
 
+function extrairCidade(
+  local?: string | null,
+  distrito?: string | null
+): string {
+  if (local) {
+    const primeiraParte = local.split(",")[0].split("(")[0].trim();
+    if (primeiraParte.length > 2 && !/\d{4}-\d{3}/.test(primeiraParte)) {
+      return primeiraParte;
+    }
+  }
+  return distrito || "Portugal";
+}
+
+function detetarTemporadaCampo(
+  nome: string,
+  desc: string,
+  isEn: boolean
+): string {
+  const t = `${nome} ${desc}`.toLowerCase();
+  if (t.includes("natal") || t.includes("christmas")) {
+    return isEn ? "Christmas" : "Natal";
+  }
+  if (t.includes("páscoa") || t.includes("pascoa") || t.includes("easter")) {
+    return isEn ? "Easter" : "Páscoa";
+  }
+  if (t.includes("carnaval") || t.includes("carnival")) {
+    return isEn ? "Carnival" : "Carnaval";
+  }
+  return isEn ? "Summer" : "Verão";
+}
+
+function calcularPrecoMinimo(campo: any): number {
+  let preco =
+    campo.preco !== null && campo.preco !== undefined ? Number(campo.preco) : 0;
+  if (!preco && Array.isArray(campo.pacotes) && campo.pacotes.length > 0) {
+    const todos = campo.pacotes.flatMap((p: any) =>
+      Array.isArray(p.variantes)
+        ? p.variantes.map((v: any) => Math.max(0, Number(v.preco) || 0))
+        : []
+    );
+    if (todos.length > 0) preco = Math.min(...todos);
+  }
+  return preco;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -37,21 +82,98 @@ export async function generateMetadata({
   const isEn = lang === "en";
   const campo = await getCampoLive(id);
 
-  if (!campo) return { title: "Camp | HelloCamp" };
+  if (!campo) {
+    return {
+      title: isEn
+        ? "Camp Not Found | HelloCamp"
+        : "Campo não encontrado | HelloCamp",
+      robots: { index: false, follow: false },
+    };
+  }
 
-  const title =
-    (isEn && campo.nome_en ? campo.nome_en : campo.nome) + " | HelloCamp";
+  const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
+  const catCampo =
+    isEn && campo.categoria_en
+      ? campo.categoria_en
+      : campo.categoria || (isEn ? "Holiday Camp" : "Campo de Férias");
+  const distrito =
+    isEn && campo.Distrito_en
+      ? campo.Distrito_en
+      : campo.Distrito || campo.distrito || "";
+  const pais = isEn && campo.pais_en ? campo.pais_en : campo.pais || "Portugal";
+  const cidade = extrairCidade(
+    isEn && campo.local_en ? campo.local_en : campo.local,
+    distrito || pais
+  );
   const descRaw =
-    isEn && campo.descricao_en ? campo.descricao_en : campo.descricao;
-  const description = descRaw
-    ? descRaw.replace(/\s+/g, " ").trim().substring(0, 155) + "..."
-    : "";
+    (isEn && campo.descricao_en ? campo.descricao_en : campo.descricao) || "";
+  const temporada = detetarTemporadaCampo(nomeCampo, descRaw, isEn);
+  const precoMin = calcularPrecoMinimo(campo);
+  const idades =
+    (isEn && campo.idade_en ? campo.idade_en : campo.idade) ||
+    `${campo.idade_min || 6}-${campo.idade_max || 16} ${isEn ? "yrs" : "anos"}`;
+
+  const temLocalNoNome = nomeCampo.toLowerCase().includes(cidade.toLowerCase());
+  const title = isEn
+    ? `${nomeCampo}${!temLocalNoNome ? ` in ${cidade}` : ""} | ${catCampo} Camp | HelloCamp`
+    : `${nomeCampo}${!temLocalNoNome ? ` em ${cidade}` : ""} | Campo de Férias ${catCampo} | HelloCamp`;
+
+  const precoTxt =
+    precoMin > 0
+      ? isEn
+        ? `From €${precoMin}.`
+        : `Desde ${precoMin}€.`
+      : "";
+  const resumoLimpo = descRaw
+    .replace(/🔥|•|\*\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const description =
+    (isEn
+      ? `${nomeCampo} in ${cidade}, ${pais} (${idades}). ${precoTxt} ${resumoLimpo}`
+      : `${nomeCampo} em ${cidade}${
+          distrito && distrito !== cidade ? `, ${distrito}` : ""
+        } (${idades}). ${precoTxt} ${resumoLimpo}`
+    ).slice(0, 158) + "...";
+
+  const keywords = isEn
+    ? [
+        `${catCampo.toLowerCase()} camp in ${cidade}`,
+        `holiday camps in ${cidade}`,
+        `${temporada.toLowerCase()} camp ${cidade}`,
+        `kids camps in ${distrito || pais}`,
+        `youth camps ${pais}`,
+        nomeCampo,
+        `children holiday programs ${cidade} ${idades}`,
+        "book holiday camp online portugal",
+      ]
+    : [
+        `campos de férias em ${cidade}`,
+        `campo de férias ${cidade}`,
+        `campos de férias de ${temporada.toLowerCase()} em ${cidade}`,
+        `campos de férias ${catCampo.toLowerCase()} ${cidade}`,
+        ...(distrito
+          ? [
+              `campos de férias em ${distrito}`,
+              `férias escolares ${distrito}`,
+            ]
+          : []),
+        `atl férias ${cidade}`,
+        `atividades para crianças ${idades} em ${cidade}`,
+        nomeCampo,
+      ];
+
+  const canonicalUrl = `https://www.hellocamp.pt/${lang}/campo/${id}`;
+  const ogImage = campo.imagem?.startsWith("http")
+    ? campo.imagem
+    : "https://www.hellocamp.pt/og-image.jpg";
 
   return {
     title,
     description,
+    keywords,
     alternates: {
-      canonical: `https://www.hellocamp.pt/${lang}/campo/${id}`,
+      canonical: canonicalUrl,
       languages: {
         "pt-PT": `https://www.hellocamp.pt/pt/campo/${id}`,
         "en-US": `https://www.hellocamp.pt/en/campo/${id}`,
@@ -60,10 +182,22 @@ export async function generateMetadata({
     openGraph: {
       title,
       description,
-      images: [
-        { url: campo.imagem || "/og-image.jpg", width: 1200, height: 630 },
-      ],
+      url: canonicalUrl,
+      siteName: "HelloCamp",
+      type: "website",
+      locale: isEn ? "en_US" : "pt_PT",
+      images: [{ url: ogImage, width: 1200, height: 630, alt: nomeCampo }],
     },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
+    },
+    robots:
+      campo.ativo === true
+        ? { index: true, follow: true }
+        : { index: false, follow: false },
   };
 }
 
@@ -107,7 +241,7 @@ export default async function DetalhesDoCampo({
     );
   }
 
-  // Regista visualização em background sem bloquear renderização
+  // Regista visualização em background sem bloquear a página
   if (campo.id && campo.organizador_id) {
     supabase
       .rpc("registar_visualizacao_campo", {
@@ -117,7 +251,7 @@ export default async function DetalhesDoCampo({
       .then();
   }
 
-  // Carrega perfil do organizador e campos relacionados em paralelo (sempre frescos)
+  // Carrega perfil do organizador e campos relacionados em paralelo (sempre atualizados)
   const [orgRes, resParceiro, resSemelhantes] = await Promise.all([
     campo.organizador_id
       ? supabase
@@ -154,7 +288,9 @@ export default async function DetalhesDoCampo({
   const descCampo =
     isEn && campo.descricao_en ? campo.descricao_en : campo.descricao;
   const catCampo =
-    isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
+    isEn && campo.categoria_en
+      ? campo.categoria_en
+      : campo.categoria || (isEn ? "Holiday Camp" : "Campo de Férias");
   const distritoVisivel =
     isEn && campo.Distrito_en
       ? campo.Distrito_en
@@ -180,9 +316,10 @@ export default async function DetalhesDoCampo({
 
   const paisReal = campo.pais || "Portugal";
   const paisVisivel = isEn && campo.pais_en ? campo.pais_en : paisReal;
+  const cidadeSeo = extrairCidade(localCampo, distritoVisivel || paisVisivel);
 
-  const scoreAvaliacoes = campo.rating_score || 0;
-  const totalAvaliacoes = campo.total_reviews || 0;
+  const scoreAvaliacoes = Number(campo.rating_score) || 0;
+  const totalAvaliacoes = Number(campo.total_reviews) || 0;
 
   const baseUrl = "https://www.hellocamp.pt";
   const campoUrlCompleto = `${baseUrl}/${lang}/campo/${campo.id}`;
@@ -193,21 +330,7 @@ export default async function DetalhesDoCampo({
   };
   const todayISO = new Date().toISOString().split("T")[0];
   const dataMaisCedo = calendario.data_inicio || campo.data_inicio || todayISO;
-
-  let precoMinimo =
-    campo.preco !== null && campo.preco !== undefined ? Number(campo.preco) : 0;
-  if (
-    Array.isArray(campo.pacotes) &&
-    campo.pacotes.length > 0 &&
-    !precoMinimo
-  ) {
-    const todosPrecos = campo.pacotes.flatMap((p: any) =>
-      Array.isArray(p.variantes)
-        ? p.variantes.map((v: any) => Math.max(0, Number(v.preco) || 0))
-        : []
-    );
-    if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
-  }
+  const precoMinimo = calcularPrecoMinimo(campo);
 
   const heroImgUrl = campo.imagem?.startsWith("http")
     ? campo.imagem
@@ -231,6 +354,55 @@ export default async function DetalhesDoCampo({
       ? parceiroInfo.descricao_en || parceiroInfo.biografia_empresa_en
       : parceiroInfo.descricao || parceiroInfo.biografia_empresa || ""
     : "";
+
+  const faqsCampo = isEn
+    ? [
+        {
+          q: `What age group is ${nomeCampo} designed for?`,
+          a: `This ${catCampo.toLowerCase()} camp in ${cidadeSeo} is designed for children and youth aged ${
+            campo.idade_en ||
+            campo.idade ||
+            `${campo.idade_min || 6} to ${campo.idade_max || 16} years`
+          }.`,
+        },
+        {
+          q: `What is the starting price and what is included?`,
+          a: `${
+            precoMinimo > 0
+              ? `Prices start from €${precoMinimo}.`
+              : "Check available packages on this page."
+          } Meals: ${alimentacaoCampo || "Check details"}. Insurance: ${
+            seguroCampo || "Included"
+          }.`,
+        },
+        {
+          q: `Does ${nomeCampo} include accommodation or is it a day camp?`,
+          a: alojamentoCampo || "Day camp (no overnight stay included).",
+        },
+      ]
+    : [
+        {
+          q: `Para que idades é indicado o programa ${nomeCampo}?`,
+          a: `Este campo de férias de ${catCampo.toLowerCase()} em ${cidadeSeo} destina-se a participantes dos ${
+            campo.idade ||
+            `${campo.idade_min || 6} aos ${campo.idade_max || 16} anos`
+          }.`,
+        },
+        {
+          q: `Qual o preço e o que está incluído na inscrição?`,
+          a: `${
+            precoMinimo > 0
+              ? `Os valores começam desde ${precoMinimo}€.`
+              : "Consulte os pacotes disponíveis nesta página."
+          } Alimentação: ${alimentacaoCampo || "Sob consulta"}. Seguro: ${
+            seguroCampo || "Incluído"
+          }.`,
+        },
+        {
+          q: `O programa em ${cidadeSeo} é em regime residencial ou externato?`,
+          a: alojamentoCampo || "Regime de externato (diurno, sem dormida).",
+        },
+      ];
 
   const breadcrumbSchema = {
     "@context": "https://schema.org",
@@ -271,17 +443,30 @@ export default async function DetalhesDoCampo({
     "@context": "https://schema.org",
     "@type": "Event",
     name: nomeCampo,
-    description: descCampo,
+    description: descCampo
+      ? descCampo.replace(/\s+/g, " ").trim().slice(0, 300)
+      : nomeCampo,
     startDate: dataMaisCedo,
-    image: [heroImgUrl],
+    ...(calendario.data_fim ? { endDate: calendario.data_fim } : {}),
+    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+    eventStatus: "https://schema.org/EventScheduled",
+    image: [heroImgUrl, ...galeriaValida.slice(0, 3)],
     location: {
       "@type": "Place",
       name: localCampo,
       address: {
         "@type": "PostalAddress",
-        addressLocality: localCampo,
+        addressLocality: cidadeSeo,
+        addressRegion: distritoVisivel || cidadeSeo,
         addressCountry: paisReal,
       },
+    },
+    organizer: {
+      "@type": "Organization",
+      name: nomeExibicaoParceiro,
+      url: campo.organizador_id
+        ? `${baseUrl}/${lang}/parceiro/${campo.organizador_id}`
+        : baseUrl,
     },
     offers: {
       "@type": "Offer",
@@ -290,6 +475,30 @@ export default async function DetalhesDoCampo({
       priceCurrency: "EUR",
       availability: "https://schema.org/InStock",
     },
+    ...(totalAvaliacoes > 0 && scoreAvaliacoes > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: scoreAvaliacoes.toFixed(1),
+            reviewCount: totalAvaliacoes,
+            bestRating: "5",
+            worstRating: "1",
+          },
+        }
+      : {}),
+  };
+
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqsCampo.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: f.a,
+      },
+    })),
   };
 
   return (
@@ -302,12 +511,19 @@ export default async function DetalhesDoCampo({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
 
       {/* HERO CONTIDO DE ALTA NITIDEZ */}
       <div className="bg-white border-b border-slate-200 pt-6 pb-8">
         <div className="max-w-[1100px] mx-auto px-4 md:px-6">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
-            <nav className="flex items-center gap-2 text-[11px] font-black text-slate-400 tracking-widest uppercase">
+            <nav
+              aria-label="Breadcrumb"
+              className="flex items-center gap-2 text-[11px] font-black text-slate-400 tracking-widest uppercase"
+            >
               <Link
                 href={`/${lang}`}
                 className="hover:text-[#0E3A68] transition-colors no-underline text-slate-400"
@@ -368,7 +584,7 @@ export default async function DetalhesDoCampo({
               </span>
               {campo.idade && (
                 <span className="text-xs font-black bg-slate-100 border border-slate-200 text-slate-700 px-2.5 py-0.5 rounded-sm">
-                  👶 {campo.idade}
+                  👶 {isEn && campo.idade_en ? campo.idade_en : campo.idade}
                 </span>
               )}
             </div>
@@ -847,6 +1063,30 @@ export default async function DetalhesDoCampo({
                   </div>
                 </div>
               )}
+
+              {/* PERGUNTAS FREQUENTES SEO (PT / EN) */}
+              <section className="bg-white p-6 md:p-8 rounded-md shadow-sm border border-slate-200 relative z-10">
+                <h2 className="text-xl font-black text-slate-900 mb-5">
+                  {isEn
+                    ? `Frequently Asked Questions — ${nomeCampo}`
+                    : `Perguntas Frequentes — ${nomeCampo}`}
+                </h2>
+                <div className="space-y-3">
+                  {faqsCampo.map((faq, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-slate-50 border border-slate-200 rounded-md p-4"
+                    >
+                      <h3 className="text-sm font-black text-slate-900 m-0 mb-1.5">
+                        {faq.q}
+                      </h3>
+                      <p className="text-xs md:text-sm text-slate-600 leading-relaxed text-justify m-0">
+                        {faq.a}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
 
               {/* FORMULÁRIO DE CONTACTO E DÚVIDAS */}
               <div
