@@ -7,6 +7,7 @@ import BotaoFavorito from "../../components/BotaoFavorito";
 import BotaoPartilha from "../../components/BotaoPartilha";
 import DescricaoExpansivel from "../../components/DescricaoExpansivel";
 import FormContactoCampo from "../../components/FormContactoCampo";
+import GaleriaAirbnb from "./GaleriaAirbnb";
 import {
   ReservaProvider,
   SeletorOpcoes,
@@ -516,7 +517,7 @@ export default async function DetalhesDoCampo({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
 
-      {/* HERO CONTIDO DE ALTA NITIDEZ */}
+      {/* HERO CONTIDO + GALERIA ESTILO AIRBNB */}
       <div className="bg-white border-b border-slate-200 pt-6 pb-8">
         <div className="max-w-[1100px] mx-auto px-4 md:px-6">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
@@ -594,56 +595,13 @@ export default async function DetalhesDoCampo({
             </h1>
           </div>
 
-          {galeriaValida.length >= 2 ? (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-[300px] sm:h-[380px] md:h-[420px] rounded-md overflow-hidden border border-slate-200">
-              <div className="md:col-span-8 h-full bg-slate-900 relative overflow-hidden">
-                <img
-                  src={heroImgUrl}
-                  alt={nomeCampo}
-                  className="w-full h-full object-cover object-center"
-                />
-              </div>
-              <div className="hidden md:grid md:col-span-4 grid-rows-2 gap-3 h-full">
-                <div className="bg-slate-900 h-full overflow-hidden relative">
-                  <img
-                    src={galeriaValida[0]}
-                    alt={`${nomeCampo} 2`}
-                    className="w-full h-full object-cover object-center"
-                  />
-                </div>
-                <div className="bg-slate-900 h-full overflow-hidden relative">
-                  <img
-                    src={galeriaValida[1]}
-                    alt={`${nomeCampo} 3`}
-                    className="w-full h-full object-cover object-center"
-                  />
-                  {galeriaValida.length > 2 && (
-                    <a
-                      href="#galeria"
-                      className="absolute bottom-3 right-3 bg-slate-950/85 hover:bg-slate-950 text-white text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-sm no-underline shadow-md"
-                    >
-                      📷 +{galeriaValida.length - 2}{" "}
-                      {isEn ? "Photos" : "Fotografias"}
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="relative w-full h-[280px] sm:h-[360px] md:h-[420px] rounded-md overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center">
-              <img
-                src={heroImgUrl}
-                alt=""
-                aria-hidden="true"
-                className="absolute inset-0 w-full h-full object-cover blur-xl opacity-40 scale-110 pointer-events-none"
-              />
-              <img
-                src={heroImgUrl}
-                alt={nomeCampo}
-                className="relative z-10 max-w-full max-h-full w-auto h-full object-contain sm:object-cover rounded-sm shadow-lg"
-              />
-            </div>
-          )}
+          {/* GALERIA ESTILO AIRBNB COM MODAL COMPLETO & LIGHTBOX SEM CORTES */}
+          <GaleriaAirbnb
+            capa={heroImgUrl}
+            galeria={galeriaValida}
+            nomeCampo={nomeCampo}
+            isEn={isEn}
+          />
         </div>
       </div>
 
@@ -937,33 +895,6 @@ export default async function DetalhesDoCampo({
                 )}
               </div>
 
-              {/* GALERIA COMPLETA */}
-              {galeriaValida.length > 0 && (
-                <div
-                  id="galeria"
-                  className="bg-white p-6 md:p-8 rounded-md shadow-sm border border-slate-200 relative z-10 scroll-mt-24"
-                >
-                  <h2 className="text-xl font-black text-slate-900 mb-6">
-                    {isEn ? "Photo Gallery" : "Galeria de Fotografias"}
-                  </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {galeriaValida.map((imgUrl: string, idx: number) => (
-                      <div
-                        key={idx}
-                        className="aspect-[4/3] rounded-md overflow-hidden bg-slate-100 border border-slate-200 relative"
-                      >
-                        <img
-                          src={imgUrl}
-                          alt={`${nomeCampo} ${idx + 1}`}
-                          loading="lazy"
-                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* OUTROS CAMPOS DO PARCEIRO */}
               {outrosDoParceiro.length > 0 && (
                 <div className="bg-white p-6 md:p-8 rounded-md shadow-sm border border-slate-200 relative z-10">
@@ -1110,7 +1041,7 @@ export default async function DetalhesDoCampo({
               </div>
             </div>
 
-            {/* BARRA LATERAL COM O RESUMO FIXO (lg:top-28 para não ficar cortada pela navbar) */}
+            {/* BARRA LATERAL COM O RESUMO FIXO */}
             <div className="w-full lg:w-[380px] flex-shrink-0 lg:sticky lg:top-28 relative z-30">
               <CaixaResumo />
             </div>
