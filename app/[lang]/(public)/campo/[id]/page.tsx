@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { getDictionary } from "@/lib/getDictionary";
-import { unstable_cache } from "next/cache";
+import { unstable_noStore as noStore } from "next/cache";
 import Link from "next/link";
 import { Metadata } from "next";
 import BotaoFavorito from "../../components/BotaoFavorito";
@@ -14,77 +14,28 @@ import {
 } from "./CaixaReserva";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
-const getCampoCached = unstable_cache(
-  async (id: string) => {
-    const { data } = await supabase
-      .from("campos")
-      .select("*")
-      .eq("id", id)
-      .single();
-    return data;
-  },
-  ["cache-campo-detalhe"],
-  { revalidate: 1 }
-);
-
-const getReviewsCached = unstable_cache(
-  async (id: string) => {
-    const { data } = await supabase
-      .from("reviews")
-      .select("*")
-      .eq("campo_id", id)
-      .order("created_at", { ascending: false });
-    return data || [];
-  },
-  ["cache-campo-reviews"],
-  { revalidate: 1 }
-);
-
-const getRelacionadosCached = unstable_cache(
-  async (
-    campoId: string,
-    organizadorId: string | null,
-    categoria: string | null
-  ) => {
-    const [resParceiro, resSemelhantes] = await Promise.all([
-      organizadorId
-        ? supabase
-            .from("campos")
-            .select("id, nome, nome_en, imagem, Distrito, local, preco")
-            .eq("organizador_id", organizadorId)
-            .eq("ativo", true)
-            .neq("id", campoId)
-            .limit(3)
-        : Promise.resolve({ data: [] }),
-      categoria
-        ? supabase
-            .from("campos")
-            .select("id, nome, nome_en, imagem, Distrito, local, preco")
-            .eq("categoria", categoria)
-            .eq("ativo", true)
-            .neq("id", campoId)
-            .limit(3)
-        : Promise.resolve({ data: [] }),
-    ]);
-
-    return {
-      outrosDoParceiro: resParceiro.data || [],
-      semelhantes: resSemelhantes.data || [],
-    };
-  },
-  ["cache-campo-relacionados"],
-  { revalidate: 3600 }
-);
+async function getCampoLive(id: string) {
+  noStore();
+  const { data } = await supabase
+    .from("campos")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  return data;
+}
 
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ lang: string; id: string }>;
 }): Promise<Metadata> {
+  noStore();
   const { lang, id } = await params;
   const isEn = lang === "en";
-  const campo = await getCampoCached(id);
+  const campo = await getCampoLive(id);
 
   if (!campo) return { title: "Camp | HelloCamp" };
 
@@ -92,7 +43,9 @@ export async function generateMetadata({
     (isEn && campo.nome_en ? campo.nome_en : campo.nome) + " | HelloCamp";
   const descRaw =
     isEn && campo.descricao_en ? campo.descricao_en : campo.descricao;
-  const description = descRaw ? descRaw.substring(0, 155) + "..." : "";
+  const description = descRaw
+    ? descRaw.replace(/\s+/g, " ").trim().substring(0, 155) + "..."
+    : "";
 
   return {
     title,
@@ -119,12 +72,21 @@ export default async function DetalhesDoCampo({
 }: {
   params: Promise<{ lang: string; id: string }>;
 }) {
+  noStore();
   const { lang, id } = await params;
-  const dict = await getDictionary(lang as "pt" | "en");
   const isEn = lang === "en";
 
-  const campo = await getCampoCached(id);
-  const reviews = await getReviewsCached(id);
+  const [dict, campo, reviewsRes] = await Promise.all([
+    getDictionary(lang as "pt" | "en"),
+    getCampoLive(id),
+    supabase
+      .from("reviews")
+      .select("*")
+      .eq("campo_id", id)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const reviews = reviewsRes.data || [];
 
   if (!campo) {
     return (
@@ -145,6 +107,7 @@ export default async function DetalhesDoCampo({
     );
   }
 
+  // Regista visualização em background sem bloquear renderização
   if (campo.id && campo.organizador_id) {
     supabase
       .rpc("registar_visualizacao_campo", {
@@ -154,33 +117,52 @@ export default async function DetalhesDoCampo({
       .then();
   }
 
-  let parceiroInfo = null;
-  if (campo.organizador_id) {
-    const { data: organizador } = await supabase
-      .from("perfis")
-      .select("*")
-      .eq("id", campo.organizador_id)
-      .single();
-    parceiroInfo = organizador;
-  }
-
-  const { outrosDoParceiro, semelhantes } = await getRelacionadosCached(
-    campo.id,
-    campo.organizador_id,
+  // Carrega perfil do organizador e campos relacionados em paralelo (sempre frescos)
+  const [orgRes, resParceiro, resSemelhantes] = await Promise.all([
+    campo.organizador_id
+      ? supabase
+          .from("perfis")
+          .select("*")
+          .eq("id", campo.organizador_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    campo.organizador_id
+      ? supabase
+          .from("campos")
+          .select('id, nome, nome_en, imagem, "Distrito", local, preco')
+          .eq("organizador_id", campo.organizador_id)
+          .eq("ativo", true)
+          .neq("id", campo.id)
+          .limit(3)
+      : Promise.resolve({ data: [] }),
     campo.categoria
-  );
+      ? supabase
+          .from("campos")
+          .select('id, nome, nome_en, imagem, "Distrito", local, preco')
+          .eq("categoria", campo.categoria)
+          .eq("ativo", true)
+          .neq("id", campo.id)
+          .limit(3)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const parceiroInfo = orgRes.data;
+  const outrosDoParceiro = resParceiro.data || [];
+  const semelhantes = resSemelhantes.data || [];
 
   const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
   const descCampo =
     isEn && campo.descricao_en ? campo.descricao_en : campo.descricao;
   const catCampo =
     isEn && campo.categoria_en ? campo.categoria_en : campo.categoria;
+  const distritoVisivel =
+    isEn && campo.Distrito_en
+      ? campo.Distrito_en
+      : campo.Distrito || campo.distrito || "";
   const localCampo =
     isEn && campo.local_en
       ? campo.local_en
-      : isEn && campo.Distrito_en
-      ? campo.Distrito_en
-      : campo.Distrito || campo.distrito || campo.local;
+      : campo.local || distritoVisivel || "Portugal";
 
   const racioCampo =
     isEn && campo.racio_monitores_en
@@ -212,10 +194,17 @@ export default async function DetalhesDoCampo({
   const todayISO = new Date().toISOString().split("T")[0];
   const dataMaisCedo = calendario.data_inicio || campo.data_inicio || todayISO;
 
-  let precoMinimo = campo.preco || 0;
-  if (campo.pacotes && campo.pacotes.length > 0 && !precoMinimo) {
+  let precoMinimo =
+    campo.preco !== null && campo.preco !== undefined ? Number(campo.preco) : 0;
+  if (
+    Array.isArray(campo.pacotes) &&
+    campo.pacotes.length > 0 &&
+    !precoMinimo
+  ) {
     const todosPrecos = campo.pacotes.flatMap((p: any) =>
-      p.variantes ? p.variantes.map((v: any) => v.preco) : []
+      Array.isArray(p.variantes)
+        ? p.variantes.map((v: any) => Math.max(0, Number(v.preco) || 0))
+        : []
     );
     if (todosPrecos.length > 0) precoMinimo = Math.min(...todosPrecos);
   }
@@ -264,7 +253,7 @@ export default async function DetalhesDoCampo({
       {
         "@type": "ListItem",
         position: 3,
-        name: localCampo,
+        name: distritoVisivel || localCampo,
         item: `${baseUrl}/${lang}/distrito/${encodeURIComponent(
           campo.Distrito || localCampo
         )}`,
@@ -314,12 +303,9 @@ export default async function DetalhesDoCampo({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }}
       />
 
-      {/* ===================================================================== */}
-      {/* NOVO HERO CONTIDO DE ALTA NITIDEZ (NÃO ESTICA NEM DESFOCA A IMAGEM!)  */}
-      {/* ===================================================================== */}
+      {/* HERO CONTIDO DE ALTA NITIDEZ */}
       <div className="bg-white border-b border-slate-200 pt-6 pb-8">
         <div className="max-w-[1100px] mx-auto px-4 md:px-6">
-          {/* BREADCRUMBS E BOTÕES DE PARTILHA/FAVORITO NO TOPO */}
           <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
             <nav className="flex items-center gap-2 text-[11px] font-black text-slate-400 tracking-widest uppercase">
               <Link
@@ -342,7 +328,7 @@ export default async function DetalhesDoCampo({
                 )}`}
                 className="hover:text-[#0E3A68] transition-colors no-underline text-slate-400"
               >
-                {localCampo}
+                {distritoVisivel || localCampo}
               </Link>
               <span>/</span>
               <span
@@ -363,7 +349,6 @@ export default async function DetalhesDoCampo({
             </div>
           </div>
 
-          {/* TÍTULO E METADADOS PRINCIPAIS ACIMA DA GALERIA */}
           <div className="mb-6">
             <div className="flex flex-wrap items-center gap-2.5 mb-3">
               <span className="rounded-sm bg-[#0E3A68] text-white px-3 py-1 text-[10px] font-black uppercase tracking-widest">
@@ -393,10 +378,8 @@ export default async function DetalhesDoCampo({
             </h1>
           </div>
 
-          {/* MOLDURA BENTO GRID DE ALTA NITIDEZ (SEM ESTICAR A LARGURA TODA DO MONITOR) */}
           {galeriaValida.length >= 2 ? (
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-[300px] sm:h-[380px] md:h-[420px] rounded-md overflow-hidden border border-slate-200">
-              {/* Foto Principal (8 Colunas) */}
               <div className="md:col-span-8 h-full bg-slate-900 relative overflow-hidden">
                 <img
                   src={heroImgUrl}
@@ -404,7 +387,6 @@ export default async function DetalhesDoCampo({
                   className="w-full h-full object-cover object-center"
                 />
               </div>
-              {/* 2 Fotos Laterais da Galeria (4 Colunas) */}
               <div className="hidden md:grid md:col-span-4 grid-rows-2 gap-3 h-full">
                 <div className="bg-slate-900 h-full overflow-hidden relative">
                   <img
@@ -432,16 +414,13 @@ export default async function DetalhesDoCampo({
               </div>
             </div>
           ) : (
-            /* Quando só há 1 Foto Principal: Fundo Ambiente + Imagem Centrada Nítida Sem Pixelizar */
             <div className="relative w-full h-[280px] sm:h-[360px] md:h-[420px] rounded-md overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center">
-              {/* Camada de fundo suavizada para preencher laterais sem esticar a foto principal */}
               <img
                 src={heroImgUrl}
                 alt=""
                 aria-hidden="true"
                 className="absolute inset-0 w-full h-full object-cover blur-xl opacity-40 scale-110 pointer-events-none"
               />
-              {/* Imagem Principal Nítida */}
               <img
                 src={heroImgUrl}
                 alt={nomeCampo}
@@ -458,14 +437,12 @@ export default async function DetalhesDoCampo({
           <div className="flex flex-col lg:flex-row gap-8 items-start w-full">
             {/* COLUNA ESQUERDA */}
             <div className="flex-1 w-full flex flex-col gap-6">
-              {/* DESCRIÇÃO E BROCHURAS PDF */}
+              {/* DESCRIÇÃO FORMATADA E JUSTIFICADA + BROCHURAS PDF */}
               <div className="bg-white p-6 md:p-8 rounded-md shadow-sm border border-slate-200 relative z-10">
-                <h2 className="text-xl font-black text-slate-900 mb-4">
+                <h2 className="text-xl font-black text-slate-900 mb-5 pb-3 border-b border-slate-100">
                   {dict.detalhe.sobre_programa}
                 </h2>
-                <div className="text-sm">
-                  <DescricaoExpansivel texto={descCampo} isEn={isEn} />
-                </div>
+                <DescricaoExpansivel texto={descCampo} isEn={isEn} />
 
                 {Array.isArray(campo.programas_pdf) &&
                   campo.programas_pdf.length > 0 && (
@@ -548,7 +525,7 @@ export default async function DetalhesDoCampo({
                 </div>
               </div>
 
-              {/* CARTÃO DE AUTORIDADE: PERFIL DO ORGANIZADOR COM LOGÓTIPO E BIO */}
+              {/* CARTÃO DE AUTORIDADE: PERFIL DO ORGANIZADOR */}
               {campo.organizador_id && parceiroInfo && (
                 <div className="bg-white p-6 md:p-8 rounded-md shadow-sm border border-slate-200 relative z-10 hover:border-[#0E3A68]/40 transition-colors">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
@@ -586,7 +563,7 @@ export default async function DetalhesDoCampo({
                           {isEn ? "Official Organizer" : "Organizador Oficial"}
                         </p>
                         {descCurtaParceiro && (
-                          <p className="text-xs text-slate-600 mt-2 mb-0 line-clamp-2 max-w-lg">
+                          <p className="text-xs text-slate-600 mt-2 mb-0 line-clamp-2 max-w-lg text-justify">
                             {descCurtaParceiro}
                           </p>
                         )}
@@ -679,9 +656,9 @@ export default async function DetalhesDoCampo({
                   <h2 className="text-xl font-black text-slate-900 mb-4">
                     {isEn ? "Specific Rules & Terms" : "Regras e Termos"}
                   </h2>
-                  <p className="leading-relaxed text-slate-600 text-sm whitespace-pre-wrap font-medium m-0 bg-slate-50 p-6 rounded-md border border-slate-200">
-                    {regrasCampo}
-                  </p>
+                  <div className="bg-slate-50 p-6 rounded-md border border-slate-200">
+                    <DescricaoExpansivel texto={regrasCampo} isEn={isEn} />
+                  </div>
                 </div>
               )}
 
@@ -735,7 +712,7 @@ export default async function DetalhesDoCampo({
                           {"★".repeat(rev.rating)}
                           {"☆".repeat(5 - rev.rating)}
                         </div>
-                        <p className="text-sm text-slate-600 m-0 font-medium leading-relaxed bg-slate-50 p-4 rounded-md border border-slate-100">
+                        <p className="text-sm text-slate-600 m-0 font-medium leading-relaxed text-justify bg-slate-50 p-4 rounded-md border border-slate-100">
                           {rev.comentario}
                         </p>
                       </div>
