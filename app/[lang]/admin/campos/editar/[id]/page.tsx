@@ -134,9 +134,7 @@ const PAISES_POR_CONTINENTE = [
   {
     continente_pt: "🌎 América do Norte",
     continente_en: "🌎 North America",
-    paises: [
-      { pt: "Estados Unidos", en: "United States" },
-    ],
+    paises: [{ pt: "Estados Unidos", en: "United States" }],
   },
   {
     continente_pt: "🌎 América do Sul",
@@ -159,9 +157,7 @@ const PAISES_POR_CONTINENTE = [
   {
     continente_pt: "🌍 África",
     continente_en: "🌍 Africa",
-    paises: [
-      { pt: "África do Sul", en: "South Africa" },
-    ],
+    paises: [{ pt: "África do Sul", en: "South Africa" }],
   },
 ];
 
@@ -187,11 +183,37 @@ export default function EditarCampoParceiro({
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [modoAutarquia, setModoAutarquia] = useState(false);
+  const [isNovoAutarquia, setIsNovoAutarquia] = useState(false);
+
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [statusText, setStatusText] = useState("");
+  const [uploadingCapaAutarquia, setUploadingCapaAutarquia] = useState(false);
   const [organizador, setOrganizador] = useState<any>(null);
+
+  // Estado Exclusivo para Editor de Autarquias (public.institucional_iniciativas)
+  const [autarquiaForm, setAutarquiaForm] = useState({
+    titulo: "",
+    entidade_organizadora: "",
+    distrito: "Lisboa",
+    concelho: "",
+    preco_base: 0,
+    idade_min_global: 6,
+    idade_max_global: 16,
+    data_inicio_global: "",
+    data_fim_global: "",
+    datas_encontradas: "",
+    link_inscricao_extraido: "",
+    link_oficial: "",
+    email_contato: "",
+    telefone_contato: "",
+    imagem_capa_url: "",
+    logotipo_url: "",
+    descricao_html: "",
+    is_active: true,
+  });
 
   const [perfilParceiro, setPerfilParceiro] = useState<{
     taxa_comissao: number;
@@ -203,7 +225,7 @@ export default function EditarCampoParceiro({
     modalidade_reserva: "direta",
   });
 
-  // Localização e Línguas
+  // Localização e Línguas (Modo Campo Privado)
   const [pais, setPais] = useState("Portugal");
   const [linguas, setLinguas] = useState({
     pt: true,
@@ -215,11 +237,9 @@ export default function EditarCampoParceiro({
   const [mapPreview, setMapPreview] = useState<{ lat: number; lon: number } | null>(null);
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
 
-  // Dropdowns Customizados
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
   const [isPolDropdownOpen, setIsPolDropdownOpen] = useState(false);
 
-  // Media (Fotos e Documentos PDF)
   const [galeria, setGaleria] = useState<GaleriaItem[]>([]);
   const [documentosExistentes, setDocumentosExistentes] = useState<
     { nome: string; url: string }[]
@@ -227,7 +247,6 @@ export default function EditarCampoParceiro({
   const [documentos, setDocumentos] = useState<File[]>([]);
   const [novoDiaFechado, setNovoDiaFechado] = useState("");
 
-  // Estado Principal do Formulário (mostra colunas EN se isEn, ou PT se !isEn)
   const [formData, setFormData] = useState({
     nome: "",
     categoria: "Desporto",
@@ -302,17 +321,138 @@ export default function EditarCampoParceiro({
   });
 
   // ==========================================
-  // CARREGAR DADOS EXISTENTES (CAMPO + PERFIL)
+  // CARREGAR DADOS (DETETA AUTARQUIA vs CAMPO)
   // ==========================================
   useEffect(() => {
-    const fetchCampo = async () => {
+    const fetchData = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push(`/${lang}/login`);
+        return;
+      }
+
+      const urlParams =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search)
+          : null;
+      const tipoParam = urlParams?.get("tipo");
+
+      const { data: meuPerfil } = await supabase
+        .from("perfis")
+        .select("*")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      // 1. CRIAÇÃO DE NOVO PROGRAMA MUNICIPAL
+      if (id === "novo" && (tipoParam === "autarquia" || meuPerfil?.role === "autarquia")) {
+        setModoAutarquia(true);
+        setIsNovoAutarquia(true);
+        setAutarquiaForm((prev) => ({
+          ...prev,
+          entidade_organizadora:
+            meuPerfil?.empresa_nome ||
+            meuPerfil?.nome_empresa ||
+            meuPerfil?.nome ||
+            "",
+          link_oficial: meuPerfil?.website || "",
+          link_inscricao_extraido: meuPerfil?.link_externo_reserva || "",
+          email_contato: meuPerfil?.email_publico || meuPerfil?.email || "",
+          telefone_contato:
+            meuPerfil?.telefone_publico || meuPerfil?.telefone || "",
+          logotipo_url: meuPerfil?.logotipo_url || "",
+        }));
+        setLoading(false);
+        return;
+      }
+
+      // 2. VERIFICAR SE É UMA INICIATIVA DE AUTARQUIA EXISTENTE
+      if (tipoParam === "autarquia" || meuPerfil?.role === "autarquia") {
+        const { data: instData } = await supabase
+          .from("institucional_iniciativas")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (instData) {
+          setModoAutarquia(true);
+          setIsNovoAutarquia(false);
+          setAutarquiaForm({
+            titulo: instData.titulo || "",
+            entidade_organizadora: instData.entidade_organizadora || "",
+            distrito: instData.distrito || "Lisboa",
+            concelho: instData.concelho || "",
+            preco_base:
+              instData.preco_base !== null && instData.preco_base !== undefined
+                ? Number(instData.preco_base)
+                : 0,
+            idade_min_global: Number(instData.idade_min_global) || 6,
+            idade_max_global: Number(instData.idade_max_global) || 16,
+            data_inicio_global: instData.data_inicio_global || "",
+            data_fim_global: instData.data_fim_global || "",
+            datas_encontradas: instData.datas_encontradas || "",
+            link_inscricao_extraido: instData.link_inscricao_extraido || "",
+            link_oficial: instData.link_oficial || "",
+            email_contato: instData.email_contato || "",
+            telefone_contato: instData.telefone_contato || "",
+            imagem_capa_url: instData.imagem_capa_url || "",
+            logotipo_url: instData.logotipo_url || "",
+            descricao_html: instData.descricao_html || "",
+            is_active: instData.is_active !== false,
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 3. MODO CAMPO PRIVADO NORMAL (public.campos)
       const { data, error } = await supabase
         .from("campos")
         .select("*")
         .eq("id", id)
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
+        // Fallback: tentar procurar em institucional_iniciativas se não veio com ?tipo=autarquia
+        const { data: instFallback } = await supabase
+          .from("institucional_iniciativas")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (instFallback) {
+          setModoAutarquia(true);
+          setIsNovoAutarquia(false);
+          setAutarquiaForm({
+            titulo: instFallback.titulo || "",
+            entidade_organizadora: instFallback.entidade_organizadora || "",
+            distrito: instFallback.distrito || "Lisboa",
+            concelho: instFallback.concelho || "",
+            preco_base:
+              instFallback.preco_base !== null &&
+              instFallback.preco_base !== undefined
+                ? Number(instFallback.preco_base)
+                : 0,
+            idade_min_global: Number(instFallback.idade_min_global) || 6,
+            idade_max_global: Number(instFallback.idade_max_global) || 16,
+            data_inicio_global: instFallback.data_inicio_global || "",
+            data_fim_global: instFallback.data_fim_global || "",
+            datas_encontradas: instFallback.datas_encontradas || "",
+            link_inscricao_extraido: instFallback.link_inscricao_extraido || "",
+            link_oficial: instFallback.link_oficial || "",
+            email_contato: instFallback.email_contato || "",
+            telefone_contato: instFallback.telefone_contato || "",
+            imagem_capa_url: instFallback.imagem_capa_url || "",
+            logotipo_url: instFallback.logotipo_url || "",
+            descricao_html: instFallback.descricao_html || "",
+            is_active: instFallback.is_active !== false,
+          });
+          setLoading(false);
+          return;
+        }
+
         alert(
           (isEn ? "Error loading camp: " : "Erro ao carregar campo: ") +
             (error?.message || (isEn ? "Not found" : "Não encontrado"))
@@ -331,7 +471,7 @@ export default function EditarCampoParceiro({
         if (orgData) {
           setOrganizador(orgData);
           setPerfilParceiro({
-            taxa_comissao: Number(orgData.taxa_comissao) || 12,
+            taxa_comissao: Number(orgData.taxa_comissao) ?? 12,
             base_comissao: orgData.base_comissao || "total",
             modalidade_reserva:
               orgData.modalidade_reserva ||
@@ -342,7 +482,6 @@ export default function EditarCampoParceiro({
         }
       }
 
-      // Reconstruir País (Normalizando se vier em inglês da BD) e Coordenadas
       const paisRaw = data.pais || data.pais_en || "Portugal";
       const paisMatch = PAISES.find(
         (p) =>
@@ -358,7 +497,6 @@ export default function EditarCampoParceiro({
         });
       }
 
-      // Reconstruir Línguas Faladas (lê tanto a coluna PT como a EN)
       const strLing = `${data.linguas_faladas || ""} ${
         data.linguas_faladas_en || ""
       }`.toLowerCase();
@@ -370,7 +508,6 @@ export default function EditarCampoParceiro({
         de: strLing.includes("alem") || strLing.includes("germ"),
       });
 
-      // Reconstruir Galeria de Imagens (Sem duplicar a Foto de Capa!)
       const fotosIniciais: GaleriaItem[] = [];
       const urlsVistas = new Set<string>();
 
@@ -397,12 +534,10 @@ export default function EditarCampoParceiro({
       }
       setGaleria(fotosIniciais);
 
-      // Reconstruir PDFs Existentes
       if (Array.isArray(data.programas_pdf)) {
         setDocumentosExistentes(data.programas_pdf);
       }
 
-      // Reconstruir Perguntas Customizadas (usa perguntas_customizadas_en quando isEn)
       const fontePerguntas =
         isEn &&
         Array.isArray(data.perguntas_customizadas_en) &&
@@ -439,7 +574,6 @@ export default function EditarCampoParceiro({
         });
       }
 
-      // Normalizar Política de Cancelamento no idioma ativo
       let politicaVisivel = isEn
         ? data.politica_cancelamento_en || data.politica_cancelamento || POLITICAS_CANCELAMENTO[0].en
         : data.politica_cancelamento || POLITICAS_CANCELAMENTO[0].pt;
@@ -453,7 +587,6 @@ export default function EditarCampoParceiro({
         politicaVisivel = isEn ? polMatch.en : polMatch.pt;
       }
 
-      // Pacotes, Alojamento e Descontos com valores no idioma ativo
       const pacotesCarregados: Pacote[] = Array.isArray(data.pacotes)
         ? data.pacotes.map((pac: Pacote) => ({
             ...pac,
@@ -522,9 +655,7 @@ export default function EditarCampoParceiro({
         calendario_funcionamento: {
           data_inicio: data.calendario_funcionamento?.data_inicio || "",
           data_fim: data.calendario_funcionamento?.data_fim || "",
-          dias_semana: Array.isArray(
-            data.calendario_funcionamento?.dias_semana
-          )
+          dias_semana: Array.isArray(data.calendario_funcionamento?.dias_semana)
             ? data.calendario_funcionamento.dias_semana
             : [1, 2, 3, 4, 5],
           dias_fechados: Array.isArray(
@@ -539,7 +670,7 @@ export default function EditarCampoParceiro({
         perguntasUI: perguntasReconstruidas,
         regras_comissao: data.regras_comissao || {
           modo: "padrao",
-          taxa_programa: Number(data.taxa_comissao) || 12,
+          taxa_programa: Number(data.taxa_comissao) ?? 12,
           taxa_alojamento: 10,
           taxa_extras: 0,
         },
@@ -548,10 +679,146 @@ export default function EditarCampoParceiro({
       setLoading(false);
     };
 
-    fetchCampo();
+    fetchData();
   }, [id, lang, isEn, router]);
 
-  // Geocodificação Manual
+  // ==========================================
+  // HANDLERS DO EDITOR DE AUTARQUIAS
+  // ==========================================
+  const handleUploadCapaAutarquia = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCapaAutarquia(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const uid = session?.user?.id || "autarquia";
+      const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const fileName = `autarquia_${uid}_${Date.now()}_${cleanName}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from("campos-imagens")
+        .upload(fileName, file, { upsert: true });
+      if (uploadErr) throw uploadErr;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("campos-imagens").getPublicUrl(fileName);
+
+      setAutarquiaForm((prev) => ({ ...prev, imagem_capa_url: publicUrl }));
+    } catch (err: any) {
+      alert("Erro ao carregar imagem: " + err.message);
+    } finally {
+      setUploadingCapaAutarquia(false);
+    }
+  };
+
+  const handleGravarAutarquia = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    if (!autarquiaForm.titulo.trim() || !autarquiaForm.entidade_organizadora.trim()) {
+      alert(
+        isEn
+          ? "Please fill in the program title and organization name."
+          : "Preencha o título do programa e o nome da entidade organizadora."
+      );
+      return;
+    }
+
+    if (!autarquiaForm.link_inscricao_extraido.trim()) {
+      alert(
+        isEn
+          ? "Municipal programs require an external registration link."
+          : "Os programas de autarquias requerem sempre um link externo de inscrição."
+      );
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada");
+
+      const precoSanitizado = Math.max(0, Number(autarquiaForm.preco_base) || 0);
+
+      const payload = {
+        organizador_id: session.user.id,
+        titulo: autarquiaForm.titulo.trim(),
+        entidade_organizadora: autarquiaForm.entidade_organizadora.trim(),
+        distrito: autarquiaForm.distrito || "Lisboa",
+        concelho: autarquiaForm.concelho.trim() || null,
+        preco_base: precoSanitizado,
+        idade_min_global: Number(autarquiaForm.idade_min_global) || 6,
+        idade_max_global: Number(autarquiaForm.idade_max_global) || 16,
+        data_inicio_global: autarquiaForm.data_inicio_global || null,
+        data_fim_global: autarquiaForm.data_fim_global || null,
+        datas_encontradas: autarquiaForm.datas_encontradas.trim() || null,
+        link_inscricao_extraido: autarquiaForm.link_inscricao_extraido.trim(),
+        link_oficial: autarquiaForm.link_oficial.trim() || null,
+        email_contato: autarquiaForm.email_contato.trim() || null,
+        telefone_contato: autarquiaForm.telefone_contato.trim() || null,
+        imagem_capa_url: autarquiaForm.imagem_capa_url.trim() || null,
+        logotipo_url: autarquiaForm.logotipo_url.trim() || null,
+        descricao_html: autarquiaForm.descricao_html || "",
+        is_active: autarquiaForm.is_active,
+      };
+
+      if (isNovoAutarquia) {
+        const { error } = await supabase
+          .from("institucional_iniciativas")
+          .insert([payload]);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("institucional_iniciativas")
+          .update(payload)
+          .eq("id", id);
+        if (error) throw error;
+      }
+
+      alert(
+        isEn
+          ? "Municipal program saved successfully!"
+          : "Programa municipal guardado com sucesso!"
+      );
+      router.push(`/${lang}/admin/campos`);
+    } catch (err: any) {
+      alert("Erro ao guardar programa municipal: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleApagarAutarquia = async () => {
+    const confirmacao = window.confirm(
+      isEn
+        ? "Are you sure you want to permanently delete this municipal program?"
+        : "Tem a certeza que pretende eliminar este programa municipal? Esta ação é irreversível."
+    );
+    if (!confirmacao) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("institucional_iniciativas")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      router.push(`/${lang}/admin/campos`);
+    } catch (err: any) {
+      alert(err.message);
+      setDeleting(false);
+    }
+  };
+
+  // ==========================================
+  // HANDLERS DO MODO CAMPO PRIVADO (INALTERADOS + SUPORTE 0€)
+  // ==========================================
   const buscarNoMapaManual = async () => {
     if (!formData.local.trim()) return;
     try {
@@ -621,7 +888,6 @@ export default function EditarCampoParceiro({
     return "fixo";
   };
 
-  // Calendário
   const toggleDiaSemana = (diaId: number) => {
     setFormData((prev) => {
       const atual = prev.calendario_funcionamento.dias_semana;
@@ -667,7 +933,6 @@ export default function EditarCampoParceiro({
     }));
   };
 
-  // Pacotes e Preços
   const adicionarVariante = () => {
     setNovoPacote((prev) => ({
       ...prev,
@@ -753,7 +1018,6 @@ export default function EditarCampoParceiro({
     }));
   };
 
-  // Alojamento
   const guardarAlojamento = () => {
     if (!novoAlojamento.nome.trim()) return;
     const itemFinal: OpcaoAlojamento = {
@@ -781,7 +1045,6 @@ export default function EditarCampoParceiro({
     }));
   };
 
-  // Descontos
   const guardarDesconto = () => {
     if (!novoDesconto.nome.trim()) return;
     const itemFinal: Desconto = {
@@ -803,7 +1066,6 @@ export default function EditarCampoParceiro({
     }));
   };
 
-  // Fotos e Documentos PDF
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const filesArray = Array.from(e.target.files);
@@ -845,7 +1107,6 @@ export default function EditarCampoParceiro({
     setDocumentos((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // Perguntas
   const adicionarPergunta = (tipo: "texto" | "escolha") => {
     setFormData((prev) => ({
       ...prev,
@@ -876,7 +1137,6 @@ export default function EditarCampoParceiro({
     }));
   };
 
-  // Apagar Campo
   const handleApagarCampo = async () => {
     const confirmacao = window.confirm(
       isEn
@@ -896,7 +1156,6 @@ export default function EditarCampoParceiro({
     }
   };
 
-  // Tradução bidirecional (PT->EN ou EN->PT consoante o idioma em que o parceiro está a editar)
   const traduzirTexto = async (texto: string, pair: "pt|en" | "en|pt") => {
     if (!texto || !texto.trim()) return "";
     try {
@@ -925,7 +1184,6 @@ export default function EditarCampoParceiro({
     }
   };
 
-  // Guardar Alterações (Pode ser clicado em qualquer passo!)
   const handleGravarCampo = async () => {
     if (!formData.nome.trim() || !formData.local.trim() || !formData.descricao.trim()) {
       alert(
@@ -963,7 +1221,6 @@ export default function EditarCampoParceiro({
       } = await supabase.auth.getSession();
       if (!session) throw new Error(isEn ? "Session expired" : "Sessão expirada");
 
-      // 1. Upload de Fotos Novas e Separação da Capa
       const uploadedUrls: string[] = [];
       let capaUrl = "";
 
@@ -997,7 +1254,6 @@ export default function EditarCampoParceiro({
         capaUrl = uploadedUrls.shift()!;
       }
 
-      // 2. Upload de Novos PDFs
       const novosDocsUploaded: { nome: string; url: string }[] = [];
       for (const doc of documentos) {
         const cleanDocName = doc.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -1018,7 +1274,6 @@ export default function EditarCampoParceiro({
       }
       const programasDocsFinais = [...documentosExistentes, ...novosDocsUploaded];
 
-      // 3. Coordenadas geográficas
       let coordsFinais = mapPreview;
       if (!coordsFinais && formData.local.trim()) {
         try {
@@ -1044,7 +1299,6 @@ export default function EditarCampoParceiro({
       const linguasPt = getLinguasString("pt");
       const linguasEn = getLinguasString("en");
 
-      // Política de cancelamento bilingue (evita tradução externa para opções padrão)
       const polPadrao = POLITICAS_CANCELAMENTO.find(
         (p) =>
           p.pt === formData.politica_cancelamento ||
@@ -1134,9 +1388,9 @@ export default function EditarCampoParceiro({
         })
       );
 
+      // Aceita custo 0€ (Gratuito) sem descartar
       const todosPrecos = pacotesFormatados
-        .flatMap((p) => p.variantes.map((v) => Number(v.preco) || 0))
-        .filter((p) => p > 0);
+        .flatMap((p) => p.variantes.map((v) => Math.max(0, Number(v.preco) || 0)));
       const precoMinimo = todosPrecos.length > 0 ? Math.min(...todosPrecos) : 0;
 
       const isPersonalizado =
@@ -1243,11 +1497,499 @@ export default function EditarCampoParceiro({
   if (loading) {
     return (
       <div className="p-12 text-center text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">
-        {isEn ? "Loading camp data..." : "A carregar dados do programa..."}
+        {isEn ? "Loading program data..." : "A carregar dados do programa..."}
       </div>
     );
   }
 
+  // ==========================================================================
+  // RENDERIZAÇÃO MODO AUTARQUIA (public.institucional_iniciativas)
+  // ==========================================================================
+  if (modoAutarquia) {
+    const isGratuito = Number(autarquiaForm.preco_base) <= 0;
+
+    return (
+      <div className="max-w-4xl mx-auto font-sans pb-20 text-[#0F172A]">
+        <div className="mb-8">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <Link
+              href={`/${lang}/admin/campos`}
+              className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-slate-800 no-underline"
+            >
+              &larr; {isEn ? "Back to Programs" : "Voltar aos Programas"}
+            </Link>
+
+            <div className="flex items-center gap-3">
+              {!isNovoAutarquia && (
+                <button
+                  type="button"
+                  onClick={handleApagarAutarquia}
+                  disabled={deleting || saving}
+                  className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black uppercase tracking-widest text-[11px] px-4 py-2.5 rounded-xl cursor-pointer transition-colors"
+                >
+                  🗑️ {deleting ? "..." : isEn ? "Delete" : "Eliminar"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleGravarAutarquia()}
+                disabled={saving}
+                className="bg-[#16A34A] hover:bg-green-700 text-white font-black uppercase tracking-widest text-xs px-6 py-2.5 rounded-xl shadow-md cursor-pointer transition-colors border-0"
+              >
+                {saving
+                  ? isEn
+                    ? "Saving..."
+                    : "A Guardar..."
+                  : isEn
+                  ? "✓ Save Municipal Program"
+                  : "✓ Guardar Programa"}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="bg-[#0F172A] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
+              🏛️ {isEn ? "Municipal Initiative" : "Programa de Autarquia"}
+            </span>
+            <span className="bg-[#2563EB] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
+              🔗 {isEn ? "Always External Link" : "Sempre Link Externo"}
+            </span>
+          </div>
+
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 m-0 tracking-tight">
+            {isNovoAutarquia
+              ? isEn
+                ? "New Municipal Program"
+                : "Novo Programa Municipal"
+              : autarquiaForm.titulo || "Editar Programa Municipal"}
+          </h1>
+        </div>
+
+        <form
+          onSubmit={handleGravarAutarquia}
+          className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 md:p-10 space-y-8"
+        >
+          {/* IDENTIFICAÇÃO */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "Program Title *" : "Título do Programa *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={autarquiaForm.titulo}
+                onChange={(e) =>
+                  setAutarquiaForm({ ...autarquiaForm, titulo: e.target.value })
+                }
+                placeholder="Ex: Cascais em Férias – Programas de Verão 2027"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#2563EB] focus:bg-white"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "Organizing Entity *" : "Entidade Organizadora *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={autarquiaForm.entidade_organizadora}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    entidade_organizadora: e.target.value,
+                  })
+                }
+                placeholder="Ex: Câmara Municipal de Cascais / Cascais Ambiente"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#2563EB] focus:bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "District *" : "Distrito *"}
+              </label>
+              <select
+                value={autarquiaForm.distrito}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    distrito: e.target.value,
+                  })
+                }
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none"
+              >
+                {DISTRITOS_PT.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "Municipality / Concelho *" : "Concelho *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={autarquiaForm.concelho}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    concelho: e.target.value,
+                  })
+                }
+                placeholder="Ex: Cascais"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#2563EB] focus:bg-white"
+              />
+            </div>
+          </div>
+
+          {/* CUSTO (PERMITE 0€ GRATUITO) E IDADES */}
+          <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-2xl">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-[10px] font-black text-emerald-900 uppercase tracking-widest">
+                  {isEn ? "Base Cost (€)" : "Custo Base (€)"}
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAutarquiaForm({ ...autarquiaForm, preco_base: 0 })
+                  }
+                  className="text-[10px] font-black uppercase tracking-wider bg-[#16A34A] text-white px-2.5 py-1 rounded-md border-0 cursor-pointer"
+                >
+                  {isEn ? "Set Free (0€)" : "Gratuito (0€)"}
+                </button>
+              </div>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={autarquiaForm.preco_base}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    preco_base: Math.max(0, Number(e.target.value)),
+                  })
+                }
+                className="w-full p-3 bg-white border border-emerald-300 rounded-xl font-black text-lg text-[#16A34A] outline-none"
+              />
+              <p className="text-[11px] font-bold text-emerald-800 mt-2 mb-0">
+                {isGratuito
+                  ? isEn
+                    ? "✓ Displayed as Free (0€)"
+                    : "✓ Será apresentado como Gratuito (0€)"
+                  : isEn
+                  ? `Displayed as: From ${autarquiaForm.preco_base}€`
+                  : `Apresentado como: Desde ${autarquiaForm.preco_base}€`}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "Minimum Age" : "Idade Mínima"}
+              </label>
+              <input
+                type="number"
+                min="3"
+                max="25"
+                value={autarquiaForm.idade_min_global}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    idade_min_global: Number(e.target.value),
+                  })
+                }
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-center text-slate-800 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "Maximum Age" : "Idade Máxima"}
+              </label>
+              <input
+                type="number"
+                min="3"
+                max="25"
+                value={autarquiaForm.idade_max_global}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    idade_max_global: Number(e.target.value),
+                  })
+                }
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-center text-slate-800 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* LINKS EXTERNOS (OBRIGATÓRIO EM AUTARQUIAS) */}
+          <div className="pt-6 border-t border-slate-100 space-y-4">
+            <h2 className="text-lg font-black text-slate-900 m-0">
+              🔗 {isEn ? "External Registration & Website" : "Inscrição Externa & Site Oficial"}
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-[11px] font-black text-[#2563EB] uppercase tracking-widest mb-2">
+                  {isEn
+                    ? "External Registration URL *"
+                    : "Link Direto de Inscrição Externa *"}
+                </label>
+                <input
+                  type="url"
+                  required
+                  value={autarquiaForm.link_inscricao_extraido}
+                  onChange={(e) =>
+                    setAutarquiaForm({
+                      ...autarquiaForm,
+                      link_inscricao_extraido: e.target.value,
+                    })
+                  }
+                  placeholder="https://atividadesnatureza.cascais.pt/..."
+                  className="w-full p-4 bg-blue-50/40 border border-blue-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                  {isEn ? "Official Program Website" : "Link da Página Oficial"}
+                </label>
+                <input
+                  type="url"
+                  value={autarquiaForm.link_oficial}
+                  onChange={(e) =>
+                    setAutarquiaForm({
+                      ...autarquiaForm,
+                      link_oficial: e.target.value,
+                    })
+                  }
+                  placeholder="https://www.cascais.pt/projeto/..."
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-[#2563EB]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* DATAS E CONTACTOS */}
+          <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "Start Date" : "Data de Início (Ref.)"}
+              </label>
+              <input
+                type="date"
+                value={autarquiaForm.data_inicio_global}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    data_inicio_global: e.target.value,
+                  })
+                }
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "End Date" : "Data de Fim (Ref.)"}
+              </label>
+              <input
+                type="date"
+                value={autarquiaForm.data_fim_global}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    data_fim_global: e.target.value,
+                  })
+                }
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn
+                  ? "Schedule / Dates Summary"
+                  : "Resumo das Datas / Turnos"}
+              </label>
+              <input
+                type="text"
+                value={autarquiaForm.datas_encontradas}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    datas_encontradas: e.target.value,
+                  })
+                }
+                placeholder="Ex: Verão 2027 (Junho a Setembro — semanalmente de 2.ª a 6.ª feira)"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "Contact Email" : "E-mail de Contacto"}
+              </label>
+              <input
+                type="email"
+                value={autarquiaForm.email_contato}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    email_contato: e.target.value,
+                  })
+                }
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn ? "Contact Phone" : "Telefone de Contacto"}
+              </label>
+              <input
+                type="text"
+                value={autarquiaForm.telefone_contato}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    telefone_contato: e.target.value,
+                  })
+                }
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* DESCRIÇÃO E IMAGEM DE CAPA */}
+          <div className="pt-6 border-t border-slate-100 space-y-6">
+            <div>
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isEn
+                  ? "Program Description (HTML or Text)"
+                  : "Descrição Completa e Programas (HTML ou Texto)"}
+              </label>
+              <textarea
+                rows={8}
+                value={autarquiaForm.descricao_html}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    descricao_html: e.target.value,
+                  })
+                }
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:border-[#2563EB] leading-relaxed"
+              />
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+              <div className="w-32 h-24 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                {autarquiaForm.imagem_capa_url ? (
+                  <img
+                    src={autarquiaForm.imagem_capa_url}
+                    alt="Capa"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-2xl">🏛️</span>
+                )}
+              </div>
+              <div className="flex-1 w-full space-y-2">
+                <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest">
+                  {isEn ? "Cover Image" : "Imagem de Capa do Programa"}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <label className="bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-black uppercase tracking-widest px-4 py-2.5 rounded-xl cursor-pointer">
+                    {uploadingCapaAutarquia
+                      ? "..."
+                      : isEn
+                      ? "📤 Upload Image"
+                      : "📤 Carregar Foto"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadCapaAutarquia}
+                      className="hidden"
+                    />
+                  </label>
+                  <input
+                    type="url"
+                    value={autarquiaForm.imagem_capa_url}
+                    onChange={(e) =>
+                      setAutarquiaForm({
+                        ...autarquiaForm,
+                        imagem_capa_url: e.target.value,
+                      })
+                    }
+                    placeholder="Ou cole o URL direto da imagem..."
+                    className="flex-1 min-w-[200px] px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ESTADO ATIVO / RASCUNHO */}
+            <label className="flex items-center justify-between bg-slate-50 p-5 rounded-2xl border border-slate-200 cursor-pointer">
+              <div>
+                <span className="block text-sm font-black text-slate-900">
+                  {isEn
+                    ? "Published on Municipalities Page"
+                    : "Publicado na Página de Autarquias"}
+                </span>
+                <span className="text-xs font-medium text-slate-500">
+                  {isEn
+                    ? "Turn off to hide this program while updating dates for the next season."
+                    : "Desative para ocultar temporariamente enquanto atualiza as datas da próxima edição."}
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={autarquiaForm.is_active}
+                onChange={(e) =>
+                  setAutarquiaForm({
+                    ...autarquiaForm,
+                    is_active: e.target.checked,
+                  })
+                }
+                className="w-6 h-6 accent-[#16A34A]"
+              />
+            </label>
+          </div>
+
+          <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
+            <Link
+              href={`/${lang}/admin/campos`}
+              className="px-6 py-3.5 font-bold text-slate-600 bg-slate-100 rounded-xl no-underline text-xs uppercase tracking-widest"
+            >
+              {isEn ? "Cancel" : "Cancelar"}
+            </Link>
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-[#16A34A] hover:bg-green-700 text-white font-black px-8 py-3.5 rounded-xl shadow-lg disabled:opacity-50 uppercase tracking-widest text-xs cursor-pointer border-0"
+            >
+              {saving
+                ? isEn
+                  ? "Saving..."
+                  : "A Guardar..."
+                : isEn
+                ? "✓ Save Municipal Program"
+                : "✓ Guardar Programa"}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  // ==========================================================================
+  // RENDERIZAÇÃO MODO PARCEIRO PRIVADO (public.campos — 3 PASSOS)
+  // ==========================================================================
   const paisParaMapa = isEn
     ? PAISES.find((p) => p.pt === pais)?.en || pais
     : pais;
@@ -1264,7 +2006,6 @@ export default function EditarCampoParceiro({
 
   return (
     <div className="max-w-5xl mx-auto font-sans pb-20">
-      {/* HEADER COM AÇÃO DE GUARDAR DIRETO E APAGAR */}
       <div className="mb-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <Link
@@ -1302,7 +2043,6 @@ export default function EditarCampoParceiro({
           {isEn ? `Edit: ${formData.nome}` : `Editar: ${formData.nome}`}
         </h1>
 
-        {/* ABAS DE NAVEGAÇÃO LIVRE ENTRE OS 3 PASSOS */}
         <div className="flex items-center gap-3 mt-6">
           {[1, 2, 3].map((num) => (
             <button
@@ -1343,9 +2083,6 @@ export default function EditarCampoParceiro({
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 md:p-10 mb-8 relative">
-        {/* ========================================== */}
-        {/* PASSO 1: DADOS BÁSICOS E LOCALIZAÇÃO */}
-        {/* ========================================== */}
         {step === 1 && (
           <div className="space-y-8">
             <h2 className="text-xl font-black text-slate-900 m-0 flex items-center gap-2">
@@ -1517,7 +2254,6 @@ export default function EditarCampoParceiro({
                 </div>
               </div>
 
-              {/* LOCALIZAÇÃO E MAPA (AGRUPADO POR CONTINENTE) */}
               <div className="md:col-span-2 border-t border-slate-100 pt-8 mt-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
@@ -1638,9 +2374,6 @@ export default function EditarCampoParceiro({
           </div>
         )}
 
-        {/* ========================================== */}
-        {/* PASSO 2: CALENDÁRIO, PREÇOS E ALOJAMENTO */}
-        {/* ========================================== */}
         {step === 2 && (
           <div className="space-y-10">
             <div>
@@ -1769,7 +2502,6 @@ export default function EditarCampoParceiro({
               </div>
             </div>
 
-            {/* 2. PACOTES E PREÇOS */}
             <div className="pt-8 border-t border-slate-100">
               <div className="flex justify-between items-start mb-6 gap-4">
                 <div>
@@ -1781,8 +2513,8 @@ export default function EditarCampoParceiro({
                   </h2>
                   <p className="text-xs text-slate-500 m-0">
                     {isEn
-                      ? "Manage your registration packages and pricing options."
-                      : "Gira os seus pacotes de inscrição e opções de preço."}
+                      ? "Manage your registration packages and pricing options (0€ allowed for free)."
+                      : "Gira os seus pacotes de inscrição e opções de preço (pode definir 0€ para gratuito)."}
                   </p>
                 </div>
                 <button
@@ -1856,7 +2588,11 @@ export default function EditarCampoParceiro({
                             {v.nome}
                           </span>
                           <span className="text-sm font-black text-[#167524]">
-                            {v.preco}€
+                            {Number(v.preco) === 0
+                              ? isEn
+                                ? "Free (0€)"
+                                : "Gratuito (0€)"
+                              : `${v.preco}€`}
                           </span>
                         </div>
                       ))}
@@ -1866,7 +2602,6 @@ export default function EditarCampoParceiro({
               </div>
             </div>
 
-            {/* 3. OPÇÕES DE ALOJAMENTO EXTRA */}
             <div className="pt-8 border-t border-slate-100">
               <div className="flex justify-between items-start mb-6 gap-4">
                 <div>
@@ -1935,7 +2670,6 @@ export default function EditarCampoParceiro({
               )}
             </div>
 
-            {/* 4. SUPLEMENTOS E DESCONTOS */}
             <div className="pt-8 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
@@ -2060,9 +2794,6 @@ export default function EditarCampoParceiro({
           </div>
         )}
 
-        {/* ========================================== */}
-        {/* PASSO 3: DESCRIÇÃO, FOTOS, PDFs E PERGUNTAS */}
-        {/* ========================================== */}
         {step === 3 && (
           <div className="space-y-10">
             <div>
@@ -2159,7 +2890,6 @@ export default function EditarCampoParceiro({
                 />
               </div>
 
-              {/* GALERIA DE FOTOS */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mt-6">
                 <div className="flex justify-between items-center mb-4">
                   <div>
@@ -2227,7 +2957,6 @@ export default function EditarCampoParceiro({
                 </div>
               </div>
 
-              {/* SECÇÃO DE UPLOAD DE PDF / ITINERÁRIO */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mt-6">
                 <div className="flex justify-between items-center mb-4">
                   <div>
@@ -2299,7 +3028,6 @@ export default function EditarCampoParceiro({
               </div>
             </div>
 
-            {/* 2. PERGUNTAS PERSONALIZADAS */}
             <div className="pt-8 border-t border-slate-100">
               <div className="flex justify-between items-center mb-6 gap-4 flex-wrap">
                 <div>
@@ -2383,7 +3111,6 @@ export default function EditarCampoParceiro({
         )}
       </div>
 
-      {/* BOTÕES INFERIORES */}
       <div className="flex justify-between items-center px-2">
         {step > 1 ? (
           <button
@@ -2536,8 +3263,8 @@ export default function EditarCampoParceiro({
                         type="text"
                         placeholder={
                           isEn
-                            ? "e.g. Base Price / With Lunch"
-                            : "Ex: Preço Base / Com Almoço"
+                            ? "e.g. Base Price / Free"
+                            : "Ex: Preço Base / Gratuito"
                         }
                         value={v.nome}
                         onChange={(e) =>
