@@ -39,6 +39,27 @@ interface Desconto {
 
 const ReservaContext = createContext<any>(null);
 
+// Helpers seguros contra desvios de fuso horário
+function parseIsoLocal(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
+}
+
+function formatDateIso(dt: Date): string {
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const d = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getMondayIso(iso: string): string {
+  const dt = parseIsoLocal(iso);
+  const day = dt.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  dt.setDate(dt.getDate() - diff);
+  return formatDateIso(dt);
+}
+
 export function ReservaProvider({
   children,
   campo,
@@ -87,10 +108,10 @@ export function ReservaProvider({
   const [quantidade, setQuantidade] = useState(1);
   const [diasSelecionados, setDiasSelecionados] = useState<string[]>([]);
 
-  const todayISO = new Date().toISOString().split("T")[0];
+  const todayISO = formatDateIso(new Date());
   const dataInicialCalendario =
     calendario.data_inicio && calendario.data_inicio > todayISO
-      ? new Date(calendario.data_inicio)
+      ? parseIsoLocal(calendario.data_inicio)
       : new Date();
 
   const [mesAtual, setMesAtual] = useState<Date>(
@@ -178,7 +199,7 @@ export function ReservaProvider({
     const inicioStr = calendario.data_inicio || todayISO;
     const fimStr =
       calendario.data_fim ||
-      new Date(Date.now() + 180 * 86400000).toISOString().split("T")[0];
+      formatDateIso(new Date(Date.now() + 180 * 86400000));
     const diasSemanaAtivos = Array.isArray(calendario.dias_semana)
       ? calendario.dias_semana
       : [1, 2, 3, 4, 5];
@@ -187,12 +208,12 @@ export function ReservaProvider({
       : [];
 
     const lista: string[] = [];
-    const cur = new Date(inicioStr);
-    const fim = new Date(fimStr);
+    const cur = parseIsoLocal(inicioStr);
+    const fim = parseIsoLocal(fimStr);
     if (isNaN(cur.getTime()) || isNaN(fim.getTime())) return lista;
 
     while (cur <= fim) {
-      const iso = cur.toISOString().split("T")[0];
+      const iso = formatDateIso(cur);
       if (
         iso >= todayISO &&
         diasSemanaAtivos.includes(cur.getDay()) &&
@@ -205,26 +226,78 @@ export function ReservaProvider({
     return lista;
   }, [calendario, todayISO]);
 
-  const trocarPacote = (novoPac: Pacote) => {
-    setPacoteSelecionado(novoPac);
-    setVarianteSelecionada(novoPac.variantes?.[0] || null);
-    setDiasSelecionados([]);
-  };
+  // Agrupar datas disponíveis por semana (segunda-feira -> dias da semana)
+  const semanasDisponiveisMap = React.useMemo(() => {
+    const mapa = new Map<string, string[]>();
+    datasDisponiveis.forEach((iso) => {
+      const mon = getMondayIso(iso);
+      if (!mapa.has(mon)) mapa.set(mon, []);
+      mapa.get(mon)!.push(iso);
+    });
+    return mapa;
+  }, [datasDisponiveis]);
 
-  const quantPacote = pacoteSelecionado?.quantidade || 1;
+  const totalSemanasDisponiveis = semanasDisponiveisMap.size;
+
+  // Deteta se a variante escolhida já representa um pack fechado de X dias (ex: "Pack 3 Dias" ou "2 Dias")
+  const matchPackVariante = (varianteSelecionada?.nome || "").match(
+    /\b(?:pack\s+)?([2-9])\s+dias?\b/i
+  );
+  const diasDaVarianteFixa = matchPackVariante
+    ? parseInt(matchPackVariante[1], 10)
+    : null;
+
+  const quantPacote =
+    pacoteSelecionado?.tipo === "dia" && diasDaVarianteFixa
+      ? diasDaVarianteFixa
+      : pacoteSelecionado?.quantidade || 1;
+
   const isDiaAvulsoFlexivel =
     pacoteSelecionado?.tipo === "dia" && quantPacote === 1;
   const isPackDiasFixo = pacoteSelecionado?.tipo === "dia" && quantPacote > 1;
 
+  // Auto-seleciona todas as datas quando um pack semanal cobre todas as semanas disponíveis (ex: Programa Completo = 3 semanas)
+  const calcularSelecaoInicial = (pac: Pacote | null): string[] => {
+    if (!pac || datasDisponiveis.length === 0) return [];
+    if (
+      pac.tipo === "semana" &&
+      totalSemanasDisponiveis > 0 &&
+      (pac.quantidade || 1) >= totalSemanasDisponiveis
+    ) {
+      return [...datasDisponiveis];
+    }
+    return [];
+  };
+
+  useEffect(() => {
+    if (
+      pacoteSelecionado?.tipo === "semana" &&
+      totalSemanasDisponiveis > 0 &&
+      (pacoteSelecionado.quantidade || 1) >= totalSemanasDisponiveis &&
+      diasSelecionados.length === 0
+    ) {
+      setDiasSelecionados([...datasDisponiveis]);
+    }
+  }, [pacoteSelecionado, totalSemanasDisponiveis, datasDisponiveis]);
+
+  const trocarPacote = (novoPac: Pacote) => {
+    setPacoteSelecionado(novoPac);
+    setVarianteSelecionada(novoPac.variantes?.[0] || null);
+    setDiasSelecionados(calcularSelecaoInicial(novoPac));
+  };
+
+  const trocarVariante = (novaVar: Variante) => {
+    setVarianteSelecionada(novaVar);
+    // Se mudar entre variante de 1 dia e pack fixo (ex: 3 dias), limpa a seleção para evitar incoerências
+    if (pacoteSelecionado?.tipo === "dia") {
+      setDiasSelecionados([]);
+    }
+  };
+
   const getSemanasSelecionadas = () => {
     const segundas = new Set<string>();
     diasSelecionados.forEach((d) => {
-      const dt = new Date(d);
-      const day = dt.getDay();
-      const diff = day === 0 ? 6 : day - 1;
-      const mon = new Date(dt);
-      mon.setDate(dt.getDate() - diff);
-      segundas.add(mon.toISOString().split("T")[0]);
+      segundas.add(getMondayIso(d));
     });
     return Array.from(segundas).sort();
   };
@@ -234,7 +307,23 @@ export function ReservaProvider({
     if (data < todayISO) return;
     if (!datasDisponiveis.includes(data)) return;
 
+    const startMondayStr = getMondayIso(data);
+    const diasDestaSemana = semanasDisponiveisMap.get(startMondayStr) || [];
+
     if (pacoteSelecionado.tipo === "dia") {
+      // Se for um Pack de dias fixo que coincide exatamente com o número de dias dessa semana (ex: Pack 3 dias numa semana de 3 dias), bloqueia logo a semana inteira!
+      if (isPackDiasFixo && diasDestaSemana.length === quantPacote) {
+        const semanaJaSelecionada = diasDestaSemana.every((d) =>
+          diasSelecionados.includes(d)
+        );
+        if (semanaJaSelecionada) {
+          setDiasSelecionados([]);
+        } else {
+          setDiasSelecionados([...diasDestaSemana].sort());
+        }
+        return;
+      }
+
       if (diasSelecionados.includes(data)) {
         setDiasSelecionados((prev) => prev.filter((d) => d !== data));
       } else {
@@ -242,35 +331,27 @@ export function ReservaProvider({
         setDiasSelecionados((prev) => [...prev, data].sort());
       }
     } else {
+      // Modo SEMANA: clicar em qualquer dia seleciona e bloqueia automaticamente todos os dias úteis dessa semana
       const limiteSemanas = pacoteSelecionado.quantidade || 1;
       const semanasAtuais = getSemanasSelecionadas();
-
-      const dateObj = new Date(data);
-      const dayOfWeek = dateObj.getDay();
-      const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      const startMonday = new Date(dateObj);
-      startMonday.setDate(dateObj.getDate() - diffToMonday);
-
-      const startMondayStr = startMonday.toISOString().split("T")[0];
-      const endSunday = new Date(startMonday);
-      endSunday.setDate(startMonday.getDate() + 6);
-
-      const diasDestaSemana = datasDisponiveis.filter((d) => {
-        const dDate = new Date(d);
-        return dDate >= startMonday && dDate <= endSunday;
-      });
 
       if (diasDestaSemana.length === 0) return;
 
       if (semanasAtuais.includes(startMondayStr)) {
+        // Desseleciona a semana clicada
         setDiasSelecionados((prev) =>
           prev.filter((d) => !diasDestaSemana.includes(d))
         );
       } else {
-        if (semanasAtuais.length >= limiteSemanas) return;
-        setDiasSelecionados((prev) =>
-          Array.from(new Set([...prev, ...diasDestaSemana])).sort()
-        );
+        if (limiteSemanas === 1) {
+          // Troca fluida para a nova semana clicada (sem precisar de desmarcar primeiro)
+          setDiasSelecionados([...diasDestaSemana].sort());
+        } else {
+          if (semanasAtuais.length >= limiteSemanas) return;
+          setDiasSelecionados((prev) =>
+            Array.from(new Set([...prev, ...diasDestaSemana])).sort()
+          );
+        }
       }
     }
   };
@@ -316,10 +397,16 @@ export function ReservaProvider({
   // MATEMÁTICA COMPLETA DE PREÇOS, ALOJAMENTO, SUPLEMENTOS, TAXAS E DESCONTOS
   // =========================================================================
   const precoBase =
-    Number(varianteSelecionada?.preco) || Number(campo.preco) || 0;
+    varianteSelecionada?.preco !== undefined &&
+    varianteSelecionada?.preco !== null
+      ? Number(varianteSelecionada.preco)
+      : Number(campo.preco) || 0;
+
+  // Só multiplica pelos dias selecionados quando é efetivamente Dia Avulso (1 dia unitário)
   const multiplicadorPrecoBase = isDiaAvulsoFlexivel
     ? Math.max(1, diasSelecionados.length)
     : 1;
+
   const totalUnidadesTempo = isDiaAvulsoFlexivel
     ? Math.max(1, diasSelecionados.length)
     : quantPacote;
@@ -354,10 +441,17 @@ export function ReservaProvider({
   const taxaMatriculaUnit = Number(campo.taxa_matricula) || 0;
   const taxaMaterialUnit = Number(campo.taxa_material) || 0;
 
-  // 4. Descontos Automáticos (ex: Irmãos quando quantidade > 1)
+  // 4. Descontos Automáticos (ex: Irmãos quando quantidade > 1, exceto se a variante já for tarifa Early Bird/2+ Crianças)
+  const varianteJaTemDescontoIrmaos = /2\+|irm[aã]os|sibling|early\s*bird/i.test(
+    varianteSelecionada?.nome || ""
+  );
   let percentagemDescontoAplicada = 0;
   let nomeDescontoAplicado = "";
-  if (descontosCampo.length > 0 && quantidade > 1) {
+  if (
+    descontosCampo.length > 0 &&
+    quantidade > 1 &&
+    !varianteJaTemDescontoIrmaos
+  ) {
     const descIrmaos = descontosCampo[0];
     if (descIrmaos && Number(descIrmaos.percentagem) > 0) {
       percentagemDescontoAplicada = Number(descIrmaos.percentagem);
@@ -386,6 +480,10 @@ export function ReservaProvider({
 
   // Validação de Datas Completas
   const SemanasCount = getSemanasSelecionadas().length;
+  const semanasAlvo = Math.min(
+    quantPacote,
+    totalSemanasDisponiveis || quantPacote
+  );
   const escolhasCompletas =
     datasDisponiveis.length === 0
       ? true
@@ -393,14 +491,13 @@ export function ReservaProvider({
       ? isDiaAvulsoFlexivel
         ? diasSelecionados.length >= 1
         : diasSelecionados.length === quantPacote
-      : SemanasCount === quantPacote;
+      : SemanasCount === semanasAlvo;
 
   const vagasTotais = campo.vagas_totais;
   const isEsgotado = vagasTotais !== null && Number(vagasTotais) <= 0;
   const disabledReserva =
     !pacoteSelecionado ||
     !varianteSelecionada ||
-    precoBase === 0 ||
     isEsgotado ||
     !escolhasCompletas;
 
@@ -504,7 +601,11 @@ export function ReservaProvider({
           nome_cliente: leadForm.nome,
           email_cliente: leadForm.email,
           telefone_cliente: leadForm.telefone,
-          turno_interesse: nomeProgramaCompleto,
+          turno_interesse: `${nomeProgramaCompleto}${
+            diasSelecionados.length > 0
+              ? ` | Datas: ${diasSelecionados.join(", ")}`
+              : ""
+          }`,
           preco_estimado: precoTotal,
         },
       ]);
@@ -541,7 +642,7 @@ export function ReservaProvider({
         pacoteSelecionado,
         setPacoteSelecionado: trocarPacote,
         varianteSelecionada,
-        setVarianteSelecionada,
+        setVarianteSelecionada: trocarVariante,
         opcoesAlojamento,
         alojamentoSelecionado,
         setAlojamentoSelecionado,
@@ -589,7 +690,8 @@ export function ReservaProvider({
         isDiaAvulsoFlexivel,
         multiplicadorPrecoBase,
         isPackDiasFixo,
-        quantPacote,
+        quantPacote:
+          pacoteSelecionado?.tipo === "semana" ? semanasAlvo : quantPacote,
         nomeProgramaCompleto,
         perguntasParsed,
         opcoesParticipantes,
@@ -617,14 +719,16 @@ export function SeletorOpcoes() {
       ? ctx.diasSelecionados.length
       : ctx.getSemanasSelecionadas().length;
 
+  const faltam = Math.max(0, ctx.quantPacote - escolhasFeitas);
+
   const mesesNomes = ctx.isEn
     ? [
         "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
+        "July", "August", "September", "October", "November", "December",
       ]
     : [
         "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
       ];
 
   return (
@@ -632,7 +736,7 @@ export function SeletorOpcoes() {
       className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 relative z-20 space-y-8"
       id="reserva"
     >
-      <div className="flex items-center justify-between border-b border-slate-100 pb-5">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-5">
         <h2 className="text-2xl font-black text-slate-900 m-0 tracking-tight">
           {ctx.isEn ? "Configure your Booking" : "Configurar Inscrição e Preços"}
         </h2>
@@ -665,7 +769,10 @@ export function SeletorOpcoes() {
       {/* 1. ESCOLHA DO PACOTE DE DURAÇÃO */}
       <div>
         <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">
-          1. {ctx.isEn ? "Select Package / Duration" : "Escolha a Modalidade / Duração"}
+          1.{" "}
+          {ctx.isEn
+            ? "Select Package / Duration"
+            : "Escolha a Modalidade / Duração"}
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {ctx.pacotes.map((pac: Pacote) => {
@@ -680,7 +787,7 @@ export function SeletorOpcoes() {
                 key={pac.id}
                 type="button"
                 onClick={() => ctx.setPacoteSelecionado(pac)}
-                className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex items-center justify-between ${
+                className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${
                   isSel
                     ? "border-[#0E3A68] bg-blue-50/40 shadow-sm"
                     : "border-slate-200 hover:border-slate-300 bg-white"
@@ -698,8 +805,12 @@ export function SeletorOpcoes() {
                       : `${pac.quantidade} ${ctx.isEn ? "Day(s)" : "Dia(s)"}`}
                   </span>
                 </div>
-                <span className="text-lg font-black text-[#0E3A68]">
-                  {precoMinPac}€
+                <span className="text-lg font-black text-[#0E3A68] shrink-0">
+                  {precoMinPac === 0
+                    ? ctx.isEn
+                      ? "Free"
+                      : "0€"
+                    : `${precoMinPac}€`}
                 </span>
               </button>
             );
@@ -725,14 +836,14 @@ export function SeletorOpcoes() {
                       key={idx}
                       type="button"
                       onClick={() => ctx.setVarianteSelecionada(v)}
-                      className={`p-3.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
+                      className={`p-3.5 rounded-xl border text-left cursor-pointer flex items-center justify-between gap-2 ${
                         isVarSel
                           ? "border-[#167524] bg-emerald-50/50 font-black"
                           : "border-slate-200 bg-slate-50 hover:bg-white font-bold"
                       }`}
                     >
                       <span className="text-xs text-slate-800">{nomeV}</span>
-                      <span className="text-sm font-black text-[#167524]">
+                      <span className="text-sm font-black text-[#167524] shrink-0">
                         {v.preco}€
                       </span>
                     </button>
@@ -745,7 +856,7 @@ export function SeletorOpcoes() {
 
       {/* 3. CALENDÁRIO INTERATIVO DE SELEÇÃO DE SEMANAS / DIAS */}
       <div>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">
             📅{" "}
             {ctx.isEn
@@ -761,17 +872,27 @@ export function SeletorOpcoes() {
           >
             {ctx.escolhasCompletas
               ? ctx.isEn
-                ? "✓ Dates Selected"
-                : "✓ Datas Selecionadas"
+                ? `✓ ${ctx.diasSelecionados.length} Day(s) Selected`
+                : `✓ ${ctx.diasSelecionados.length} Dia(s) Selecionado(s)`
               : ctx.isEn
-              ? `Select ${ctx.quantPacote - escolhasFeitas} more`
-              : `Selecione ${ctx.quantPacote - escolhasFeitas} ${
+              ? `Select ${faltam} ${
+                  ctx.pacoteSelecionado?.tipo === "semana" ? "week(s)" : "day(s)"
+                }`
+              : `Selecione ${faltam} ${
                   ctx.pacoteSelecionado?.tipo === "semana"
                     ? "semana(s)"
                     : "dia(s)"
                 }`}
           </span>
         </div>
+
+        {ctx.pacoteSelecionado?.tipo === "semana" && (
+          <p className="text-[11px] font-bold text-slate-500 mt-0 mb-3">
+            {ctx.isEn
+              ? "Tip: Clicking any day automatically selects the entire week."
+              : "Dica: Ao clicar num dia, toda a semana correspondente é selecionada automaticamente."}
+          </p>
+        )}
 
         <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
           <div className="flex items-center justify-between mb-4">
@@ -831,7 +952,7 @@ export function SeletorOpcoes() {
         </div>
       </div>
 
-      {/* 4. OPÇÕES DE ALOJAMENTO EXTRA (SE CONFIGURADAS PELO PARCEIRO) */}
+      {/* 4. OPÇÕES DE ALOJAMENTO EXTRA */}
       {ctx.opcoesAlojamento && ctx.opcoesAlojamento.length > 0 && (
         <div className="pt-4 border-t border-slate-100">
           <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">
@@ -891,14 +1012,12 @@ export function SeletorOpcoes() {
         </div>
       )}
 
-      {/* 5. PERGUNTAS DE ESCOLHA MÚLTIPLA CUSTOMIZADAS PELO PARCEIRO (COM DROPDOWNS CUSTOMIZADOS!) */}
+      {/* 5. PERGUNTAS DE ESCOLHA MÚLTIPLA CUSTOMIZADAS PELO PARCEIRO */}
       {ctx.perguntasParsed && ctx.perguntasParsed.length > 0 && (
         <div className="pt-4 border-t border-slate-100 space-y-5">
           <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400">
             📋{" "}
-            {ctx.isEn
-              ? "Participant Preferences"
-              : "Opções por Participante"}
+            {ctx.isEn ? "Participant Preferences" : "Opções por Participante"}
           </label>
           {Array.from({ length: ctx.quantidade }).map((_, idx) => {
             const pNum = idx + 1;
@@ -1020,9 +1139,7 @@ export function CaixaResumo() {
       : "Ir para Formulário Oficial ↗";
 
   const baseCalculado =
-    ctx.precoBase *
-    (ctx.diasSelecionados.length === 0 ? 1 : ctx.multiplicadorPrecoBase) *
-    ctx.quantidade;
+    ctx.precoBase * ctx.multiplicadorPrecoBase * ctx.quantidade;
 
   return (
     <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-lg border border-slate-200">
@@ -1048,9 +1165,16 @@ export function CaixaResumo() {
       </div>
 
       <div className="space-y-3 text-xs mb-6">
-        <div className="flex justify-between font-bold text-slate-700">
-          <span>{ctx.nomeProgramaCompleto}</span>
-          <span>{baseCalculado.toFixed(2)}€</span>
+        <div className="flex justify-between gap-2 font-bold text-slate-700">
+          <span>
+            {ctx.nomeProgramaCompleto}
+            {ctx.isDiaAvulsoFlexivel && ctx.diasSelecionados.length > 0
+              ? ` (${ctx.diasSelecionados.length} ${
+                  ctx.isEn ? "day(s)" : "dia(s)"
+                })`
+              : ""}
+          </span>
+          <span className="shrink-0">{baseCalculado.toFixed(2)}€</span>
         </div>
 
         {ctx.alojamentoSelecionado && (
