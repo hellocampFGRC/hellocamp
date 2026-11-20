@@ -34,6 +34,11 @@ function isPortugueseLocation(texto: string, email = ""): boolean {
 }
 
 function detectPartnerLang(perfil: any, campos: any[]): "pt" | "en" {
+  // Autarquias portuguesas abrem sempre em PT
+  if (perfil?.role === "autarquia") {
+    return "pt";
+  }
+
   // 1. Prioridade máxima: país dos campos do parceiro
   if (Array.isArray(campos) && campos.length > 0) {
     const campoComPais = campos.find((c) => c?.pais || c?.pais_en);
@@ -79,9 +84,12 @@ export default function AdminPartnerLayout({
 
   const [empresaNome, setEmpresaNome] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
+  const [userRole, setUserRole] = useState<string>("organizador");
   const [statusContrato, setStatusContrato] = useState<string>("Pendente");
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isAutarquia = userRole === "autarquia";
 
   useEffect(() => {
     const loadPartnerInfo = async () => {
@@ -101,7 +109,7 @@ export default function AdminPartnerLayout({
           supabase
             .from("perfis")
             .select(
-              "empresa_nome, nome_empresa, nome, nome_completo, status_contrato, morada_sede, email, email_publico, is_superadmin"
+              "role, empresa_nome, nome_empresa, nome, nome_completo, status_contrato, morada_sede, email, email_publico, is_superadmin"
             )
             .eq("id", uid)
             .maybeSingle(),
@@ -131,6 +139,7 @@ export default function AdminPartnerLayout({
       }
 
       if (perfil) {
+        setUserRole(perfil.role || "organizador");
         setEmpresaNome(
           perfil.empresa_nome ||
             perfil.nome_empresa ||
@@ -164,13 +173,28 @@ export default function AdminPartnerLayout({
     },
     {
       href: `/${activeLang}/admin/campos`,
-      label: isEn ? "My Camps" : "Os Meus Campos",
-      icon: "🏕️",
+      label: isAutarquia
+        ? isEn
+          ? "Municipal Programs"
+          : "Programas Municipais"
+        : isEn
+        ? "My Camps"
+        : "Os Meus Campos",
+      icon: isAutarquia ? "🏛️" : "🏕️",
     },
+    ...(!isAutarquia
+      ? [
+          {
+            href: `/${activeLang}/admin/reservas`,
+            label: isEn ? "Bookings & Kids" : "Inscrições & Fichas",
+            icon: "📋",
+          },
+        ]
+      : []),
     {
-      href: `/${activeLang}/admin/reservas`,
-      label: isEn ? "Bookings & Kids" : "Inscrições & Fichas",
-      icon: "📋",
+      href: `/${activeLang}/admin/recrutamento`,
+      label: isEn ? "Staff Recruitment" : "Recrutamento",
+      icon: "🧑‍🏫",
     },
     {
       href: `/${activeLang}/admin/inbox`,
@@ -178,17 +202,25 @@ export default function AdminPartnerLayout({
       icon: "💬",
       badge: unreadCount > 0 ? unreadCount : null,
     },
-    {
-      href: `/${activeLang}/admin/faturacao`,
-      label: isEn ? "Finance & Stripe" : "Finanças & Stripe",
-      icon: "💰",
-    },
-    {
-      href: `/${activeLang}/admin/contrato`,
-      label: isEn ? "Global Contract" : "Contrato Global",
-      icon: "📝",
-    },
+    ...(!isAutarquia
+      ? [
+          {
+            href: `/${activeLang}/admin/faturacao`,
+            label: isEn ? "Finance & Stripe" : "Finanças & Stripe",
+            icon: "💰",
+          },
+          {
+            href: `/${activeLang}/admin/contrato`,
+            label: isEn ? "Global Contract" : "Contrato Global",
+            icon: "📝",
+          },
+        ]
+      : []),
   ];
+
+  const novoProgramaHref = isAutarquia
+    ? `/${activeLang}/admin/campos/editar/novo?tipo=autarquia`
+    : `/${activeLang}/admin/campos/novo`;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A] flex flex-col md:flex-row">
@@ -204,7 +236,7 @@ export default function AdminPartnerLayout({
               <span className="text-white">Hello</span>
               <span className="text-[#F59E0B]">Camp</span>
               <span className="ml-2 bg-[#2563EB] text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md">
-                B2B
+                {isAutarquia ? "🏛️" : "B2B"}
               </span>
             </Link>
           </div>
@@ -212,7 +244,13 @@ export default function AdminPartnerLayout({
           {/* INFO DA ENTIDADE */}
           <div className="p-5 border-b border-slate-800 bg-slate-900/60">
             <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">
-              {isEn ? "Organizer Account" : "Entidade Organizadora"}
+              {isAutarquia
+                ? isEn
+                  ? "Municipality Account"
+                  : "Conta de Autarquia"
+                : isEn
+                ? "Organizer Account"
+                : "Entidade Organizadora"}
             </span>
             <div className="font-black text-sm text-white truncate">
               {empresaNome || "..."}
@@ -220,12 +258,12 @@ export default function AdminPartnerLayout({
             <div className="mt-2 flex items-center gap-2">
               <span
                 className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md text-white ${
-                  statusContrato === "Aprovado"
+                  statusContrato === "Aprovado" || isAutarquia
                     ? "bg-[#16A34A]"
                     : "bg-[#F59E0B]"
                 }`}
               >
-                {statusContrato === "Aprovado"
+                {statusContrato === "Aprovado" || isAutarquia
                   ? isEn
                     ? "✓ Verified"
                     : "✓ Verificado"
@@ -235,11 +273,21 @@ export default function AdminPartnerLayout({
               </span>
               {userId && (
                 <Link
-                  href={`/${activeLang}/parceiro/${userId}?preview=admin`}
+                  href={
+                    isAutarquia
+                      ? `/${activeLang}/institucional`
+                      : `/${activeLang}/parceiro/${userId}?preview=admin`
+                  }
                   target="_blank"
                   className="text-[10px] font-black text-[#F59E0B] hover:underline no-underline"
                 >
-                  {isEn ? "Public Page ↗" : "Ver Montra ↗"}
+                  {isAutarquia
+                    ? isEn
+                      ? "Municipalities ↗"
+                      : "Autarquias ↗"
+                    : isEn
+                    ? "Public Page ↗"
+                    : "Ver Montra ↗"}
                 </Link>
               )}
             </div>
@@ -281,11 +329,19 @@ export default function AdminPartnerLayout({
         {/* RODAPÉ DA SIDEBAR */}
         <div className="p-4 border-t border-slate-800 space-y-2">
           <Link
-            href={`/${activeLang}/admin/campos/novo`}
+            href={novoProgramaHref}
             className="w-full flex items-center justify-center gap-2 bg-[#16A34A] hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest py-3 px-4 rounded-md no-underline transition-colors shadow-sm"
           >
             <span>+</span>
-            <span>{isEn ? "New Camp" : "Criar Novo Campo"}</span>
+            <span>
+              {isAutarquia
+                ? isEn
+                  ? "New Municipal Program"
+                  : "Novo Programa Municipal"
+                : isEn
+                ? "New Camp"
+                : "Criar Novo Campo"}
+            </span>
           </Link>
 
           <button
@@ -307,7 +363,7 @@ export default function AdminPartnerLayout({
           <span className="text-white">Hello</span>
           <span className="text-[#F59E0B]">Camp</span>
           <span className="ml-2 bg-[#2563EB] text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md">
-            B2B
+            {isAutarquia ? "🏛️" : "B2B"}
           </span>
         </Link>
 
@@ -324,7 +380,10 @@ export default function AdminPartnerLayout({
       {mobileMenuOpen && (
         <div className="md:hidden bg-[#0F172A] text-white px-4 pt-2 pb-6 border-b border-slate-800 space-y-2 z-30">
           {navLinks.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive =
+              pathname === item.href ||
+              (item.href !== `/${activeLang}/admin/dashboard` &&
+                pathname?.startsWith(item.href));
             return (
               <Link
                 key={item.href}
@@ -350,11 +409,18 @@ export default function AdminPartnerLayout({
           })}
           <div className="pt-2 flex gap-2">
             <Link
-              href={`/${activeLang}/admin/campos/novo`}
+              href={novoProgramaHref}
               onClick={() => setMobileMenuOpen(false)}
               className="flex-1 text-center bg-[#16A34A] text-white font-black text-xs uppercase tracking-widest py-3 rounded-md no-underline"
             >
-              + {isEn ? "New Camp" : "Novo Campo"}
+              +{" "}
+              {isAutarquia
+                ? isEn
+                  ? "New Program"
+                  : "Novo Programa"
+                : isEn
+                ? "New Camp"
+                : "Novo Campo"}
             </Link>
             <button
               type="button"
