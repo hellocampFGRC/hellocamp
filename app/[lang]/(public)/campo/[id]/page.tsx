@@ -1110,8 +1110,8 @@ export default async function DetalhesDoCampo({
               </div>
             </div>
 
-            {/* BARRA LATERAL COM O RESUMO FIXO */}
-            <div className="w-full lg:w-[380px] flex-shrink-0 lg:sticky lg:top-8 relative z-30">
+            {/* BARRA LATERAL COM O RESUMO FIXO (lg:top-28 para não ficar cortada pela navbar) */}
+            <div className="w-full lg:w-[380px] flex-shrink-0 lg:sticky lg:top-28 relative z-30">
               <CaixaResumo />
             </div>
           </div>

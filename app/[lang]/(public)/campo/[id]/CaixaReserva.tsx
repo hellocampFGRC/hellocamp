@@ -405,7 +405,6 @@ export function ReservaProvider({
     ? Math.max(1, diasSelecionados.length)
     : quantPacote;
 
-  // Número real de dias cobertos pelo pacote/seleção (para regras por dia como 36€/dia ou 4+ dias)
   const diasReferenciaSemana = React.useMemo(() => {
     const semanas = Array.from(semanasDisponiveisMap.values());
     if (semanas.length === 0) return 5;
@@ -440,7 +439,6 @@ export function ReservaProvider({
 
   const candidatosDesconto = promocoesAtivasHoje
     .map((d) => {
-      // Compatibilidade com descontos legados (sem min_criancas/min_dias/data_fim -> assume 2+ irmãos)
       const minCriancas =
         d.min_criancas !== undefined
           ? Number(d.min_criancas)
@@ -472,7 +470,6 @@ export function ReservaProvider({
     .filter(Boolean) as { regra: Desconto; poupanca: number; label: string }[];
 
   if (candidatosDesconto.length > 0) {
-    // Escolhe automaticamente a regra mais vantajosa para a família
     const melhor = candidatosDesconto.reduce((best, curr) =>
       curr.poupanca > best.poupanca ? curr : best
     );
@@ -480,13 +477,15 @@ export function ReservaProvider({
     nomeDescontoAplicado = melhor.label;
   }
 
-  // 3. Detetar promoção disponível hoje que só falta aumentar o nº de participantes (ex: Early Bird 2+ crianças)
+  // 3. Aviso informativo de promoção disponível hoje para 2+ participantes
   const promoDesbloqueavel =
     valorDesconto === 0
       ? promocoesAtivasHoje.find(
           (d) =>
             (d.min_criancas ?? 1) > quantidade &&
-            (Boolean(d.data_fim) || Boolean(d.preco_por_dia) || Number(d.percentagem) > 0)
+            (Boolean(d.data_fim) ||
+              Boolean(d.preco_por_dia) ||
+              Number(d.percentagem) > 0)
         ) || null
       : null;
 
@@ -819,7 +818,7 @@ export function SeletorOpcoes() {
         </div>
       </div>
 
-      {/* BANNER AUTOMÁTICO DE PROMOÇÃO ATIVA OU DESBLOQUEÁVEL */}
+      {/* BANNER AUTOMÁTICO DE PROMOÇÃO ATIVA OU DISPONÍVEL (SEM BOTÃO) */}
       {ctx.valorDesconto > 0 ? (
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between gap-3">
           <span className="text-xs font-black text-[#167524]">
@@ -831,27 +830,14 @@ export function SeletorOpcoes() {
           </span>
         </div>
       ) : ctx.promoDesbloqueavel ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs font-bold text-amber-950">
-            {ctx.isEn && ctx.promoDesbloqueavel.nome_en
-              ? ctx.promoDesbloqueavel.nome_en
-              : ctx.promoDesbloqueavel.nome}{" "}
-            —{" "}
-            {ctx.isEn
-              ? `Add ${ctx.promoDesbloqueavel.min_criancas}+ children to unlock automatically.`
-              : `Selecione ${ctx.promoDesbloqueavel.min_criancas}+ participantes para ativar automaticamente.`}
-          </span>
-          <button
-            type="button"
-            onClick={() =>
-              ctx.setQuantidade(ctx.promoDesbloqueavel.min_criancas || 2)
-            }
-            className="bg-[#F59E0B] hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest px-3.5 py-2 rounded-lg border-0 cursor-pointer shrink-0"
-          >
-            {ctx.isEn
-              ? `Set ${ctx.promoDesbloqueavel.min_criancas} children`
-              : `Testar com ${ctx.promoDesbloqueavel.min_criancas} participantes`}
-          </button>
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-xs font-bold text-amber-950">
+          {ctx.isEn && ctx.promoDesbloqueavel.nome_en
+            ? ctx.promoDesbloqueavel.nome_en
+            : ctx.promoDesbloqueavel.nome}{" "}
+          —{" "}
+          {ctx.isEn
+            ? `Automatically applied for ${ctx.promoDesbloqueavel.min_criancas}+ children.`
+            : `Aplicado automaticamente a partir de ${ctx.promoDesbloqueavel.min_criancas} participantes.`}
         </div>
       ) : null}
 
