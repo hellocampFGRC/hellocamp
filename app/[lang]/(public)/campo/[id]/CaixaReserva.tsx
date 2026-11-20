@@ -16,6 +16,7 @@ interface Pacote {
   titulo: string;
   tipo: "semana" | "dia";
   quantidade: number;
+  dias_equivalentes?: number;
   variantes: Variante[];
   titulo_en?: string;
 }
@@ -33,8 +34,14 @@ interface Desconto {
   id: string;
   nome: string;
   nome_en?: string;
-  percentagem: number;
-  acumulavel: boolean;
+  percentagem?: number;
+  preco_por_dia?: number;
+  acumulavel?: boolean;
+  ativo?: boolean;
+  min_criancas?: number;
+  min_dias?: number;
+  data_inicio?: string;
+  data_fim?: string;
 }
 
 const ReservaContext = createContext<any>(null);
@@ -226,7 +233,7 @@ export function ReservaProvider({
     return lista;
   }, [calendario, todayISO]);
 
-  // Agrupar datas disponíveis por semana (segunda-feira -> dias da semana)
+  // Agrupar datas disponíveis por semana (segunda-feira -> dias úteis dessa semana)
   const semanasDisponiveisMap = React.useMemo(() => {
     const mapa = new Map<string, string[]>();
     datasDisponiveis.forEach((iso) => {
@@ -239,7 +246,7 @@ export function ReservaProvider({
 
   const totalSemanasDisponiveis = semanasDisponiveisMap.size;
 
-  // Deteta se a variante escolhida já representa um pack fechado de X dias (ex: "Pack 3 Dias" ou "2 Dias")
+  // Deteta se alguma variante antiga tem "Pack X Dias" no nome
   const matchPackVariante = (varianteSelecionada?.nome || "").match(
     /\b(?:pack\s+)?([2-9])\s+dias?\b/i
   );
@@ -256,7 +263,6 @@ export function ReservaProvider({
     pacoteSelecionado?.tipo === "dia" && quantPacote === 1;
   const isPackDiasFixo = pacoteSelecionado?.tipo === "dia" && quantPacote > 1;
 
-  // Auto-seleciona todas as datas quando um pack semanal cobre todas as semanas disponíveis (ex: Programa Completo = 3 semanas)
   const calcularSelecaoInicial = (pac: Pacote | null): string[] => {
     if (!pac || datasDisponiveis.length === 0) return [];
     if (
@@ -288,7 +294,6 @@ export function ReservaProvider({
 
   const trocarVariante = (novaVar: Variante) => {
     setVarianteSelecionada(novaVar);
-    // Se mudar entre variante de 1 dia e pack fixo (ex: 3 dias), limpa a seleção para evitar incoerências
     if (pacoteSelecionado?.tipo === "dia") {
       setDiasSelecionados([]);
     }
@@ -311,16 +316,12 @@ export function ReservaProvider({
     const diasDestaSemana = semanasDisponiveisMap.get(startMondayStr) || [];
 
     if (pacoteSelecionado.tipo === "dia") {
-      // Se for um Pack de dias fixo que coincide exatamente com o número de dias dessa semana (ex: Pack 3 dias numa semana de 3 dias), bloqueia logo a semana inteira!
       if (isPackDiasFixo && diasDestaSemana.length === quantPacote) {
         const semanaJaSelecionada = diasDestaSemana.every((d) =>
           diasSelecionados.includes(d)
         );
-        if (semanaJaSelecionada) {
-          setDiasSelecionados([]);
-        } else {
-          setDiasSelecionados([...diasDestaSemana].sort());
-        }
+        if (semanaJaSelecionada) setDiasSelecionados([]);
+        else setDiasSelecionados([...diasDestaSemana].sort());
         return;
       }
 
@@ -331,20 +332,16 @@ export function ReservaProvider({
         setDiasSelecionados((prev) => [...prev, data].sort());
       }
     } else {
-      // Modo SEMANA: clicar em qualquer dia seleciona e bloqueia automaticamente todos os dias úteis dessa semana
       const limiteSemanas = pacoteSelecionado.quantidade || 1;
       const semanasAtuais = getSemanasSelecionadas();
-
       if (diasDestaSemana.length === 0) return;
 
       if (semanasAtuais.includes(startMondayStr)) {
-        // Desseleciona a semana clicada
         setDiasSelecionados((prev) =>
           prev.filter((d) => !diasDestaSemana.includes(d))
         );
       } else {
         if (limiteSemanas === 1) {
-          // Troca fluida para a nova semana clicada (sem precisar de desmarcar primeiro)
           setDiasSelecionados([...diasDestaSemana].sort());
         } else {
           if (semanasAtuais.length >= limiteSemanas) return;
@@ -376,9 +373,7 @@ export function ReservaProvider({
       selecionado?: boolean;
     }[] = [];
 
-    for (let i = 0; i < offset; i++) {
-      celulas.push({ vazio: true });
-    }
+    for (let i = 0; i < offset; i++) celulas.push({ vazio: true });
     for (let d = 1; d <= diasNoMes; d++) {
       const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(
         d
@@ -394,7 +389,7 @@ export function ReservaProvider({
   };
 
   // =========================================================================
-  // MATEMÁTICA COMPLETA DE PREÇOS, ALOJAMENTO, SUPLEMENTOS, TAXAS E DESCONTOS
+  // MOTOR AUTOMÁTICO DE PREÇOS, EARLY BIRD POR DATA, IRMÃOS E ESCALÕES DE DIAS
   // =========================================================================
   const precoBase =
     varianteSelecionada?.preco !== undefined &&
@@ -402,7 +397,6 @@ export function ReservaProvider({
       ? Number(varianteSelecionada.preco)
       : Number(campo.preco) || 0;
 
-  // Só multiplica pelos dias selecionados quando é efetivamente Dia Avulso (1 dia unitário)
   const multiplicadorPrecoBase = isDiaAvulsoFlexivel
     ? Math.max(1, diasSelecionados.length)
     : 1;
@@ -411,18 +405,99 @@ export function ReservaProvider({
     ? Math.max(1, diasSelecionados.length)
     : quantPacote;
 
-  // 1. Custo de Alojamento Extra (por participante)
+  // Número real de dias cobertos pelo pacote/seleção (para regras por dia como 36€/dia ou 4+ dias)
+  const diasReferenciaSemana = React.useMemo(() => {
+    const semanas = Array.from(semanasDisponiveisMap.values());
+    if (semanas.length === 0) return 5;
+    const alvo = Math.min(quantPacote, semanas.length);
+    return semanas
+      .slice(0, alvo)
+      .reduce((acc, lista) => acc + lista.length, 0);
+  }, [semanasDisponiveisMap, quantPacote]);
+
+  const totalDiasReais =
+    diasSelecionados.length > 0
+      ? diasSelecionados.length
+      : pacoteSelecionado?.dias_equivalentes
+      ? Number(pacoteSelecionado.dias_equivalentes)
+      : pacoteSelecionado?.tipo === "semana"
+      ? diasReferenciaSemana
+      : quantPacote;
+
+  const subtotalPrograma = precoBase * multiplicadorPrecoBase * quantidade;
+
+  // 1. Avaliar todas as promoções ativas na data de hoje (todayISO)
+  const promocoesAtivasHoje = descontosCampo.filter((d) => {
+    if (d.ativo === false) return false;
+    if (d.data_inicio && todayISO < d.data_inicio) return false;
+    if (d.data_fim && todayISO > d.data_fim) return false;
+    return true;
+  });
+
+  // 2. Calcular qual o melhor desconto elegível para a seleção atual
+  let valorDesconto = 0;
+  let nomeDescontoAplicado = "";
+
+  const candidatosDesconto = promocoesAtivasHoje
+    .map((d) => {
+      // Compatibilidade com descontos legados (sem min_criancas/min_dias/data_fim -> assume 2+ irmãos)
+      const minCriancas =
+        d.min_criancas !== undefined
+          ? Number(d.min_criancas)
+          : !d.min_dias && !d.data_fim
+          ? 2
+          : 1;
+      const minDias = d.min_dias !== undefined ? Number(d.min_dias) : 1;
+
+      if (quantidade < minCriancas) return null;
+      if (totalDiasReais < minDias) return null;
+
+      let poupanca = 0;
+      if (d.preco_por_dia !== undefined && d.preco_por_dia !== null) {
+        const novoSubtotal =
+          Number(d.preco_por_dia) * totalDiasReais * quantidade;
+        poupanca = Math.max(0, subtotalPrograma - novoSubtotal);
+      } else if (Number(d.percentagem) > 0) {
+        poupanca = subtotalPrograma * (Number(d.percentagem) / 100);
+      }
+
+      if (poupanca <= 0.009) return null;
+
+      return {
+        regra: d,
+        poupanca,
+        label: isEn && d.nome_en ? d.nome_en : d.nome,
+      };
+    })
+    .filter(Boolean) as { regra: Desconto; poupanca: number; label: string }[];
+
+  if (candidatosDesconto.length > 0) {
+    // Escolhe automaticamente a regra mais vantajosa para a família
+    const melhor = candidatosDesconto.reduce((best, curr) =>
+      curr.poupanca > best.poupanca ? curr : best
+    );
+    valorDesconto = melhor.poupanca;
+    nomeDescontoAplicado = melhor.label;
+  }
+
+  // 3. Detetar promoção disponível hoje que só falta aumentar o nº de participantes (ex: Early Bird 2+ crianças)
+  const promoDesbloqueavel =
+    valorDesconto === 0
+      ? promocoesAtivasHoje.find(
+          (d) =>
+            (d.min_criancas ?? 1) > quantidade &&
+            (Boolean(d.data_fim) || Boolean(d.preco_por_dia) || Number(d.percentagem) > 0)
+        ) || null
+      : null;
+
+  // 4. Alojamento, Suplementos e Taxas
   let custoAlojamentoUnit = 0;
   if (alojamentoSelecionado) {
     const pAloj = Number(alojamentoSelecionado.preco) || 0;
-    if (alojamentoSelecionado.tipo === "fixo") {
-      custoAlojamentoUnit = pAloj;
-    } else {
-      custoAlojamentoUnit = pAloj * totalUnidadesTempo;
-    }
+    custoAlojamentoUnit =
+      alojamentoSelecionado.tipo === "fixo" ? pAloj : pAloj * totalUnidadesTempo;
   }
 
-  // 2. Custo Seguro e Transporte (por participante)
   const valSeguro = Number(campo.extra_seguro) || 0;
   const custoSeguroUnit = extraSeguro
     ? campo.tipo_extra_seguro === "diario"
@@ -437,34 +512,8 @@ export function ReservaProvider({
       : valTransporte
     : 0;
 
-  // 3. Taxas Fixas (Matrícula e Material por participante)
   const taxaMatriculaUnit = Number(campo.taxa_matricula) || 0;
   const taxaMaterialUnit = Number(campo.taxa_material) || 0;
-
-  // 4. Descontos Automáticos (ex: Irmãos quando quantidade > 1, exceto se a variante já for tarifa Early Bird/2+ Crianças)
-  const varianteJaTemDescontoIrmaos = /2\+|irm[aã]os|sibling|early\s*bird/i.test(
-    varianteSelecionada?.nome || ""
-  );
-  let percentagemDescontoAplicada = 0;
-  let nomeDescontoAplicado = "";
-  if (
-    descontosCampo.length > 0 &&
-    quantidade > 1 &&
-    !varianteJaTemDescontoIrmaos
-  ) {
-    const descIrmaos = descontosCampo[0];
-    if (descIrmaos && Number(descIrmaos.percentagem) > 0) {
-      percentagemDescontoAplicada = Number(descIrmaos.percentagem);
-      nomeDescontoAplicado =
-        isEn && descIrmaos.nome_en ? descIrmaos.nome_en : descIrmaos.nome;
-    }
-  }
-
-  const subtotalPrograma = precoBase * multiplicadorPrecoBase * quantidade;
-  const valorDesconto =
-    percentagemDescontoAplicada > 0
-      ? subtotalPrograma * (percentagemDescontoAplicada / 100)
-      : 0;
 
   const totalExtrasPorCrianca =
     custoAlojamentoUnit +
@@ -605,6 +654,8 @@ export function ReservaProvider({
             diasSelecionados.length > 0
               ? ` | Datas: ${diasSelecionados.join(", ")}`
               : ""
+          }${
+            nomeDescontoAplicado ? ` | Promo: ${nomeDescontoAplicado}` : ""
           }`,
           preco_estimado: precoTotal,
         },
@@ -667,6 +718,8 @@ export function ReservaProvider({
         taxaMaterialTotal: taxaMaterialUnit * quantidade,
         valorDesconto,
         nomeDescontoAplicado,
+        promoDesbloqueavel,
+        subtotalPrograma,
         precoTotal,
         precoBase,
         isEsgotado,
@@ -766,6 +819,42 @@ export function SeletorOpcoes() {
         </div>
       </div>
 
+      {/* BANNER AUTOMÁTICO DE PROMOÇÃO ATIVA OU DESBLOQUEÁVEL */}
+      {ctx.valorDesconto > 0 ? (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+          <span className="text-xs font-black text-[#167524]">
+            ✓ {ctx.nomeDescontoAplicado}{" "}
+            {ctx.isEn ? "applied automatically!" : "aplicado automaticamente!"}
+          </span>
+          <span className="bg-[#167524] text-white text-xs font-black px-3 py-1 rounded-lg shrink-0">
+            -{ctx.valorDesconto.toFixed(2)}€
+          </span>
+        </div>
+      ) : ctx.promoDesbloqueavel ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-xs font-bold text-amber-950">
+            {ctx.isEn && ctx.promoDesbloqueavel.nome_en
+              ? ctx.promoDesbloqueavel.nome_en
+              : ctx.promoDesbloqueavel.nome}{" "}
+            —{" "}
+            {ctx.isEn
+              ? `Add ${ctx.promoDesbloqueavel.min_criancas}+ children to unlock automatically.`
+              : `Selecione ${ctx.promoDesbloqueavel.min_criancas}+ participantes para ativar automaticamente.`}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              ctx.setQuantidade(ctx.promoDesbloqueavel.min_criancas || 2)
+            }
+            className="bg-[#F59E0B] hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest px-3.5 py-2 rounded-lg border-0 cursor-pointer shrink-0"
+          >
+            {ctx.isEn
+              ? `Set ${ctx.promoDesbloqueavel.min_criancas} children`
+              : `Testar com ${ctx.promoDesbloqueavel.min_criancas} participantes`}
+          </button>
+        </div>
+      ) : null}
+
       {/* 1. ESCOLHA DO PACOTE DE DURAÇÃO */}
       <div>
         <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">
@@ -818,13 +907,13 @@ export function SeletorOpcoes() {
         </div>
       </div>
 
-      {/* 2. ESCOLHA DA OPÇÃO DE PREÇO (VARIANTES DO PACOTE) */}
+      {/* 2. OPÇÃO DE PREÇO (SÓ APARECE SE O PACOTE TIVER VARIANTES REAIS COMO ALMOÇO/QUARTO) */}
       {ctx.pacoteSelecionado &&
         ctx.pacoteSelecionado.variantes &&
         ctx.pacoteSelecionado.variantes.length > 1 && (
           <div>
             <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">
-              2. {ctx.isEn ? "Select Price Option" : "Escolha a Opção de Preço"}
+              2. {ctx.isEn ? "Select Option" : "Escolha a Opção"}
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {ctx.pacoteSelecionado.variantes.map(
@@ -1138,9 +1227,6 @@ export function CaixaResumo() {
       ? "Go to Official Form ↗"
       : "Ir para Formulário Oficial ↗";
 
-  const baseCalculado =
-    ctx.precoBase * ctx.multiplicadorPrecoBase * ctx.quantidade;
-
   return (
     <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-lg border border-slate-200">
       <div className="flex items-baseline justify-between border-b border-slate-100 pb-5 mb-5">
@@ -1148,9 +1234,16 @@ export function CaixaResumo() {
           <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
             {ctx.isEn ? "Total Price" : "Valor Total"}
           </span>
-          <span className="text-3xl font-black text-[#0E3A68]">
-            {ctx.precoTotal.toFixed(2)}€
-          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-[#0E3A68]">
+              {ctx.precoTotal.toFixed(2)}€
+            </span>
+            {ctx.valorDesconto > 0 && (
+              <span className="text-sm font-bold text-slate-400 line-through">
+                {(ctx.precoTotal + ctx.valorDesconto).toFixed(2)}€
+              </span>
+            )}
+          </div>
         </div>
         <span className="text-xs font-bold text-slate-500">
           {ctx.quantidade}{" "}
@@ -1174,7 +1267,7 @@ export function CaixaResumo() {
                 })`
               : ""}
           </span>
-          <span className="shrink-0">{baseCalculado.toFixed(2)}€</span>
+          <span className="shrink-0">{ctx.subtotalPrograma.toFixed(2)}€</span>
         </div>
 
         {ctx.alojamentoSelecionado && (
@@ -1215,9 +1308,9 @@ export function CaixaResumo() {
         )}
 
         {ctx.valorDesconto > 0 && (
-          <div className="flex justify-between font-black text-[#167524] bg-emerald-50 p-2.5 rounded-xl">
+          <div className="flex justify-between gap-2 font-black text-[#167524] bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
             <span>✨ {ctx.nomeDescontoAplicado || "Desconto"}</span>
-            <span>-{ctx.valorDesconto.toFixed(2)}€</span>
+            <span className="shrink-0">-{ctx.valorDesconto.toFixed(2)}€</span>
           </div>
         )}
       </div>
