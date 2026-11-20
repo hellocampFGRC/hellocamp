@@ -39,8 +39,12 @@ export default function GestaoParceirosHQ({
   const [camposByParceiro, setCamposByParceiro] = useState<
     Record<string, any[]>
   >({});
+  const [iniciativasByParceiro, setIniciativasByParceiro] = useState<
+    Record<string, any[]>
+  >({});
   const [loading, setLoading] = useState(true);
   const [pesquisa, setPesquisa] = useState("");
+  const [filtroRole, setFiltroRole] = useState<"todos" | "organizador" | "autarquia">("todos");
 
   // Modal de Criação / Edição de Parceiro
   const [showModal, setShowModal] = useState(false);
@@ -50,6 +54,7 @@ export default function GestaoParceirosHQ({
 
   const [form, setForm] = useState({
     id: "",
+    role: "organizador",
     nome_completo: "",
     email: "",
     password: "",
@@ -71,6 +76,7 @@ export default function GestaoParceirosHQ({
   const [sendingEmail, setSendingEmail] = useState(false);
   const [welcomeData, setWelcomeData] = useState<{
     id: string;
+    role: string;
     nome: string;
     email: string;
     password: string;
@@ -80,6 +86,7 @@ export default function GestaoParceirosHQ({
     localDetetado: string;
   }>({
     id: "",
+    role: "organizador",
     nome: "",
     email: "",
     password: "",
@@ -99,19 +106,29 @@ export default function GestaoParceirosHQ({
 
   const fetchParceiros = async () => {
     setLoading(true);
-    const [{ data, error }, { data: camposData }] = await Promise.all([
-      supabase
-        .from("perfis")
-        .select(
-          "id, empresa_nome, nome_empresa, nome, nome_completo, nif_empresa, email, telefone, morada_sede, status_contrato, taxa_comissao, base_comissao, modalidade_reserva, created_at"
-        )
-        .eq("role", "organizador")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("campos")
-        .select("id, nome, nome_en, categoria, local, Distrito, preco, ativo, status_aprovacao, organizador_id")
-        .order("created_at", { ascending: true }),
-    ]);
+    const [{ data, error }, { data: camposData }, { data: instData }] =
+      await Promise.all([
+        supabase
+          .from("perfis")
+          .select(
+            "id, role, empresa_nome, nome_empresa, nome, nome_completo, nif_empresa, email, telefone, morada_sede, status_contrato, taxa_comissao, base_comissao, modalidade_reserva, created_at"
+          )
+          .in("role", ["organizador", "autarquia"])
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("campos")
+          .select(
+            "id, nome, nome_en, categoria, local, Distrito, preco, ativo, status_aprovacao, organizador_id"
+          )
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("institucional_iniciativas")
+          .select(
+            "id, titulo, distrito, concelho, preco_base, is_active, organizador_id"
+          )
+          .not("organizador_id", "is", null)
+          .order("created_at", { ascending: true }),
+      ]);
 
     if (error) {
       alert("Erro ao ler a base de dados: " + error.message);
@@ -119,14 +136,29 @@ export default function GestaoParceirosHQ({
       setParceiros(data || []);
     }
 
-    const grouped: Record<string, any[]> = {};
+    const groupedCampos: Record<string, any[]> = {};
     (camposData || []).forEach((c: any) => {
       if (c.organizador_id) {
-        if (!grouped[c.organizador_id]) grouped[c.organizador_id] = [];
-        grouped[c.organizador_id].push(c);
+        if (!groupedCampos[c.organizador_id]) groupedCampos[c.organizador_id] = [];
+        groupedCampos[c.organizador_id].push(c);
       }
     });
-    setCamposByParceiro(grouped);
+    setCamposByParceiro(groupedCampos);
+
+    const groupedInst: Record<string, any[]> = {};
+    (instData || []).forEach((i: any) => {
+      if (i.organizador_id) {
+        if (!groupedInst[i.organizador_id]) groupedInst[i.organizador_id] = [];
+        groupedInst[i.organizador_id].push({
+          ...i,
+          nome: i.titulo,
+          local: [i.concelho, i.distrito].filter(Boolean).join(", "),
+          Distrito: i.distrito,
+          isInstitucional: true,
+        });
+      }
+    });
+    setIniciativasByParceiro(groupedInst);
     setLoading(false);
   };
 
@@ -139,6 +171,12 @@ export default function GestaoParceirosHQ({
     listaCampos: any[],
     parceiroObj: any
   ): { idioma: InviteLang; resumoLocal: string } => {
+    if (parceiroObj?.role === "autarquia") {
+      const primeiro = listaCampos[0];
+      const resumo = primeiro?.local || parceiroObj?.morada_sede || "Portugal";
+      return { idioma: "pt", resumoLocal: resumo };
+    }
+
     const locaisTexto = listaCampos
       .map((c) => `${c.local || ""} ${c.Distrito || ""}`)
       .join(" ")
@@ -149,10 +187,9 @@ export default function GestaoParceirosHQ({
 
     const primeiroCampo = listaCampos[0];
     const resumoLocal = primeiroCampo
-      ? `${primeiroCampo.local || ""}${primeiroCampo.Distrito ? ` (${primeiroCampo.Distrito})` : ""}`.trim()
+      ? `${primeiroCampo.local || ""}${primeiroCampo.Distrito && !String(primeiroCampo.local || "").includes(primeiroCampo.Distrito) ? ` (${primeiroCampo.Distrito})` : ""}`.trim()
       : parceiroObj?.morada_sede || "Portugal";
 
-    // 1. Verificar Espanha / Espanhol
     if (
       /\b(espanha|spain|españa|madrid|barcelona|valencia|sevilla|sevilha|malaga|málaga|bilbao|galiza|galicia|vigo|salamanca|andalucia|catalunya)\b/i.test(
         textoGlobal
@@ -162,7 +199,6 @@ export default function GestaoParceirosHQ({
       return { idioma: "es", resumoLocal: resumoLocal || "España" };
     }
 
-    // 2. Verificar França / Francês
     if (
       /\b(frança|france|paris|lyon|marseille|toulouse|nice|bordeaux|geneve|genève|lausanne)\b/i.test(
         textoGlobal
@@ -172,7 +208,6 @@ export default function GestaoParceirosHQ({
       return { idioma: "fr", resumoLocal: resumoLocal || "France" };
     }
 
-    // 3. Verificar Países Anglófonos ou Internacionais
     if (
       /\b(uk|united kingdom|england|london|usa|united states|ireland|dublin|scotland|australia|canada|international|internacional|switzerland|zurich|germany|berlin|italy|netherlands)\b/i.test(
         textoGlobal
@@ -183,7 +218,6 @@ export default function GestaoParceirosHQ({
       return { idioma: "en", resumoLocal: resumoLocal || "International" };
     }
 
-    // 4. Se tem campos e NENHUM local/distrito corresponde a Portugal, mas tem nome_en preenchido ou local estrangeiro
     if (listaCampos.length > 0 && textoGlobal.length > 2) {
       const parecePortugal = DISTRITOS_PT.some((d) => textoGlobal.includes(d));
       if (!parecePortugal && !emailParceiro.endsWith(".pt")) {
@@ -199,6 +233,7 @@ export default function GestaoParceirosHQ({
     idioma: InviteLang,
     dados: {
       id: string;
+      role: string;
       nome: string;
       email: string;
       password: string;
@@ -207,9 +242,54 @@ export default function GestaoParceirosHQ({
       localDetetado: string;
     }
   ) => {
-    const { id, nome, email, password, empresa, campos, localDetetado } = dados;
+    const { id, role, nome, email, password, empresa, campos, localDetetado } = dados;
     const primeiroNome = (nome || empresa || "Partner").split(" ")[0];
-    const urlLang = idioma === "pt" ? "pt" : "en"; // Rotas da plataforma suportam /pt e /en
+    const urlLang = idioma === "pt" ? "pt" : "en";
+    const linkLogin = `https://www.hellocamp.pt/${urlLang}/login`;
+
+    // Template dedicado para AUTARQUIAS
+    if (role === "autarquia") {
+      const passVisivel = password || "HelloCamp2027!";
+      const linhasProgramas =
+        campos.length > 0
+          ? campos
+              .map(
+                (c, idx) =>
+                  `   ${idx + 1}. ${c.titulo || c.nome}${c.local ? ` (${c.local})` : ""}\n      🔗 Ver em Autarquias: https://www.hellocamp.pt/pt/institucional/${c.id}`
+              )
+              .join("\n\n")
+          : `   • Os seus programas municipais estão prontos a ser editados no seu Painel.`;
+
+      const assunto = `HelloCamp Autarquias — Acesso ao Painel e Programas de ${empresa}`;
+      const corpo = `Olá ${primeiroNome},
+
+É com enorme gosto que informamos que a conta institucional da ${empresa}${localDetetado ? ` (${localDetetado})` : ""} e os respetivos programas já se encontram configurados na secção de Autarquias da HelloCamp!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1️⃣ PROGRAMAS CONFIGURADOS EM AUTARQUIAS (${campos.length})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${linhasProgramas}
+
+🌐 Página Geral de Autarquias:
+https://www.hellocamp.pt/pt/institucional
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2️⃣ ACESSO AO PAINEL PARA EDITAR DATAS, VALORES E LINKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Sempre que precisarem de atualizar datas, valores (incluindo programas gratuitos), descrições ou links externos de inscrição, podem fazê-lo diretamente no vosso painel:
+
+🔗 Link de Login: ${linkLogin}
+✉️ E-mail de Acesso: ${email}
+🔑 Password Temporária: ${passVisivel}
+
+Estamos inteiramente à disposição para qualquer apoio ou ajuste!
+
+Com os melhores cumprimentos,
+Equipa HelloCamp
+🌐 www.hellocamp.pt`;
+
+      return { assunto, corpo };
+    }
 
     const linkContrato = id
       ? `https://www.hellocamp.pt/${urlLang}/assinatura-contrato/${id}`
@@ -217,7 +297,6 @@ export default function GestaoParceirosHQ({
     const linkMontra = id
       ? `https://www.hellocamp.pt/${urlLang}/parceiro/${id}?preview=admin`
       : `https://www.hellocamp.pt/${urlLang}`;
-    const linkLogin = `https://www.hellocamp.pt/${urlLang}/login`;
 
     if (idioma === "en") {
       const passVisivel =
@@ -384,7 +463,6 @@ L'Équipe HelloCamp
       return { assunto, corpo };
     }
 
-    // Padrão: Português (PT)
     const passVisivel =
       password || "HelloCamp2026! (ou defina a sua ao assinar o contrato)";
     const linhasCampos =
@@ -439,9 +517,9 @@ Equipa HelloCamp
     return { assunto, corpo };
   };
 
-  // Constrói o texto e assunto sempre que abrimos o Modal de Convite/Pré-Visualização
   const prepararModalConvite = (parceiroObj: any, passwordTemp?: string) => {
     const id = parceiroObj.id || "";
+    const role = parceiroObj.role || "organizador";
     const empresa =
       parceiroObj.empresa_nome ||
       parceiroObj.nome_empresa ||
@@ -450,21 +528,26 @@ Equipa HelloCamp
       "Parceiro";
     const nomeResp = parceiroObj.nome_completo || empresa;
     const emailDestino = (parceiroObj.email || "").trim().toLowerCase();
-    const listaCampos = camposByParceiro[id] || [];
+
+    const listaProgramas =
+      role === "autarquia"
+        ? iniciativasByParceiro[id] || []
+        : camposByParceiro[id] || [];
 
     const { idioma, resumoLocal } = detetarIdiomaPorLocalizacao(
-      listaCampos,
+      listaProgramas,
       parceiroObj
     );
 
     const novoWelcomeData = {
       id,
+      role,
       nome: nomeResp,
       email: emailDestino,
       password: passwordTemp || "",
       empresa,
-      taxa_comissao: parceiroObj.taxa_comissao ?? 12,
-      campos: listaCampos,
+      taxa_comissao: parceiroObj.taxa_comissao ?? (role === "autarquia" ? 0 : 12),
+      campos: listaProgramas,
       localDetetado: resumoLocal,
     };
 
@@ -481,7 +564,6 @@ Equipa HelloCamp
     setShowWelcomeModal(true);
   };
 
-  // Permite mudar o idioma manualmente dentro do modal de convite
   const handleMudarIdiomaConvite = (novoIdioma: InviteLang) => {
     setInviteLang(novoIdioma);
     const { assunto, corpo } = construirTextoConvitePorIdioma(
@@ -496,6 +578,7 @@ Equipa HelloCamp
     const randomPass = Math.random().toString(36).slice(-6) + "Hc26!";
     setForm({
       id: "",
+      role: "organizador",
       nome_completo: "",
       email: "",
       password: randomPass,
@@ -514,15 +597,17 @@ Equipa HelloCamp
   const abrirModalEditar = (p: any) => {
     setForm({
       id: p.id,
+      role: p.role || "organizador",
       nome_completo: p.nome_completo || "",
       email: p.email || "",
       password: "",
       empresa_nome: p.empresa_nome || p.nome_empresa || p.nome || "",
       nif_empresa: p.nif_empresa || "",
       telefone: p.telefone || "",
-      taxa_comissao: (p.taxa_comissao ?? 12).toString(),
+      taxa_comissao: (p.taxa_comissao ?? (p.role === "autarquia" ? 0 : 12)).toString(),
       base_comissao: p.base_comissao || "total",
-      modalidade_reserva: p.modalidade_reserva || "direta",
+      modalidade_reserva:
+        p.modalidade_reserva || (p.role === "autarquia" ? "link_externo" : "direta"),
       status_contrato: p.status_contrato || "Sem Contrato",
     });
     setIsEditing(true);
@@ -538,18 +623,22 @@ Equipa HelloCamp
 
     setSaving(true);
 
+    const parsedComissao = parseFloat(form.taxa_comissao);
+    const taxaFinal = Number.isFinite(parsedComissao) ? parsedComissao : 12;
+
     try {
       if (isEditing) {
         const { error } = await supabase
           .from("perfis")
           .update({
+            role: form.role,
             nome_completo: form.nome_completo || null,
             empresa_nome: form.empresa_nome || null,
             nome_empresa: form.empresa_nome || null,
             nome: form.empresa_nome || null,
             nif_empresa: form.nif_empresa || null,
             telefone: form.telefone || null,
-            taxa_comissao: parseFloat(form.taxa_comissao) || 12,
+            taxa_comissao: taxaFinal,
             base_comissao: form.base_comissao,
             modalidade_reserva: form.modalidade_reserva,
             status_contrato: form.status_contrato,
@@ -559,16 +648,18 @@ Equipa HelloCamp
 
         if (error) throw error;
 
-        await supabase
-          .from("campos")
-          .update({
-            taxa_comissao: parseFloat(form.taxa_comissao) || 12,
-            base_comissao: form.base_comissao,
-            modalidade_reserva: form.modalidade_reserva,
-          })
-          .eq("organizador_id", form.id);
+        if (form.role !== "autarquia") {
+          await supabase
+            .from("campos")
+            .update({
+              taxa_comissao: taxaFinal,
+              base_comissao: form.base_comissao,
+              modalidade_reserva: form.modalidade_reserva,
+            })
+            .eq("organizador_id", form.id);
+        }
 
-        alert("Parceiro atualizado com sucesso!");
+        alert("Entidade atualizada com sucesso!");
         setShowModal(false);
         fetchParceiros();
       } else {
@@ -577,13 +668,14 @@ Equipa HelloCamp
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "create",
+            role: form.role,
             email: form.email,
             password: form.password,
             nome_completo: form.nome_completo,
             empresa_nome: form.empresa_nome,
             nif_empresa: form.nif_empresa,
             telefone: form.telefone,
-            taxa_comissao: parseFloat(form.taxa_comissao) || 12,
+            taxa_comissao: taxaFinal,
             base_comissao: form.base_comissao,
             modalidade_reserva: form.modalidade_reserva,
             status_contrato: form.status_contrato,
@@ -593,16 +685,25 @@ Equipa HelloCamp
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro ao criar parceiro.");
 
+        // Garantir role = 'autarquia' se selecionado na criação
+        if (form.role === "autarquia" && data.user?.id) {
+          await supabase
+            .from("perfis")
+            .update({ role: "autarquia", taxa_comissao: 0, modalidade_reserva: "link_externo" })
+            .eq("id", data.user.id);
+        }
+
         setShowModal(false);
         await fetchParceiros();
 
         prepararModalConvite(
           {
             id: data.user?.id || "",
+            role: form.role,
             nome_completo: form.nome_completo,
             empresa_nome: form.empresa_nome,
             email: form.email,
-            taxa_comissao: parseFloat(form.taxa_comissao) || 12,
+            taxa_comissao: taxaFinal,
           },
           form.password
         );
@@ -656,7 +757,6 @@ Equipa HelloCamp
     }
   };
 
-  // Disparo direto de E-mail via API Resend com confirmação
   const handleDispararEmailAPI = async () => {
     if (!welcomeData.email) {
       alert("Este parceiro não tem um endereço de e-mail válido.");
@@ -685,7 +785,7 @@ Equipa HelloCamp
       if (!res.ok) {
         throw new Error(
           data.error ||
-            "Não foi possível disparar via API. Pode usar o botão 'Abrir no Cliente de E-mail'."
+            "Não foi possível disparar via API. Pode usar o botão 'Abrir no App de E-mail'."
         );
       }
 
@@ -697,13 +797,17 @@ Equipa HelloCamp
     }
   };
 
-  const parceirosFiltrados = parceiros.filter((p) =>
-    `${p.empresa_nome || ""} ${p.nome_empresa || ""} ${p.nome || ""} ${
+  const parceirosFiltrados = parceiros.filter((p) => {
+    if (filtroRole !== "todos" && p.role !== filtroRole) return false;
+    return `${p.empresa_nome || ""} ${p.nome_empresa || ""} ${p.nome || ""} ${
       p.nome_completo || ""
     } ${p.email || ""} ${p.nif_empresa || ""}`
       .toLowerCase()
-      .includes(pesquisa.toLowerCase())
-  );
+      .includes(pesquisa.toLowerCase());
+  });
+
+  const totalOrganizadores = parceiros.filter((p) => p.role === "organizador").length;
+  const totalAutarquias = parceiros.filter((p) => p.role === "autarquia").length;
 
   const labelClass =
     "text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block";
@@ -715,16 +819,16 @@ Equipa HelloCamp
   return (
     <div className="max-w-7xl mx-auto font-sans text-[#0F172A] pb-20">
       {/* HEADER EXECUTIVO HELLO CAMP */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-6 rounded-md border border-slate-200 shadow-sm">
+      <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-6 rounded-md border border-slate-200 shadow-sm">
         <div>
           <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-2">
-            SuperAdmin HQ • B2B
+            SuperAdmin HQ • B2B & Autarquias
           </span>
           <h1 className="text-2xl md:text-3xl font-black text-[#0F172A] tracking-tight m-0">
-            Gestão de Parceiros & Onboarding
+            Gestão de Parceiros & Autarquias
           </h1>
           <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1 mb-0">
-            Contas, Comissões, Pré-Visualização de Campos e Envio de Convites Multilingue
+            Contas, Comissões, Programas Municipais e Envio de Convites Multilingue
           </p>
         </div>
 
@@ -733,7 +837,7 @@ Equipa HelloCamp
             type="text"
             value={pesquisa}
             onChange={(e) => setPesquisa(e.target.value)}
-            placeholder="Pesquisar empresa, responsável, email..."
+            placeholder="Pesquisar empresa, autarquia, email..."
             className="bg-[#F8FAFC] border border-slate-300 rounded-md px-4 py-3 text-xs font-bold text-[#0F172A] outline-none focus:border-[#2563EB] min-w-[250px]"
           />
           <button
@@ -746,19 +850,56 @@ Equipa HelloCamp
         </div>
       </div>
 
-      {/* TABELA DE PARCEIROS */}
+      {/* FILTROS RÁPIDOS DE TIPO DE ENTIDADE */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <button
+          type="button"
+          onClick={() => setFiltroRole("todos")}
+          className={`px-4 py-2 rounded-md text-[11px] font-black uppercase tracking-widest cursor-pointer border-0 ${
+            filtroRole === "todos"
+              ? "bg-[#0F172A] text-white"
+              : "bg-white text-slate-600 border border-slate-200"
+          }`}
+        >
+          Todos ({parceiros.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setFiltroRole("organizador")}
+          className={`px-4 py-2 rounded-md text-[11px] font-black uppercase tracking-widest cursor-pointer border-0 ${
+            filtroRole === "organizador"
+              ? "bg-[#2563EB] text-white"
+              : "bg-white text-slate-600 border border-slate-200"
+          }`}
+        >
+          🏢 Parceiros Privados ({totalOrganizadores})
+        </button>
+        <button
+          type="button"
+          onClick={() => setFiltroRole("autarquia")}
+          className={`px-4 py-2 rounded-md text-[11px] font-black uppercase tracking-widest cursor-pointer border-0 ${
+            filtroRole === "autarquia"
+              ? "bg-[#16A34A] text-white"
+              : "bg-white text-slate-600 border border-slate-200"
+          }`}
+        >
+          Autarquias ({totalAutarquias})
+        </button>
+      </div>
+
+      {/* TABELA DE PARCEIROS & AUTARQUIAS */}
       <div className="bg-white border border-slate-200 rounded-md overflow-x-auto shadow-sm">
         <table className="w-full text-left min-w-[980px] border-collapse">
           <thead className="bg-[#F8FAFC] border-b border-slate-200">
             <tr>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Empresa / NIF
+                Entidade / Tipo
               </th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 Contacto & Login
               </th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Campos & Localização
+                Programas & Localização
               </th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 Contrato / Comissão
@@ -775,7 +916,7 @@ Equipa HelloCamp
                   colSpan={5}
                   className="p-12 text-center text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse"
                 >
-                  A carregar parceiros...
+                  A carregar entidades...
                 </td>
               </tr>
             ) : parceirosFiltrados.length === 0 ? (
@@ -784,11 +925,12 @@ Equipa HelloCamp
                   colSpan={5}
                   className="p-12 text-center text-slate-400 font-bold text-sm"
                 >
-                  Nenhum parceiro organizador encontrado.
+                  Nenhuma entidade encontrada.
                 </td>
               </tr>
             ) : (
               parceirosFiltrados.map((p) => {
+                const isAutarquia = p.role === "autarquia";
                 const statusLabel = p.status_contrato || "Sem Contrato";
                 let statusBadgeClass = "bg-slate-600 text-white";
                 if (p.status_contrato === "Aprovado") {
@@ -803,12 +945,14 @@ Equipa HelloCamp
                   statusBadgeClass = "bg-[#F43F5E] text-white";
                 }
 
-                const listaCamposParceiro = camposByParceiro[p.id] || [];
-                const numCampos = listaCamposParceiro.length;
+                const listaProgramas = isAutarquia
+                  ? iniciativasByParceiro[p.id] || []
+                  : camposByParceiro[p.id] || [];
+                const numProgramas = listaProgramas.length;
                 const nomeEmp =
                   p.empresa_nome || p.nome_empresa || p.nome || null;
                 const { idioma: idiomaDetetado, resumoLocal } =
-                  detetarIdiomaPorLocalizacao(listaCamposParceiro, p);
+                  detetarIdiomaPorLocalizacao(listaProgramas, p);
 
                 return (
                   <tr
@@ -816,6 +960,17 @@ Equipa HelloCamp
                     className="hover:bg-[#F8FAFC] transition-colors"
                   >
                     <td className="px-6 py-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        {isAutarquia ? (
+                          <span className="bg-[#0F172A] text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md">
+                            Autarquia
+                          </span>
+                        ) : (
+                          <span className="bg-blue-50 text-[#2563EB] border border-blue-200 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md">
+                            Parceiro
+                          </span>
+                        )}
+                      </div>
                       <div className="font-black text-sm text-[#0F172A]">
                         {nomeEmp || (
                           <span className="text-slate-400 italic">
@@ -845,12 +1000,24 @@ Equipa HelloCamp
                     <td className="px-6 py-4">
                       <div className="flex flex-col items-start gap-1.5">
                         <div className="flex items-center gap-1.5">
-                          <Link
-                            href={`/${lang}/superadmin/campos?parceiro=${p.id}`}
-                            className="inline-flex items-center gap-1.5 bg-[#0F172A] hover:bg-[#2563EB] text-white font-black text-[11px] px-3 py-1.5 rounded-md no-underline transition-colors"
-                          >
-                            🏕️ {numCampos} {numCampos === 1 ? "Campo" : "Campos"}
-                          </Link>
+                          {isAutarquia ? (
+                            <Link
+                              href={`/${lang}/institucional`}
+                              target="_blank"
+                              className="inline-flex items-center gap-1.5 bg-[#16A34A] hover:bg-green-700 text-white font-black text-[11px] px-3 py-1.5 rounded-md no-underline transition-colors"
+                            >
+                              🏛️ {numProgramas}{" "}
+                              {numProgramas === 1 ? "Programa" : "Programas"}
+                            </Link>
+                          ) : (
+                            <Link
+                              href={`/${lang}/superadmin/campos?parceiro=${p.id}`}
+                              className="inline-flex items-center gap-1.5 bg-[#0F172A] hover:bg-[#2563EB] text-white font-black text-[11px] px-3 py-1.5 rounded-md no-underline transition-colors"
+                            >
+                              🏕️ {numProgramas}{" "}
+                              {numProgramas === 1 ? "Campo" : "Campos"}
+                            </Link>
+                          )}
                           <span className="bg-slate-100 border border-slate-200 text-[#0F172A] text-[9px] font-black uppercase px-2 py-1 rounded-md">
                             {idiomaDetetado.toUpperCase()}
                           </span>
@@ -860,13 +1027,20 @@ Equipa HelloCamp
                             📍 {resumoLocal}
                           </span>
                         )}
-                        {numCampos > 0 && (
+                        {numProgramas > 0 && (
                           <Link
-                            href={`/${lang}/campo/${listaCamposParceiro[0].id}?preview=admin`}
+                            href={
+                              isAutarquia
+                                ? `/${lang}/institucional/${listaProgramas[0].id}`
+                                : `/${lang}/campo/${listaProgramas[0].id}?preview=admin`
+                            }
                             target="_blank"
                             className="text-[10px] font-black text-[#2563EB] hover:underline no-underline"
                           >
-                            👁️ Ver 1.º Campo (Admin) ↗
+                            👁️{" "}
+                            {isAutarquia
+                              ? "Ver 1.º Programa (Autarquias) ↗"
+                              : "Ver 1.º Campo (Admin) ↗"}
                           </Link>
                         )}
                       </div>
@@ -880,8 +1054,9 @@ Equipa HelloCamp
                           {statusLabel}
                         </span>
                         <span className="text-[10px] font-black text-[#0F172A] bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
-                          {p.taxa_comissao ?? 12}% •{" "}
-                          {p.modalidade_reserva || "direta"}
+                          {p.taxa_comissao ?? (isAutarquia ? 0 : 12)}% •{" "}
+                          {p.modalidade_reserva ||
+                            (isAutarquia ? "link_externo" : "direta")}
                         </span>
                       </div>
                     </td>
@@ -892,7 +1067,7 @@ Equipa HelloCamp
                           type="button"
                           onClick={() => prepararModalConvite(p)}
                           className="bg-[#F59E0B] hover:bg-amber-600 text-white px-3.5 py-2 rounded-md text-[10px] uppercase tracking-widest font-black cursor-pointer transition-colors border-0 shadow-sm"
-                          title="Pré-visualizar, editar e enviar E-mail Completo no idioma do local do campo"
+                          title="Pré-visualizar, editar e enviar E-mail Completo"
                         >
                           📧 Convite ({idiomaDetetado.toUpperCase()})
                         </button>
@@ -906,7 +1081,6 @@ Equipa HelloCamp
                             setResetModalParceiro(p);
                           }}
                           className="bg-[#16A34A] hover:bg-green-700 text-white px-3.5 py-2 rounded-md text-[10px] uppercase tracking-widest font-black cursor-pointer transition-colors border-0 shadow-sm"
-                          title="Definir uma nova password temporária e abrir pré-visualização do convite"
                         >
                           🔑 Definir Pass
                         </button>
@@ -923,7 +1097,6 @@ Equipa HelloCamp
                           type="button"
                           onClick={() => handleEnviarEmailRecuperacao(p.email)}
                           className="bg-[#0F172A] hover:bg-slate-800 text-white px-3 py-2 rounded-md text-[10px] uppercase tracking-widest font-black cursor-pointer transition-colors border-0"
-                          title="Disparar link automático de redefinição de password"
                         >
                           🔄 Reset Link
                         </button>
@@ -938,7 +1111,7 @@ Equipa HelloCamp
       </div>
 
       {/* ===================================================================== */}
-      {/* MODAL CRIAR / EDITAR PARCEIRO                                         */}
+      {/* MODAL CRIAR / EDITAR PARCEIRO OU AUTARQUIA                            */}
       {/* ===================================================================== */}
       {showModal && (
         <div
@@ -952,8 +1125,8 @@ Equipa HelloCamp
             <div className="px-8 py-5 border-b border-slate-200 flex justify-between items-center bg-[#0F172A] text-white">
               <h2 className="text-lg font-black m-0">
                 {isEditing
-                  ? "✏️ Editar Parceiro Organizador"
-                  : "🏢 Criar Nova Conta de Parceiro"}
+                  ? "✏️ Editar Entidade"
+                  : "🏢 Criar Nova Conta de Entidade"}
               </h2>
               <button
                 type="button"
@@ -970,12 +1143,54 @@ Equipa HelloCamp
                 onSubmit={handleSubmeter}
                 className="space-y-6"
               >
-                {/* 1. CREDENCIAIS */}
+                {/* 1. TIPO & CREDENCIAIS */}
                 <div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
                   <h3 className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">
-                    1. Credenciais de Acesso
+                    1. Tipo de Conta & Credenciais
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="md:col-span-2">
+                      <label className={labelClass}>Tipo de Entidade *</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              role: "organizador",
+                              taxa_comissao:
+                                form.taxa_comissao === "0" ? "12" : form.taxa_comissao,
+                            })
+                          }
+                          className={`p-3 rounded-md text-xs font-black uppercase tracking-widest cursor-pointer border ${
+                            form.role === "organizador"
+                              ? "bg-[#2563EB] text-white border-[#2563EB]"
+                              : "bg-slate-50 text-slate-600 border-slate-300"
+                          }`}
+                        >
+                          🏢 Parceiro Organizador
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              role: "autarquia",
+                              taxa_comissao: "0",
+                              modalidade_reserva: "link_externo",
+                            })
+                          }
+                          className={`p-3 rounded-md text-xs font-black uppercase tracking-widest cursor-pointer border ${
+                            form.role === "autarquia"
+                              ? "bg-[#0F172A] text-white border-[#0F172A]"
+                              : "bg-slate-50 text-slate-600 border-slate-300"
+                          }`}
+                        >
+                          🏛️ Autarquia / Câmara Municipal
+                        </button>
+                      </div>
+                    </div>
+
                     <div>
                       <label className={labelClass}>
                         Nome do Responsável *
@@ -987,7 +1202,7 @@ Equipa HelloCamp
                         onChange={(e) =>
                           setForm({ ...form, nome_completo: e.target.value })
                         }
-                        placeholder="Ex: Marta Cruz Machado"
+                        placeholder="Ex: Bernardo Martins da Costa"
                       />
                     </div>
                     <div>
@@ -1022,10 +1237,6 @@ Equipa HelloCamp
                             setForm({ ...form, password: e.target.value })
                           }
                         />
-                        <p className="text-[10px] font-bold text-slate-500 mt-1.5 mb-0">
-                          O parceiro poderá entrar diretamente com esta password
-                          ou definir uma nova ao assinar o contrato.
-                        </p>
                       </div>
                     )}
                   </div>
@@ -1034,7 +1245,7 @@ Equipa HelloCamp
                 {/* 2. GESTÃO COMERCIAL */}
                 <div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
                   <h3 className="text-[10px] font-black text-[#F59E0B] uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">
-                    2. Condições Comerciais Padrão (Por defeito: 12%)
+                    2. Condições Comerciais (0% para Autarquias)
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
@@ -1044,6 +1255,7 @@ Equipa HelloCamp
                       <input
                         type="number"
                         step="0.1"
+                        min="0"
                         required
                         className={inputClass}
                         value={form.taxa_comissao}
@@ -1053,10 +1265,9 @@ Equipa HelloCamp
                       />
                     </div>
 
-                    {/* Dropdown Customizado de Status */}
                     <div className="relative">
                       <label className={labelClass}>
-                        Status do Contrato B2B *
+                        Status do Contrato / Conta *
                       </label>
                       <div
                         onClick={() =>
@@ -1087,7 +1298,6 @@ Equipa HelloCamp
                       )}
                     </div>
 
-                    {/* Dropdown Customizado de Modalidade */}
                     <div className="md:col-span-2 relative">
                       <label className={labelClass}>
                         Modalidade de Reserva Padrão
@@ -1135,7 +1345,7 @@ Equipa HelloCamp
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="md:col-span-2">
                       <label className={labelClass}>
-                        Nome da Empresa / Organização
+                        Nome da Empresa / Autarquia
                       </label>
                       <input
                         className={inputClass}
@@ -1143,7 +1353,7 @@ Equipa HelloCamp
                         onChange={(e) =>
                           setForm({ ...form, empresa_nome: e.target.value })
                         }
-                        placeholder="Ex: Museu das Comunicações"
+                        placeholder="Ex: Câmara Municipal de Cascais"
                       />
                     </div>
                     <div>
@@ -1216,8 +1426,7 @@ Equipa HelloCamp
             <p className="text-xs text-slate-600 mb-5 leading-relaxed">
               Defina uma password temporária para{" "}
               <strong>{resetModalParceiro.email}</strong>. Ao confirmar, abrirá
-              a janela de pré-visualização e edição do e-mail no idioma
-              correspondente à localização dos campos.
+              a janela de pré-visualização e edição do e-mail.
             </p>
             <form onSubmit={handleDefinirPasswordDireta} className="space-y-4">
               <div>
@@ -1266,19 +1475,17 @@ Equipa HelloCamp
             className="bg-white w-full max-w-4xl max-h-[92vh] rounded-md flex flex-col overflow-hidden shadow-2xl border border-slate-300"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* CABEÇALHO DO MODAL */}
             <div className="bg-[#0F172A] px-6 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-white border-b border-slate-800">
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                   <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
-                    Onboarding B2B • {welcomeData.campos.length}{" "}
-                    {welcomeData.campos.length === 1
-                      ? "Campo Configurado"
-                      : "Campos Configurados"}
+                    {welcomeData.role === "autarquia"
+                      ? `🏛️ Autarquia • ${welcomeData.campos.length} Programas`
+                      : `Onboarding B2B • ${welcomeData.campos.length} Campos`}
                   </span>
                   {welcomeData.localDetetado && (
                     <span className="inline-block bg-slate-800 text-slate-200 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border border-slate-700">
-                      📍 Local detetado: {welcomeData.localDetetado}
+                      📍 {welcomeData.localDetetado}
                     </span>
                   )}
                 </div>
@@ -1287,36 +1494,36 @@ Equipa HelloCamp
                 </h2>
                 <p className="text-slate-300 text-xs mt-1 mb-0">
                   Destinatário:{" "}
-                  <strong className="text-white">{welcomeData.email}</strong> •
-                  Idioma detetado automaticamente pela localização do campo (pode alternar abaixo).
+                  <strong className="text-white">{welcomeData.email}</strong>
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* SELETOR DE IDIOMA DO CONVITE */}
-                <div className="flex bg-slate-800 p-1 rounded-md border border-slate-700">
-                  {(
-                    [
-                      { code: "pt", label: "🇵🇹 PT" },
-                      { code: "en", label: "🇬🇧 EN" },
-                      { code: "es", label: "🇪🇸 ES" },
-                      { code: "fr", label: "🇫🇷 FR" },
-                    ] as { code: InviteLang; label: string }[]
-                  ).map((item) => (
-                    <button
-                      key={item.code}
-                      type="button"
-                      onClick={() => handleMudarIdiomaConvite(item.code)}
-                      className={`px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase cursor-pointer border-0 transition-colors ${
-                        inviteLang === item.code
-                          ? "bg-[#16A34A] text-white"
-                          : "bg-transparent text-slate-300 hover:text-white"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
+                {welcomeData.role !== "autarquia" && (
+                  <div className="flex bg-slate-800 p-1 rounded-md border border-slate-700">
+                    {(
+                      [
+                        { code: "pt", label: "🇵🇹 PT" },
+                        { code: "en", label: "🇬🇧 EN" },
+                        { code: "es", label: "🇪🇸 ES" },
+                        { code: "fr", label: "🇫🇷 FR" },
+                      ] as { code: InviteLang; label: string }[]
+                    ).map((item) => (
+                      <button
+                        key={item.code}
+                        type="button"
+                        onClick={() => handleMudarIdiomaConvite(item.code)}
+                        className={`px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase cursor-pointer border-0 transition-colors ${
+                          inviteLang === item.code
+                            ? "bg-[#16A34A] text-white"
+                            : "bg-transparent text-slate-300 hover:text-white"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <button
                   type="button"
@@ -1343,13 +1550,9 @@ Equipa HelloCamp
               </div>
             </div>
 
-            {/* CORPO DO MODAL: PRÉ-VISUALIZAÇÃO OU EDIÇÃO */}
             <div className="p-6 md:p-8 overflow-y-auto flex-1 bg-[#F8FAFC]">
-              {/* CAMPO ASSUNTO SEMPRE VISÍVEL E EDITÁVEL */}
               <div className="mb-4">
-                <label className={labelClass}>
-                  Assunto do E-mail (Editável • Idioma: {inviteLang.toUpperCase()})
-                </label>
+                <label className={labelClass}>Assunto do E-mail</label>
                 <input
                   type="text"
                   value={emailAssunto}
@@ -1360,15 +1563,7 @@ Equipa HelloCamp
 
               {activeEmailTab === "edit" ? (
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className={labelClass}>
-                      Corpo da Mensagem (100% Editável)
-                    </label>
-                    <span className="text-[10px] font-bold text-[#2563EB]">
-                      As alterações feitas aqui refletem-se imediatamente na
-                      pré-visualização e no envio!
-                    </span>
-                  </div>
+                  <label className={labelClass}>Corpo da Mensagem</label>
                   <textarea
                     value={emailCorpoEditavel}
                     onChange={(e) => setEmailCorpoEditavel(e.target.value)}
@@ -1377,7 +1572,6 @@ Equipa HelloCamp
                   />
                 </div>
               ) : (
-                /* PRÉ-VISUALIZAÇÃO RICA DO E-MAIL + LINKS DIRETOS CLICÁVEIS */
                 <div className="bg-white border border-slate-300 rounded-md overflow-hidden shadow-sm">
                   <div className="bg-slate-100 px-5 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div>
@@ -1393,72 +1587,107 @@ Equipa HelloCamp
                       onClick={() => setActiveEmailTab("edit")}
                       className="bg-[#F59E0B] hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md cursor-pointer border-0"
                     >
-                      ✏️ Editar Texto do E-mail
+                      ✏️ Editar Texto
                     </button>
                   </div>
 
-                  {/* SIMULAÇÃO DO TEMPLATE HTML EXECUTIVO HELLO CAMP */}
                   <div className="p-6 md:p-8 space-y-6">
                     <div className="bg-[#0F172A] text-white p-6 rounded-md flex items-center justify-between">
                       <div>
                         <span className="bg-[#F59E0B] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md inline-block mb-2">
-                          HelloCamp Partner Portal ({inviteLang.toUpperCase()})
+                          {welcomeData.role === "autarquia"
+                            ? "HelloCamp Autarquias"
+                            : `HelloCamp Partner Portal (${inviteLang.toUpperCase()})`}
                         </span>
                         <h3 className="text-xl font-black m-0">
                           {welcomeData.empresa}
                         </h3>
                       </div>
-                      <span className="text-3xl">🏕️</span>
+                      <span className="text-3xl">
+                        {welcomeData.role === "autarquia" ? "🏛️" : "🏕️"}
+                      </span>
                     </div>
 
-                    {/* TEXTO FORMATADO */}
                     <div className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed font-medium bg-[#F8FAFC] p-5 rounded-md border border-slate-200">
                       {emailCorpoEditavel}
                     </div>
 
-                    {/* CARTÕES DE TESTE RÁPIDO DOS LINKS DE VISÃO ADMIN */}
                     <div className="border-t border-slate-200 pt-5">
                       <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 m-0 mb-3">
-                        🔍 Testar Links de Visão Admin Incluídos no E-mail (Mesmo
-                        com Campos Inativos/Pendentes):
+                        🔍 Testar Links Incluídos no E-mail:
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {welcomeData.id && (
-                          <a
-                            href={`/${previewUrlLang}/parceiro/${welcomeData.id}?preview=admin`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-black text-[#2563EB] no-underline flex items-center justify-between"
-                          >
-                            <span>🏢 Ver Montra Pública ({previewUrlLang.toUpperCase()})</span>
-                            <span>↗</span>
-                          </a>
+                        {welcomeData.role === "autarquia" ? (
+                          <>
+                            <a
+                              href={`/${previewUrlLang}/institucional`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-black text-[#2563EB] no-underline flex items-center justify-between"
+                            >
+                              <span>Ver Página de Autarquias</span>
+                              <span>↗</span>
+                            </a>
+                            {welcomeData.campos.map((c: any) => (
+                              <a
+                                key={c.id}
+                                href={`/${previewUrlLang}/institucional/${c.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md text-xs font-black text-[#16A34A] no-underline flex items-center justify-between"
+                              >
+                                <span className="truncate pr-2">
+                                  {c.titulo || c.nome}
+                                </span>
+                                <span className="flex-shrink-0">Ver ↗</span>
+                              </a>
+                            ))}
+                          </>
+                        ) : (
+                          <>
+                            {welcomeData.id && (
+                              <a
+                                href={`/${previewUrlLang}/parceiro/${welcomeData.id}?preview=admin`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-black text-[#2563EB] no-underline flex items-center justify-between"
+                              >
+                                <span>
+                                  🏢 Ver Montra Pública ({previewUrlLang.toUpperCase()})
+                                </span>
+                                <span>↗</span>
+                              </a>
+                            )}
+                            {welcomeData.id && (
+                              <a
+                                href={`/${previewUrlLang}/assinatura-contrato/${welcomeData.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md text-xs font-black text-amber-900 no-underline flex items-center justify-between"
+                              >
+                                <span>
+                                  📄 Ver Assinatura de Contrato (
+                                  {previewUrlLang.toUpperCase()})
+                                </span>
+                                <span>↗</span>
+                              </a>
+                            )}
+                            {welcomeData.campos.map((c: any) => (
+                              <a
+                                key={c.id}
+                                href={`/${previewUrlLang}/campo/${c.id}?preview=admin`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md text-xs font-black text-[#16A34A] no-underline flex items-center justify-between"
+                              >
+                                <span className="truncate pr-2">
+                                  🏕️ {inviteLang !== "pt" && c.nome_en ? c.nome_en : c.nome}
+                                </span>
+                                <span className="flex-shrink-0">Ver Admin ↗</span>
+                              </a>
+                            ))}
+                          </>
                         )}
-                        {welcomeData.id && (
-                          <a
-                            href={`/${previewUrlLang}/assinatura-contrato/${welcomeData.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md text-xs font-black text-amber-900 no-underline flex items-center justify-between"
-                          >
-                            <span>📄 Ver Assinatura de Contrato ({previewUrlLang.toUpperCase()})</span>
-                            <span>↗</span>
-                          </a>
-                        )}
-                        {welcomeData.campos.map((c: any) => (
-                          <a
-                            key={c.id}
-                            href={`/${previewUrlLang}/campo/${c.id}?preview=admin`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md text-xs font-black text-[#16A34A] no-underline flex items-center justify-between"
-                          >
-                            <span className="truncate pr-2">
-                              🏕️ {inviteLang !== "pt" && c.nome_en ? c.nome_en : c.nome}
-                            </span>
-                            <span className="flex-shrink-0">Ver Admin ↗</span>
-                          </a>
-                        ))}
                       </div>
                     </div>
                   </div>
@@ -1466,7 +1695,6 @@ Equipa HelloCamp
               )}
             </div>
 
-            {/* BARRA DE AÇÕES DE CONFIRMAÇÃO E ENVIO */}
             <div className="px-6 py-4 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
@@ -1483,7 +1711,7 @@ Equipa HelloCamp
                     navigator.clipboard.writeText(
                       `Assunto: ${emailAssunto}\n\n${emailCorpoEditavel}`
                     );
-                    alert("Assunto e mensagem copiados para a área de transferência!");
+                    alert("Assunto e mensagem copiados!");
                   }}
                   className="bg-[#0F172A] hover:bg-slate-800 text-white font-black uppercase tracking-widest text-[10px] px-5 py-3.5 rounded-md cursor-pointer border-0"
                 >
