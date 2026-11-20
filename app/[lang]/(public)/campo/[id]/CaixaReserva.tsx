@@ -67,6 +67,20 @@ function getMondayIso(iso: string): string {
   return formatDateIso(dt);
 }
 
+function formatShortDate(iso: string, isEn: boolean): string {
+  const dt = parseIsoLocal(iso);
+  const meses = isEn
+    ? [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+      ]
+    : [
+        "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+        "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+      ];
+  return `${dt.getDate()} ${meses[dt.getMonth()]}`;
+}
+
 export function ReservaProvider({
   children,
   campo,
@@ -246,22 +260,23 @@ export function ReservaProvider({
 
   const totalSemanasDisponiveis = semanasDisponiveisMap.size;
 
-  // Deteta se alguma variante antiga tem "Pack X Dias" no nome
-  const matchPackVariante = (varianteSelecionada?.nome || "").match(
-    /\b(?:pack\s+)?([2-9])\s+dias?\b/i
-  );
+  const isModoSemana = pacoteSelecionado?.tipo === "semana";
+
+  // Deteta se alguma variante legada tem "Pack X Dias" no nome (só aplicável a tipo === "dia")
+  const matchPackVariante = !isModoSemana
+    ? (varianteSelecionada?.nome || "").match(/\b(?:pack\s+)?([2-9])\s+dias?\b/i)
+    : null;
   const diasDaVarianteFixa = matchPackVariante
     ? parseInt(matchPackVariante[1], 10)
     : null;
 
   const quantPacote =
-    pacoteSelecionado?.tipo === "dia" && diasDaVarianteFixa
+    !isModoSemana && diasDaVarianteFixa
       ? diasDaVarianteFixa
       : pacoteSelecionado?.quantidade || 1;
 
-  const isDiaAvulsoFlexivel =
-    pacoteSelecionado?.tipo === "dia" && quantPacote === 1;
-  const isPackDiasFixo = pacoteSelecionado?.tipo === "dia" && quantPacote > 1;
+  const isDiaAvulsoFlexivel = !isModoSemana && quantPacote === 1;
+  const isPackDiasFixo = !isModoSemana && quantPacote > 1;
 
   const calcularSelecaoInicial = (pac: Pacote | null): string[] => {
     if (!pac || datasDisponiveis.length === 0) return [];
@@ -307,6 +322,39 @@ export function ReservaProvider({
     return Array.from(segundas).sort();
   };
 
+  // Resumo legível das semanas ou dias selecionados para mostrar na CaixaResumo
+  const resumoDatasSelecionadas = React.useMemo(() => {
+    if (diasSelecionados.length === 0) return [];
+    const sorted = [...diasSelecionados].sort();
+
+    if (isModoSemana) {
+      const porSemana = new Map<string, string[]>();
+      sorted.forEach((iso) => {
+        const mon = getMondayIso(iso);
+        if (!porSemana.has(mon)) porSemana.set(mon, []);
+        porSemana.get(mon)!.push(iso);
+      });
+
+      return Array.from(porSemana.values()).map((dias) => {
+        const inicio = formatShortDate(dias[0], isEn);
+        const fim = formatShortDate(dias[dias.length - 1], isEn);
+        const labelIntervalo =
+          dias.length > 1 ? `${inicio} – ${fim}` : inicio;
+        return `${labelIntervalo} (${dias.length} ${
+          isEn
+            ? dias.length === 1
+              ? "day"
+              : "days"
+            : dias.length === 1
+            ? "dia"
+            : "dias"
+        })`;
+      });
+    }
+
+    return sorted.map((iso) => formatShortDate(iso, isEn));
+  }, [diasSelecionados, isModoSemana, isEn]);
+
   const handleDiaClick = (data: string) => {
     if (!pacoteSelecionado) return;
     if (data < todayISO) return;
@@ -315,7 +363,7 @@ export function ReservaProvider({
     const startMondayStr = getMondayIso(data);
     const diasDestaSemana = semanasDisponiveisMap.get(startMondayStr) || [];
 
-    if (pacoteSelecionado.tipo === "dia") {
+    if (!isModoSemana) {
       if (isPackDiasFixo && diasDestaSemana.length === quantPacote) {
         const semanaJaSelecionada = diasDestaSemana.every((d) =>
           diasSelecionados.includes(d)
@@ -332,23 +380,38 @@ export function ReservaProvider({
         setDiasSelecionados((prev) => [...prev, data].sort());
       }
     } else {
-      const limiteSemanas = pacoteSelecionado.quantidade || 1;
+      const limiteSemanas = Math.min(
+        pacoteSelecionado.quantidade || 1,
+        totalSemanasDisponiveis || pacoteSelecionado.quantidade || 1
+      );
       const semanasAtuais = getSemanasSelecionadas();
       if (diasDestaSemana.length === 0) return;
 
       if (semanasAtuais.includes(startMondayStr)) {
+        // Desseleciona a semana clicada
         setDiasSelecionados((prev) =>
           prev.filter((d) => !diasDestaSemana.includes(d))
         );
+      } else if (limiteSemanas === 1) {
+        // Pack 1 semana: substitui diretamente pela nova semana
+        setDiasSelecionados([...diasDestaSemana].sort());
+      } else if (semanasAtuais.length < limiteSemanas) {
+        // Ainda faltam semanas: adiciona a semana clicada
+        setDiasSelecionados((prev) =>
+          Array.from(new Set([...prev, ...diasDestaSemana])).sort()
+        );
       } else {
-        if (limiteSemanas === 1) {
-          setDiasSelecionados([...diasDestaSemana].sort());
-        } else {
-          if (semanasAtuais.length >= limiteSemanas) return;
-          setDiasSelecionados((prev) =>
-            Array.from(new Set([...prev, ...diasDestaSemana])).sort()
-          );
-        }
+        // Já atingiu o limite (ex: 2 semanas): substitui a semana mais antiga pela nova
+        const semanaARemover = semanasAtuais[0];
+        const diasARemover = semanasDisponiveisMap.get(semanaARemover) || [];
+        setDiasSelecionados((prev) =>
+          Array.from(
+            new Set([
+              ...prev.filter((d) => !diasARemover.includes(d)),
+              ...diasDestaSemana,
+            ])
+          ).sort()
+        );
       }
     }
   };
@@ -389,7 +452,7 @@ export function ReservaProvider({
   };
 
   // =========================================================================
-  // MOTOR AUTOMÁTICO DE PREÇOS, EARLY BIRD POR DATA, IRMÃOS E ESCALÕES DE DIAS
+  // MOTOR AUTOMÁTICO DE PREÇOS (SEMANAS NUNCA DUPLICAM O PREÇO DO PACK!)
   // =========================================================================
   const precoBase =
     varianteSelecionada?.preco !== undefined &&
@@ -397,11 +460,16 @@ export function ReservaProvider({
       ? Number(varianteSelecionada.preco)
       : Number(campo.preco) || 0;
 
-  const multiplicadorPrecoBase = isDiaAvulsoFlexivel
+  // Para qualquer pack semanal (1, 2 ou 3 semanas), o preço da variante já é o preço TOTAL do pack -> multiplicador é SEMPRE 1
+  const multiplicadorPrecoBase = isModoSemana
+    ? 1
+    : isDiaAvulsoFlexivel
     ? Math.max(1, diasSelecionados.length)
     : 1;
 
-  const totalUnidadesTempo = isDiaAvulsoFlexivel
+  const totalUnidadesTempo = isModoSemana
+    ? quantPacote
+    : isDiaAvulsoFlexivel
     ? Math.max(1, diasSelecionados.length)
     : quantPacote;
 
@@ -419,7 +487,7 @@ export function ReservaProvider({
       ? diasSelecionados.length
       : pacoteSelecionado?.dias_equivalentes
       ? Number(pacoteSelecionado.dias_equivalentes)
-      : pacoteSelecionado?.tipo === "semana"
+      : isModoSemana
       ? diasReferenciaSemana
       : quantPacote;
 
@@ -433,7 +501,7 @@ export function ReservaProvider({
     return true;
   });
 
-  // 2. Calcular qual o melhor desconto elegível para a seleção atual
+  // 2. Calcular o melhor desconto elegível automaticamente
   let valorDesconto = 0;
   let nomeDescontoAplicado = "";
 
@@ -535,7 +603,7 @@ export function ReservaProvider({
   const escolhasCompletas =
     datasDisponiveis.length === 0
       ? true
-      : pacoteSelecionado?.tipo === "dia"
+      : !isModoSemana
       ? isDiaAvulsoFlexivel
         ? diasSelecionados.length >= 1
         : diasSelecionados.length === quantPacote
@@ -650,8 +718,8 @@ export function ReservaProvider({
           email_cliente: leadForm.email,
           telefone_cliente: leadForm.telefone,
           turno_interesse: `${nomeProgramaCompleto}${
-            diasSelecionados.length > 0
-              ? ` | Datas: ${diasSelecionados.join(", ")}`
+            resumoDatasSelecionadas.length > 0
+              ? ` | Datas: ${resumoDatasSelecionadas.join(", ")}`
               : ""
           }${
             nomeDescontoAplicado ? ` | Promo: ${nomeDescontoAplicado}` : ""
@@ -701,6 +769,8 @@ export function ReservaProvider({
         setQuantidade,
         diasSelecionados,
         setDiasSelecionados,
+        resumoDatasSelecionadas,
+        isModoSemana,
         mesAtual,
         nextMonth,
         prevMonth,
@@ -742,8 +812,7 @@ export function ReservaProvider({
         isDiaAvulsoFlexivel,
         multiplicadorPrecoBase,
         isPackDiasFixo,
-        quantPacote:
-          pacoteSelecionado?.tipo === "semana" ? semanasAlvo : quantPacote,
+        quantPacote: isModoSemana ? semanasAlvo : quantPacote,
         nomeProgramaCompleto,
         perguntasParsed,
         opcoesParticipantes,
@@ -893,7 +962,7 @@ export function SeletorOpcoes() {
         </div>
       </div>
 
-      {/* 2. OPÇÃO DE PREÇO (SÓ APARECE SE O PACOTE TIVER VARIANTES REAIS COMO ALMOÇO/QUARTO) */}
+      {/* 2. OPÇÃO DE PREÇO (SÓ APARECE SE O PACOTE TIVER VARIANTES REAIS) */}
       {ctx.pacoteSelecionado &&
         ctx.pacoteSelecionado.variantes &&
         ctx.pacoteSelecionado.variantes.length > 1 && (
@@ -1244,17 +1313,94 @@ export function CaixaResumo() {
       </div>
 
       <div className="space-y-3 text-xs mb-6">
+        {/* PROGRAMA & CÁLCULO BASE */}
         <div className="flex justify-between gap-2 font-bold text-slate-700">
-          <span>
-            {ctx.nomeProgramaCompleto}
-            {ctx.isDiaAvulsoFlexivel && ctx.diasSelecionados.length > 0
-              ? ` (${ctx.diasSelecionados.length} ${
-                  ctx.isEn ? "day(s)" : "dia(s)"
-                })`
-              : ""}
-          </span>
+          <div>
+            <span className="block">{ctx.nomeProgramaCompleto}</span>
+            <span className="text-[10px] font-semibold text-slate-400">
+              {ctx.isDiaAvulsoFlexivel && ctx.diasSelecionados.length > 0
+                ? `${ctx.precoBase.toFixed(2)}€ × ${ctx.diasSelecionados.length} ${
+                    ctx.isEn ? "day(s)" : "dia(s)"
+                  }`
+                : `${ctx.precoBase.toFixed(2)}€ / ${
+                    ctx.isEn ? "participant" : "participante"
+                  }`}
+              {ctx.quantidade > 1
+                ? ` × ${ctx.quantidade} ${
+                    ctx.isEn ? "children" : "participantes"
+                  }`
+                : ""}
+            </span>
+          </div>
           <span className="shrink-0">{ctx.subtotalPrograma.toFixed(2)}€</span>
         </div>
+
+        {/* SEMANAS / DATAS SELECIONADAS */}
+        {ctx.resumoDatasSelecionadas.length > 0 && (
+          <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 space-y-1.5">
+            <span className="block text-[10px] font-black uppercase tracking-widest text-[#0E3A68]">
+              📅{" "}
+              {ctx.isModoSemana
+                ? ctx.isEn
+                  ? "Selected Week(s)"
+                  : "Semana(s) Selecionada(s)"
+                : ctx.isEn
+                ? "Selected Dates"
+                : "Datas Selecionadas"}
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {ctx.resumoDatasSelecionadas.map((label: string, idx: number) => (
+                <span
+                  key={idx}
+                  className="bg-white border border-blue-200 text-[#0E3A68] text-[11px] font-black px-2.5 py-1 rounded-lg"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* OPÇÕES SELECIONADAS POR PARTICIPANTE */}
+        {ctx.perguntasParsed && ctx.perguntasParsed.length > 0 && (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+            <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+              📋 {ctx.isEn ? "Selected Options" : "Opções Selecionadas"}
+            </span>
+            {Array.from({ length: ctx.quantidade }).map((_, idx) => {
+              const pNum = idx + 1;
+              const respostas = ctx.opcoesParticipantes[pNum] || {};
+              return (
+                <div key={pNum} className="space-y-1 text-[11px]">
+                  {ctx.quantidade > 1 && (
+                    <span className="block font-black text-[#0E3A68]">
+                      👦{" "}
+                      {ctx.isEn
+                        ? `Participant ${pNum}`
+                        : `Participante ${pNum}`}
+                    </span>
+                  )}
+                  {ctx.perguntasParsed.map((perg: any, pIdx: number) => {
+                    const val = respostas[perg.titulo] || perg.opcoes[0] || "";
+                    return (
+                      <div
+                        key={pIdx}
+                        className="flex flex-col gap-0.5 text-slate-600"
+                      >
+                        <span className="text-[10px] font-semibold text-slate-400 leading-tight">
+                          {perg.titulo}
+                        </span>
+                        <span className="font-black text-slate-800">
+                          {val}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {ctx.alojamentoSelecionado && (
           <div className="flex justify-between font-bold text-slate-600">
