@@ -28,11 +28,11 @@ export async function generateMetadata({
 
   return {
     title: isEn
-      ? `HelloCamp | Best Summer Camps, Sports & Language Programs (${ano})`
-      : `HelloCamp | Os Melhores Campos de Férias de Verão, Natal, Aventura e Línguas (${ano})`,
+      ? `HelloCamp | Best Summer Camps, Municipal Programs & Staff Pool (${ano})`
+      : `HelloCamp | Campos de Férias Privados, Autarquias e Bolsa de Monitores (${ano})`,
     description: isEn
-      ? "Compare and book verified summer camps, adventure camps, surf schools, and language courses in Portugal (Lisbon, Cascais, Porto, Anadia) and Europe."
-      : "Descubra e reserve os melhores campos de férias em Portugal (Lisboa, Cascais, Porto, Anadia, Algarve) e na Europa. Férias de Verão, Natal, Páscoa, Aventura, Desporto e Línguas.",
+      ? "Compare and book verified summer camps, adventure camps, surf schools, language courses, and free municipal youth programs in Portugal and Europe."
+      : "Descubra e reserve campos de férias privados e programas gratuitos de autarquias e associações em Portugal e na Europa. Verão, Natal, Páscoa, Desporto, Línguas e Bolsa de Monitores.",
     alternates: {
       canonical: `https://www.hellocamp.pt/${lang}`,
       languages: {
@@ -54,16 +54,19 @@ export default async function HomePage({
 
   const todayISO = new Date().toISOString().split("T")[0];
 
-  // Carrega todos os campos ativos para alimentar os destaques e validar que regiões/países têm oferta ativa
-  const { data: todosCamposAtivos } = await supabase
-    .from("campos")
-    .select("*")
-    .eq("ativo", true);
+  const [{ data: todosCamposAtivos }, { count: totalInstitucional }] =
+    await Promise.all([
+      supabase.from("campos").select("*").eq("ativo", true),
+      supabase
+        .from("institucional_iniciativas")
+        .select("id", { count: "exact", head: true })
+        .eq("is_active", true),
+    ]);
 
   const listaAtivos = todosCamposAtivos || [];
   const camposDeFerias = listaAtivos.slice(0, 12);
+  const qtdAutarquias = totalInstitucional || 0;
 
-  // Catálogo base de Distritos e Países com fotografias de alta qualidade
   const CATALOGO_DISTRITOS = [
     {
       nome: "Lisboa",
@@ -164,7 +167,6 @@ export default async function HomePage({
     },
   ];
 
-  // Filtra apenas os Distritos e Países que têm campos ativos no momento
   const distritosAtivosCards = CATALOGO_DISTRITOS.filter((dist) =>
     listaAtivos.some((c) => {
       const txt = normalizeStr(`${c.Distrito || ""} ${c.local || ""} ${c.nome || ""}`);
@@ -179,7 +181,6 @@ export default async function HomePage({
     })
   );
 
-  // Opções para os selects da barra de pesquisa baseadas nos ativos
   const paisesOpcoes =
     paisesAtivosCards.length > 0
       ? paisesAtivosCards.map((p) => ({ valor: p.nome, label: isEn ? p.nome_en : p.nome }))
@@ -211,9 +212,9 @@ export default async function HomePage({
     { valor: "3-6", label: isEn ? "3 to 6 years" : "3 a 6 anos" },
     { valor: "7-12", label: isEn ? "7 to 12 years" : "7 a 12 anos" },
     { valor: "13-18", label: isEn ? "13 to 18 years" : "13 a 18 anos" },
+    { valor: "15-25", label: isEn ? "Youth (15+ years)" : "Jovens (15+ anos)" },
   ];
 
-  // Links de SEO Programático Limpos (Intenção Local, Sazonal e por Categoria)
   const LINKS_SEO_PROGRAMATICOS = [
     { url: "campos-de-ferias/anadia", pt: "Campos de Férias na Anadia", en: "Summer Camps in Anadia" },
     { url: "campos-de-ferias/cascais", pt: "Campos de Férias em Cascais", en: "Summer Camps in Cascais" },
@@ -226,10 +227,10 @@ export default async function HomePage({
     { url: "linguas/portugal", pt: "Campos de Férias de Línguas", en: "Language Camps" },
     { url: "surf/portugal", pt: "Campos de Férias de Surf", en: "Surf Camps in Portugal" },
     { url: "ingles/reino-unido", pt: "Cursos de Inglês no Reino Unido", en: "English Camps in the UK" },
-    { url: "aventura/anadia", pt: "Campos de Aventura na Anadia", en: "Adventure Camps in Anadia" },
+    { url: "institucional", pt: "Campos Gratuitos de Autarquias", en: "Free Municipal Camps" },
+    { url: "monitores", pt: "Bolsa Nacional de Monitores", en: "Camp Staff Pool" },
   ];
 
-  // JSON-LD da Organização e Motor de Busca (Sitelinks Searchbox no Google)
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
@@ -249,8 +250,8 @@ export default async function HomePage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
 
-      {/* HERO SECTION COM IMAGEM DE CAPA GRANDE */}
-      <section className="relative min-h-[85vh] w-full flex flex-col items-center justify-center pt-16 pb-32">
+      {/* HERO SECTION */}
+      <section className="relative min-h-[82vh] w-full flex flex-col items-center justify-center pt-12 md:pt-16 pb-24 md:pb-32">
         <div className="absolute inset-0 z-0 bg-[#0F172A] overflow-hidden">
           <img
             src="https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&q=80&w=2000"
@@ -258,33 +259,33 @@ export default async function HomePage({
             className="absolute inset-0 w-full h-full object-cover opacity-50"
             fetchPriority="high"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A]/60 via-transparent to-[#F8FAFC]/20" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A]/65 via-transparent to-[#F8FAFC]/20" />
         </div>
 
-        <div className="relative z-10 w-full max-w-6xl mx-auto px-4 md:px-6 flex flex-col items-center mt-8">
-          <div className="text-center mb-10 md:mb-14 w-full">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-md text-xs font-black uppercase tracking-widest text-[#F59E0B] mb-6 backdrop-blur-md shadow-sm">
+        <div className="relative z-10 w-full max-w-6xl mx-auto px-4 md:px-6 flex flex-col items-center mt-6 md:mt-8">
+          <div className="text-center mb-8 md:mb-12 w-full">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-md text-[11px] md:text-xs font-black uppercase tracking-widest text-[#F59E0B] mb-5 backdrop-blur-md shadow-sm">
               <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] animate-pulse" />
-              {isEn ? "More than a holiday camp" : "Mais que um campo de férias"}
+              {isEn ? "All Camps & Youth Programs in One Place" : "Todos os Campos e Programas Jovens num Só Lugar"}
             </div>
 
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight drop-shadow-lg">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight drop-shadow-lg">
               {isEn ? "Camps that create great stories." : "Campos que criam grandes histórias."}
             </h1>
-            <p className="mt-4 md:mt-6 text-lg md:text-2xl font-medium text-slate-200 tracking-wide leading-relaxed max-w-3xl mx-auto drop-shadow-md">
+            <p className="mt-4 md:mt-6 text-base md:text-xl font-medium text-slate-200 tracking-wide leading-relaxed max-w-3xl mx-auto drop-shadow-md">
               {isEn
-                ? "Explore, learn, and grow in one place. Summer, Christmas, Easter, Adventure, Sports & Languages."
-                : "Explora, aprende e cresce num só lugar. Campos de férias de Verão, Natal, Aventura, Desporto e Línguas."}
+                ? "Private camps in Portugal & abroad, free municipal youth programs, and our national monitor network — all in one platform."
+                : "Campos de férias privados em Portugal e no estrangeiro, programas gratuitos de autarquias e associações, e a Bolsa Nacional de Monitores."}
             </p>
           </div>
 
           {/* CAIXA DE PESQUISA AVANÇADA */}
           <div
             id="pesquisa"
-            className="relative w-full bg-white rounded-md shadow-2xl p-6 md:p-10 border border-slate-100 scroll-mt-24"
+            className="relative w-full bg-white rounded-md shadow-2xl p-5 md:p-10 border border-slate-100 scroll-mt-24"
           >
-            <form action={`/${lang}/pesquisa`} method="GET" className="relative pb-10 md:pb-4 mt-2">
-              <div className="flex justify-between items-end mb-4">
+            <form action={`/${lang}/pesquisa`} method="GET" className="relative pb-2 md:pb-4 mt-1">
+              <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
                 <span className="text-xs font-black text-[#0F172A] uppercase tracking-widest hidden sm:block">
                   {isEn ? "Find your next adventure" : "Encontra a próxima aventura"}
                 </span>
@@ -297,7 +298,7 @@ export default async function HomePage({
                 </Link>
               </div>
 
-              <div className="mb-6 relative">
+              <div className="mb-5 relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <span className="text-slate-400 text-lg">🔍</span>
                 </div>
@@ -313,14 +314,14 @@ export default async function HomePage({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 md:gap-4 w-full">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                     {isEn ? "Country" : "País"}
                   </label>
                   <select
                     name="pais"
-                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
+                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3.5 text-slate-700 text-base sm:text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
                   >
                     <option value="">{isEn ? "All Countries" : "Todos"}</option>
                     {paisesOpcoes.map((p) => (
@@ -337,7 +338,7 @@ export default async function HomePage({
                   </label>
                   <select
                     name="distrito"
-                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
+                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3.5 text-slate-700 text-base sm:text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
                   >
                     <option value="">{isEn ? "All Regions" : "Todos os Distritos"}</option>
                     {distritosOpcoes.map((d) => (
@@ -354,7 +355,7 @@ export default async function HomePage({
                   </label>
                   <select
                     name="categoria"
-                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
+                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3.5 text-slate-700 text-base sm:text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
                   >
                     <option value="">{isEn ? "All Categories" : "Todas as Categorias"}</option>
                     {categoriasOpcoes.map((cat) => (
@@ -371,7 +372,7 @@ export default async function HomePage({
                   </label>
                   <select
                     name="idade"
-                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3.5 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
+                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3.5 text-slate-700 text-base sm:text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
                   >
                     <option value="">{isEn ? "All Ages" : "Todas as Idades"}</option>
                     {idadesOpcoes.map((faixa) => (
@@ -390,12 +391,12 @@ export default async function HomePage({
                     type="date"
                     name="data"
                     min={todayISO}
-                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3 text-slate-700 text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
+                    className="w-full appearance-none rounded-md bg-[#F8FAFC] px-4 py-3 text-slate-700 text-base sm:text-sm font-bold outline-none border border-slate-200 focus:bg-white focus:border-[#2563EB] cursor-pointer transition-all shadow-sm"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-center mt-8 md:absolute md:-bottom-[4rem] md:left-1/2 md:-translate-x-1/2">
+              <div className="flex justify-center mt-6 md:mt-8 md:absolute md:-bottom-[4rem] md:left-1/2 md:-translate-x-1/2">
                 <button
                   type="submit"
                   className="group w-full md:w-64 bg-[#F59E0B] hover:bg-amber-500 rounded-md flex items-center justify-center gap-3 py-4 md:py-5 shadow-xl shadow-amber-500/30 transition-all hover:-translate-y-1 cursor-pointer border-0"
@@ -422,16 +423,16 @@ export default async function HomePage({
         </div>
       </section>
 
-      {/* DESTAQUES B2C */}
+      {/* DESTAQUES B2C (CAMPOS PRIVADOS) */}
       {camposDeFerias.length > 0 && (
-        <section className="bg-white py-20 md:py-32 border-t border-slate-200/80">
+        <section className="bg-white py-16 md:py-28 border-t border-slate-200/80">
           <div className="max-w-[1280px] mx-auto px-4 md:px-8">
-            <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
+            <div className="flex flex-col md:flex-row justify-between md:items-end mb-10 md:mb-12 gap-4">
               <div>
                 <span className="text-xs font-black text-[#2563EB] uppercase tracking-widest block mb-2">
                   {isEn ? "Handpicked for you" : "Seleção em Destaque"}
                 </span>
-                <h2 className="text-3xl md:text-4xl font-black text-[#0F172A] tracking-tight">
+                <h2 className="text-2xl md:text-4xl font-black text-[#0F172A] tracking-tight m-0">
                   {isEn ? "Featured Holiday Camps" : "Próximos Campos de Férias"}
                 </h2>
               </div>
@@ -443,7 +444,7 @@ export default async function HomePage({
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
               {camposDeFerias.map((campo, index) => {
                 const campoId = campo.id ?? index + 1;
                 const nomeCampo = isEn && campo.nome_en ? campo.nome_en : campo.nome;
@@ -454,7 +455,7 @@ export default async function HomePage({
                 const localCampo =
                   isEn && campo.local_en
                     ? campo.local_en
-                    : campo.local || campo.Distrito || campo.Pais || "Portugal";
+                    : campo.Distrito || campo.local || campo.Pais || "Portugal";
 
                 let precoVisivel = Number(campo.preco) || 0;
                 if (!precoVisivel && Array.isArray(campo.pacotes) && campo.pacotes.length > 0) {
@@ -486,7 +487,7 @@ export default async function HomePage({
                       <BotaoFavorito campoId={campoId} />
                     </div>
 
-                    <div className="relative h-60 w-full bg-slate-100 overflow-hidden">
+                    <div className="relative h-56 md:h-60 w-full bg-slate-100 overflow-hidden">
                       <img
                         src={imgUrl}
                         alt={nomeCampo}
@@ -498,11 +499,11 @@ export default async function HomePage({
                       </div>
                     </div>
 
-                    <div className="flex flex-col p-6 flex-1 pointer-events-none">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
-                        <span>📍 {localCampo}</span>
+                    <div className="flex flex-col p-5 md:p-6 flex-1 pointer-events-none">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5">
+                        <span className="truncate">📍 {localCampo}</span>
                       </div>
-                      <h3 className="text-xl font-black text-[#0F172A] leading-tight mb-4 line-clamp-2">
+                      <h3 className="text-lg md:text-xl font-black text-[#0F172A] leading-tight mb-4 line-clamp-2">
                         {nomeCampo}
                       </h3>
 
@@ -515,7 +516,7 @@ export default async function HomePage({
                             {precoVisivel > 0 ? `${precoVisivel}€` : "Sob Consulta"}
                           </p>
                         </div>
-                        <span className="bg-[#0F172A] group-hover:bg-[#2563EB] text-white px-5 py-2.5 rounded-md text-xs font-black uppercase tracking-widest transition-colors shadow-sm">
+                        <span className="bg-[#0F172A] group-hover:bg-[#2563EB] text-white px-4 md:px-5 py-2.5 rounded-md text-xs font-black uppercase tracking-widest transition-colors shadow-sm">
                           {isEn ? "View Dates" : "Ver Detalhes"}
                         </span>
                       </div>
@@ -528,26 +529,107 @@ export default async function HomePage({
         </section>
       )}
 
-      {/* NAVEGAÇÃO POR DISTRITOS E REGIÕES COM CAMPOS ATIVOS */}
+      {/* ECOSSISTEMA SOCIAL & JUVENTUDE (AUTARQUIAS + BOLSA DE MONITORES) */}
+      <section className="bg-[#F8FAFC] py-16 md:py-20 border-t border-slate-200/80">
+        <div className="max-w-[1280px] mx-auto px-4 md:px-8">
+          <div className="text-center mb-10 md:mb-12">
+            <span className="text-xs font-black text-[#16A34A] uppercase tracking-widest block mb-2">
+              {isEn ? "Open Access & Youth Impact" : "Acesso Universal & Empregabilidade Jovem"}
+            </span>
+            <h2 className="text-2xl md:text-4xl font-black text-[#0F172A] tracking-tight m-0">
+              {isEn
+                ? "Public Programs & National Monitor Network"
+                : "Programas Gratuitos e Oportunidades para Jovens"}
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+            {/* CARTÃO 1: AUTARQUIAS & PROGRAMAS SOCIAIS */}
+            <div className="bg-white rounded-md border border-slate-200 border-t-4 border-t-[#16A34A] p-6 md:p-8 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <span className="inline-block bg-emerald-50 text-[#16A34A] border border-emerald-200 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                    {isEn ? "100% Free Listing" : "Divulgação 100% Gratuita"}
+                  </span>
+                  {qtdAutarquias > 0 && (
+                    <span className="text-xs font-black text-[#16A34A]">
+                      {qtdAutarquias} {isEn ? "Active Programs" : "Programas Mapeados"}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-xl md:text-2xl font-black text-[#0F172A] mb-3">
+                  {isEn
+                    ? "Municipalities, Parishes & Social Programs"
+                    : "Autarquias, Juntas e Programas Sociais"}
+                </h3>
+                <p className="text-sm text-slate-600 font-medium leading-relaxed mb-6">
+                  {isEn
+                    ? "Find free and subsidized holiday camps, youth volunteering, and sports programs organized by City Councils, Parishes, and non-profits across Portugal."
+                    : "Centralizamos num só portal os campos de férias, voluntariado jovem e programas desportivos gratuitos ou subsidiados de Câmaras Municipais, Juntas de Freguesia e associações sem fins lucrativos."}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/${lang}/institucional`}
+                  className="bg-[#16A34A] hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest px-6 py-3.5 rounded-md no-underline transition-colors shadow-sm"
+                >
+                  {isEn ? "Explore Public Programs →" : "Explorar Programas Gratuitos →"}
+                </Link>
+              </div>
+            </div>
+
+            {/* CARTÃO 2: BOLSA NACIONAL DE MONITORES */}
+            <div className="bg-white rounded-md border border-slate-200 border-t-4 border-t-[#2563EB] p-6 md:p-8 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <span className="inline-block bg-blue-50 text-[#2563EB] border border-blue-200 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md">
+                    {isEn ? "Ages 16–35 • 0% Commission" : "Jovens 16–35 Anos • 0% Comissão"}
+                  </span>
+                </div>
+                <h3 className="text-xl md:text-2xl font-black text-[#0F172A] mb-3">
+                  {isEn
+                    ? "National Camp Monitor Talent Pool"
+                    : "Bolsa Nacional de Monitores e Coordenadores"}
+                </h3>
+                <p className="text-sm text-slate-600 font-medium leading-relaxed mb-6">
+                  {isEn
+                    ? "Looking for seasonal work or your first job in youth animation and sports? Create your free profile and connect directly with private camps, clubs, and municipalities."
+                    : "Procuras trabalho sazonal ou a tua primeira experiência em animação juvenil e desporto? Cria o teu perfil gratuito e liga-te diretamente a campos privados, clubes e autarquias em todo o país."}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/${lang}/monitores`}
+                  className="bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-black uppercase tracking-widest px-6 py-3.5 rounded-md no-underline transition-colors shadow-sm"
+                >
+                  {isEn ? "Join Staff Pool →" : "Aceder à Bolsa de Monitores →"}
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* NAVEGAÇÃO POR DISTRITOS */}
       {distritosAtivosCards.length > 0 && (
-        <section className="bg-white py-20 border-t border-slate-200/80">
+        <section className="bg-white py-16 md:py-20 border-t border-slate-200/80">
           <div className="max-w-[1280px] mx-auto px-4 md:px-8">
-            <div className="text-center mb-12">
+            <div className="text-center mb-10 md:mb-12">
               <span className="text-xs font-black text-[#2563EB] uppercase tracking-widest block mb-2">
                 {isEn ? "Explore by region" : "Explorar por Região"}
               </span>
-              <h2 className="text-3xl md:text-4xl font-black text-[#0F172A] tracking-tight">
+              <h2 className="text-2xl md:text-4xl font-black text-[#0F172A] tracking-tight m-0">
                 {isEn ? "Discover by District" : "Descubra os Melhores Destinos"}
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6">
               {distritosAtivosCards.map((distrito) => {
                 const nomeDistrito = isEn ? distrito.nome_en : distrito.nome;
                 return (
                   <Link
                     href={`/${lang}/distrito/${encodeURIComponent(distrito.nome)}`}
                     key={distrito.nome}
-                    className="group relative block h-[220px] w-full overflow-hidden rounded-md bg-slate-900 shadow-sm hover:shadow-xl transition-all duration-300"
+                    className="group relative block h-[200px] md:h-[220px] w-full overflow-hidden rounded-md bg-slate-900 shadow-sm hover:shadow-xl transition-all duration-300"
                   >
                     <img
                       src={distrito.imagem}
@@ -570,24 +652,24 @@ export default async function HomePage({
 
       {/* PAÍSES COM CAMPOS ATIVOS */}
       {paisesAtivosCards.length > 0 && (
-        <section className="bg-[#F8FAFC] py-20 border-t border-slate-200/80">
+        <section className="bg-[#F8FAFC] py-16 md:py-20 border-t border-slate-200/80">
           <div className="max-w-[1280px] mx-auto px-4 md:px-8">
-            <div className="text-center mb-12">
+            <div className="text-center mb-10 md:mb-12">
               <span className="text-xs font-black text-[#16A34A] uppercase tracking-widest block mb-2">
                 {isEn ? "International Programs" : "Programas Nacionais e Internacionais"}
               </span>
-              <h2 className="text-3xl md:text-4xl font-black text-[#0F172A] tracking-tight">
+              <h2 className="text-2xl md:text-4xl font-black text-[#0F172A] tracking-tight m-0">
                 {isEn ? "Discover by Country" : "Descubra por País"}
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
               {paisesAtivosCards.map((pais) => {
                 const nomePais = isEn ? pais.nome_en : pais.nome;
                 return (
                   <Link
                     href={`/${lang}/pesquisa/pais/${encodeURIComponent(pais.nome)}`}
                     key={pais.nome}
-                    className="group relative block h-[240px] w-full overflow-hidden rounded-md bg-slate-900 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+                    className="group relative block h-[220px] md:h-[240px] w-full overflow-hidden rounded-md bg-slate-900 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
                   >
                     <img
                       src={pais.imagem}
@@ -595,7 +677,7 @@ export default async function HomePage({
                       loading="lazy"
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-70 group-hover:opacity-90"
                     />
-                    <div className="absolute inset-0 flex flex-col justify-end p-8 bg-gradient-to-t from-black/80 via-black/20 to-transparent">
+                    <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-8 bg-gradient-to-t from-black/80 via-black/20 to-transparent">
                       <h3 className="text-2xl font-black text-white tracking-tight">{nomePais}</h3>
                       <p className="mt-1 text-sm font-bold text-[#F59E0B]">
                         {isEn ? pais.desc_en : pais.desc}
@@ -609,18 +691,18 @@ export default async function HomePage({
         </section>
       )}
 
-      {/* BLOCO DE SEO PROGRAMÁTICO (URLS LIMPOS E DIRETOS PARA AS PÁGINAS DE SERVIÇO/LOCAL) */}
-      <section className="bg-white py-16 border-t border-slate-200/80">
+      {/* BLOCO DE SEO PROGRAMÁTICO */}
+      <section className="bg-white py-14 md:py-16 border-t border-slate-200/80">
         <div className="max-w-5xl mx-auto px-4 md:px-6">
           <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 text-center">
             {isEn ? "Popular Searches by Location & Season" : "Pesquisas Frequentes de Campos de Férias"}
           </h2>
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="flex flex-wrap justify-center gap-2.5 md:gap-3">
             {LINKS_SEO_PROGRAMATICOS.map((link) => (
               <Link
                 key={link.url}
                 href={`/${lang}/${link.url}`}
-                className="bg-[#F8FAFC] border border-slate-200 hover:border-[#2563EB] text-slate-700 hover:text-[#2563EB] text-xs font-bold px-5 py-2.5 rounded-md transition-colors no-underline"
+                className="bg-[#F8FAFC] border border-slate-200 hover:border-[#2563EB] text-slate-700 hover:text-[#2563EB] text-xs font-bold px-4 md:px-5 py-2.5 rounded-md transition-colors no-underline"
               >
                 {isEn ? link.en : link.pt}
               </Link>
