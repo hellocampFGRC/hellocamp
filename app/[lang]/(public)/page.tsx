@@ -553,7 +553,7 @@ export default async function HomePage({
                   </span>
                   {qtdAutarquias > 0 && (
                     <span className="text-xs font-black text-[#16A34A]">
-                      {qtdAutarquias} {isEn ? "Active Programs" : "Programas Mapeados"}
+                      {qtdAutarquias} {isEn ? "Active Programs" : "Programas"}
                     </span>
                   )}
                 </div>
