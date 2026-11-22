@@ -28,17 +28,44 @@ async function getCampoLive(id: string) {
   return data;
 }
 
+function pareceMorada(texto: string): boolean {
+  const t = texto.trim();
+  if (!t) return true;
+  // Deteta números de porta, códigos postais ou prefixos de rua
+  return (
+    /\d/.test(t) ||
+    /^(rua|av\.?|avenida|estrada|travessa|largo|praça|praca|road|street|st\.?|ave\.?)\b/i.test(
+      t
+    )
+  );
+}
+
+function extrairDistritoLimpo(distrito?: string | null): string {
+  if (!distrito) return "";
+  const limpo = distrito.split(",")[0].split("(")[0].trim();
+  if (limpo.length < 2 || pareceMorada(limpo)) return "";
+  return limpo;
+}
+
 function extrairCidade(
   local?: string | null,
-  distrito?: string | null
+  distrito?: string | null,
+  pais?: string | null
 ): string {
+  const distLimpo = extrairDistritoLimpo(distrito);
+  if (distLimpo) return distLimpo;
+
   if (local) {
-    const primeiraParte = local.split(",")[0].split("(")[0].trim();
-    if (primeiraParte.length > 2 && !/\d{4}-\d{3}/.test(primeiraParte)) {
-      return primeiraParte;
+    const partes = local
+      .split(",")
+      .map((p) => p.split("(")[0].trim())
+      .filter((p) => p.length > 2 && !pareceMorada(p));
+    if (partes.length > 0) {
+      // A última parte limpa costuma ser a cidade/região (ex: "154 Main Road, Sea Point, Cidade do Cabo" -> "Cidade do Cabo")
+      return partes[partes.length - 1];
     }
   }
-  return distrito || "Portugal";
+  return pais || "Portugal";
 }
 
 function detetarTemporadaCampo(
@@ -97,14 +124,19 @@ export async function generateMetadata({
     isEn && campo.categoria_en
       ? campo.categoria_en
       : campo.categoria || (isEn ? "Holiday Camp" : "Campo de Férias");
-  const distrito =
+  const distrito = extrairDistritoLimpo(
     isEn && campo.Distrito_en
       ? campo.Distrito_en
-      : campo.Distrito || campo.distrito || "";
-  const pais = isEn && campo.pais_en ? campo.pais_en : campo.pais || "Portugal";
+      : campo.Distrito || campo.distrito
+  );
+  const pais =
+    isEn && campo.pais_en
+      ? campo.pais_en
+      : campo.Pais || campo.pais || "Portugal";
   const cidade = extrairCidade(
     isEn && campo.local_en ? campo.local_en : campo.local,
-    distrito || pais
+    distrito,
+    pais
   );
   const descRaw =
     (isEn && campo.descricao_en ? campo.descricao_en : campo.descricao) || "";
@@ -160,7 +192,7 @@ export async function generateMetadata({
             ]
           : []),
         `atl férias ${cidade}`,
-        `atividades para crianças ${idades} em ${cidade}`,
+        `atividades para jovens ${idades} em ${cidade}`,
         nomeCampo,
       ];
 
@@ -242,7 +274,6 @@ export default async function DetalhesDoCampo({
     );
   }
 
-  // Regista visualização em background sem bloquear a página
   if (campo.id && campo.organizador_id) {
     supabase
       .rpc("registar_visualizacao_campo", {
@@ -252,7 +283,6 @@ export default async function DetalhesDoCampo({
       .then();
   }
 
-  // Carrega perfil do organizador e campos relacionados em paralelo (sempre atualizados)
   const [orgRes, resParceiro, resSemelhantes] = await Promise.all([
     campo.organizador_id
       ? supabase
@@ -292,14 +322,22 @@ export default async function DetalhesDoCampo({
     isEn && campo.categoria_en
       ? campo.categoria_en
       : campo.categoria || (isEn ? "Holiday Camp" : "Campo de Férias");
-  const distritoVisivel =
-    isEn && campo.Distrito_en
-      ? campo.Distrito_en
-      : campo.Distrito || campo.distrito || "";
+
+  // Distrito limpo apenas para o breadcrumb e link /distrito/[Distrito]
+  const distritoReal = extrairDistritoLimpo(campo.Distrito || campo.distrito);
+  const distritoVisivel = extrairDistritoLimpo(
+    isEn && campo.Distrito_en ? campo.Distrito_en : distritoReal
+  );
+
+  const paisReal = campo.Pais || campo.pais || "Portugal";
+  const paisVisivel = isEn && campo.pais_en ? campo.pais_en : paisReal;
+
   const localCampo =
     isEn && campo.local_en
       ? campo.local_en
-      : campo.local || distritoVisivel || "Portugal";
+      : campo.local || distritoVisivel || paisVisivel;
+
+  const cidadeSeo = extrairCidade(localCampo, distritoVisivel, paisVisivel);
 
   const racioCampo =
     isEn && campo.racio_monitores_en
@@ -314,10 +352,6 @@ export default async function DetalhesDoCampo({
     isEn && campo.regras_termos_en
       ? campo.regras_termos_en
       : campo.regras_termos;
-
-  const paisReal = campo.pais || "Portugal";
-  const paisVisivel = isEn && campo.pais_en ? campo.pais_en : paisReal;
-  const cidadeSeo = extrairCidade(localCampo, distritoVisivel || paisVisivel);
 
   const scoreAvaliacoes = Number(campo.rating_score) || 0;
   const totalAvaliacoes = Number(campo.total_reviews) || 0;
@@ -405,39 +439,42 @@ export default async function DetalhesDoCampo({
         },
       ];
 
+  // BreadcrumbList Schema dinâmico (só inclui Distrito se existir um distrito válido)
+  const breadcrumbItems: any[] = [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: isEn ? "Home" : "Início",
+      item: `${baseUrl}/${lang}`,
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: paisVisivel,
+      item: `${baseUrl}/${lang}/pesquisa/pais/${encodeURIComponent(paisReal)}`,
+    },
+  ];
+
+  if (distritoReal) {
+    breadcrumbItems.push({
+      "@type": "ListItem",
+      position: 3,
+      name: distritoVisivel || distritoReal,
+      item: `${baseUrl}/${lang}/distrito/${encodeURIComponent(distritoReal)}`,
+    });
+  }
+
+  breadcrumbItems.push({
+    "@type": "ListItem",
+    position: breadcrumbItems.length + 1,
+    name: nomeCampo,
+    item: campoUrlCompleto,
+  });
+
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: isEn ? "Home" : "Início",
-        item: `${baseUrl}/${lang}`,
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: paisVisivel,
-        item: `${baseUrl}/${lang}/pesquisa/pais/${encodeURIComponent(
-          paisReal
-        )}`,
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: distritoVisivel || localCampo,
-        item: `${baseUrl}/${lang}/distrito/${encodeURIComponent(
-          campo.Distrito || localCampo
-        )}`,
-      },
-      {
-        "@type": "ListItem",
-        position: 4,
-        name: nomeCampo,
-        item: campoUrlCompleto,
-      },
-    ],
+    itemListElement: breadcrumbItems,
   };
 
   const eventSchema = {
@@ -518,12 +555,12 @@ export default async function DetalhesDoCampo({
       />
 
       {/* HERO CONTIDO + GALERIA ESTILO AIRBNB */}
-      <div className="bg-white border-b border-slate-200 pt-6 pb-8">
+      <div className="bg-white border-b border-slate-200 pt-5 md:pt-6 pb-8">
         <div className="max-w-[1100px] mx-auto px-4 md:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <nav
               aria-label="Breadcrumb"
-              className="flex items-center gap-2 text-[11px] font-black text-slate-400 tracking-widest uppercase"
+              className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-black text-slate-400 tracking-widest uppercase"
             >
               <Link
                 href={`/${lang}`}
@@ -538,25 +575,29 @@ export default async function DetalhesDoCampo({
               >
                 {paisVisivel}
               </Link>
-              <span>/</span>
-              <Link
-                href={`/${lang}/distrito/${encodeURIComponent(
-                  campo.Distrito || localCampo
-                )}`}
-                className="hover:text-[#0E3A68] transition-colors no-underline text-slate-400"
-              >
-                {distritoVisivel || localCampo}
-              </Link>
+              {distritoReal && (
+                <>
+                  <span>/</span>
+                  <Link
+                    href={`/${lang}/distrito/${encodeURIComponent(
+                      distritoReal
+                    )}`}
+                    className="hover:text-[#0E3A68] transition-colors no-underline text-slate-400"
+                  >
+                    {distritoVisivel || distritoReal}
+                  </Link>
+                </>
+              )}
               <span>/</span>
               <span
-                className="text-slate-900 max-w-[180px] sm:max-w-[260px] truncate"
+                className="text-slate-900 max-w-[180px] sm:max-w-[280px] truncate"
                 title={nomeCampo}
               >
                 {nomeCampo}
               </span>
             </nav>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <BotaoPartilha
                 url={campoUrlCompleto}
                 titulo={nomeCampo}
@@ -590,12 +631,11 @@ export default async function DetalhesDoCampo({
               )}
             </div>
 
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 leading-tight m-0 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 leading-tight m-0 tracking-tight">
               {nomeCampo}
             </h1>
           </div>
 
-          {/* GALERIA ESTILO AIRBNB COM MODAL COMPLETO & LIGHTBOX SEM CORTES */}
           <GaleriaAirbnb
             capa={heroImgUrl}
             galeria={galeriaValida}
@@ -611,7 +651,7 @@ export default async function DetalhesDoCampo({
           <div className="flex flex-col lg:flex-row gap-8 items-start w-full">
             {/* COLUNA ESQUERDA */}
             <div className="flex-1 w-full flex flex-col gap-6">
-              {/* DESCRIÇÃO FORMATADA E JUSTIFICADA + BROCHURAS PDF */}
+              {/* DESCRIÇÃO + BROCHURAS PDF */}
               <div className="bg-white p-6 md:p-8 rounded-md shadow-sm border border-slate-200 relative z-10">
                 <h2 className="text-xl font-black text-slate-900 mb-5 pb-3 border-b border-slate-100">
                   {dict.detalhe.sobre_programa}
@@ -646,7 +686,7 @@ export default async function DetalhesDoCampo({
                   )}
               </div>
 
-              {/* INFORMAÇÕES LOGÍSTICAS IMPORTANTES */}
+              {/* INFORMAÇÕES LOGÍSTICAS */}
               <div className="bg-white p-6 md:p-8 rounded-md shadow-sm border border-slate-200 relative z-10">
                 <h2 className="text-xl font-black text-slate-900 mb-6">
                   {dict.detalhe.informacoes_importantes}
@@ -699,7 +739,7 @@ export default async function DetalhesDoCampo({
                 </div>
               </div>
 
-              {/* CARTÃO DE AUTORIDADE: PERFIL DO ORGANIZADOR */}
+              {/* PERFIL DO ORGANIZADOR */}
               {campo.organizador_id && parceiroInfo && (
                 <div className="bg-white p-6 md:p-8 rounded-md shadow-sm border border-slate-200 relative z-10 hover:border-[#0E3A68]/40 transition-colors">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
@@ -718,7 +758,7 @@ export default async function DetalhesDoCampo({
                         )}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           <h3 className="text-xl font-black text-slate-900 m-0 leading-none">
                             {nomeExibicaoParceiro}
                           </h3>
@@ -933,7 +973,7 @@ export default async function DetalhesDoCampo({
                           </div>
                           <div className="px-1 pb-1 mt-1">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">
-                              {c.Distrito || c.local}
+                              {extrairDistritoLimpo(c.Distrito) || c.local}
                             </p>
                             <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68]">
                               {isEn && c.nome_en ? c.nome_en : c.nome}
@@ -982,7 +1022,7 @@ export default async function DetalhesDoCampo({
                           </div>
                           <div className="px-1 pb-1 mt-1">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">
-                              {c.Distrito || c.local}
+                              {extrairDistritoLimpo(c.Distrito) || c.local}
                             </p>
                             <h3 className="text-sm font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-[#0E3A68]">
                               {isEn && c.nome_en ? c.nome_en : c.nome}
@@ -995,7 +1035,7 @@ export default async function DetalhesDoCampo({
                 </div>
               )}
 
-              {/* PERGUNTAS FREQUENTES SEO (PT / EN) */}
+              {/* PERGUNTAS FREQUENTES SEO */}
               <section className="bg-white p-6 md:p-8 rounded-md shadow-sm border border-slate-200 relative z-10">
                 <h2 className="text-xl font-black text-slate-900 mb-5">
                   {isEn
