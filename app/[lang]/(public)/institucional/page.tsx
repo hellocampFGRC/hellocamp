@@ -25,12 +25,12 @@ export async function generateMetadata({
   const canonical = `https://www.hellocamp.pt/${lang}/institucional`;
 
   const title = isEn
-    ? "Municipal Holiday Camps in Portugal | City Councils & Parishes | HelloCamp"
-    : "Campos de Férias das Autarquias e Câmaras Municipais em Portugal | HelloCamp";
+    ? "Municipal & Social Youth Programs in Portugal | 100% Free Directory | HelloCamp"
+    : "Campos de Férias de Autarquias, Juntas e Programas Sociais em Portugal | HelloCamp";
 
   const description = isEn
-    ? "Find official municipal holiday camps across Portugal (Cascais, Lisbon, Porto, Oeiras, Sintra, Braga, Faro). Check Summer, Easter, and Christmas dates, prices, and registration portals."
-    : "Consulte num só portal os campos de férias municipais de Verão, Páscoa e Natal das Câmaras Municipais e Juntas de Freguesia (Cascais, Lisboa, Oeiras, Sintra, Loures, Porto, Braga, Faro e todo o país).";
+    ? "Find free and subsidized youth holiday camps, volunteering, and sports programs from City Councils, Parishes, and non-profits across Portugal."
+    : "Consulte num só portal os campos de férias, voluntariado jovem e programas gratuitos ou subsidiados de Câmaras Municipais, Juntas de Freguesia, IPSS e associações sem fins lucrativos em todo o país.";
 
   return {
     title,
@@ -38,17 +38,13 @@ export async function generateMetadata({
     keywords: [
       "campos de férias autarquias",
       "campos de férias câmaras municipais",
+      "programas sociais jovens portugal",
+      "voluntariado jovem câmaras municipais",
+      "campos de férias gratuitos portugal",
       "campos de férias em cascais",
       "campos de férias em lisboa",
-      "campos de férias em oeiras",
-      "campos de férias em sintra",
-      "campos de férias em loures",
       "campos de férias no porto",
       "férias desportivas municipais",
-      "campos de férias gratuitos portugal",
-      "campos de férias verão 2027",
-      "campos de férias páscoa",
-      "campos de férias natal",
     ],
     alternates: {
       canonical,
@@ -94,8 +90,8 @@ export default async function InstitucionalIndexPage({
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: isEn
-      ? "Municipal Holiday Camps in Portugal"
-      : "Campos de Férias das Autarquias em Portugal",
+      ? "Municipal & Social Youth Programs in Portugal"
+      : "Campos de Férias das Autarquias e Programas Sociais em Portugal",
     numberOfItems: iniciativas.length,
     itemListElement: iniciativas.slice(0, 50).map((item: any, idx: number) => ({
       "@type": "ListItem",
@@ -114,39 +110,62 @@ export default async function InstitucionalIndexPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* HERO AUTARQUIAS */}
-      <section className="bg-[#16A34A] text-white pt-20 pb-28 px-4 md:px-8 border-b-8 border-[#F59E0B] relative overflow-hidden">
+      {/* HERO AUTARQUIAS & PROGRAMAS SOCIAIS */}
+      <section className="bg-[#16A34A] text-white pt-14 md:pt-20 pb-24 md:pb-28 px-4 md:px-8 border-b-8 border-[#F59E0B] relative overflow-hidden">
         <div className="absolute -top-20 -right-20 w-80 h-80 bg-[#F59E0B] rounded-full opacity-90 pointer-events-none hidden lg:block" />
-        <div className="max-w-[1280px] mx-auto relative z-10">
-          <span className="inline-block bg-[#0F172A] text-white text-[10px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-md mb-4">
-            🏛️{" "}
-            {isEn
-              ? "Municipalities & Parishes"
-              : "Câmaras Municipais & Juntas de Freguesia"}
-          </span>
-          <h1 className="text-3xl md:text-6xl font-black tracking-tight text-white mb-4 max-w-3xl leading-tight">
-            {isEn
-              ? "Public & Municipal Holiday Programs"
-              : "Campos de Férias das Autarquias e Juntas"}
-          </h1>
-          <p className="text-emerald-50 text-base md:text-xl font-medium max-w-2xl leading-relaxed">
-            {isEn
-              ? "Consult official municipal youth programs, dates, and registration links across Portugal."
-              : "Consulte num só portal os programas municipais de férias de Verão, Páscoa e Natal, idades, valores e links oficiais de cada Câmara Municipal e Junta de Freguesia."}
-          </p>
+        <div className="max-w-[1280px] mx-auto relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-8">
+          <div className="max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <span className="inline-block bg-[#0F172A] text-white text-[10px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-md">
+                🏛️{" "}
+                {isEn
+                  ? "Municipalities, Parishes & Non-Profits"
+                  : "Autarquias, Juntas & Entidades Sociais"}
+              </span>
+              <span className="inline-block bg-white/20 text-white text-[10px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-md">
+                ✓ {isEn ? "100% Free Listing (0% Fee)" : "Divulgação 100% Gratuita"}
+              </span>
+            </div>
+            <h1 className="text-3xl md:text-5xl lg:text-6xl font-black tracking-tight text-white mb-4 leading-tight">
+              {isEn
+                ? "Public, Municipal & Social Youth Programs"
+                : "Campos de Férias de Autarquias e Programas Sociais"}
+            </h1>
+            <p className="text-emerald-50 text-base md:text-lg font-medium max-w-2xl leading-relaxed m-0">
+              {isEn
+                ? "Consult official municipal and non-profit holiday camps, sports, and youth volunteering programs across Portugal — with direct links to official registration."
+                : "Consulte num só portal os campos de férias, voluntariado jovem e programas gratuitos ou subsidiados de Câmaras Municipais, Juntas de Freguesia, IPSS e associações sem fins lucrativos."}
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0">
+            <a
+              href="mailto:info@hellocamp.pt?subject=Submeter%20Programa%20Gratuito%20-%20Autarquia%20ou%20Associa%C3%A7%C3%A3o"
+              className="inline-flex items-center justify-center gap-2 bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-black uppercase tracking-widest px-6 py-4 rounded-md no-underline shadow-lg transition-colors text-center"
+            >
+              <span>➕</span>{" "}
+              {isEn
+                ? "Submit Free Public Program"
+                : "Submeter Programa Gratuitamente"}
+            </a>
+            <span className="text-[11px] font-bold text-emerald-100 text-center">
+              {iniciativas.length} {isEn ? "programs" : "programas"} •{" "}
+              {distritosUnicos.length} {isEn ? "districts" : "distritos"}
+            </span>
+          </div>
         </div>
       </section>
 
-      {/* FILTROS INTERATIVOS + GRELA DE PROGRAMAS (SSR COM DADOS INICIAIS) */}
+      {/* FILTROS INTERATIVOS + GRELHA DE PROGRAMAS */}
       <InstitucionalClient lang={lang} iniciativasIniciais={iniciativas} />
 
-      {/* MALHA DE LINKS SEO POR DISTRITO (INDEXAÇÃO DIRETA PELO GOOGLE) */}
+      {/* MALHA DE LINKS SEO POR DISTRITO */}
       {distritosUnicos.length > 0 && (
         <section className="max-w-[1280px] mx-auto px-4 md:px-8 mt-16 pt-12 border-t border-slate-200">
           <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-5">
             {isEn
-              ? "Browse Municipal Programs by District"
-              : "Explorar Campos de Férias Municipais por Distrito"}
+              ? "Browse Municipal & Social Programs by District"
+              : "Explorar Programas de Autarquias por Distrito"}
           </h2>
           <div className="flex flex-wrap gap-2.5">
             {distritosUnicos.map((d) => (

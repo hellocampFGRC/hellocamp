@@ -13,6 +13,12 @@ const normalize = (str: string) =>
     .toLowerCase()
     .trim();
 
+function slugify(str: string) {
+  return normalize(str)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 interface OptionItem {
   value: string;
   label: string;
@@ -108,9 +114,11 @@ function PesquisaConteudo({ lang }: { lang: string }) {
   const searchParams = useSearchParams();
 
   const [todosCampos, setTodosCampos] = useState<any[]>([]);
+  const [todasAutarquias, setTodasAutarquias] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [q, setQ] = useState(searchParams.get("q") || "");
+  const [pais, setPais] = useState(searchParams.get("pais") || "");
   const [distrito, setDistrito] = useState(searchParams.get("distrito") || "");
   const [categoria, setCategoria] = useState(searchParams.get("categoria") || "");
   const [idade, setIdade] = useState(searchParams.get("idade") || "");
@@ -119,6 +127,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
 
   useEffect(() => {
     setQ(searchParams.get("q") || "");
+    setPais(searchParams.get("pais") || "");
     setDistrito(searchParams.get("distrito") || "");
     setCategoria(searchParams.get("categoria") || "");
     setIdade(searchParams.get("idade") || "");
@@ -127,18 +136,25 @@ function PesquisaConteudo({ lang }: { lang: string }) {
   }, [searchParams]);
 
   useEffect(() => {
-    async function carregarCampos() {
+    async function carregarDados() {
       setLoading(true);
-      const { data } = await supabase
-        .from("campos")
-        .select("*")
-        .eq("ativo", true)
-        .order("created_at", { ascending: false });
+      const [{ data: camposData }, { data: autarquiasData }] = await Promise.all([
+        supabase
+          .from("campos")
+          .select("*")
+          .eq("ativo", true)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("institucional_iniciativas")
+          .select("id, distrito, concelho, titulo")
+          .eq("is_active", true),
+      ]);
 
-      setTodosCampos(data || []);
+      setTodosCampos(camposData || []);
+      setTodasAutarquias(autarquiasData || []);
       setLoading(false);
     }
-    carregarCampos();
+    carregarDados();
   }, []);
 
   const distritosOpcoes: OptionItem[] = [
@@ -185,6 +201,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
     { value: "3-6", label: isEn ? "3 to 6 years" : "3 a 6 anos" },
     { value: "7-12", label: isEn ? "7 to 12 years" : "7 a 12 anos" },
     { value: "13-18", label: isEn ? "13 to 18 years" : "13 a 18 anos" },
+    { value: "15-25", label: isEn ? "Youth (15+ years)" : "Jovens (15+ anos)" },
   ];
 
   const ordemOpcoes: OptionItem[] = [
@@ -224,10 +241,18 @@ function PesquisaConteudo({ lang }: { lang: string }) {
         const qNorm = normalize(q);
         const texto = normalize(
           `${c.nome || ""} ${c.nome_en || ""} ${c.categoria || ""} ${
-            c.Distrito || ""
-          } ${c.local || ""} ${c.descricao || ""}`
+            c.Pais || ""
+          } ${c.Distrito || ""} ${c.local || ""} ${c.descricao || ""}`
         );
         if (!texto.includes(qNorm)) return false;
+      }
+
+      if (pais) {
+        const paisNorm = normalize(pais);
+        const locPais = normalize(
+          `${c.Pais || ""} ${c.Distrito || ""} ${c.local || ""}`
+        );
+        if (!locPais.includes(paisNorm)) return false;
       }
 
       if (distrito) {
@@ -240,10 +265,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
         const catCampo = normalize(
           `${c.categoria || ""} ${c.categoria_en || ""} ${c.descricao || ""}`
         );
-        if (catNorm === "verao") {
-          // Verão aceita todos por defeito se tiverem edições ativas
-          return true;
-        }
+        if (catNorm === "verao") return true;
         if (
           !catCampo.includes(catNorm) &&
           !(catNorm.includes("desporto") && catCampo.includes("futebol")) &&
@@ -280,8 +302,23 @@ function PesquisaConteudo({ lang }: { lang: string }) {
       return 0;
     });
 
+  // Contagem de programas gratuitos/autárquicos para a ponte na pesquisa
+  const autarquiasNaZona = distrito
+    ? todasAutarquias.filter((a) =>
+        normalize(`${a.distrito || ""} ${a.concelho || ""}`).includes(
+          normalize(distrito)
+        )
+      )
+    : todasAutarquias;
+
+  const linkAutarquias =
+    distrito && autarquiasNaZona.length > 0 && distrito !== "Cascais" && distrito !== "Anadia"
+      ? `/${lang}/institucional/distrito/${slugify(distrito)}`
+      : `/${lang}/institucional`;
+
   const limparFiltros = () => {
     setQ("");
+    setPais("");
     setDistrito("");
     setCategoria("");
     setIdade("");
@@ -290,7 +327,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
     router.push(`/${lang}/pesquisa`);
   };
 
-  const temFiltros = q || distrito || categoria || idade || dataInicio;
+  const temFiltros = q || pais || distrito || categoria || idade || dataInicio;
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A] pb-24">
@@ -299,22 +336,28 @@ function PesquisaConteudo({ lang }: { lang: string }) {
         <div className="absolute -top-20 -right-20 w-80 h-80 bg-[#F59E0B] rounded-full opacity-90 pointer-events-none hidden lg:block" />
         <div className="max-w-[1280px] mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6 relative z-10">
           <div>
-            <span className="inline-block bg-[#F59E0B] text-white text-[10px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-md mb-3">
+            <span className="inline-block bg-[#F59E0B] text-[#0F172A] text-[10px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-md mb-3">
               {isEn ? "Directory & Booking" : "Diretório Oficial HelloCamp"}
             </span>
             <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white m-0">
-              {isEn ? "Explore Holiday Camps" : "Explorar Campos de Férias"}
+              {pais
+                ? isEn
+                  ? `Holiday Camps in ${pais}`
+                  : `Campos de Férias em ${pais}`
+                : isEn
+                ? "Explore Holiday Camps"
+                : "Explorar Campos de Férias"}
             </h1>
             <p className="text-blue-100 text-sm md:text-base font-medium mt-2 mb-0">
               {isEn
-                ? "Compare verified programs, dates, and prices in one place."
-                : "Compare programas verificados, datas e preços num só lugar."}
+                ? "Compare verified private programs, dates, and prices in Portugal & abroad."
+                : "Compare programas verificados, datas e preços em Portugal e no estrangeiro num só lugar."}
             </p>
           </div>
 
           <Link
             href={`/${lang}/mapa`}
-            className="bg-[#F59E0B] hover:bg-amber-600 text-white px-6 py-4 rounded-md text-xs font-black uppercase tracking-widest no-underline transition-all shadow-lg flex items-center justify-center gap-2 w-fit"
+            className="bg-[#F59E0B] hover:bg-amber-500 text-[#0F172A] px-6 py-4 rounded-md text-xs font-black uppercase tracking-widest no-underline transition-all shadow-lg flex items-center justify-center gap-2 w-full md:w-fit"
           >
             <span>🗺️</span>{" "}
             {isEn ? "Open Interactive Map" : "Ver no Mapa Interativo"}
@@ -322,9 +365,9 @@ function PesquisaConteudo({ lang }: { lang: string }) {
         </div>
       </section>
 
-      {/* BARRA DE FILTROS COM DROPDOWNS 100% CUSTOMIZADOS */}
-      <section className="max-w-[1280px] mx-auto px-4 md:px-8 -mt-10 relative z-30 mb-10">
-        <div className="bg-white p-6 rounded-md shadow-xl border border-slate-200 space-y-4">
+      {/* BARRA DE FILTROS */}
+      <section className="max-w-[1280px] mx-auto px-4 md:px-8 -mt-10 relative z-30 mb-8">
+        <div className="bg-white p-5 md:p-6 rounded-md shadow-xl border border-slate-200 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             <div className="md:col-span-4">
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
@@ -339,7 +382,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
                     ? "Surf, Football, Robotics, Anadia..."
                     : "Surf, Futebol, Robótica, Anadia..."
                 }
-                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3 text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white shadow-sm"
+                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-md px-4 py-3 text-base sm:text-sm font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:bg-white shadow-sm"
               />
             </div>
 
@@ -374,8 +417,8 @@ function PesquisaConteudo({ lang }: { lang: string }) {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-100">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="bg-[#2563EB] text-white text-xs font-black px-3.5 py-1.5 rounded-md">
                 {resultados.length}{" "}
                 {isEn ? "programs found" : "programas encontrados"}
@@ -391,7 +434,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
               )}
             </div>
 
-            <div className="w-60">
+            <div className="w-full sm:w-60">
               <CustomDropdown
                 label={isEn ? "Sort by" : "Ordenar por"}
                 value={ordem}
@@ -404,10 +447,43 @@ function PesquisaConteudo({ lang }: { lang: string }) {
         </div>
       </section>
 
+      {/* PONTE PARA AUTARQUIAS E PROGRAMAS SOCIAIS GRATUITOS */}
+      {!loading && (!pais || normalize(pais) === "portugal") && autarquiasNaZona.length > 0 && (
+        <section className="max-w-[1280px] mx-auto px-4 md:px-8 mb-8">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-md p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3">
+              <span className="text-2xl shrink-0">🏛️</span>
+              <div>
+                <p className="text-sm font-black text-[#0F172A] m-0">
+                  {distrito
+                    ? isEn
+                      ? `We also found ${autarquiasNaZona.length} free/municipal programs in ${distrito}`
+                      : `Encontrámos também ${autarquiasNaZona.length} programas gratuitos/sociais de Autarquias em ${distrito}`
+                    : isEn
+                    ? `Also explore ${autarquiasNaZona.length} free/municipal youth programs across Portugal`
+                    : `Explore também ${autarquiasNaZona.length} programas gratuitos de Autarquias e Associações em Portugal`}
+                </p>
+                <p className="text-xs text-slate-600 font-medium m-0 mt-0.5">
+                  {isEn
+                    ? "City Councils, Parishes, and non-profits listed 100% free on HelloCamp."
+                    : "Câmaras Municipais, Juntas de Freguesia e associações divulgadas gratuitamente na HelloCamp."}
+                </p>
+              </div>
+            </div>
+            <Link
+              href={linkAutarquias}
+              className="bg-[#16A34A] hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest px-5 py-3 rounded-md no-underline text-center shrink-0 transition-colors"
+            >
+              {isEn ? "View Free Programs →" : "Ver Programas Gratuitos →"}
+            </Link>
+          </div>
+        </section>
+      )}
+
       {/* GRELHA DE RESULTADOS */}
       <section className="max-w-[1280px] mx-auto px-4 md:px-8">
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
             {[1, 2, 3, 4, 5, 6].map((n) => (
               <div
                 key={n}
@@ -416,7 +492,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
             ))}
           </div>
         ) : resultados.length === 0 ? (
-          <div className="bg-white rounded-md border border-slate-200 p-12 text-center shadow-sm max-w-xl mx-auto">
+          <div className="bg-white rounded-md border border-slate-200 p-10 md:p-12 text-center shadow-sm max-w-xl mx-auto">
             <span className="text-5xl block mb-4">🏕️</span>
             <h2 className="text-2xl font-black text-[#0F172A] mb-2">
               {isEn
@@ -437,7 +513,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
             {resultados.map((campo: any) => {
               const nome = isEn && campo.nome_en ? campo.nome_en : campo.nome;
               const cat =
@@ -447,7 +523,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
               const local =
                 isEn && campo.local_en
                   ? campo.local_en
-                  : campo.Distrito || campo.local || "Portugal";
+                  : campo.Distrito || campo.local || campo.Pais || "Portugal";
               const preco = obterPrecoMinimo(campo);
               const imgUrl = campo.imagem?.startsWith("http")
                 ? campo.imagem
@@ -469,7 +545,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
                     <BotaoFavorito campoId={campo.id} />
                   </div>
 
-                  <div className="relative h-60 w-full bg-slate-100 overflow-hidden">
+                  <div className="relative h-56 md:h-60 w-full bg-slate-100 overflow-hidden">
                     <img
                       src={imgUrl}
                       alt={nome}
@@ -481,13 +557,13 @@ function PesquisaConteudo({ lang }: { lang: string }) {
                     </div>
                   </div>
 
-                  <div className="flex flex-col p-6 flex-1 pointer-events-none">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                      <span>📍 {local}</span>
-                      {campo.idade && <span>• 👶 {campo.idade}</span>}
+                  <div className="flex flex-col p-5 md:p-6 flex-1 pointer-events-none">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 truncate">
+                      <span className="truncate">📍 {local}</span>
+                      {campo.idade && <span className="shrink-0">• 👶 {campo.idade}</span>}
                     </div>
 
-                    <h3 className="text-xl font-black text-[#0F172A] leading-tight mb-4 line-clamp-2">
+                    <h3 className="text-lg md:text-xl font-black text-[#0F172A] leading-tight mb-4 line-clamp-2">
                       {nome}
                     </h3>
 
@@ -500,7 +576,7 @@ function PesquisaConteudo({ lang }: { lang: string }) {
                           {preco > 0 ? `${preco}€` : "Sob Consulta"}
                         </span>
                       </div>
-                      <span className="bg-[#0F172A] group-hover:bg-[#2563EB] text-white px-5 py-2.5 rounded-md text-xs font-black uppercase tracking-widest transition-colors shadow-sm">
+                      <span className="bg-[#0F172A] group-hover:bg-[#2563EB] text-white px-4 md:px-5 py-2.5 rounded-md text-xs font-black uppercase tracking-widest transition-colors shadow-sm">
                         {isEn ? "View Dates" : "Ver Detalhes"}
                       </span>
                     </div>

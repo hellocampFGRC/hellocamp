@@ -10,14 +10,43 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { lang } = await params;
   const isEn = lang === "en";
+  const canonical = `https://www.hellocamp.pt/${lang}/monitores`;
+
+  const title = isEn
+    ? "HelloCamp Staff Pool | Work in Summer Camps & Youth Programs"
+    : "Bolsa Nacional de Monitores HelloCamp | Trabalha em Campos de Férias";
+
+  const description = isEn
+    ? "Create your free monitor profile (ages 16-35), set your availability calendar, and receive direct job offers from verified private camps, clubs, and municipalities."
+    : "Cria o teu perfil gratuito de monitor ou coordenador (16 aos 35 anos), define o teu calendário de disponibilidade e recebe propostas diretas de campos de férias privados, clubes e autarquias.";
 
   return {
-    title: isEn
-      ? "HelloCamp Staff Pool | Work in Summer Camps"
-      : "Bolsa de Monitores HelloCamp | Trabalha nos Melhores Campos de Férias",
-    description: isEn
-      ? "Create your free monitor profile, set your availability calendar, and receive direct job offers from verified summer camps."
-      : "Cria o teu perfil gratuito de monitor ou coordenador, define o teu calendário de disponibilidade e recebe propostas diretas de campos de férias verificados.",
+    title,
+    description,
+    keywords: [
+      "bolsa de monitores campos de férias",
+      "trabalho de verão monitores portugal",
+      "emprego monitor campo de férias",
+      "recrutamento monitores campos de férias",
+      "trabalho sazonal jovens portugal",
+      "coordenador campo de férias ipdj",
+    ],
+    alternates: {
+      canonical,
+      languages: {
+        "pt-PT": "https://www.hellocamp.pt/pt/monitores",
+        "en-US": "https://www.hellocamp.pt/en/monitores",
+      },
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      siteName: "HelloCamp",
+      type: "website",
+      locale: isEn ? "en_US" : "pt_PT",
+    },
+    robots: { index: true, follow: true },
   };
 }
 
@@ -29,56 +58,73 @@ export default async function MonitoresLandingPage({
   const { lang } = await params;
   const isEn = lang === "en";
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: isEn
+      ? "HelloCamp National Staff Pool"
+      : "Bolsa Nacional de Monitores HelloCamp",
+    description: isEn
+      ? "Free talent network connecting youth (16-35) with verified holiday camps, sports clubs, and municipalities in Portugal."
+      : "Rede gratuita que liga jovens monitores e coordenadores (16-35 anos) a campos de férias verificados, clubes e autarquias em Portugal.",
+    url: `https://www.hellocamp.pt/${lang}/monitores`,
+  };
+
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A] pb-24">
-      {/* HERO SECTION COM AS NOVAS CORES HELLO CAMP */}
-      <section className="relative overflow-hidden pt-20 pb-28 md:pt-28 md:pb-36 px-4 md:px-8 bg-[#2563EB] border-b-4 border-[#F59E0B] text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
+      {/* HERO SECTION */}
+      <section className="relative overflow-hidden pt-16 pb-24 md:pt-24 md:pb-32 px-4 md:px-8 bg-[#2563EB] border-b-4 border-[#F59E0B] text-white">
         <div className="max-w-5xl mx-auto text-center relative z-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#F59E0B] text-white rounded-md text-[11px] font-black uppercase tracking-widest mb-6 shadow-sm">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#F59E0B] text-[#0F172A] rounded-md text-[11px] font-black uppercase tracking-widest mb-6 shadow-sm">
             <span>🎓</span>
             <span>
               {isEn
-                ? "HelloCamp Official Talent Network"
-                : "Bolsa Oficial de Monitores & Coordenadores"}
+                ? "National Youth Staff Network (Ages 16–35)"
+                : "Bolsa Nacional de Monitores • Jovens 16–35 Anos"}
             </span>
           </div>
 
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-6 leading-[1.1] text-white">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight mb-6 leading-[1.1] text-white">
             {isEn
-              ? "Work in the best Summer Camps in Portugal & Europe."
-              : "O teu próximo verão épico como Monitor começa aqui."}
+              ? "Work in the best Holiday Camps in Portugal & Europe."
+              : "O teu próximo trabalho como Monitor começa aqui."}
           </h1>
 
           <p className="text-base md:text-xl text-blue-100 font-medium mb-10 max-w-3xl mx-auto leading-relaxed">
             {isEn
-              ? "Create your professional profile for free, highlight your certifications and availability calendar, and receive direct job invitations from verified camp organizers."
-              : "Cria o teu perfil profissional gratuito, destaca as tuas certificações, línguas e calendário de disponibilidade, e recebe convites de trabalho diretos de centenas de campos de férias verificados."}
+              ? "Create your free professional profile, highlight your certifications and availability, and receive direct job invitations from verified private camps, sports clubs, and municipalities."
+              : "Cria o teu perfil profissional gratuito, destaca as tuas certificações, línguas e disponibilidade, e recebe convites de trabalho diretos de campos privados, clubes desportivos, associações e autarquias."}
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link
               href={`/${lang}/monitores/registo`}
-              className="w-full sm:w-auto bg-[#F59E0B] hover:bg-amber-600 text-white font-black uppercase tracking-widest text-xs md:text-sm px-9 py-4.5 rounded-md shadow-lg transition-all no-underline"
+              className="w-full sm:w-auto bg-[#F59E0B] hover:bg-amber-500 text-[#0F172A] font-black uppercase tracking-widest text-xs md:text-sm px-8 py-4 rounded-md shadow-lg transition-all no-underline text-center"
             >
               {isEn ? "✍️ Create Free Monitor Profile" : "✍️ Criar Perfil de Monitor Grátis"}
             </Link>
             <Link
               href={`/${lang}/monitores/portal/perfil`}
-              className="w-full sm:w-auto bg-[#0F172A] hover:bg-slate-800 text-white font-black uppercase tracking-widest text-xs md:text-sm px-9 py-4.5 rounded-md shadow-lg transition-all no-underline"
+              className="w-full sm:w-auto bg-[#0F172A] hover:bg-slate-800 text-white font-black uppercase tracking-widest text-xs md:text-sm px-8 py-4 rounded-md shadow-lg transition-all no-underline text-center"
             >
               {isEn ? "🔑 Monitor Portal (Profile & Offers)" : "🔑 Área do Monitor (Perfil & Propostas)"}
             </Link>
           </div>
 
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-xs font-black uppercase tracking-wider text-white">
-            <span className="bg-white/15 px-3.5 py-1.5 rounded-md">
-              ✓ {isEn ? "100% Free for Staff" : "100% Gratuito para Monitores"}
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3 md:gap-5 text-xs font-black uppercase tracking-wider text-white">
+            <span className="bg-white/15 px-3.5 py-2 rounded-md">
+              ✓ {isEn ? "100% Free for Youth" : "100% Gratuito para Monitores"}
             </span>
-            <span className="bg-white/15 px-3.5 py-1.5 rounded-md">
-              ✓ {isEn ? "0% Salary Commission" : "0% Comissões sobre o teu Ordenado"}
+            <span className="bg-white/15 px-3.5 py-2 rounded-md">
+              ✓ {isEn ? "0% Salary Commission" : "0% Comissões sobre o Ordenado"}
             </span>
-            <span className="bg-white/15 px-3.5 py-1.5 rounded-md">
-              ✓ {isEn ? "Verified Organizers Only" : "Acesso Exclusivo a Parceiros Verificados"}
+            <span className="bg-white/15 px-3.5 py-2 rounded-md">
+              ✓ {isEn ? "Private Camps, Clubs & Councils" : "Campos Privados, Clubes e Autarquias"}
             </span>
           </div>
         </div>
@@ -93,7 +139,7 @@ export default async function MonitoresLandingPage({
             </div>
             <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
               {isEn
-                ? "Direct Chat with Camp Directors"
+                ? "Direct Contact with Camp Directors"
                 : "Contacto Direto com Diretores de Campo"}
             </div>
           </div>
@@ -204,7 +250,7 @@ export default async function MonitoresLandingPage({
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
             <div className="bg-[#F8FAFC] p-6 rounded-md border border-slate-200">
               <span className="inline-block bg-[#2563EB] text-white text-xs font-black px-3 py-1 rounded-md mb-4">
                 PASSO 1
@@ -222,7 +268,7 @@ export default async function MonitoresLandingPage({
             </div>
 
             <div className="bg-[#F8FAFC] p-6 rounded-md border border-slate-200">
-              <span className="inline-block bg-[#F59E0B] text-white text-xs font-black px-3 py-1 rounded-md mb-4">
+              <span className="inline-block bg-[#F59E0B] text-[#0F172A] text-xs font-black px-3 py-1 rounded-md mb-4">
                 PASSO 2
               </span>
               <h3 className="text-lg font-black text-[#0F172A] m-0 mb-2">
@@ -256,9 +302,9 @@ export default async function MonitoresLandingPage({
         </div>
       </section>
 
-      {/* FAQ E SEGURANÇA */}
+      {/* PRIVACIDADE & CTA FINAL */}
       <section className="max-w-4xl mx-auto px-4 md:px-8 pt-16">
-        <div className="bg-[#0F172A] text-white p-8 md:p-10 rounded-md border-l-4 border-[#16A34A] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="bg-[#0F172A] text-white p-7 md:p-10 rounded-md border-l-4 border-[#16A34A] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
             <span className="bg-[#16A34A] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md inline-block mb-2">
               🛡️ Privacidade & Segurança RGPD
@@ -271,12 +317,12 @@ export default async function MonitoresLandingPage({
             <p className="text-xs text-slate-300 m-0 leading-relaxed max-w-xl">
               {isEn
                 ? "Your profile is never indexed on Google or visible to the general public. Only verified partner organizations with an approved contract can view your details."
-                : "O teu perfil nunca aparece no Google nem ao público geral. Apenas entidades organizadoras verificadas e com contrato aprovado na HelloCamp têm acesso à Bolsa de Recrutamento."}
+                : "O teu perfil nunca aparece no Google nem ao público geral. Apenas entidades organizadoras verificadas na HelloCamp têm acesso à Bolsa de Recrutamento."}
             </p>
           </div>
           <Link
             href={`/${lang}/monitores/registo`}
-            className="bg-[#F59E0B] hover:bg-amber-600 text-white font-black text-xs uppercase tracking-widest px-7 py-4 rounded-md no-underline shrink-0"
+            className="w-full md:w-auto text-center bg-[#F59E0B] hover:bg-amber-500 text-[#0F172A] font-black text-xs uppercase tracking-widest px-7 py-4 rounded-md no-underline shrink-0"
           >
             {isEn ? "Register Now →" : "Criar Perfil Agora →"}
           </Link>
