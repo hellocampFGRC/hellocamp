@@ -22,6 +22,13 @@ function normalizar(str: string) {
     .toLowerCase();
 }
 
+const TEMPORADAS_OPCOES = [
+  { key: "Todas", pt: "Todas", en: "All Seasons", termos: [] },
+  { key: "Verão", pt: "Verão", en: "Summer", termos: ["verao", "summer"] },
+  { key: "Páscoa", pt: "Páscoa", en: "Easter", termos: ["pascoa", "easter"] },
+  { key: "Natal", pt: "Natal", en: "Christmas", termos: ["natal", "christmas"] },
+];
+
 export default function InstitucionalClient({
   lang,
   iniciativasIniciais,
@@ -62,6 +69,13 @@ export default function InstitucionalClient({
     ).sort(),
   ];
 
+  const getDistritoLabel = (d: string) => {
+    if (d === "Todos") return isEn ? "All Districts" : "Todos os Distritos";
+    if (!isEn) return d;
+    const match = iniciativasIniciais.find((i) => i.distrito === d);
+    return match?.distrito_en || d;
+  };
+
   const iniciativasFiltradas = iniciativasIniciais.filter((item) => {
     if (distritoFiltro !== "Todos" && item.distrito !== distritoFiltro) {
       return false;
@@ -78,13 +92,16 @@ export default function InstitucionalClient({
           ? Number(item.preco_base)
           : null;
       const textoGratuito = normalizar(
-        `${item.titulo || ""} ${item.descricao_html || ""}`
+        `${item.titulo || ""} ${item.titulo_en || ""} ${
+          item.descricao_html || ""
+        } ${item.descricao_html_en || ""}`
       );
       if (
         !(
           (precoNum !== null && precoNum <= 0) ||
           textoGratuito.includes("gratuito") ||
-          textoGratuito.includes("gratuita")
+          textoGratuito.includes("gratuita") ||
+          textoGratuito.includes("free")
         )
       ) {
         return false;
@@ -92,15 +109,19 @@ export default function InstitucionalClient({
     }
 
     const textoCompleto = normalizar(
-      `${item.titulo || ""} ${item.entidade_organizadora || ""} ${
-        item.concelho || ""
-      } ${item.distrito || ""} ${item.datas_encontradas || ""} ${
+      `${item.titulo || ""} ${item.titulo_en || ""} ${
+        item.entidade_organizadora || ""
+      } ${item.concelho || ""} ${item.distrito || ""} ${
+        item.distrito_en || ""
+      } ${item.datas_encontradas || ""} ${item.datas_encontradas_en || ""} ${
         item.descricao_html || ""
-      }`
+      } ${item.descricao_html_en || ""}`
     );
 
     if (temporadaFiltro !== "Todas") {
-      if (!textoCompleto.includes(normalizar(temporadaFiltro))) {
+      const tempObj = TEMPORADAS_OPCOES.find((t) => t.key === temporadaFiltro);
+      const termosBusca = tempObj ? tempObj.termos : [normalizar(temporadaFiltro)];
+      if (!termosBusca.some((t) => textoCompleto.includes(t))) {
         return false;
       }
     }
@@ -154,11 +175,7 @@ export default function InstitucionalClient({
                 className="w-full bg-[#F8FAFC] border border-slate-200 hover:border-[#16A34A] rounded-md px-4 py-3.5 text-sm font-bold text-[#0F172A] flex items-center justify-between cursor-pointer"
               >
                 <span className="truncate">
-                  {distritoFiltro === "Todos"
-                    ? isEn
-                      ? "All Districts"
-                      : "Todos os Distritos"
-                    : distritoFiltro}
+                  {getDistritoLabel(distritoFiltro)}
                 </span>
                 <span className="text-xs text-slate-500">▼</span>
               </button>
@@ -179,13 +196,7 @@ export default function InstitucionalClient({
                           : "bg-white text-[#0F172A] hover:bg-slate-100"
                       }`}
                     >
-                      <span>
-                        {d === "Todos"
-                          ? isEn
-                            ? "All Districts"
-                            : "Todos os Distritos"
-                          : d}
-                      </span>
+                      <span>{getDistritoLabel(d)}</span>
                       {distritoFiltro === d && <span>✓</span>}
                     </button>
                   ))}
@@ -215,18 +226,18 @@ export default function InstitucionalClient({
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mr-1">
               {isEn ? "Quick Filters:" : "Filtros Rápidos:"}
             </span>
-            {["Todas", "Verão", "Páscoa", "Natal"].map((temp) => (
+            {TEMPORADAS_OPCOES.map((temp) => (
               <button
-                key={temp}
+                key={temp.key}
                 type="button"
-                onClick={() => setTemporadaFiltro(temp)}
+                onClick={() => setTemporadaFiltro(temp.key)}
                 className={`px-3.5 py-2 rounded-md text-xs font-black cursor-pointer border transition-colors ${
-                  temporadaFiltro === temp
+                  temporadaFiltro === temp.key
                     ? "bg-[#16A34A] text-white border-[#16A34A]"
                     : "bg-[#F8FAFC] text-slate-600 border-slate-200 hover:border-[#16A34A]"
                 }`}
               >
-                {temp === "Todas" && isEn ? "All Seasons" : temp}
+                {isEn ? temp.en : temp.pt}
               </button>
             ))}
 
@@ -268,7 +279,14 @@ export default function InstitucionalClient({
               : "Iniciativas Municipais e Sociais Ativas"}
           </h2>
           <span className="bg-[#16A34A] text-white text-xs font-black px-3.5 py-1.5 rounded-md">
-            {iniciativasFiltradas.length} {isEn ? "Programs" : "Programas"}
+            {iniciativasFiltradas.length}{" "}
+            {isEn
+              ? iniciativasFiltradas.length === 1
+                ? "Program"
+                : "Programs"
+              : iniciativasFiltradas.length === 1
+              ? "Programa"
+              : "Programas"}
           </span>
         </div>
 
@@ -298,22 +316,48 @@ export default function InstitucionalClient({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
             {iniciativasFiltradas.map((item) => {
               const titulo =
-                item.titulo || item.entidade_organizadora || "Programa Municipal";
+                (isEn && item.titulo_en ? item.titulo_en : item.titulo) ||
+                item.entidade_organizadora ||
+                (isEn ? "Municipal Program" : "Programa Municipal");
               const entidade =
-                item.entidade_organizadora || item.concelho || "Autarquia";
+                item.entidade_organizadora ||
+                item.concelho ||
+                (isEn ? "Municipality" : "Autarquia");
               const resumo =
-                limparHtml(item.descricao_html) ||
-                "Programa municipal ou social de ocupação de tempos livres e férias escolares.";
+                limparHtml(
+                  isEn && item.descricao_html_en
+                    ? item.descricao_html_en
+                    : item.descricao_html
+                ) ||
+                (isEn
+                  ? "Municipal or social holiday camp and youth recreation program."
+                  : "Programa municipal ou social de ocupação de tempos livres e férias escolares.");
+              const distritoExibir =
+                (isEn && item.distrito_en ? item.distrito_en : item.distrito) ||
+                "Portugal";
               const fotoDefinida = item.imagem_capa_url || FALLBACK_IMG;
-              const idadesTexto =
-                item.idade_min_global && item.idade_max_global
-                  ? `${item.idade_min_global} aos ${item.idade_max_global} anos`
-                  : "6 aos 16 anos";
+
+              const minIdade = item.idade_min_global || 6;
+              const maxIdade = item.idade_max_global || 16;
+              const idadesTexto = isEn
+                ? `Ages ${minIdade} to ${maxIdade}`
+                : `${minIdade} aos ${maxIdade} anos`;
 
               const precoNum =
                 item.preco_base !== null && item.preco_base !== undefined
                   ? Number(item.preco_base)
                   : null;
+
+              const precoBadge =
+                precoNum === null
+                  ? null
+                  : precoNum <= 0
+                  ? isEn
+                    ? "Free"
+                    : "Gratuito"
+                  : isEn
+                  ? `From ${precoNum}€`
+                  : `Desde ${precoNum}€`;
 
               return (
                 <article
@@ -323,7 +367,7 @@ export default function InstitucionalClient({
                   <div className="relative h-52 md:h-56 w-full bg-slate-100 overflow-hidden">
                     <img
                       src={fotoDefinida}
-                      alt={`${titulo} - ${item.concelho || item.distrito}`}
+                      alt={`${titulo} - ${item.concelho || distritoExibir}`}
                       loading="lazy"
                       onError={(e) => {
                         e.currentTarget.src = FALLBACK_IMG;
@@ -331,11 +375,11 @@ export default function InstitucionalClient({
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute top-3 left-3 bg-[#16A34A] text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest shadow-sm">
-                      {item.distrito || "Portugal"}
+                      🏛️ {distritoExibir}
                     </div>
-                    {precoNum !== null && (
+                    {precoBadge && (
                       <div className="absolute top-3 right-3 bg-[#0F172A]/90 text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest">
-                        {precoNum <= 0 ? "Gratuito" : `Desde ${precoNum}€`}
+                        {precoBadge}
                       </div>
                     )}
                   </div>
@@ -353,7 +397,7 @@ export default function InstitucionalClient({
 
                     <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                       <span className="text-[11px] font-bold text-slate-500 truncate">
-                        {idadesTexto}
+                        👶 {idadesTexto}
                       </span>
                       <Link
                         href={`/${lang}/institucional/${item.slug || item.id}`}
